@@ -1,0 +1,111 @@
+# SwiftLint config for SixFour.
+#
+# Philosophy: the codebase already practices the discipline; this file just
+# enforces it mechanically so reviewers don't have to. Force-unwraps,
+# force-casts, and force-tries are *errors*, not warnings — every legitimate
+# use needs a one-line `// swiftlint:disable:next force_cast — <why>` comment.
+
+# Code that is generated or out of scope for lint. Paths are relative to the
+# directory swiftlint is invoked from (project root).
+excluded:
+  - SixFour/Generated      # bit-for-bit codegen from spec/, do not hand-edit
+  - .build
+  - dist-newstyle
+  - spec/dist-newstyle
+  - trainer
+
+# We don't enforce Apple's "lowercase camelCase identifiers" on the handful of
+# math types where the convention is fixed (L,a,b are the OKLab channels;
+# T,H,W,K are the four shape constants the entire spec is built around).
+identifier_name:
+  excluded:
+    - L            # OKLab lightness channel (ColorScience.OKLab)
+    - a            # OKLab a* channel
+    - b            # OKLab b* channel
+    - T            # frames per GIF
+    - H            # tile height
+    - W            # tile width
+    - K            # palette size
+    - M            # PSD distance metric (CholeskyPSD)
+    - id           # SwiftUI Identifiable convention
+    - i            # short loop indices in numeric inner loops
+    - j
+    - k
+    - x
+    - y
+    - z
+    - r
+    - g
+    - u            # Sinkhorn row scaling
+    - v            # Sinkhorn col scaling
+    - n
+    - m
+    - s
+    - t            # transport plan, time scalars
+    - d            # distance scalars
+    - f
+    - cs           # centroids
+    - l_           # OKLab intermediate per Björn Ottosson's spec
+    - m_           # OKLab intermediate per Björn Ottosson's spec
+    - s_           # OKLab intermediate per Björn Ottosson's spec
+  min_length:
+    warning: 1
+    error: 1
+
+type_name:
+  min_length:
+    warning: 3
+    error: 2
+
+# Promote unsafe escapes from warnings to errors. The CI gate would otherwise
+# silently accept new force_unwraps as they sneak in.
+opt_in_rules:
+  - force_unwrapping
+  - empty_count
+  - explicit_init
+  - first_where
+  - last_where
+  - sorted_first_last
+  - toggle_bool
+  - vertical_whitespace_closing_braces
+
+disabled_rules:
+  - trailing_comma                            # codebase uses both styles deliberately
+  - opening_brace                             # SwiftUI ViewBuilder closures clash
+  - line_length                               # Metal kernel argument lists exceed 120 ch
+  - multiple_closures_with_trailing_closure   # SwiftUI Button/label idiom
+  - implicit_optional_initialization          # `= nil` is more discoverable in fields
+  - vertical_whitespace_opening_braces        # one blank line after `class X {` is intentional
+  - statement_position                        # `}\n catch` is clearer in long do-blocks
+  - colon                                     # column alignment in literals is intentional
+  - comma                                     # column alignment in literals is intentional
+  - unused_import                             # belongs in `analyzer_rules`; not run here
+
+# Promote these from warning to error so they fail CI.
+force_cast: error
+force_try: error
+force_unwrapping: error
+
+# Generated keys / matrix constants exceed any reasonable file-line limit.
+file_length:
+  warning: 600
+  error: 1200
+
+function_body_length:
+  warning: 100
+  error: 200
+
+# Larger SwiftUI views and AVFoundation orchestrators legitimately accumulate
+# state; the encoder also packs many small private helpers per type.
+type_body_length:
+  warning: 400
+  error: 600
+
+# Cyclomatic complexity caps — encoder LZW and Sinkhorn loops legitimately
+# branch many ways.
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+# Where SwiftLint hits its own analyzer plugin output. Keep the noise off.
+reporter: "xcode"

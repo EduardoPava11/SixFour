@@ -1,0 +1,45 @@
+name: spec-codegen drift
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  drift:
+    name: Generated/ matches Haskell spec
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.2.8'
+          cabal-version: '3.10'
+
+      - name: Cache cabal store
+        uses: actions/cache@v4
+        with:
+          path: ~/.cabal/store
+          key: cabal-${{ runner.os }}-9.2.8-${{ hashFiles('spec/spec.cabal', 'spec/cabal.project') }}
+          restore-keys: cabal-${{ runner.os }}-9.2.8-
+
+      - name: Run spec-codegen
+        run: |
+          cd spec
+          cabal update
+          cabal run -v0 spec-codegen
+
+      - name: Verify Generated/ has not drifted
+        run: |
+          if ! git diff --quiet -- SixFour/Generated/ trainer/generated/; then
+            echo "::error::SixFour/Generated/ or trainer/generated/ differs from spec output."
+            git diff -- SixFour/Generated/ trainer/generated/
+            exit 1
+          fi
+
+      - name: Run Haskell property tests
+        run: |
+          cd spec
+          cabal test

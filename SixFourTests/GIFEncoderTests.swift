@@ -1,0 +1,278 @@
+import Testing
+import Foundation
+import simd
+@testable import SixFour
+
+/// Byte-level acceptance of `GIFEncoder`. We don't import a third-party GIF
+/// parser; we walk the bytes ourselves. The tests pin every header field that
+/// matters for the spec ("per-frame LCT" vs "global GCT") so refactors can't
+/// silently change which mode is on the wire.
+struct GIFEncoderTests {
+
+    // MARK: - Per-frame (LCT) mode
+
+    @Test func perFrameModeWritesNoGCTAnd64LocalTables() throws {
+        let encoder = GIFEncoder(width: 8, height: 8, fps: 20)
+        let frames: [[UInt8]] = Array(repeating: Array(repeating: 0, count: 64), count: 4)
+        let palettes: [[SIMD3<UInt8>]] = Array(
+            repeating: synthPalette256(seed: 1), count: 4
+        )
+        let url = scratchURL("perframe.gif")
+        try encoder.encode(frames: frames, perFramePalettes: palettes, to: url)
+
+        let bytes = try Data(contentsOf: url)
+        try expectMagic(bytes)
+        // Logical screen descriptor packed byte at offset 10 = 0x70 → GCT flag OFF.
+        #expect(bytes[10] == 0x70, "per-frame mode must NOT write a Global Color Table")
+        // Trailer.
+        #expect(bytes.last == 0x3B)
+
+        // Walk and count image descriptors (0x2C) — each must carry an LCT
+        // packed byte at offset+9 with bit 7 set.
+        let lctCount = countImageDescriptors(bytes, expectLCT: true)
+        #expect(lctCount == 4, "expected 4 image descriptors with LCT; saw \(lctCount)")
+    }
+
+    // MARK: - Global (GCT) mode
+
+    @Test func globalModeWritesOneGCTAndNoLocalTables() throws {
+        let encoder = GIFEncoder(width: 8, height: 8, fps: 20)
+        let frames: [[UInt8]] = Array(repeating: Array(repeating: 0, count: 64), count: 4)
+        let url = scratchURL("global.gif")
+        try encoder.encode(frames: frames, globalPalette: synthPalette256(seed: 7), to: url)
+
+        let bytes = try Data(contentsOf: url)
+        try expectMagic(bytes)
+        // Packed byte at offset 10 = 0xF7 → GCT flag ON, size = 256 entries.
+        #expect(bytes[10] == 0xF7, "global mode must write a Global Color Table (expected 0xF7)")
+        #expect(bytes.last == 0x3B)
+
+        // The 768-byte GCT immediately follows the 13-byte header + LSD.
+        // Header (6) + LSD (7) = 13. GCT runs 13..13+768.
+        let palette = synthPalette256(seed: 7)
+        for i in 0..<256 {
+            let base = 13 + i * 3
+            #expect(bytes[base + 0] == palette[i].x)
+            #expect(bytes[base + 1] == palette[i].y)
+            #expect(bytes[base + 2] == palette[i].z)
+        }
+
+        let lctCount = countImageDescriptors(bytes, expectLCT: false)
+        #expect(lctCount == 4, "expected 4 image descriptors with NO LCT; saw \(lctCount)")
+    }
+
+    // MARK: - Size invariant the user actually pays for
+
+    /// The product claim is: global mode trims ~48 KB of palette tables off a
+    /// 64-frame GIF. Verify directly on a 64-frame fixture.
+    @Test func globalModeIsAtLeast47KBSmallerOn64Frames() throws {
+        let encoder = GIFEncoder(width: 64, height: 64, fps: 20)
+        let frames: [[UInt8]] = Array(
+            repeating: Array(repeating: 0, count: 64 * 64), count: 64
+        )
+        let palette = synthPalette256(seed: 42)
+        let palettes = Array(repeating: palette, count: 64)
+
+        let lctURL = scratchURL("64frame_lct.gif")
+        let gctURL = scratchURL("64frame_gct.gif")
+        try encoder.encode(frames: frames, perFramePalettes: palettes, to: lctURL)
+        try encoder.encode(frames: frames, globalPalette: palette, to: gctURL)
+
+        let lctSize = try Data(contentsOf: lctURL).count
+        let gctSize = try Data(contentsOf: gctURL).count
+        let saved = lctSize - gctSize
+        // 63 frames × 768 bytes of removed LCT = 48,384 B saved
+        // (the global mode adds back one 768-byte GCT — that's the 1-frame baseline).
+        #expect(saved >= 47_000, "global mode saved only \(saved) bytes; expected ≥ 47 KB")
+    }
+
+    // MARK: - LZW round-trip
+
+    /// Encode a constant-color frame, run our LZW decoder over the
+    /// LZW-encoded image data, and confirm the pixel stream comes back
+    /// identical. Guards against future minCodeSize / clear-code regressions.
+    @Test func lzwRoundTripOnConstantFrame() throws {
+        let encoder = GIFEncoder(width: 4, height: 4, fps: 20)
+        let pixels: [UInt8] = [
+            3, 3, 3, 3,
+            3, 7, 7, 3,
+            3, 7, 7, 3,
+            3, 3, 3, 3
+        ]
+        let url = scratchURL("lzw.gif")
+        try encoder.encode(
+            frames: [pixels],
+            globalPalette: synthPalette256(seed: 99),
+            to: url
+        )
+
+        let bytes = try Data(contentsOf: url)
+        let imageDataStart = locateFirstImageDataBlock(bytes)
+        let decoded = decodeLZWBlocks(bytes, startingAt: imageDataStart)
+        #expect(decoded == pixels, "LZW round-trip lost pixels: got \(decoded)")
+    }
+
+    // MARK: - Helpers (fixtures + tiny parser)
+
+    private func scratchURL(_ name: String) -> URL {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appending(path: "sixfour-tests", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appending(path: name)
+    }
+
+    /// Deterministic 256-entry palette derived from a seed — values cover the
+    /// gamut so we can spot palette truncation or transposition bugs.
+    private func synthPalette256(seed: UInt8) -> [SIMD3<UInt8>] {
+        (0..<256).map { i in
+            let v = UInt8((i ^ Int(seed)) & 0xFF)
+            return SIMD3<UInt8>(v, UInt8(255 - i), UInt8((i + Int(seed)) & 0xFF))
+        }
+    }
+
+    private func expectMagic(_ bytes: Data) throws {
+        #expect(bytes.count > 13)
+        #expect(bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) // "GIF"
+        #expect(bytes[3] == 0x38 && bytes[4] == 0x39 && bytes[5] == 0x61) // "89a"
+    }
+
+    /// Walk the file and count `0x2C` image-descriptor blocks. For each, also
+    /// assert the LCT-flag bit matches `expectLCT`.
+    private func countImageDescriptors(_ bytes: Data, expectLCT: Bool) -> Int {
+        var i = 13  // past header + LSD
+        // Skip optional GCT if present.
+        if (bytes[10] & 0x80) != 0 {
+            i += 768
+        }
+        var count = 0
+        while i < bytes.count {
+            let b = bytes[i]
+            if b == 0x3B { break }
+            if b == 0x21 {
+                // Extension introducer: 0x21 label size data... 0x00 terminator.
+                i += 2  // intro + label
+                while i < bytes.count {
+                    let n = Int(bytes[i]); i += 1
+                    if n == 0 { break }
+                    i += n
+                }
+            } else if b == 0x2C {
+                // Image descriptor: 10 bytes.
+                let packed = bytes[i + 9]
+                let hasLCT = (packed & 0x80) != 0
+                #expect(hasLCT == expectLCT,
+                        "image descriptor LCT flag mismatch: expected \(expectLCT), got \(hasLCT)")
+                i += 10
+                if hasLCT { i += 768 }
+                // LZW min code size + sub-blocks.
+                i += 1
+                while i < bytes.count {
+                    let n = Int(bytes[i]); i += 1
+                    if n == 0 { break }
+                    i += n
+                }
+                count += 1
+            } else {
+                i += 1
+            }
+        }
+        return count
+    }
+
+    /// Returns the file offset of the LZW min-code-size byte for the first
+    /// image descriptor in `bytes`.
+    private func locateFirstImageDataBlock(_ bytes: Data) -> Int {
+        var i = 13
+        if (bytes[10] & 0x80) != 0 { i += 768 }
+        while i < bytes.count {
+            if bytes[i] == 0x21 {
+                i += 2
+                while i < bytes.count {
+                    let n = Int(bytes[i]); i += 1
+                    if n == 0 { break }
+                    i += n
+                }
+            } else if bytes[i] == 0x2C {
+                let packed = bytes[i + 9]
+                i += 10
+                if (packed & 0x80) != 0 { i += 768 }
+                return i
+            } else {
+                i += 1
+            }
+        }
+        return -1
+    }
+
+    /// Decode GIF LZW from `start` (min-code-size byte) and return the pixel
+    /// stream. Walks until end-of-information code.
+    private func decodeLZWBlocks(_ bytes: Data, startingAt start: Int) -> [UInt8] {
+        let minCodeSize = Int(bytes[start])
+        var i = start + 1
+        // Concatenate sub-blocks.
+        var lzw = Data()
+        while i < bytes.count {
+            let n = Int(bytes[i]); i += 1
+            if n == 0 { break }
+            lzw.append(bytes.subdata(in: i..<(i + n)))
+            i += n
+        }
+
+        let clearCode = 1 << minCodeSize
+        let endCode = clearCode + 1
+        var codeSize = minCodeSize + 1
+        var nextCode = endCode + 1
+        var dict: [Int: [UInt8]] = [:]
+        for k in 0..<clearCode { dict[k] = [UInt8(k)] }
+
+        var output: [UInt8] = []
+        var bitBuffer: UInt32 = 0
+        var bitsInBuffer = 0
+        var byteIndex = 0
+        var prev: [UInt8] = []
+
+        func readCode() -> Int? {
+            while bitsInBuffer < codeSize {
+                if byteIndex >= lzw.count { return nil }
+                bitBuffer |= UInt32(lzw[byteIndex]) << bitsInBuffer
+                byteIndex += 1
+                bitsInBuffer += 8
+            }
+            let mask: UInt32 = (1 << UInt32(codeSize)) - 1
+            let code = Int(bitBuffer & mask)
+            bitBuffer >>= UInt32(codeSize)
+            bitsInBuffer -= codeSize
+            return code
+        }
+
+        while let code = readCode() {
+            if code == clearCode {
+                dict.removeAll(keepingCapacity: true)
+                for k in 0..<clearCode { dict[k] = [UInt8(k)] }
+                codeSize = minCodeSize + 1
+                nextCode = endCode + 1
+                prev = []
+                continue
+            }
+            if code == endCode { break }
+            let entry: [UInt8]
+            if let e = dict[code] {
+                entry = e
+            } else if code == nextCode, let p = prev.first {
+                entry = prev + [p]
+            } else {
+                return output  // corrupt; bail
+            }
+            output.append(contentsOf: entry)
+            if !prev.isEmpty {
+                dict[nextCode] = prev + [entry[0]]
+                nextCode += 1
+                if nextCode == (1 << codeSize) && codeSize < 12 {
+                    codeSize += 1
+                }
+            }
+            prev = entry
+        }
+        return output
+    }
+}

@@ -1,0 +1,116 @@
+cabal-version:      3.0
+name:               sixfour-spec
+version:            0.1.0.0
+synopsis:           Algebraic spec for the SixFour 64-frame, 256-color GIF pipeline.
+description:
+  Haskell source-of-truth for the SixFour two-stage palette pipeline
+  (Wu per-frame quantizer + Sinkhorn-balanced global merger) plus the
+  on-device NN slot signatures. Emits Swift and Python contracts so
+  the iOS app and the MLX trainer cannot drift from the spec.
+author:             Daniel
+build-type:         Simple
+extra-source-files: README.md
+
+common warnings
+    ghc-options:    -Wall -Wno-unused-imports -Wno-unused-matches
+
+library
+    import:           warnings
+    exposed-modules:
+        SixFour.Spec.Shape
+        SixFour.Spec.Color
+        SixFour.Spec.Palette
+        SixFour.Spec.Indices
+        SixFour.Spec.Gauge
+        SixFour.Spec.StageA
+        SixFour.Spec.StageB
+        SixFour.Spec.Pipeline
+        SixFour.Spec.Net
+        SixFour.Spec.Laws
+        SixFour.Spec.Hybrid.Shape
+        SixFour.Spec.Hybrid.Trunk
+        SixFour.Spec.Hybrid.Delta
+        SixFour.Spec.Hybrid.Hybrid
+        SixFour.Spec.Hybrid.Indices
+        SixFour.Spec.Hybrid.STBN3D
+        SixFour.Spec.Hybrid.StageB1
+        SixFour.Spec.Hybrid.StageB2
+        SixFour.Spec.Hybrid.Pipeline
+        SixFour.Spec.Hybrid.Laws
+        SixFour.Codegen.Swift
+        SixFour.Codegen.MLX
+    build-depends:
+        base       >=4.16 && <5
+      , vector     >=0.13 && <0.14
+      , containers >=0.6  && <0.8
+      , text       >=1.2  && <2.2
+      , transformers >=0.5 && <0.7
+    hs-source-dirs:   src
+    default-language: Haskell2010
+    default-extensions:
+        DataKinds
+      , KindSignatures
+      , GADTs
+      , TypeApplications
+      , ScopedTypeVariables
+      , TypeFamilies
+      , TypeOperators
+      , ConstraintKinds
+      , FlexibleContexts
+      , FlexibleInstances
+      , RankNTypes
+      , DeriveGeneric
+      , DerivingStrategies
+      , GeneralizedNewtypeDeriving
+      , BangPatterns
+      , LambdaCase
+      , OverloadedStrings
+
+executable spec-codegen
+    import:           warnings
+    main-is:          Spec.hs
+    build-depends:
+        base
+      , sixfour-spec
+      , text
+      , bytestring >=0.11 && <0.13
+      , vector
+      , directory  >=1.3 && <1.4
+      , filepath   >=1.4 && <1.6
+    hs-source-dirs:   app
+    default-language: Haskell2010
+    default-extensions:
+        DataKinds
+      , TypeApplications
+
+test-suite spec-tests
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          Spec.hs
+    other-modules:
+        Properties.Color
+        Properties.Gauge
+        Properties.Surjectivity
+        Properties.Wu
+        Properties.Sinkhorn
+        Properties.Hybrid
+    build-depends:
+        base
+      , sixfour-spec
+      , vector
+      , containers
+      , QuickCheck >=2.14 && <2.16
+      , tasty      >=1.4  && <1.6
+      , tasty-quickcheck >=0.10 && <0.12
+    hs-source-dirs:   test
+    default-language: Haskell2010
+    default-extensions:
+        DataKinds
+      , ScopedTypeVariables
+      , TypeApplications
+      , TypeOperators
+      , TypeFamilies
+      , ConstraintKinds
+      , FlexibleContexts
+      , KindSignatures
+      , AllowAmbiguousTypes

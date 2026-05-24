@@ -1,0 +1,156 @@
+name: SixFour
+options:
+  bundleIdPrefix: com.sixfour
+  deploymentTarget:
+    iOS: "26.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+  groupSortPosition: top
+  defaultConfig: Debug
+
+settings:
+  base:
+    SWIFT_VERSION: "6.2"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    SWIFT_STRICT_CONCURRENCY: complete
+    # Do NOT set GENERATE_INFOPLIST_FILE: YES — we ship an explicit
+    # SixFour/Info.plist via `info.path`. Enabling the generator makes
+    # Xcode synthesize a partial plist that drops CFBundleIdentifier,
+    # which then breaks `simctl install` ("Missing bundle ID").
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_REQUIRED: NO
+    # Xcode 26's Metal toolchain emits `default.metallib` with embedded
+    # source records (-frecord-sources); codesign treats it as a nested
+    # code object and the simulator's ad-hoc bundle sign won't recurse
+    # without --deep, failing with "code object is not signed at all".
+    OTHER_CODE_SIGN_FLAGS: "--deep"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    # Opt into the modern CBLAS interface so StageBSinkhorn's cblas_dgemm /
+    # cblas_dgemv calls don't emit macOS 13.3 deprecation warnings.
+    GCC_PREPROCESSOR_DEFINITIONS: "$(inherited) ACCELERATE_NEW_LAPACK=1"
+  configs:
+    Debug:
+      SWIFT_OPTIMIZATION_LEVEL: -Onone
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: -O
+
+targets:
+  SixFour:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    preBuildScripts:
+      - name: spec-codegen drift gate
+        script: |
+          # Regenerate the Swift + Python bridges into a scratch dir and
+          # diff against the committed files. Fails the build if the
+          # committed contracts have drifted from the Haskell spec.
+          #
+          # Xcode's iOS-simulator build environment exports SDKROOT /
+          # ARCHS / etc. that confuse the host-targeted GHC toolchain,
+          # so cabal is invoked through `env -i` to start clean.
+          SRC="$SRCROOT"
+          CABAL=""
+          for candidate in "$HOME/.ghcup/bin/cabal" "/opt/homebrew/bin/cabal" "/usr/local/bin/cabal"; do
+            if [ -x "$candidate" ]; then CABAL="$candidate"; break; fi
+          done
+          if [ -z "$CABAL" ]; then
+            echo "warning: cabal not found; skipping spec-codegen drift gate"
+            exit 0
+          fi
+          set -e
+          SCRATCH="$(mktemp -d)"
+          trap 'rm -rf "$SCRATCH"' EXIT
+          env -i HOME="$HOME" PATH="$HOME/.ghcup/bin:/opt/homebrew/bin:/usr/bin:/bin" \
+            sh -c "cd '$SRC/spec' && '$CABAL' run -v0 spec-codegen -- \
+              --swift-out '$SCRATCH/swift' --mlx-out '$SCRATCH/mlx' --res-out '$SCRATCH/res'"
+          if ! diff -q "$SCRATCH/swift/StageContract.swift"  "$SRC/SixFour/Generated/StageContract.swift" \
+             || ! diff -q "$SCRATCH/swift/NetContract.swift"   "$SRC/SixFour/Generated/NetContract.swift" \
+             || ! diff -q "$SCRATCH/swift/HybridContract.swift" "$SRC/SixFour/Generated/HybridContract.swift" \
+             || ! diff -q "$SCRATCH/res/stbn3d-8.bin"          "$SRC/SixFour/Resources/stbn3d-8.bin" \
+             || ! diff -q "$SCRATCH/mlx/stages.py"             "$SRC/trainer/generated/stages.py" \
+             || ! diff -q "$SCRATCH/mlx/net_shape.py"          "$SRC/trainer/generated/net_shape.py"; then
+            echo "error: SixFour/Generated/, SixFour/Resources/stbn3d-8.bin, or trainer/generated/ drifted from the spec."
+            echo "Run 'cd spec && cabal run spec-codegen' and commit the result."
+            diff -u "$SCRATCH/swift/StageContract.swift"  "$SRC/SixFour/Generated/StageContract.swift"  || true
+            diff -u "$SCRATCH/swift/NetContract.swift"    "$SRC/SixFour/Generated/NetContract.swift"    || true
+            diff -u "$SCRATCH/swift/HybridContract.swift" "$SRC/SixFour/Generated/HybridContract.swift" || true
+            diff -u "$SCRATCH/mlx/stages.py"              "$SRC/trainer/generated/stages.py"           || true
+            diff -u "$SCRATCH/mlx/net_shape.py"           "$SRC/trainer/generated/net_shape.py"        || true
+            exit 1
+          fi
+        basedOnDependencyAnalysis: false
+    sources:
+      # `path: SixFour, type: group` recursively picks up everything in
+      # SixFour/, including SixFour/Resources/stbn3d-8.bin (auto-added as
+      # a bundle-root resource). We intentionally do NOT add Resources/
+      # as a separate folder reference: doing so creates a literal
+      # `SixFour.app/Resources/` subdirectory, which simctl misreads as
+      # a nested bundle and rejects the install with "Missing bundle ID".
+      - path: SixFour
+        type: group
+    info:
+      path: SixFour/Info.plist
+      properties:
+        CFBundleDisplayName: SixFour
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "1"
+        UILaunchStoryboardName: ""
+        UILaunchScreen:
+          UIColorName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+          - UIInterfaceOrientationPortraitUpsideDown
+        NSCameraUsageDescription: >-
+          SixFour captures 64 frames at 20 fps to build a 64×64 animated GIF
+          with a global 256-color Lab palette shaped by your signature look.
+        NSPhotoLibraryAddUsageDescription: >-
+          SixFour saves your generated GIFs to the Photos library.
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sixfour.SixFour
+        DEVELOPMENT_TEAM: ""
+
+  SixFourTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: SixFourTests
+        type: group
+        optional: true
+    dependencies:
+      - target: SixFour
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sixfour.SixFourTests
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/SixFour.app/SixFour
+        SWIFT_VERSION: "6.2"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        # Test target has no explicit Info.plist; let Xcode synthesize one.
+        # (The main SixFour target ships its own SixFour/Info.plist, which
+        # is why GENERATE_INFOPLIST_FILE is intentionally OFF in the base
+        # settings — turning it on at base strips CFBundleIdentifier from
+        # the app bundle.)
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  SixFour:
+    build:
+      targets:
+        SixFour: all
+        SixFourTests: [test]
+    test:
+      targets:
+        - SixFourTests
+      gatherCoverageData: false
