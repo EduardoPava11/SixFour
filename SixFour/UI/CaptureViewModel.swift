@@ -59,6 +59,13 @@ final class CaptureViewModel {
 
     var primaryOutput: CaptureOutput?
 
+    /// Live 64×64 pixelated preview tile, updated at ~10 fps while
+    /// the session is idle (no burst in progress). The CaptureView's
+    /// "pixelated" preview mode binds to this; the toggle button in
+    /// the top bar switches between the full-res AVCaptureVideoPreview
+    /// and this downsampled view. Nil until the first frame arrives.
+    var previewTile: UIImage?
+
     private(set) var session: CaptureSession?
     private(set) var pipeline: MetalPipeline?
     private(set) var store: GeneStore?
@@ -90,6 +97,18 @@ final class CaptureViewModel {
             Self.logger.info(
                 "[viewmodel] propagated colorSpaceTag=\(session.activeColorSpaceTag.label, privacy: .public) to MetalPipeline"
             )
+
+            // Wire the live 64×64 preview path. The callback runs on
+            // the session's delegateQueue; we marshal the OKLab→UIImage
+            // conversion + assignment to the MainActor here so the
+            // SwiftUI binding fires cleanly.
+            session.previewPipeline = pipeline
+            session.previewCallback = { [weak self] tile in
+                guard let image = Self.makePreviewImage(from: tile) else { return }
+                Task { @MainActor [weak self] in
+                    self?.previewTile = image
+                }
+            }
 
             self.pipeline = pipeline
             self.session = session
@@ -268,6 +287,53 @@ final class CaptureViewModel {
         Task { @MainActor in
             UISelectionFeedbackGenerator().selectionChanged()
         }
+    }
+
+    /// Convert one 64×64 OKLab tile into a UIImage in the sRGB color
+    /// space, ready for display by SwiftUI Image(uiImage:). The pixel
+    /// data is laid out as RGBA8 (alpha = 255) so we can hand it
+    /// straight to CGImage without an intermediate vImage convert.
+    /// Cost: ~0.5 ms per call (4096 OKLab→sRGB conversions + one
+    /// CGImage create). nonisolated so it can run on the session's
+    /// delegate queue before being marshaled to MainActor.
+    nonisolated private static func makePreviewImage(from tile: OKLabTile) -> UIImage? {
+        let side = tile.side
+        let pixelCount = side * side
+        guard tile.pixels.count == pixelCount else { return nil }
+
+        // RGBA8 buffer (alpha always 255 — opaque preview).
+        var bytes = [UInt8](repeating: 255, count: pixelCount * 4)
+        for i in 0..<pixelCount {
+            let lab = OKLab(tile.pixels[i])
+            let rgb = ColorScience.okLabToSRGB8(lab)
+            let base = i * 4
+            bytes[base + 0] = rgb.x
+            bytes[base + 1] = rgb.y
+            bytes[base + 2] = rgb.z
+            // bytes[base + 3] = 255 already from repeating:
+        }
+
+        let bytesPerRow = side * 4
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else {
+            return nil
+        }
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo: CGBitmapInfo = [
+            CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            .byteOrder32Big
+        ]
+        guard let cgImage = CGImage(
+            width: side, height: side,
+            bitsPerComponent: 8, bitsPerPixel: 32,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo,
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+        ) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 
     private func makeOutputURL(extension ext: String) -> URL {

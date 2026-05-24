@@ -41,6 +41,31 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// addOutput time. Reset to `false` at every `captureBurst` start.
     private var firstFrameVerified = false
 
+    // MARK: - Live 64×64 preview
+
+    /// Persistent reference to the MetalPipeline used for both burst
+    /// capture and idle preview. ViewModel assigns this once during
+    /// bootstrap; the delegate uses it for preview submissions while
+    /// `collecting == false`. Burst capture still passes a pipeline
+    /// to `captureBurst(into:)` — usually the same instance — but the
+    /// signature stays parameterized for testability.
+    var previewPipeline: MetalPipeline?
+
+    /// Callback fired with the latest 64×64 OKLab tile while the
+    /// session is idle (no burst in progress). Throttled to ~10 fps
+    /// via `previewMinIntervalNanos`. Set to nil to disable preview.
+    /// The callback runs on `delegateQueue`, NOT the main actor —
+    /// the receiver is responsible for dispatching UI updates.
+    var previewCallback: (@Sendable (OKLabTile) -> Void)?
+
+    /// Last preview submission timestamp (nanoseconds since boot) for
+    /// throttling. Only touched on `delegateQueue`.
+    private var lastPreviewSubmitNanos: UInt64 = 0
+
+    /// Throttle: 100 ms = 10 fps. Capture delegate fires at 20 fps, so
+    /// every second frame becomes a preview submission.
+    private static let previewMinIntervalNanos: UInt64 = 100_000_000
+
     /// Result of a completed 64-frame burst.
     struct BurstResult: Sendable {
         let tiles: [OKLabTile]
@@ -630,9 +655,18 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         // Always on delegateQueue.
-        guard collecting else { return }
-        guard submittedCount < targetFrameCount else { return }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+
+        // If no burst is in progress, route to the live preview path
+        // (throttled to ~10 fps). Burst capture has priority — when
+        // `collecting == true` we skip preview entirely to keep the
+        // GPU free for the burst pipeline.
+        if !collecting {
+            tryEnqueuePreviewFrame(pixelBuffer: pixelBuffer)
+            return
+        }
+
+        guard submittedCount < targetFrameCount else { return }
         guard let pipeline = pipelineRef else { return }
 
         // First-frame format verification — the only reliable signal
@@ -702,5 +736,35 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         Self.log.warning("Camera DROPPED a frame (kernel-side)")
+    }
+
+    /// Submit `pixelBuffer` through the same Metal pipeline used for
+    /// burst capture, but solely for the live 64×64 preview. Throttled
+    /// to ~10 fps (every other camera frame at 20 fps). Result is
+    /// delivered to `previewCallback` from the GPU completion handler
+    /// — receiver is responsible for dispatching to the main actor.
+    ///
+    /// Called only on `delegateQueue` when `collecting == false`. Burst
+    /// capture has priority and short-circuits this path.
+    private func tryEnqueuePreviewFrame(pixelBuffer: CVPixelBuffer) {
+        guard let pipeline = previewPipeline, let callback = previewCallback else { return }
+        // Throttle by mach time. clock_gettime_nsec_np is monotonic +
+        // ~ns precision; ContinuousClock would also work but mach
+        // avoids the wrapper allocation per frame.
+        let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        if now - lastPreviewSubmitNanos < Self.previewMinIntervalNanos { return }
+        lastPreviewSubmitNanos = now
+        do {
+            try pipeline.submitAsync(pixelBuffer: pixelBuffer, captureNanos: now) { tile in
+                // GPU completion handler — runs on whatever queue Metal
+                // picks. Hand off to the receiver immediately; they're
+                // responsible for marshaling to the main actor.
+                callback(tile)
+            }
+        } catch {
+            // Preview failures are non-fatal — burst capture still
+            // works. Log once per error to avoid spam.
+            Self.log.debug("[capture] preview submit failed: \(String(describing: error), privacy: .public)")
+        }
     }
 }

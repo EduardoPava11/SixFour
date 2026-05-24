@@ -1,9 +1,18 @@
 import SwiftUI
 
 struct CaptureView: View {
+    /// Preview mode for the camera viewport. .fullRes shows the
+    /// AVCaptureVideoPreviewLayer at sensor resolution (the framing
+    /// reference). .pixelated shows the 64×64 OKLab tile rendered
+    /// through the actual capture pipeline, upscaled with
+    /// nearest-neighbour so the user sees exactly what the GIF will
+    /// look like. Toggle button in the top bar switches between them.
+    enum PreviewMode { case fullRes, pixelated }
+
     @State private var vm = CaptureViewModel()
     @State private var showCompose = false
     @State private var reticle: ReticleHit? = nil
+    @State private var previewMode: PreviewMode = .fullRes
 
     var body: some View {
         rootContent
@@ -53,26 +62,46 @@ struct CaptureView: View {
                 // (within 1%) the actual integer-multiple crop we ship to Metal.
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
-                    if let session = vm.session?.session {
-                        CameraPreview(session: session) { devicePoint, localPoint in
-                            vm.focus(at: devicePoint)
-                            let absolutePoint = CGPoint(
-                                x: localPoint.x + (proxy.size.width - side) / 2,
-                                y: localPoint.y + previewYOffset
-                            )
-                            reticle = ReticleHit(point: absolutePoint, id: UUID())
+                    ZStack {
+                        if let session = vm.session?.session {
+                            CameraPreview(session: session) { devicePoint, localPoint in
+                                vm.focus(at: devicePoint)
+                                let absolutePoint = CGPoint(
+                                    x: localPoint.x + (proxy.size.width - side) / 2,
+                                    y: localPoint.y + previewYOffset
+                                )
+                                reticle = ReticleHit(point: absolutePoint, id: UUID())
+                            }
+                            .opacity(previewMode == .fullRes ? 1 : 0)
+                            // The pixelated preview overlay rides on top
+                            // when the user toggles to .pixelated. It's
+                            // the same 64×64 OKLab tile the burst pipeline
+                            // produces, rendered through CGImage with
+                            // nearest-neighbour upscaling for the
+                            // unmistakable 64×64 look.
+                            if previewMode == .pixelated {
+                                if let img = vm.previewTile {
+                                    Image(uiImage: img)
+                                        .interpolation(.none)
+                                        .resizable()
+                                        .scaledToFill()
+                                } else {
+                                    // First-frame fallback — black until
+                                    // the preview path delivers its
+                                    // first tile (~100 ms after bootstrap).
+                                    Color.black
+                                }
+                            }
+                        } else {
+                            Rectangle().fill(.black)
                         }
-                        .frame(width: side, height: side)
-                        .clipped()
-                        .overlay(
-                            Rectangle()
-                                .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
-                        )
-                    } else {
-                        Rectangle()
-                            .fill(.black)
-                            .frame(width: side, height: side)
                     }
+                    .frame(width: side, height: side)
+                    .clipped()
+                    .overlay(
+                        Rectangle()
+                            .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
+                    )
                     Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -108,11 +137,30 @@ struct CaptureView: View {
     }
 
     private var topBar: some View {
-        HStack {
+        HStack(spacing: 10) {
             Text("SixFour")
                 .font(.system(.title2, design: .monospaced, weight: .bold))
                 .foregroundStyle(.white.opacity(0.9))
             Spacer()
+            // Preview toggle — swaps the full-res camera preview for
+            // the live 64×64 downsampled tile (the actual GIF look,
+            // upscaled with nearest-neighbour). Icon flips between a
+            // sharp-edged camera and a pixel grid so the current
+            // mode is unambiguous.
+            Button {
+                previewMode = (previewMode == .fullRes) ? .pixelated : .fullRes
+            } label: {
+                Image(systemName: previewMode == .fullRes
+                      ? "squareshape.split.2x2"
+                      : "camera")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .padding(8)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .accessibilityLabel(previewMode == .fullRes
+                                ? "Switch to 64×64 pixelated preview"
+                                : "Switch to full-resolution preview")
             Button {
                 showCompose = true
             } label: {
