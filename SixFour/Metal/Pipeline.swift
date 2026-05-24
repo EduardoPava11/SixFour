@@ -59,10 +59,15 @@ final class MetalPipeline: @unchecked Sendable {
     private let cropDownsampleLinearizePSO: any MTLComputePipelineState
     private let linearToOklabPSO: any MTLComputePipelineState
     private let unsharpPSO: any MTLComputePipelineState
-    private let kmeansSeedPSO: any MTLComputePipelineState
-    private let kmeansResetPSO: any MTLComputePipelineState
-    private let kmeansAssignAccumulatePSO: any MTLComputePipelineState
-    private let kmeansFinalizePSO: any MTLComputePipelineState
+    let kmeansSeedPSO: any MTLComputePipelineState
+    let kmeansResetPSO: any MTLComputePipelineState
+    let kmeansAssignAccumulatePSO: any MTLComputePipelineState
+    let kmeansFinalizePSO: any MTLComputePipelineState
+    /// Post-Lloyd: K threads compute per-cluster covariance from the
+    /// outer-product atomics accumulated in KMeansBin and write 6
+    /// floats (upper triangle of Σ) per cluster to the covariances
+    /// buffer. Added when ClusterStatistics landed.
+    let kmeansFinalizeStatsPSO: any MTLComputePipelineState
 
     init(tileSide: Int = 64, kMeansK: Int = SixFourShape.K) throws {
         guard let dev = MTLCreateSystemDefaultDevice() else { throw MetalPipelineError.noDevice }
@@ -87,6 +92,7 @@ final class MetalPipeline: @unchecked Sendable {
         self.kmeansResetPSO = try pso("kmeansResetKernel")
         self.kmeansAssignAccumulatePSO = try pso("kmeansAssignAccumulateKernel")
         self.kmeansFinalizePSO = try pso("kmeansFinalizeKernel")
+        self.kmeansFinalizeStatsPSO = try pso("kmeansFinalizeStatsKernel")
         Self.logger.info("MetalPipeline init: tileSide=\(tileSide) kMeansK=\(kMeansK) device=\(dev.name)")
     }
 
@@ -150,7 +156,7 @@ final class MetalPipeline: @unchecked Sendable {
     ///
     /// This is the half of Stage A that used to live inside `submitAsync`;
     /// hoisting it out keeps the delegate queue light during capture.
-    func runStageAKMeansBatch(tiles: [OKLabTile]) throws -> [OKLabTile] {
+    func runStageAKMeansBatch(tiles: [OKLabTile]) throws -> [ClusterStatistics] {
         precondition(!tiles.isEmpty, "runStageAKMeansBatch: tiles must be non-empty")
         let frameCount = tiles.count
         Self.logger.info(
@@ -158,30 +164,46 @@ final class MetalPipeline: @unchecked Sendable {
         )
         let started = ContinuousClock().now
 
-        // Per-tile scratch GPU buffers. centroids + shift are shared so the
-        // host can read them after the command buffer completes; bins is
-        // private since we never look at it from the host.
-        let centroidBytes = kMeansK * MemoryLayout<SIMD4<Float>>.stride
-        let binBytes = kMeansK * Self.kMeansBinStride
-        var centroidBufs: [any MTLBuffer] = []
-        var binBufs: [any MTLBuffer] = []
-        var shiftBufs: [any MTLBuffer] = []
-        var tileTextures: [any MTLTexture] = []
+        // Per-tile scratch GPU buffers. centroids/shift/covariances/
+        // assignments are shared so the host can read them after the
+        // command buffer completes; bins is private since we never
+        // look at it from the host (only the GPU kernels read/write
+        // it, and the kmeansFinalizeStatsKernel forwards the
+        // statistics into the host-visible covariances buffer).
+        let centroidBytes   = kMeansK * MemoryLayout<SIMD4<Float>>.stride
+        let binBytes        = kMeansK * Self.kMeansBinStride
+        let shiftBytes      = MemoryLayout<UInt32>.stride
+        let covarianceBytes = kMeansK * Self.kMeansCovarianceStride
+        let pixelCount      = tileSide * tileSide
+        let assignmentBytes = pixelCount * MemoryLayout<UInt16>.stride
+
+        var centroidBufs:    [any MTLBuffer] = []
+        var binBufs:         [any MTLBuffer] = []
+        var shiftBufs:       [any MTLBuffer] = []
+        var covarianceBufs:  [any MTLBuffer] = []
+        var assignmentBufs:  [any MTLBuffer] = []
+        var tileTextures:    [any MTLTexture] = []
         centroidBufs.reserveCapacity(frameCount)
         binBufs.reserveCapacity(frameCount)
         shiftBufs.reserveCapacity(frameCount)
+        covarianceBufs.reserveCapacity(frameCount)
+        assignmentBufs.reserveCapacity(frameCount)
         tileTextures.reserveCapacity(frameCount)
 
         for tile in tiles {
             guard
-                let cBuf = device.makeBuffer(length: centroidBytes, options: [.storageModeShared]),
-                let bBuf = device.makeBuffer(length: binBytes, options: [.storageModePrivate]),
-                let sBuf = device.makeBuffer(length: MemoryLayout<UInt32>.stride, options: [.storageModeShared])
+                let cBuf  = device.makeBuffer(length: centroidBytes,   options: [.storageModeShared]),
+                let bBuf  = device.makeBuffer(length: binBytes,        options: [.storageModePrivate]),
+                let sBuf  = device.makeBuffer(length: shiftBytes,      options: [.storageModeShared]),
+                let vBuf  = device.makeBuffer(length: covarianceBytes, options: [.storageModeShared]),
+                let aBuf  = device.makeBuffer(length: assignmentBytes, options: [.storageModeShared])
             else { throw MetalPipelineError.commandFailed }
             sBuf.contents().bindMemory(to: UInt32.self, capacity: 1).pointee = 0
             centroidBufs.append(cBuf)
             binBufs.append(bBuf)
             shiftBufs.append(sBuf)
+            covarianceBufs.append(vBuf)
+            assignmentBufs.append(aBuf)
 
             // Stage the tile pixels back into a Metal texture so the
             // k-means kernels can sample it. (The original
@@ -214,7 +236,18 @@ final class MetalPipeline: @unchecked Sendable {
                 centroids: centroidBufs[i],
                 bins: binBufs[i],
                 shift: shiftBufs[i],
+                assignments: assignmentBufs[i],
                 iterations: kMeansIterations,
+                K: kMeansK
+            )
+            // After the last Lloyd iteration the bins still hold the
+            // accumulated sums; compute covariances before the next
+            // iteration would reset them. (There IS no next iteration
+            // — we run this kernel once per tile, post-Lloyd.)
+            try encodeKMeansFinalizeStats(
+                cmd: cmd,
+                bins: binBufs[i],
+                covariances: covarianceBufs[i],
                 K: kMeansK
             )
         }
@@ -226,34 +259,91 @@ final class MetalPipeline: @unchecked Sendable {
             throw MetalPipelineError.commandFailed
         }
 
-        // Read back palette + shift per tile and produce new OKLabTiles.
-        var out: [OKLabTile] = []
+        // Read back centroids + covariances + assignments per tile;
+        // assemble ClusterStatistics. The provenance.mse is computed
+        // CPU-side from tile.pixels + assignments + centroids (one
+        // pass over 4096 pixels per tile, ~50 µs).
+        var out: [ClusterStatistics] = []
         out.reserveCapacity(frameCount)
         var shiftAccum: Float = 0
+        var mseAccum: Float = 0
+        let tileExtractMs = Self.millis(ContinuousClock().now - started) / max(1, frameCount)
         for i in 0..<frameCount {
             let cPtr = centroidBufs[i].contents().bindMemory(to: SIMD4<Float>.self, capacity: kMeansK)
-            var palette = [SIMD3<Float>](repeating: .zero, count: kMeansK)
-            for k in 0..<kMeansK {
-                let c = cPtr[k]
-                palette[k] = SIMD3<Float>(c.x, c.y, c.z)
-            }
+            let vPtr = covarianceBufs[i].contents().bindMemory(to: Float.self, capacity: kMeansK * 6)
+            let aPtr = assignmentBufs[i].contents().bindMemory(to: UInt16.self, capacity: pixelCount)
             let shiftRaw = shiftBufs[i].contents().bindMemory(to: UInt32.self, capacity: 1).pointee
             let finalShift = Float(shiftRaw) / 65536.0
             shiftAccum += finalShift
-            let src = tiles[i]
-            out.append(OKLabTile(
-                side: src.side,
-                pixels: src.pixels,
-                captureNanos: src.captureNanos,
-                palette: palette,
-                finalShift: finalShift
+
+            // Per-cluster (mean, Σ, count). Count comes from a CPU
+            // pass over assignments (the bins buffer is .private and
+            // not host-readable; this is cheap — 4096 increments).
+            var counts = [UInt32](repeating: 0, count: kMeansK)
+            let assignments = Array(UnsafeBufferPointer(start: aPtr, count: pixelCount))
+            for a in assignments {
+                counts[Int(a)] &+= 1
+            }
+
+            // MSE = (1/N) Σ ‖pixel − centroid[assignment]‖² in OKLab units².
+            var sse: Float = 0
+            let pixels = tiles[i].pixels
+            for p in 0..<pixelCount {
+                let c4 = cPtr[Int(assignments[p])]
+                let d = pixels[p] - SIMD3<Float>(c4.x, c4.y, c4.z)
+                sse += simd_dot(d, d)
+            }
+            let mse = sse / Float(pixelCount)
+            mseAccum += mse
+
+            var clusters = [ClusterStatistics.Cluster](repeating: ClusterStatistics.Cluster(
+                mean: .zero, covariance: ClusterStatistics.Cluster.emptyCovariance, count: 0
+            ), count: kMeansK)
+            for k in 0..<kMeansK {
+                let c4 = cPtr[k]
+                let base = k * 6
+                let LL = vPtr[base + 0]
+                let La = vPtr[base + 1]
+                let Lb = vPtr[base + 2]
+                let aa = vPtr[base + 3]
+                let ab = vPtr[base + 4]
+                let bb = vPtr[base + 5]
+                // simd_float3x3 columns: [col0, col1, col2]. Symmetric Σ:
+                //   row 0: (LL, La, Lb)
+                //   row 1: (La, aa, ab)
+                //   row 2: (Lb, ab, bb)
+                let sigma = simd_float3x3(
+                    columns: (
+                        SIMD3<Float>(LL, La, Lb),
+                        SIMD3<Float>(La, aa, ab),
+                        SIMD3<Float>(Lb, ab, bb)
+                    )
+                )
+                clusters[k] = ClusterStatistics.Cluster(
+                    mean: SIMD3<Float>(c4.x, c4.y, c4.z),
+                    covariance: sigma,
+                    count: counts[k]
+                )
+            }
+
+            let provenance = ClusterStatistics.Provenance(
+                family: .iterativeKMeans,
+                parameters: .kMeans(seed: .uniformStride, iterations: kMeansIterations),
+                extractMillis: tileExtractMs,
+                mse: mse
+            )
+            out.append(ClusterStatistics(
+                clusters: clusters,
+                assignments: assignments,
+                provenance: provenance
             ))
         }
         let elapsed = ContinuousClock().now - started
         let ms = Self.millis(elapsed)
         let meanShift = shiftAccum / Float(frameCount)
+        let meanMSE = mseAccum / Float(frameCount)
         Self.logger.info(
-            "runStageAKMeansBatch done in \(ms)ms (mean final shift=\(meanShift), \(ms / max(1, frameCount))ms/frame)"
+            "runStageAKMeansBatch done in \(ms)ms (mean final shift=\(meanShift), mean MSE=\(meanMSE), \(ms / max(1, frameCount))ms/frame)"
         )
         return out
     }
@@ -298,9 +388,15 @@ final class MetalPipeline: @unchecked Sendable {
         let output: any MTLTexture
     }
 
-    /// Byte stride of one `KMeansBin` matching the Metal struct definition
-    /// (four 32-bit atomics, no padding required at 16-byte alignment).
-    static let kMeansBinStride: Int = 16
+    /// Byte stride of one `KMeansBin`. Currently 10 × 4-byte atomics:
+    /// 4 linear sums (sum_L, sum_a, sum_b, count) + 6 outer-product
+    /// sums for covariance (sum_LL, sum_La, sum_Lb, sum_aa, sum_ab,
+    /// sum_bb). atomic_int / atomic_uint are 4 bytes each with no
+    /// alignment padding required at 4-byte boundaries.
+    static let kMeansBinStride: Int = 40
+    /// Byte stride of one covariance entry (upper triangle of 3×3
+    /// symmetric Σ: LL, La, Lb, aa, ab, bb).
+    static let kMeansCovarianceStride: Int = 6 * MemoryLayout<Float>.stride
 
     private func allocateIntermediates() throws -> Intermediates {
         return Intermediates(
@@ -388,12 +484,19 @@ final class MetalPipeline: @unchecked Sendable {
     /// seed once, then `iterations × (reset, assign+accumulate, finalize)`.
     /// Centroids and shift live in shared-storage buffers so the completion
     /// handler can read them back directly without an extra copy pass.
+    ///
+    /// `assignments` is a `pixels × ushort` device buffer that the
+    /// assign+accumulate kernel writes per pixel each iteration; only
+    /// the last iteration's write is observable (each pixel slot is
+    /// overwritten). Used by KMeansExtractor to populate
+    /// `ClusterStatistics.assignments`.
     func encodeKMeans(
         cmd: any MTLCommandBuffer,
         tile: any MTLTexture,
         centroids: any MTLBuffer,
         bins: any MTLBuffer,
         shift: any MTLBuffer,
+        assignments: any MTLBuffer,
         iterations: Int,
         K: Int
     ) throws {
@@ -419,6 +522,7 @@ final class MetalPipeline: @unchecked Sendable {
                 enc.setBuffer(centroids, offset: 0, index: 0)
                 enc.setBuffer(bins, offset: 0, index: 1)
                 enc.setBytes(&kVar, length: MemoryLayout<UInt32>.size, index: 2)
+                enc.setBuffer(assignments, offset: 0, index: 3)
             }
             // Finalize: K threads divide sum/count, accumulate shift.
             try dispatch1D(cmd: cmd, pso: kmeansFinalizePSO, threadCount: K) { enc in
@@ -427,6 +531,28 @@ final class MetalPipeline: @unchecked Sendable {
                 enc.setBuffer(shift, offset: 0, index: 2)
                 enc.setBytes(&kVar, length: MemoryLayout<UInt32>.size, index: 3)
             }
+        }
+    }
+
+    /// Encode the post-Lloyd covariance pass: K threads, one per
+    /// cluster. Reads the outer-product atomics + linear sums from
+    /// `bins`, computes Σ = E[xxᵀ] − μμᵀ, and writes 6 floats
+    /// (upper triangle: LL, La, Lb, aa, ab, bb) per cluster to
+    /// `covariances`. Must be encoded AFTER the Lloyd loop, on the
+    /// same command buffer; the bins must still hold the last
+    /// iteration's accumulations (do NOT reset between Lloyd's last
+    /// finalize and this kernel).
+    func encodeKMeansFinalizeStats(
+        cmd: any MTLCommandBuffer,
+        bins: any MTLBuffer,
+        covariances: any MTLBuffer,
+        K: Int
+    ) throws {
+        var kVar = UInt32(K)
+        try dispatch1D(cmd: cmd, pso: kmeansFinalizeStatsPSO, threadCount: K) { enc in
+            enc.setBuffer(bins, offset: 0, index: 0)
+            enc.setBuffer(covariances, offset: 0, index: 1)
+            enc.setBytes(&kVar, length: MemoryLayout<UInt32>.size, index: 2)
         }
     }
 

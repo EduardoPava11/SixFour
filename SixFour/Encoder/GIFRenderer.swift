@@ -67,10 +67,29 @@ struct GIFRenderer {
         }
 
         onPhase?(.stageA)
-        // Batched GPU k-means on all tiles — the half of Stage A that
-        // used to fold into submitAsync, hoisted here so the camera
-        // delegate queue stays light during capture.
-        let tilesWithPalettes = try pipeline.runStageAKMeansBatch(tiles: tiles)
+        // Per-frame palette extraction via the PaletteExtractor
+        // protocol. KMeansExtractor wraps the existing GPU batched
+        // k-means + new covariance/assignment readback; the result
+        // is `[ClusterStatistics]` (one per tile) carrying per-cluster
+        // (μ, Σ, count) and the per-pixel assignment. We stitch the
+        // centroids back into each OKLabTile.palette for downstream
+        // Dither + encoder back-compat. The rich statistics flow
+        // through `perFrameStatistics` once Phase C (CaptureBundle)
+        // lands; for Phase A they're computed but not yet surfaced.
+        let extractor = KMeansExtractor(pipeline: pipeline)
+        let perFrameStats = try extractor.extractBatch(tiles: tiles, K: pipeline.kMeansK)
+        let tilesWithPalettes: [OKLabTile] = zip(tiles, perFrameStats).map { tile, stats in
+            OKLabTile(
+                side: tile.side,
+                pixels: tile.pixels,
+                captureNanos: tile.captureNanos,
+                palette: stats.clusters.map { $0.mean },
+                finalShift: 0
+            )
+        }
+        // Suppress unused warning until Phase C wires perFrameStats
+        // into a CaptureBundle for downstream editing tools.
+        _ = perFrameStats
 
         var generator = PaletteGenerator()
         generator.refinementMetric = refinementMetric

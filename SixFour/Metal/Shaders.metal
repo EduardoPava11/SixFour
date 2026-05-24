@@ -292,15 +292,33 @@ kernel void unsharpMaskLKernel(
 //
 // Buffer layout
 // -------------
-// centroidsBuf : 256 × float4    (xyz = OKLab, w unused)
-// binsBuf      : 256 × KMeansBin (atomic_int sum_L, sum_a, sum_b; atomic_uint count)
-// shiftBuf     : single atomic_uint, accumulated Σ‖μ' − μ‖² × 2^16
+// centroidsBuf    : 256 × float4    (xyz = OKLab, w unused)
+// binsBuf         : 256 × KMeansBin (4 sum atomics + 6 outer-product atomics + count)
+// shiftBuf        : single atomic_uint, accumulated Σ‖μ' − μ‖² × 2^16
+// assignmentsBuf  : pixels × ushort  (per-pixel cluster index, last-iter wins)
+// covariancesBuf  : 256 × 6 floats   (upper triangle of per-cluster Σ: LL, La, Lb, aa, ab, bb)
+//
+// Outer-product atomics enable per-cluster covariance derivation without
+// a CPU pass over the pixel array. Cost: 6 extra atomic adds per pixel
+// per Lloyd iteration (negligible). The new `kmeansFinalizeStatsKernel`
+// runs ONCE after the Lloyd loop, computes Σ = E[xxᵀ] − μμᵀ from the
+// accumulated outer products + final centroids, and writes 6 floats
+// per cluster for the host to assemble into simd_float3x3.
 
 struct KMeansBin {
     atomic_int  sum_L;
     atomic_int  sum_a;
     atomic_int  sum_b;
     atomic_uint count;
+    // Outer-product accumulators for covariance. Same fixed-point
+    // scale (×2^16) as the linear sums. Worst-case |p_i × p_j| ≤ 1,
+    // so 4096 × 65536 ≈ 268M — fits in int32 with headroom.
+    atomic_int  sum_LL;
+    atomic_int  sum_La;
+    atomic_int  sum_Lb;
+    atomic_int  sum_aa;
+    atomic_int  sum_ab;
+    atomic_int  sum_bb;
 };
 
 // Seed step: write K initial centroids as uniform-stride samples from the
@@ -339,6 +357,15 @@ kernel void kmeansResetKernel(
     atomic_store_explicit(&bins[k].sum_a, 0, memory_order_relaxed);
     atomic_store_explicit(&bins[k].sum_b, 0, memory_order_relaxed);
     atomic_store_explicit(&bins[k].count, 0u, memory_order_relaxed);
+    // Outer-product accumulators for covariance — same zero-reset
+    // pattern. The Σ = E[xxᵀ] − μμᵀ math needs a clean slate per
+    // iteration, same as the linear sums.
+    atomic_store_explicit(&bins[k].sum_LL, 0, memory_order_relaxed);
+    atomic_store_explicit(&bins[k].sum_La, 0, memory_order_relaxed);
+    atomic_store_explicit(&bins[k].sum_Lb, 0, memory_order_relaxed);
+    atomic_store_explicit(&bins[k].sum_aa, 0, memory_order_relaxed);
+    atomic_store_explicit(&bins[k].sum_ab, 0, memory_order_relaxed);
+    atomic_store_explicit(&bins[k].sum_bb, 0, memory_order_relaxed);
 }
 
 // Fused assignment + accumulation. One thread per pixel: find nearest of
@@ -350,6 +377,7 @@ kernel void kmeansAssignAccumulateKernel(
     device const float4*            centroids [[buffer(0)]],
     device KMeansBin*               bins [[buffer(1)]],
     constant uint&                  K [[buffer(2)]],
+    device ushort*                  assignments [[buffer(3)]],
     uint                            gid [[thread_position_in_grid]],
     uint                            tid [[thread_position_in_threadgroup]],
     uint                            tgSize [[threads_per_threadgroup]]
@@ -378,6 +406,7 @@ kernel void kmeansAssignAccumulateKernel(
         if (sq < bestD) { bestD = sq; bestK = k; }
     }
 
+    // Linear sums (existing).
     int sL = int(round(lab.x * 65536.0f));
     int sA = int(round(lab.y * 65536.0f));
     int sB = int(round(lab.z * 65536.0f));
@@ -385,6 +414,26 @@ kernel void kmeansAssignAccumulateKernel(
     atomic_fetch_add_explicit(&bins[bestK].sum_a, sA, memory_order_relaxed);
     atomic_fetch_add_explicit(&bins[bestK].sum_b, sB, memory_order_relaxed);
     atomic_fetch_add_explicit(&bins[bestK].count, 1u,  memory_order_relaxed);
+
+    // Outer-product sums for covariance. Same ×2^16 fixed-point scale.
+    // Worst case |p_i × p_j| ≤ 1; 4096 × 65536 ≈ 268M fits in int32.
+    int sLL = int(round(lab.x * lab.x * 65536.0f));
+    int sLa = int(round(lab.x * lab.y * 65536.0f));
+    int sLb = int(round(lab.x * lab.z * 65536.0f));
+    int saa = int(round(lab.y * lab.y * 65536.0f));
+    int sab = int(round(lab.y * lab.z * 65536.0f));
+    int sbb = int(round(lab.z * lab.z * 65536.0f));
+    atomic_fetch_add_explicit(&bins[bestK].sum_LL, sLL, memory_order_relaxed);
+    atomic_fetch_add_explicit(&bins[bestK].sum_La, sLa, memory_order_relaxed);
+    atomic_fetch_add_explicit(&bins[bestK].sum_Lb, sLb, memory_order_relaxed);
+    atomic_fetch_add_explicit(&bins[bestK].sum_aa, saa, memory_order_relaxed);
+    atomic_fetch_add_explicit(&bins[bestK].sum_ab, sab, memory_order_relaxed);
+    atomic_fetch_add_explicit(&bins[bestK].sum_bb, sbb, memory_order_relaxed);
+
+    // Per-pixel assignment — last-iter wins (each Lloyd iter overwrites
+    // the same slot). The Swift caller reads `assignments` after the
+    // final iteration; intermediate values are never observed.
+    assignments[gid] = ushort(bestK);
 }
 
 // Finalize: K threads. For each centroid k, divide the bin sum by the
@@ -418,4 +467,57 @@ kernel void kmeansFinalizeKernel(
     uint distFP = uint(clamp(distSq, 0.0f, 64.0f) * 65536.0f);
     atomic_fetch_add_explicit(shiftFP, distFP, memory_order_relaxed);
     centroids[k] = newC;
+}
+
+// Finalize statistics: K threads, one per cluster. Reads the outer-product
+// atomics + linear sums accumulated during the LAST Lloyd iteration and
+// computes per-cluster sample covariance:
+//
+//   Σ = E[xxᵀ] − μμᵀ
+//
+// where μ is the cluster mean (centroid) and E[xxᵀ] is the average outer
+// product over the assigned pixels. Σ is symmetric 3×3 PSD — we write
+// only the upper triangle (6 floats per cluster: LL, La, Lb, aa, ab, bb)
+// to halve the buffer footprint and skip redundant reads. The host
+// assembles a `simd_float3x3` from these 6 values.
+//
+// Empty-cluster convention: writes (1e-6, 0, 0, 1e-6, 0, 1e-6) — a tiny
+// isotropic Σ. Consumers MUST check `count > 0` before treating it as
+// meaningful (the value is just numerically safe; not statistically real).
+//
+// Output layout: covariances[k * 6 + 0..5] = (LL, La, Lb, aa, ab, bb).
+kernel void kmeansFinalizeStatsKernel(
+    device const KMeansBin* bins        [[buffer(0)]],
+    device float*           covariances [[buffer(1)]],
+    constant uint&          K           [[buffer(2)]],
+    uint                    k           [[thread_position_in_grid]]
+) {
+    if (k >= K) return;
+    uint count = atomic_load_explicit(&bins[k].count, memory_order_relaxed);
+    uint base = k * 6u;
+    if (count == 0u) {
+        covariances[base + 0u] = 1e-6f;
+        covariances[base + 1u] = 0.0f;
+        covariances[base + 2u] = 0.0f;
+        covariances[base + 3u] = 1e-6f;
+        covariances[base + 4u] = 0.0f;
+        covariances[base + 5u] = 1e-6f;
+        return;
+    }
+    float inv = 1.0f / (65536.0f * float(count));
+    float mL = float(atomic_load_explicit(&bins[k].sum_L,  memory_order_relaxed)) * inv;
+    float ma = float(atomic_load_explicit(&bins[k].sum_a,  memory_order_relaxed)) * inv;
+    float mb = float(atomic_load_explicit(&bins[k].sum_b,  memory_order_relaxed)) * inv;
+    float ELL = float(atomic_load_explicit(&bins[k].sum_LL, memory_order_relaxed)) * inv;
+    float ELa = float(atomic_load_explicit(&bins[k].sum_La, memory_order_relaxed)) * inv;
+    float ELb = float(atomic_load_explicit(&bins[k].sum_Lb, memory_order_relaxed)) * inv;
+    float Eaa = float(atomic_load_explicit(&bins[k].sum_aa, memory_order_relaxed)) * inv;
+    float Eab = float(atomic_load_explicit(&bins[k].sum_ab, memory_order_relaxed)) * inv;
+    float Ebb = float(atomic_load_explicit(&bins[k].sum_bb, memory_order_relaxed)) * inv;
+    covariances[base + 0u] = ELL - mL * mL;
+    covariances[base + 1u] = ELa - mL * ma;
+    covariances[base + 2u] = ELb - mL * mb;
+    covariances[base + 3u] = Eaa - ma * ma;
+    covariances[base + 4u] = Eab - ma * mb;
+    covariances[base + 5u] = Ebb - mb * mb;
 }

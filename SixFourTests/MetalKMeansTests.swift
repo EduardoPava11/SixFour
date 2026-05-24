@@ -49,11 +49,18 @@ struct MetalKMeansTests {
             )
         }
 
-        let centroidsBytes = K * MemoryLayout<SIMD4<Float>>.stride
-        let binsBytes      = K * MetalPipeline.kMeansBinStride
-        let centroids = try #require(device.makeBuffer(length: centroidsBytes, options: [.storageModeShared]))
-        let bins      = try #require(device.makeBuffer(length: binsBytes,      options: [.storageModePrivate]))
-        let shift     = try #require(device.makeBuffer(length: MemoryLayout<UInt32>.stride, options: [.storageModeShared]))
+        let centroidsBytes  = K * MemoryLayout<SIMD4<Float>>.stride
+        let binsBytes       = K * MetalPipeline.kMeansBinStride
+        let assignmentBytes = side * side * MemoryLayout<UInt16>.stride
+        let centroids   = try #require(device.makeBuffer(length: centroidsBytes,  options: [.storageModeShared]))
+        let bins        = try #require(device.makeBuffer(length: binsBytes,       options: [.storageModePrivate]))
+        let shift       = try #require(device.makeBuffer(length: MemoryLayout<UInt32>.stride, options: [.storageModeShared]))
+        // assignments buffer added when KMeansBin gained covariance
+        // atomics; the assign+accumulate kernel now writes per-pixel
+        // assignments here for downstream MSE / editing-tool use.
+        // This test doesn't read assignments back — it only checks
+        // centroid parity — but the buffer is required by the kernel.
+        let assignments = try #require(device.makeBuffer(length: assignmentBytes, options: [.storageModeShared]))
         shift.contents().bindMemory(to: UInt32.self, capacity: 1).pointee = 0
 
         let cmd = try #require(pipeline.queue.makeCommandBuffer())
@@ -63,6 +70,7 @@ struct MetalKMeansTests {
             centroids: centroids,
             bins: bins,
             shift: shift,
+            assignments: assignments,
             iterations: iterations,
             K: K
         )
