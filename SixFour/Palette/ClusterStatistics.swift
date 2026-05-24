@@ -19,7 +19,7 @@ import simd
 ///    the principal eigenvector, or re-quantize under a
 ///    Mahalanobis-weighted metric. None of these consumers exist
 ///    yet; this type is the contract they'll bind against.
-struct ClusterStatistics: Sendable {
+struct ClusterStatistics: Sendable, Codable {
     /// Per-cluster moments. Length == K (256 by default). Index k in
     /// this array corresponds to palette index k in the GIF.
     let clusters: [Cluster]
@@ -41,17 +41,64 @@ struct ClusterStatistics: Sendable {
     /// (count == 0) carry an identity-scaled covariance to keep
     /// consumers numerically safe; consumers MUST check `count > 0`
     /// before treating the moments as meaningful.
-    struct Cluster: Sendable {
+    ///
+    /// Custom Codable because `simd_float3x3` isn't Codable. We
+    /// flatten Σ to 6 floats (upper triangle: LL, La, Lb, aa, ab, bb)
+    /// since the matrix is symmetric — same convention used in
+    /// `kmeansFinalizeStatsKernel`'s GPU output. Halves the
+    /// serialized size vs. storing all 9 floats.
+    struct Cluster: Sendable, Codable {
         /// OKLab centroid; equivalent to `OKLabTile.palette[k]`.
         let mean: SIMD3<Float>
         /// Sample covariance Σ = E[xxᵀ] − μμᵀ over the assigned
         /// pixels. Always PSD by construction; eigendecomposable
-        /// via LAPACK `ssyev_` for principal-axis analysis.
+        /// via the closed-form solver in ClusterStatisticsOps.
         /// Convention for empty clusters: `matrix_identity_float3x3 * 1e-6`.
         let covariance: simd_float3x3
         /// Number of pixels assigned to this cluster. Sum over all
         /// clusters equals `assignments.count` (the tile pixel count).
         let count: UInt32
+
+        private enum CodingKeys: String, CodingKey {
+            case mean, sigmaLL, sigmaLa, sigmaLb, sigmaaa, sigmaab, sigmabb, count
+        }
+
+        init(mean: SIMD3<Float>, covariance: simd_float3x3, count: UInt32) {
+            self.mean = mean
+            self.covariance = covariance
+            self.count = count
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.mean = try c.decode(SIMD3<Float>.self, forKey: .mean)
+            self.count = try c.decode(UInt32.self, forKey: .count)
+            let LL = try c.decode(Float.self, forKey: .sigmaLL)
+            let La = try c.decode(Float.self, forKey: .sigmaLa)
+            let Lb = try c.decode(Float.self, forKey: .sigmaLb)
+            let aa = try c.decode(Float.self, forKey: .sigmaaa)
+            let ab = try c.decode(Float.self, forKey: .sigmaab)
+            let bb = try c.decode(Float.self, forKey: .sigmabb)
+            self.covariance = simd_float3x3(
+                columns: (
+                    SIMD3<Float>(LL, La, Lb),
+                    SIMD3<Float>(La, aa, ab),
+                    SIMD3<Float>(Lb, ab, bb)
+                )
+            )
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(mean, forKey: .mean)
+            try c.encode(count, forKey: .count)
+            try c.encode(covariance[0, 0], forKey: .sigmaLL)
+            try c.encode(covariance[0, 1], forKey: .sigmaLa)
+            try c.encode(covariance[0, 2], forKey: .sigmaLb)
+            try c.encode(covariance[1, 1], forKey: .sigmaaa)
+            try c.encode(covariance[1, 2], forKey: .sigmaab)
+            try c.encode(covariance[2, 2], forKey: .sigmabb)
+        }
     }
 
     /// Algorithm metadata. Codable + Hashable so editing tools can

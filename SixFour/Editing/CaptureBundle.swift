@@ -47,7 +47,7 @@ import Foundation
 /// `Documents/sixfour_bundles/<uuid>/` so bundles survive app
 /// relaunch. For now, the in-memory single-bundle path is enough
 /// to validate the editing-tool integration story.
-struct CaptureBundle: Sendable {
+struct CaptureBundle: Sendable, Codable {
     /// Stable UUID for this capture. Same value if/when the bundle
     /// gets persisted to disk later, so editing-tool state can refer
     /// to "the X capture" durably.
@@ -71,4 +71,43 @@ struct CaptureBundle: Sendable {
     /// so editing tools can replace specific frames with re-extracted
     /// stats without rebuilding the whole bundle.
     var perFrameStatistics: [ClusterStatistics]
+
+    /// Canonical on-disk filename. Single-bundle persistence for
+    /// now: the most-recent bundle overwrites the previous one.
+    /// A future "browse old captures" UI will move to one-file-per-
+    /// UUID under `Documents/sixfour_bundles/<uuid>.json`.
+    static let canonicalFilename = "sixfour_bundle.json"
+
+    /// Path to the canonical single-bundle file in Documents.
+    static func canonicalURL() -> URL? {
+        guard let docs = try? FileManager.default.url(
+            for: .documentDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true
+        ) else { return nil }
+        return docs.appendingPathComponent(canonicalFilename)
+    }
+
+    /// Serialize to JSON + write to the canonical Documents path.
+    /// Best-effort: failures are logged at the call site, not
+    /// thrown — bundle persistence is a nice-to-have, not a
+    /// blocker for the render flow.
+    /// Size estimate: ~4 MB JSON-encoded (3 MB tiles + 1 MB stats).
+    /// Writes are off the main actor via the caller's
+    /// Task.detached.
+    func save(to url: URL = canonicalURL() ?? URL(fileURLWithPath: "/dev/null")) throws {
+        let encoder = JSONEncoder()
+        // Compact encoding: no pretty-printing (the file is for
+        // machine round-trip, not human inspection).
+        let data = try encoder.encode(self)
+        try data.write(to: url, options: [.atomic])
+    }
+
+    /// Read + decode from the canonical Documents path. Returns nil
+    /// if the file doesn't exist; throws if it exists but can't be
+    /// decoded (caller decides whether to surface or swallow).
+    static func load(from url: URL = canonicalURL() ?? URL(fileURLWithPath: "/dev/null")) throws -> CaptureBundle? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(CaptureBundle.self, from: data)
+    }
 }

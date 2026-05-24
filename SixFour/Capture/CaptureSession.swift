@@ -73,7 +73,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     }
 
     /// Aggregate statistics over the 63 inter-frame intervals (in ms).
-    struct BurstTiming: Sendable {
+    struct BurstTiming: Sendable, Codable {
         let frameCount: Int
         let durationMs: Double
         let meanIntervalMs: Double
@@ -359,7 +359,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// Read by `MetalPipeline.colorSpaceTag` after `CaptureSession` init.
     /// Raw values are the buffer(2) uniform `cropDownsampleLinearizeKernel`
     /// reads; they must stay in sync with the switch in `Shaders.metal`.
-    enum ActiveColorSpaceTag: UInt8, Sendable {
+    enum ActiveColorSpaceTag: UInt8, Sendable, Codable {
         case rec709    = 0
         case hlgBT2020 = 1
         case appleLog  = 2

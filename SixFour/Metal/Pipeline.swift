@@ -19,7 +19,7 @@ import os
 /// final Lloyd iteration (diagnostic; ≈ 0 at convergence). Per-pixel
 /// indices are NOT included — those are produced downstream by CPU-side
 /// error-diffusion dither against the palette.
-struct OKLabTile: Sendable {
+struct OKLabTile: Sendable, Codable {
     let side: Int
     let pixels: [SIMD3<Float>]
     let captureNanos: UInt64

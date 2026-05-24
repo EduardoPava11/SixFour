@@ -170,10 +170,40 @@ final class CaptureViewModel {
             self.session = session
             self.store = store
 
+            // Restore the most-recent CaptureBundle from disk (if
+            // any). Populates `currentBundle` only — no GIF is
+            // rendered automatically; the rendered GIF for an old
+            // bundle is gone, and re-running the full render on
+            // bootstrap would be a surprising hidden cost. Future
+            // "open old captures" UI will surface this.
+            do {
+                if let loaded = try CaptureBundle.load() {
+                    self.currentBundle = loaded
+                    Self.logger.info("[viewmodel] restored CaptureBundle id=\(loaded.id, privacy: .public)")
+                }
+            } catch {
+                Self.logger.warning("[viewmodel] CaptureBundle restore failed (ignored): \(String(describing: error), privacy: .public)")
+            }
+
             session.startPreview()
             phase = .idle
         } catch {
             phase = .failed(String(describing: error))
+        }
+    }
+
+    /// Best-effort background write of the current bundle to
+    /// Documents. Logged on failure; never throws into the UI
+    /// (persistence is a nice-to-have, not a critical path).
+    private func saveBundleAsync() {
+        guard let bundle = currentBundle else { return }
+        Task.detached(priority: .background) {
+            do {
+                try bundle.save()
+                Self.logger.info("[viewmodel] CaptureBundle saved to disk")
+            } catch {
+                Self.logger.warning("[viewmodel] CaptureBundle save failed: \(String(describing: error), privacy: .public)")
+            }
         }
     }
 
@@ -227,6 +257,7 @@ final class CaptureViewModel {
                 output: renderResult.output,
                 perFrameStatistics: renderResult.perFrameStatistics
             )]
+            saveBundleAsync()
             phase = .done
             Self.fireHapticNotification(.success)
         } catch let err as StageBSinkhorn.StageBError {
@@ -498,6 +529,7 @@ final class CaptureViewModel {
                 let evicted = editHistory.remove(at: 1)
                 Self.deleteFilesAsync(for: evicted.output)
             }
+            saveBundleAsync()
             phase = .done
             Self.fireHapticNotification(.success)
         } catch let err as StageBSinkhorn.StageBError {
