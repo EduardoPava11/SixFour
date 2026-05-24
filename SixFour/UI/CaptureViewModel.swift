@@ -29,6 +29,16 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     /// StatsFooterView so users can A/B compare extractors on the
     /// same scene.
     let meanExtractMSE: Float
+    /// Mean centroid condition number κ across the 64 per-frame
+    /// palettes. κ ≈ 1 → orthogonal centroids (well-conditioned
+    /// palette); κ → ∞ → near-collinear centroids (palette has
+    /// wasted slots). Surfaced as a multicollinearity diagnostic.
+    let meanCentroidConditionNumber: Float
+    /// Fraction (0…1) of clusters admitted by the χ²₃ test at
+    /// α=0.05 across 64 frames. Higher → more "statistically real"
+    /// clusters; lower → many palette slots are noise. Editing
+    /// tools (future) can use this to drive auto-prune+refill.
+    let meanAdmissionRateAt05: Float
 
     var id: URL { gifURL }
 }
@@ -285,6 +295,15 @@ final class CaptureViewModel {
         }
         let contact: URL? = FileManager.default.fileExists(atPath: sheetURL.path) ? sheetURL : nil
 
+        // Compute per-frame quality diagnostics via the Phase D
+        // statistics module. Cost: ~10 µs/frame × 64 frames < 1 ms
+        // total — negligible vs. the 100s of ms of GIF render. We
+        // run this once per render; if the user re-extracts, this
+        // is re-computed via the new render's perFrameStatistics.
+        let (kappa, admissionRate) = Self.qualityDiagnostics(
+            perFrameStatistics: report.perFrameStatistics
+        )
+
         let output = CaptureOutput(
             gifURL: baseURL,
             contactURL: contact,
@@ -299,9 +318,55 @@ final class CaptureViewModel {
             timingSummary: summary,
             palettesForDisplay: report.palettesForDisplay,
             extractorChoice: report.extractorChoice,
-            meanExtractMSE: report.meanExtractMSE
+            meanExtractMSE: report.meanExtractMSE,
+            meanCentroidConditionNumber: kappa,
+            meanAdmissionRateAt05: admissionRate
         )
         return RenderResult(output: output, perFrameStatistics: report.perFrameStatistics)
+    }
+
+    /// Compute the two extractor-quality summary metrics across all
+    /// 64 per-frame palettes:
+    ///   - mean κ (centroid Gram condition number) — multicollinearity
+    ///   - mean fraction admitted by χ²₃ at α=0.05 — statistical
+    ///     significance of the per-frame clusters relative to that
+    ///     frame's pooled mean+covariance.
+    /// Skips per-frame κ values that are infinite (rank-deficient
+    /// palettes) when averaging — those would dominate the mean
+    /// and obscure typical κ.
+    nonisolated static func qualityDiagnostics(
+        perFrameStatistics: [ClusterStatistics]
+    ) -> (kappa: Float, admissionRate: Float) {
+        guard !perFrameStatistics.isEmpty else { return (.infinity, 0) }
+        var kappaSum: Float = 0
+        var kappaCount = 0
+        var admittedSum: Float = 0
+        for stats in perFrameStatistics {
+            let κ = ClusterStatisticsOps.centroidConditionNumber(stats.clusters)
+            if κ.isFinite {
+                kappaSum += κ
+                kappaCount += 1
+            }
+            let pooledMean = ClusterStatisticsOps.pooledMean(stats.clusters)
+            let pooledCov = ClusterStatisticsOps.pooledCovariance(
+                stats.clusters, pooledMean: pooledMean
+            )
+            let (admitted, _) = ClusterStatisticsOps.chiSquareAdmission(
+                clusters: stats.clusters,
+                alpha: 0.05,
+                populationMean: pooledMean,
+                populationCovariance: pooledCov
+            )
+            // Denominator is total clusters (including empty); the
+            // "admission rate" is what fraction of the palette
+            // budget is being earned.
+            admittedSum += Float(admitted.count) / Float(max(1, stats.clusters.count))
+        }
+        let meanKappa: Float = kappaCount > 0
+            ? kappaSum / Float(kappaCount)
+            : .infinity
+        let meanAdmitted = admittedSum / Float(perFrameStatistics.count)
+        return (meanKappa, meanAdmitted)
     }
 
     func reset() {

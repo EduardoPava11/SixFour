@@ -8,19 +8,30 @@ struct StatsFooterView: View {
     let output: CaptureOutput
 
     var body: some View {
-        HStack(spacing: 8) {
-            label(extractorText, mono: false)
-            dot
-            label(modeText, mono: false)
-            dot
-            label(mseText, mono: true)
-            dot
-            label(sizeText, mono: true)
-            dot
-            label(timeText, mono: true)
-            dot
-            label(witnessText, mono: true)
-                .foregroundStyle(witnessTint)
+        // Two rows: top = identity (extractor, mode, runtime
+        // pipeline metrics); bottom = quality (MSE, κ, admission
+        // rate). Keeps the line lengths readable on a 64×64-
+        // aspect-ratio screen.
+        VStack(spacing: 2) {
+            HStack(spacing: 8) {
+                label(extractorText, mono: false)
+                dot
+                label(modeText, mono: false)
+                dot
+                label(sizeText, mono: true)
+                dot
+                label(timeText, mono: true)
+                dot
+                label(witnessText, mono: true)
+                    .foregroundStyle(witnessTint)
+            }
+            HStack(spacing: 8) {
+                label(mseText, mono: true)
+                dot
+                label(kappaText, mono: true)
+                dot
+                label(admissionText, mono: true)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
@@ -42,6 +53,25 @@ struct StatsFooterView: View {
         // 0.0001..0.01. Use 5 significant digits in scientific
         // notation so the comparison is readable across scales.
         String(format: "MSE %.4f", output.meanExtractMSE)
+    }
+
+    /// Mean centroid condition number κ across 64 frames. κ ≈ 1 →
+    /// orthogonal centroids; κ ≫ 1 → near-collinear (palette has
+    /// wasted slots). Editing-tool refill heuristic candidate.
+    private var kappaText: String {
+        if output.meanCentroidConditionNumber.isFinite {
+            return String(format: "κ %.2f", output.meanCentroidConditionNumber)
+        } else {
+            return "κ ∞"
+        }
+    }
+
+    /// Fraction of clusters admitted by χ²₃ at α=0.05 (averaged
+    /// over 64 frames). Higher = more statistically real palette
+    /// slots; lower = palette is dominated by noise/empty bins.
+    private var admissionText: String {
+        let pct = output.meanAdmissionRateAt05 * 100
+        return String(format: "χ² %.0f%%", pct)
     }
 
     // MARK: - Field projections
