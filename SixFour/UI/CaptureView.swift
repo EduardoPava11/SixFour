@@ -176,6 +176,15 @@ struct CaptureView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 14) {
+            // Palette-extraction algorithm picker. Three processing-model
+            // families: K-means (iterative refinement, GPU, fast),
+            // Wu (recursive bipartition, CPU, rich statistics),
+            // Octree (hierarchical merging, CPU, deterministic).
+            // All three produce the same ClusterStatistics shape so
+            // downstream code is unchanged regardless of choice.
+            extractorPicker
+                .frame(maxWidth: 320)
+
             // The mode selector is the primary creative control. Three honest
             // endpoints of the Sinkhorn spectrum — Per-frame (θ=0), Shared
             // (θ≈0.05), Global (θ→∞ via log-domain). See spec/MATH.md
@@ -190,6 +199,19 @@ struct CaptureView: View {
             }
         }
         .padding(.bottom, 16)
+    }
+
+    /// Segmented picker for the per-frame palette-extraction algorithm.
+    /// Selection persists across launches via @AppStorage inside
+    /// CaptureViewModel.extractorChoiceBinding.
+    private var extractorPicker: some View {
+        Picker("Extractor", selection: vm.extractorChoiceBinding) {
+            ForEach(Composition.ExtractorChoice.allCases, id: \.self) { choice in
+                Text(choice.label).tag(choice)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityLabel("Palette extraction algorithm")
     }
 
     @ViewBuilder

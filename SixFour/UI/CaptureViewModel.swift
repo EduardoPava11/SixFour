@@ -23,6 +23,12 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     /// sRGB UInt8 palettes for the PaletteStripView — either 1 (Shared/Global)
     /// or 64 (Per-frame) entries of 256 colours each.
     let palettesForDisplay: [[SIMD3<UInt8>]]
+    /// Which extractor produced the per-frame palettes for this render.
+    let extractorChoice: Composition.ExtractorChoice
+    /// Mean per-frame extraction MSE (OKLab units²). Surfaced in
+    /// StatsFooterView so users can A/B compare extractors on the
+    /// same scene.
+    let meanExtractMSE: Float
 
     var id: URL { gifURL }
 }
@@ -66,17 +72,32 @@ final class CaptureViewModel {
     /// and this downsampled view. Nil until the first frame arrives.
     var previewTile: UIImage?
 
+    /// In-memory CaptureBundle for the most-recent successful render.
+    /// Holds the raw OKLab tiles + per-frame ClusterStatistics from
+    /// the extractor that produced the current GIF. Replaced on each
+    /// new capture; nil before the first capture. Future editing
+    /// tools consume this to re-run extraction / inspect statistics
+    /// without re-shooting.
+    var currentBundle: CaptureBundle?
+
+    /// Persisted last-used extractor choice (K-means / Wu / Octree).
+    /// Restored on bootstrap. Format: the enum's `rawValue` string.
+    @ObservationIgnored
+    @AppStorage("sixfour.extractor.v1") private var storedExtractor: String = "kMeans"
+
     private(set) var session: CaptureSession?
     private(set) var pipeline: MetalPipeline?
     private(set) var store: GeneStore?
 
     func bootstrap() async {
-        let restored = restoredMode()
+        let restoredMode = restoredMode()
+        let restoredChoice = restoredExtractorChoice()
         composition = Composition(
             name: composition.name,
             metric: composition.metric,
             createdAt: composition.createdAt,
-            paletteMode: restored
+            paletteMode: restoredMode,
+            extractorChoice: restoredChoice
         )
 
         do {
@@ -143,13 +164,25 @@ final class CaptureViewModel {
             let mode = composition.paletteMode
             let composition = self.composition
 
-            primaryOutput = try await renderOnce(
+            let renderResult = try await renderOnce(
                 tiles: tiles,
                 mode: mode,
                 composition: composition,
                 store: store,
                 pipeline: pipeline,
                 summary: result.timing.summary
+            )
+            primaryOutput = renderResult.output
+            // Build the in-memory CaptureBundle from raw tiles + the
+            // per-frame statistics the extractor produced. Editing
+            // tools consume this without needing to re-shoot.
+            currentBundle = CaptureBundle(
+                id: UUID(),
+                captureTimestamp: Date(),
+                burstTiming: result.timing,
+                colorSpaceTag: session.activeColorSpaceTag,
+                tiles: tiles,
+                perFrameStatistics: renderResult.perFrameStatistics
             )
             phase = .done
             Self.fireHapticNotification(.success)
@@ -171,6 +204,17 @@ final class CaptureViewModel {
         }
     }
 
+    /// Render-and-package result. The viewmodel needs both the
+    /// user-visible `CaptureOutput` (GIF URL, palettes, timing) AND
+    /// the per-frame statistics so it can assemble a CaptureBundle
+    /// for downstream editing tools. Returning both from `renderOnce`
+    /// keeps the data flow linear (no extra plumbing back through
+    /// GIFRenderer.Report).
+    private struct RenderResult: Sendable {
+        let output: CaptureOutput
+        let perFrameStatistics: [ClusterStatistics]
+    }
+
     private func renderOnce(
         tiles: [OKLabTile],
         mode: PaletteGenerator.Mode,
@@ -178,7 +222,7 @@ final class CaptureViewModel {
         store: GeneStore,
         pipeline: MetalPipeline,
         summary: String
-    ) async throws -> CaptureOutput {
+    ) async throws -> RenderResult {
         let baseURL = makeOutputURL(extension: "gif")
         let sheetURL = baseURL.deletingPathExtension().appendingPathExtension("contact.png")
 
@@ -208,7 +252,7 @@ final class CaptureViewModel {
         }
         let contact: URL? = FileManager.default.fileExists(atPath: sheetURL.path) ? sheetURL : nil
 
-        return CaptureOutput(
+        let output = CaptureOutput(
             gifURL: baseURL,
             contactURL: contact,
             mode: report.mode,
@@ -220,13 +264,21 @@ final class CaptureViewModel {
             achievedTheta: report.achievedTheta,
             attempts: report.attempts,
             timingSummary: summary,
-            palettesForDisplay: report.palettesForDisplay
+            palettesForDisplay: report.palettesForDisplay,
+            extractorChoice: report.extractorChoice,
+            meanExtractMSE: report.meanExtractMSE
         )
+        return RenderResult(output: output, perFrameStatistics: report.perFrameStatistics)
     }
 
     func reset() {
         phase = .idle
         primaryOutput = nil
+        // currentBundle deliberately persists across reset() — Retake
+        // brings the user back to capture, but if they DON'T retake
+        // they should still be able to open editing tools on the
+        // last bundle. The bundle is only replaced on a successful
+        // new capture.
     }
 
     /// Binding for `ModeSelector`. Persists the chosen mode and fires a haptic.
@@ -239,9 +291,31 @@ final class CaptureViewModel {
                     name: self.composition.name,
                     metric: self.composition.metric,
                     createdAt: self.composition.createdAt,
-                    paletteMode: newMode
+                    paletteMode: newMode,
+                    extractorChoice: self.composition.extractorChoice
                 )
                 self.storedMode = Self.encode(mode: newMode)
+                Self.fireHapticSelection()
+            }
+        )
+    }
+
+    /// Binding for the extractor picker in CaptureView. Persists the
+    /// chosen family and fires a haptic. The next capture uses the
+    /// new choice; previously rendered GIFs / bundles aren't affected.
+    var extractorChoiceBinding: Binding<Composition.ExtractorChoice> {
+        Binding(
+            get: { [weak self] in self?.composition.extractorChoice ?? .kMeans },
+            set: { [weak self] newChoice in
+                guard let self else { return }
+                self.composition = Composition(
+                    name: self.composition.name,
+                    metric: self.composition.metric,
+                    createdAt: self.composition.createdAt,
+                    paletteMode: self.composition.paletteMode,
+                    extractorChoice: newChoice
+                )
+                self.storedExtractor = newChoice.rawValue
                 Self.fireHapticSelection()
             }
         )
@@ -258,6 +332,12 @@ final class CaptureViewModel {
         case "1":        return .shared
         default:         return .perFrame
         }
+    }
+
+    /// Restore the extractor pick from AppStorage. Defaults to
+    /// .kMeans for first launch (matches the prior behavior).
+    private func restoredExtractorChoice() -> Composition.ExtractorChoice {
+        Composition.ExtractorChoice(rawValue: storedExtractor) ?? .kMeans
     }
 
     private static func encode(mode: PaletteGenerator.Mode) -> String {

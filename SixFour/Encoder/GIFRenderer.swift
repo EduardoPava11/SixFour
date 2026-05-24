@@ -40,6 +40,19 @@ struct GIFRenderer {
         let fileSize: Int
         /// sRGB palette stack for the UI's PaletteStripView.
         let palettesForDisplay: [[SIMD3<UInt8>]]
+        /// Which extractor produced the per-frame palettes. Surfaced
+        /// in the StatsFooter so the user sees which algorithm ran.
+        let extractorChoice: Composition.ExtractorChoice
+        /// Per-frame extraction MSE in OKLab units² — the universal
+        /// quality metric for comparing extractors on the same scene.
+        /// Lower = tighter quantization. We surface the mean across
+        /// frames here; per-frame values live in
+        /// `perFrameStatistics[i].provenance.mse`.
+        let meanExtractMSE: Float
+        /// 64 ClusterStatistics, one per tile. The CaptureViewModel
+        /// stitches this into a CaptureBundle for downstream editing
+        /// tools (re-run extraction, χ²-significance tests, etc.).
+        let perFrameStatistics: [ClusterStatistics]
     }
 
     let composition: Composition
@@ -68,15 +81,16 @@ struct GIFRenderer {
 
         onPhase?(.stageA)
         // Per-frame palette extraction via the PaletteExtractor
-        // protocol. KMeansExtractor wraps the existing GPU batched
-        // k-means + new covariance/assignment readback; the result
-        // is `[ClusterStatistics]` (one per tile) carrying per-cluster
-        // (μ, Σ, count) and the per-pixel assignment. We stitch the
-        // centroids back into each OKLabTile.palette for downstream
-        // Dither + encoder back-compat. The rich statistics flow
-        // through `perFrameStatistics` once Phase C (CaptureBundle)
-        // lands; for Phase A they're computed but not yet surfaced.
-        let extractor = KMeansExtractor(pipeline: pipeline)
+        // protocol. composition.makeExtractor dispatches on the
+        // user's pick (K-means / Wu / Octree); the result is
+        // `[ClusterStatistics]` (one per tile) carrying per-cluster
+        // (μ, Σ, count) + per-pixel assignment + provenance. We
+        // stitch the centroids back into each OKLabTile.palette for
+        // downstream Dither + encoder back-compat; the rich
+        // statistics flow through Report.perFrameStatistics so
+        // CaptureViewModel can build a CaptureBundle for editing
+        // tools.
+        let extractor = composition.makeExtractor(pipeline: pipeline)
         let perFrameStats = try extractor.extractBatch(tiles: tiles, K: pipeline.kMeansK)
         let tilesWithPalettes: [OKLabTile] = zip(tiles, perFrameStats).map { tile, stats in
             OKLabTile(
@@ -87,9 +101,13 @@ struct GIFRenderer {
                 finalShift: 0
             )
         }
-        // Suppress unused warning until Phase C wires perFrameStats
-        // into a CaptureBundle for downstream editing tools.
-        _ = perFrameStats
+        let meanExtractMSE: Float = {
+            let sum = perFrameStats.reduce(Float(0)) { $0 + $1.provenance.mse }
+            return sum / Float(max(1, perFrameStats.count))
+        }()
+        Self.logger.info(
+            "[renderer] extractor=\(self.composition.extractorChoice.rawValue, privacy: .public) meanMSE=\(meanExtractMSE)"
+        )
 
         var generator = PaletteGenerator()
         generator.refinementMetric = refinementMetric
@@ -142,7 +160,10 @@ struct GIFRenderer {
             achievedTheta: output.achievedTheta,
             attempts: output.attempts,
             fileSize: fileSize,
-            palettesForDisplay: displayPalettes
+            palettesForDisplay: displayPalettes,
+            extractorChoice: composition.extractorChoice,
+            meanExtractMSE: meanExtractMSE,
+            perFrameStatistics: perFrameStats
         )
     }
 }

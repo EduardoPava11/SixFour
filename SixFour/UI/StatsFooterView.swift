@@ -9,7 +9,11 @@ struct StatsFooterView: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            label(extractorText, mono: false)
+            dot
             label(modeText, mono: false)
+            dot
+            label(mseText, mono: true)
             dot
             label(sizeText, mono: true)
             dot
@@ -23,6 +27,21 @@ struct StatsFooterView: View {
         .background(.ultraThinMaterial, in: Capsule())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(voiceOverDescription)
+    }
+
+    /// Extractor family label (K-means / Wu / Octree). First field
+    /// in the footer so the user sees immediately which algorithm
+    /// produced the visible GIF.
+    private var extractorText: String { output.extractorChoice.label }
+
+    /// Mean extraction MSE in OKLab units². Lower = tighter
+    /// quantization. Surfaced so users can A/B compare extractors
+    /// on the same scene without external tooling.
+    private var mseText: String {
+        // OKLab values are small (mostly ≤ 1.0); MSE is usually
+        // 0.0001..0.01. Use 5 significant digits in scientific
+        // notation so the comparison is readable across scales.
+        String(format: "MSE %.4f", output.meanExtractMSE)
     }
 
     // MARK: - Field projections
