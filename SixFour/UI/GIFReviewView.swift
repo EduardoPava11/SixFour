@@ -85,7 +85,21 @@ struct GIFReviewView: View {
     }
 
     private func actionRow(primary: CaptureOutput) -> some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 14) {
+            // Undo button — appears whenever the user has at least
+            // one edit on top of the initial render. Disabled when
+            // vm.canUndo is false; tap restores the previous render.
+            Button {
+                vm.undo()
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.callout.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .tint(.white)
+            .disabled(!vm.canUndo || isReRendering)
+            .accessibilityLabel("Undo edit (\(vm.editHistory.count - 1) edit\(vm.editHistory.count == 2 ? "" : "s") in history)")
+
             ShareLink(item: primary.gifURL) {
                 Label("Share", systemImage: "square.and.arrow.up")
             }

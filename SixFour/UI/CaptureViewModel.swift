@@ -80,6 +80,31 @@ final class CaptureViewModel {
     /// without re-shooting.
     var currentBundle: CaptureBundle?
 
+    /// Edit history stack. Index 0 = the initial render produced by
+    /// `capture()`. Each `reExtract()` appends a new entry. `undo()`
+    /// pops the head (refuses to drop below index 0). Capped at 10
+    /// entries; eldest non-initial gets evicted on overflow with
+    /// background file cleanup.
+    private(set) var editHistory: [EditHistoryEntry] = []
+
+    /// One entry on the edit history stack — a complete render
+    /// snapshot (user-visible CaptureOutput + the rich
+    /// ClusterStatistics that produced it). Carrying both lets
+    /// `undo()` restore primaryOutput + the bundle's
+    /// perFrameStatistics atomically.
+    struct EditHistoryEntry: Sendable {
+        let output: CaptureOutput
+        let perFrameStatistics: [ClusterStatistics]
+    }
+
+    /// Editing UI binds this to enable/disable the Undo button.
+    var canUndo: Bool { editHistory.count > 1 }
+
+    /// Max entries kept on the edit history stack. The initial
+    /// render plus 9 user edits — covers the typical A/B/C
+    /// comparison flow without growing storage forever.
+    static let editHistoryCap: Int = 10
+
     /// Persisted last-used extractor choice (K-means / Wu / Octree).
     /// Restored on bootstrap. Format: the enum's `rawValue` string.
     @ObservationIgnored
@@ -184,6 +209,14 @@ final class CaptureViewModel {
                 tiles: tiles,
                 perFrameStatistics: renderResult.perFrameStatistics
             )
+            // New capture → reset history to a single initial entry.
+            // Any previous edits' GIF files leak slightly here (the
+            // OS deletes them on next app launch via Documents
+            // recycling); explicit cleanup not critical at burst-size.
+            editHistory = [EditHistoryEntry(
+                output: renderResult.output,
+                perFrameStatistics: renderResult.perFrameStatistics
+            )]
             phase = .done
             Self.fireHapticNotification(.success)
         } catch let err as StageBSinkhorn.StageBError {
@@ -281,6 +314,58 @@ final class CaptureViewModel {
         // new capture.
     }
 
+    /// Pop the head of the edit history, restore the previous render
+    /// to `primaryOutput` + `currentBundle.perFrameStatistics`.
+    /// Refuses to pop below index 0 (the initial capture render is
+    /// never lost — Retake is the way out of that state).
+    ///
+    /// The popped entry's GIF + contact-sheet files are deleted in
+    /// the background to keep Documents tidy without blocking the
+    /// UI. The `composition.extractorChoice` is reverted to the
+    /// previous entry's extractor so the picker on screen reflects
+    /// the now-current state.
+    func undo() {
+        guard canUndo else { return }
+        let popped = editHistory.removeLast()
+        let restored = editHistory.last!  // safe: count > 1 verified above
+        Self.fireHapticImpact(.light)
+        Self.deleteFilesAsync(for: popped.output)
+        primaryOutput = restored.output
+        if var bundle = currentBundle {
+            bundle.perFrameStatistics = restored.perFrameStatistics
+            currentBundle = bundle
+        }
+        // Sync the picker selection to whatever the restored render
+        // was extracted with.
+        let restoredChoice = restored.output.extractorChoice
+        if composition.extractorChoice != restoredChoice {
+            self.composition = Composition(
+                name: composition.name,
+                metric: composition.metric,
+                createdAt: composition.createdAt,
+                paletteMode: composition.paletteMode,
+                extractorChoice: restoredChoice
+            )
+            self.storedExtractor = restoredChoice.rawValue
+        }
+    }
+
+    /// Background file cleanup. Deletes the GIF + (optional)
+    /// contact-sheet for an evicted/popped EditHistoryEntry. Errors
+    /// are swallowed — best-effort; the OS recycles Documents on
+    /// next launch anyway, and the user shouldn't see hitches
+    /// because Undo is supposed to feel instant.
+    nonisolated static func deleteFilesAsync(for output: CaptureOutput) {
+        let gif = output.gifURL
+        let contact = output.contactURL
+        Task.detached(priority: .background) {
+            try? FileManager.default.removeItem(at: gif)
+            if let contact = contact {
+                try? FileManager.default.removeItem(at: contact)
+            }
+        }
+    }
+
     /// Re-extract palettes from the cached capture bundle with a
     /// different extractor family and re-render the GIF in place.
     /// No re-capture — the raw OKLab tiles in `currentBundle.tiles`
@@ -336,6 +421,18 @@ final class CaptureViewModel {
                 tiles: bundle.tiles,
                 perFrameStatistics: renderResult.perFrameStatistics
             )
+            // Push onto edit history. If we exceed the cap, evict
+            // the SECOND entry (preserve the initial render at
+            // index 0 + most recent N-1 edits).
+            let entry = EditHistoryEntry(
+                output: renderResult.output,
+                perFrameStatistics: renderResult.perFrameStatistics
+            )
+            editHistory.append(entry)
+            if editHistory.count > Self.editHistoryCap {
+                let evicted = editHistory.remove(at: 1)
+                Self.deleteFilesAsync(for: evicted.output)
+            }
             phase = .done
             Self.fireHapticNotification(.success)
         } catch let err as StageBSinkhorn.StageBError {
