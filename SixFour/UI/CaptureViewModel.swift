@@ -281,6 +281,76 @@ final class CaptureViewModel {
         // new capture.
     }
 
+    /// Re-extract palettes from the cached capture bundle with a
+    /// different extractor family and re-render the GIF in place.
+    /// No re-capture — the raw OKLab tiles in `currentBundle.tiles`
+    /// are the input. Updates `primaryOutput` + `currentBundle
+    /// .perFrameStatistics` on success.
+    ///
+    /// Editing-tool entry point #1: lets the user A/B different
+    /// extractors on the same scene without retaking. Future edits
+    /// (parameter sliders, χ²-refill toggle, K=64/128/256) will use
+    /// the same pattern — pass new params + reuse bundle.tiles.
+    ///
+    /// Updates `composition.extractorChoice` so subsequent captures
+    /// default to the new pick. The AppStorage persistence flows
+    /// through `extractorChoiceBinding`.
+    func reExtract(with choice: Composition.ExtractorChoice) async {
+        guard let bundle = currentBundle,
+              let store = store,
+              let pipeline = pipeline else { return }
+        // No-op if the user re-picked the same extractor; saves a
+        // GPU/CPU pass and a Documents write.
+        if composition.extractorChoice == choice && primaryOutput != nil { return }
+
+        Self.fireHapticImpact(.light)
+        let newComposition = Composition(
+            name: composition.name,
+            metric: composition.metric,
+            createdAt: composition.createdAt,
+            paletteMode: composition.paletteMode,
+            extractorChoice: choice
+        )
+        self.composition = newComposition
+        self.storedExtractor = choice.rawValue
+
+        phase = .renderingStageA
+        do {
+            let renderResult = try await renderOnce(
+                tiles: bundle.tiles,
+                mode: newComposition.paletteMode,
+                composition: newComposition,
+                store: store,
+                pipeline: pipeline,
+                summary: bundle.burstTiming.summary
+            )
+            primaryOutput = renderResult.output
+            // Replace the cached perFrameStatistics with the new
+            // extractor's output. Tiles are unchanged (still
+            // re-extractable for further edits).
+            currentBundle = CaptureBundle(
+                id: bundle.id,
+                captureTimestamp: bundle.captureTimestamp,
+                burstTiming: bundle.burstTiming,
+                colorSpaceTag: bundle.colorSpaceTag,
+                tiles: bundle.tiles,
+                perFrameStatistics: renderResult.perFrameStatistics
+            )
+            phase = .done
+            Self.fireHapticNotification(.success)
+        } catch let err as StageBSinkhorn.StageBError {
+            let msg = String(describing: err)
+            Self.logger.error("[viewmodel] reExtract failed: \(msg, privacy: .public)")
+            phase = .failed(msg)
+            Self.fireHapticNotification(.warning)
+        } catch {
+            let msg = String(describing: error)
+            Self.logger.error("[viewmodel] reExtract failed: \(msg, privacy: .public)")
+            phase = .failed(msg)
+            Self.fireHapticNotification(.warning)
+        }
+    }
+
     /// Binding for `ModeSelector`. Persists the chosen mode and fires a haptic.
     var paletteModeBinding: Binding<PaletteGenerator.Mode> {
         Binding(

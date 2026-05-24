@@ -34,9 +34,54 @@ struct GIFReviewView: View {
             RenderPanel(output: primary)
                 .padding(.horizontal)
             Spacer()
+            // Edit affordance: re-extract from the cached bundle
+            // using a different algorithm family. No re-capture
+            // needed; the raw OKLab tiles are kept in
+            // `vm.currentBundle`. Disabled during in-flight
+            // re-extraction so the user can't queue multiple.
+            extractorEditPicker(primary: primary)
             actionRow(primary: primary)
         }
         .padding(.vertical)
+    }
+
+    /// Segmented picker bound to the current output's extractor.
+    /// On change → `vm.reExtract` re-runs extraction + render with
+    /// the cached `currentBundle.tiles`. The picker label sits
+    /// above the segments to disambiguate from the capture-screen
+    /// picker (which sets the algorithm for the NEXT capture, not
+    /// for editing the current one).
+    @ViewBuilder
+    private func extractorEditPicker(primary: CaptureOutput) -> some View {
+        VStack(spacing: 4) {
+            Text("Edit · Extractor")
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.6))
+            Picker("Re-extract algorithm", selection: Binding(
+                get: { primary.extractorChoice },
+                set: { newChoice in
+                    Task { await vm.reExtract(with: newChoice) }
+                }
+            )) {
+                ForEach(Composition.ExtractorChoice.allCases, id: \.self) { choice in
+                    Text(choice.label).tag(choice)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(isReRendering)
+            .frame(maxWidth: 320)
+        }
+        .padding(.horizontal)
+    }
+
+    /// Whether a re-extraction is currently in flight. We watch
+    /// `vm.phase` because `reExtract` uses the same render-stage
+    /// enum as the initial capture path.
+    private var isReRendering: Bool {
+        switch vm.phase {
+        case .renderingStageA, .renderingStageB, .renderingEncode: return true
+        default: return false
+        }
     }
 
     private func actionRow(primary: CaptureOutput) -> some View {
