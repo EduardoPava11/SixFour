@@ -171,6 +171,42 @@ struct MetalKMeansTests {
         #expect(wu.provenance.mse <= uni.provenance.mse + 1e-4, "Wu+KM MSE \(wu.provenance.mse) regressed vs uniform \(uni.provenance.mse)")
     }
 
+    /// The GPU blue-noise kernel must agree with the CPU `Dither.blueNoiseSIMD`
+    /// reference: identical top-2 + threshold logic, so reconstruction MSE
+    /// matches and the vast majority of pixels pick the same index (float
+    /// rounding can flip a pixel sitting exactly on a blue-noise threshold or
+    /// where the 1st/2nd nearest are near-equidistant).
+    @MainActor
+    @Test func gpuBlueNoiseMatchesCPUReconstruction() throws {
+        let side = 64, K = 256
+        var rng: UInt64 = 0x1234_5678
+        func f01() -> Float { rng = rng &* 6364136223846793005 &+ 1; return Float(rng >> 40) / Float(1 << 24) }
+
+        let pixels: [SIMD3<Float>] = (0..<(side * side)).map { _ in
+            SIMD3<Float>(f01(), f01() - 0.5, f01() - 0.5)
+        }
+        let palette: [SIMD3<Float>] = (0..<K).map { _ in
+            SIMD3<Float>(f01(), f01() - 0.5, f01() - 0.5)
+        }
+        let thresholds: [UInt8] = (0..<(side * side)).map { _ in UInt8(f01() * 255) }
+
+        let tile = OKLabTile(side: side, pixels: pixels, captureNanos: 0, palette: palette, finalShift: 0)
+        let cpu = Dither.blueNoiseSIMD(tile: tile, centroids: CentroidSet(palette), thresholds: thresholds)
+        let gpu = try BlueNoisePalettePipeline().assign(pixels: pixels, centroids: palette, thresholds: thresholds)
+
+        func mse(_ idx: [UInt8]) -> Float {
+            var s: Float = 0
+            for i in 0..<pixels.count {
+                let d = pixels[i] - palette[Int(idx[i])]; s += simd_dot(d, d)
+            }
+            return s / Float(pixels.count)
+        }
+        #expect(abs(mse(cpu) - mse(gpu)) < 1e-3, "GPU MSE \(mse(gpu)) vs CPU \(mse(cpu))")
+        let agree = zip(cpu, gpu).filter { $0 == $1 }.count
+        #expect(Float(agree) / Float(cpu.count) > 0.98,
+                "GPU/CPU blue-noise agreement only \(Float(agree) / Float(cpu.count))")
+    }
+
     /// 15 iterations is enough that the per-iteration shift has shrunk below
     /// a clearly-converged threshold on a well-conditioned input. We don't
     /// pin a hard number (the GPU's atomic-fixed-point accumulation is noisier
