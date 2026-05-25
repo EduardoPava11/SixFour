@@ -228,6 +228,32 @@ struct MetalKMeansTests {
         }
     }
 
+    /// FPS's defining, always-true property: it captures a RARE extreme colour
+    /// that MSE-driven quantization absorbs into the dense body. (Whether FPS
+    /// beats Wu+KM on *overall* coverage is content-dependent — on smooth
+    /// content k-means spreads evenly too — so that verdict is left to the
+    /// on-device A/B, not asserted here.) We test the seed function directly.
+    @Test func fpsSeedCapturesRareExtremeColor() {
+        let K = 256
+        // Body: a 4080-pixel fine gradient in a SMALL gamut region (many
+        // distinct colours, so k-means would spend its 256-budget here).
+        var pixels: [SIMD3<Float>] = []
+        pixels.reserveCapacity(4096)
+        for i in 0..<4080 {
+            let t = Float(i) / 4079.0
+            pixels.append(SIMD3<Float>(0.40 + 0.20 * t, -0.05 + 0.10 * t, 0.05 - 0.10 * t))
+        }
+        // A rare vivid extreme (16 of 4096 px ≈ 0.4%) — MSE allocates ~1 centroid here.
+        let extreme = SIMD3<Float>(0.95, 0.45, 0.45)
+        for _ in 0..<16 { pixels.append(extreme) }
+
+        let seeds = KMeansPalettePipeline.farthestPointSeedCentroids(pixels: pixels, K: K)
+        let nearest = seeds
+            .map { simd_distance(SIMD3<Float>($0.x, $0.y, $0.z), extreme) }
+            .min() ?? .infinity
+        #expect(nearest < 1e-3, "FPS must capture the rare extreme colour (nearest seed Δ=\(nearest))")
+    }
+
     /// 15 iterations is enough that the per-iteration shift has shrunk below
     /// a clearly-converged threshold on a well-conditioned input. We don't
     /// pin a hard number (the GPU's atomic-fixed-point accumulation is noisier

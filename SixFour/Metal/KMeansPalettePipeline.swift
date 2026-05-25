@@ -30,7 +30,14 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
     ///     near-optimal "Wu+KM" (Celebi 2011): lower MSE and far fewer dead
     ///     clusters than a uniform stride. Costs one CPU Wu pass per tile;
     ///     opt-in until on-device benchmarking justifies making it the default.
-    enum Seed: Sendable { case uniformStride, wuInit }
+    /// Initial-centroid strategy.
+    ///   * `.uniformStride` — GPU stride kernel (fastest, MSE-biased).
+    ///   * `.wuInit` — Wu variance boxes (Wu+KM, MSE quality leader).
+    ///   * `.farthestPoint` — maximin / FPS: centroids that maximize the min
+    ///     pairwise distance → spreads across the gamut, captures extreme
+    ///     colours. The *diversity* objective (use with `kMeansIterations = 0`
+    ///     to keep the raw spread; Lloyd would pull centroids back to density).
+    enum Seed: Sendable { case uniformStride, wuInit, farthestPoint }
     /// Default is Wu+KM (the literature's quality leader) now that it is the
     /// app's sole extraction path. `.uniformStride` is retained for the
     /// MSE-comparison test and as a fallback.
@@ -139,24 +146,26 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
             tileTextures.append(tex)
         }
 
-        // Wu+KM (Celebi 2011): seed the Lloyd loop from Wu's variance boxes
-        // instead of the uniform-stride GPU kernel. Computed on CPU and written
+        // CPU seeding (Wu boxes or farthest-point): computed on CPU and written
         // into the shared centroid buffers BEFORE the command buffer runs; the
-        // seed dispatch is then skipped (`seedOnGPU: false`).
+        // GPU seed dispatch is then skipped (`seedOnGPU: false`). Uniform-stride
+        // seeds on the GPU instead.
         let seedOnGPU = (seed == .uniformStride)
         lastWuSeedMillis = 0
-        if seed == .wuInit {
-            let wuStart = ContinuousClock().now
+        if seed != .uniformStride {
+            let seedStart = ContinuousClock().now
             for i in 0..<frameCount {
-                let seeds = Self.wuSeedCentroids(pixels: tiles[i].pixels, K: kMeansK)
+                let seeds: [SIMD4<Float>] = (seed == .wuInit)
+                    ? Self.wuSeedCentroids(pixels: tiles[i].pixels, K: kMeansK)
+                    : Self.farthestPointSeedCentroids(pixels: tiles[i].pixels, K: kMeansK)
                 let dst = centroidBufs[i].contents().bindMemory(to: SIMD4<Float>.self, capacity: kMeansK)
                 for k in 0..<kMeansK { dst[k] = seeds[k] }
             }
-            let wuMs = Self.millis(ContinuousClock().now - wuStart)
-            lastWuSeedMillis = wuMs
-            // .notice (not .info) so it persists + shows in Console by default
-            // for on-device benchmarking.
-            Self.logger.notice("[bench] Wu+KM seed (CPU, ×\(frameCount) frames): \(wuMs)ms total (\(wuMs / max(1, frameCount))ms/frame)")
+            let ms = Self.millis(ContinuousClock().now - seedStart)
+            if seed == .wuInit { lastWuSeedMillis = ms }
+            let name = (seed == .wuInit) ? "Wu+KM" : "farthest-point"
+            // .notice so it persists + shows in Console for on-device benchmarking.
+            Self.logger.notice("[bench] \(name) seed (CPU, ×\(frameCount) frames): \(ms)ms total (\(ms / max(1, frameCount))ms/frame)")
         }
 
         guard let cmd = gpu.queue.makeCommandBuffer() else {
@@ -380,6 +389,45 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
                 let p = pixels[(k * stride) % n]
                 out[k] = SIMD4<Float>(p.x, p.y, p.z, 1)
             }
+        }
+        return out
+    }
+
+    /// Farthest-point (maximin) seeds: the diversity objective. Greedily pick K
+    /// pixels each maximizing the minimum distance to those already chosen, so
+    /// the palette SPREADS across the scene's gamut and captures rare/extreme
+    /// colours (the opposite of MSE's density bias). First seed = the pixel
+    /// farthest from the data mean (a deterministic extreme). O(K·N) with
+    /// incremental min-distance tracking (same shape as the dither/seed loops).
+    static func farthestPointSeedCentroids(pixels: [SIMD3<Float>], K: Int) -> [SIMD4<Float>] {
+        let n = pixels.count
+        precondition(n > 0, "farthestPoint: need ≥1 pixel")
+        // First seed: farthest pixel from the mean (deterministic extreme).
+        var mean = SIMD3<Float>.zero
+        for p in pixels { mean += p }
+        mean /= Float(n)
+        var current = 0
+        var bestD: Float = -1
+        for i in 0..<n {
+            let d = pixels[i] - mean
+            let dd = simd_dot(d, d)
+            if dd > bestD { bestD = dd; current = i }
+        }
+
+        var out = [SIMD4<Float>](repeating: SIMD4<Float>(0, 0, 0, 1), count: K)
+        var minDist = [Float](repeating: .greatestFiniteMagnitude, count: n)
+        for k in 0..<K {
+            let c = pixels[current]
+            out[k] = SIMD4<Float>(c.x, c.y, c.z, 1)
+            var nextIdx = 0
+            var nextD: Float = -1
+            for i in 0..<n {
+                let d = pixels[i] - c
+                let dd = simd_dot(d, d)
+                if dd < minDist[i] { minDist[i] = dd }
+                if minDist[i] > nextD { nextD = minDist[i]; nextIdx = i }
+            }
+            current = nextIdx
         }
         return out
     }

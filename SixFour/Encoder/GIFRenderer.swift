@@ -107,26 +107,34 @@ struct GIFRenderer {
         let coverage = ClusterStatisticsOps.gamutCoverage(perFrame: perFrameStats)
         Self.logger.notice("[bench] coverage occupiedBins=\(coverage.occupiedBins) (\(String(format: "%.1f%%", coverage.fraction * 100)) of 16³)  meanMSE=\(meanExtractMSE)")
 
-        // Seed A/B on COVERAGE (the right yardstick): does Wu+KM's ~6.5s seed
-        // capture MORE of the gamut than instant uniform-stride on this real
-        // scene? Run a uniform-stride pass, compare occupied-bin coverage, stamp
-        // the delta. Gated by `benchmarkSeed`; flip false once measured.
+        // Seed A/B on COVERAGE (the right yardstick): does raw farthest-point
+        // (maximin, diversity-maximizing) capture MORE of the gamut than the
+        // current Wu+KM default? Run an FPS pass with NO Lloyd (iterations = 0,
+        // so the spread isn't pulled back to density), compare occupied-bin
+        // coverage, stamp the delta. Gated by `benchmarkSeed`; flip false once
+        // the default is chosen.
         var seedComparison: String? = nil
         if benchmarkSeed {
-            let original = engines.kMeans.seed
-            engines.kMeans.seed = .uniformStride
-            if let uni = try? engines.kMeans.extractBatch(tiles: tiles, K: SixFourShape.K) {
-                let uniCov = ClusterStatisticsOps.gamutCoverage(perFrame: uni)
-                let deltaPct = uniCov.fraction > 0
-                    ? (coverage.fraction - uniCov.fraction) / uniCov.fraction * 100 : 0
+            let origSeed = engines.kMeans.seed
+            let origIters = engines.kMeans.kMeansIterations
+            engines.kMeans.seed = .farthestPoint
+            // 1 iteration: just enough to populate per-cluster counts (the
+            // assign pass) while barely settling the FPS spread — 0 would leave
+            // counts empty so coverage can't be measured.
+            engines.kMeans.kMeansIterations = 1
+            if let fps = try? engines.kMeans.extractBatch(tiles: tiles, K: SixFourShape.K) {
+                let fpsCov = ClusterStatisticsOps.gamutCoverage(perFrame: fps)
+                let deltaPct = coverage.fraction > 0
+                    ? (fpsCov.fraction - coverage.fraction) / coverage.fraction * 100 : 0
                 seedComparison = String(
-                    format: "wuCoverage=%d uniformCoverage=%d bins (Wu+KM %+.1f%%, cost %dms); wuMSE=%.6f uniMSE=%.6f",
-                    coverage.occupiedBins, uniCov.occupiedBins, deltaPct, wuSeedMillis,
-                    meanExtractMSE, Self.meanMSE(uni)
+                    format: "wuKMCoverage=%d fpsCoverage=%d bins (FPS %+.1f%% vs Wu+KM); wuMSE=%.6f fpsMSE=%.6f",
+                    coverage.occupiedBins, fpsCov.occupiedBins, deltaPct,
+                    meanExtractMSE, Self.meanMSE(fps)
                 )
                 Self.logger.notice("[bench] seed \(seedComparison!, privacy: .public)")
             }
-            engines.kMeans.seed = original
+            engines.kMeans.seed = origSeed
+            engines.kMeans.kMeansIterations = origIters
         }
 
         var generator = PaletteGenerator()
