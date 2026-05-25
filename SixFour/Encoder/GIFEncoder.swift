@@ -42,10 +42,16 @@ struct GIFEncoder {
     /// surjective onto all `K` colours. An incomplete volume cannot be
     /// constructed, so it cannot reach this encoder.
     /// `perFramePalettes[i]`: 256 sRGB triplets, the local color table for frame i.
+    /// `comment`: optional text embedded as a GIF89a **Comment Extension**
+    /// (`0x21 0xFE`). It travels inside the file (so it survives AirDrop) and is
+    /// readable by `exiftool file.gif` (the `Comment` tag) or `strings`. SixFour
+    /// uses it to stamp each GIF with its render + benchmark metadata so the
+    /// numbers don't have to be copied out of Console.
     func encode(
         volume: CompleteVoxelVolume,
         perFramePalettes: [[SIMD3<UInt8>]],
-        to url: URL
+        to url: URL,
+        comment: String? = nil
     ) throws {
         let frames = volume.frames
         guard frames.count == perFramePalettes.count else {
@@ -72,6 +78,13 @@ struct GIFEncoder {
         data.append(0x00)  // pixel aspect ratio
 
         data.append(contentsOf: netscapeLoop(count: 0))
+
+        // Optional Comment Extension — render/bench metadata that travels with
+        // the file (AirDrop-safe, exiftool/strings-readable). Placed before the
+        // first frame, after the loop block, per GIF89a convention.
+        if let comment, !comment.isEmpty {
+            data.append(contentsOf: commentExtension(comment))
+        }
 
         for (i, frame) in frames.enumerated() {
             let palette = perFramePalettes[i]
@@ -108,6 +121,22 @@ struct GIFEncoder {
             table[base + 2] = c.z
         }
         return table
+    }
+
+    /// GIF89a Comment Extension: `0x21 0xFE`, then UTF-8 text in ≤255-byte
+    /// sub-blocks, then a `0x00` terminator. Read by `exiftool` / `strings`.
+    private func commentExtension(_ text: String) -> [UInt8] {
+        var out: [UInt8] = [0x21, 0xFE]
+        let bytes = Array(text.utf8)
+        var i = 0
+        while i < bytes.count {
+            let chunk = min(255, bytes.count - i)
+            out.append(UInt8(chunk))
+            out.append(contentsOf: bytes[i..<(i + chunk)])
+            i += chunk
+        }
+        out.append(0x00)
+        return out
     }
 
     private func netscapeLoop(count: UInt16) -> [UInt8] {

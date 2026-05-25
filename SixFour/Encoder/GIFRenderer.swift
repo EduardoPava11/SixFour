@@ -120,10 +120,21 @@ struct GIFRenderer {
         guard let volume = CompleteVoxelVolume(checkingFrames: output.frameIndices) else {
             throw GIFEncoderError.incompleteVoxelVolume
         }
+        // Stamp the render + benchmark metadata into the GIF as a Comment
+        // Extension so an AirDropped file carries its own stats (read with
+        // `exiftool file.gif` or `strings`) — no copy-pasting Console.
+        let metadata = Self.renderComment(
+            tiles: tiles,
+            meanMSE: meanExtractMSE,
+            wuSeedMillis: engines.kMeans.lastWuSeedMillis,
+            ditherSummary: output.ditherSummary,
+            stageAMillis: output.stageAMillis
+        )
         try encoder.encode(
             volume: volume,
             perFramePalettes: srgbPalettes,
-            to: url
+            to: url,
+            comment: metadata
         )
         let displayPalettes: [[SIMD3<UInt8>]] = srgbPalettes
 
@@ -140,5 +151,25 @@ struct GIFRenderer {
             meanExtractMSE: meanExtractMSE,
             perFrameStatistics: perFrameStats
         )
+    }
+
+    /// Build the GIF metadata comment: the render + benchmark stats, embedded so
+    /// the file carries its own numbers (no copy-pasting Console after AirDrop).
+    /// Read it back with `exiftool file.gif` (Comment tag) or `strings file.gif`.
+    private static func renderComment(
+        tiles: [OKLabTile],
+        meanMSE: Float,
+        wuSeedMillis: Int,
+        ditherSummary: String,
+        stageAMillis: Int
+    ) -> String {
+        let ts = ISO8601DateFormatter().string(from: Date())
+        let side = tiles.first?.side ?? SixFourShape.W
+        return """
+        SixFour \(side)×\(side)×\(tiles.count) GIF
+        extractor=Wu+KM  dither=\(ditherSummary)  meanMSE=\(String(format: "%.6f", meanMSE))
+        wuSeedMs=\(wuSeedMillis)  stageA(refine+dither+rescue)Ms=\(stageAMillis)  frames=\(tiles.count)  K=\(SixFourShape.K)
+        rendered=\(ts)
+        """
     }
 }

@@ -36,6 +36,50 @@ struct GIFEncoderTests {
         #expect(lctCount == SixFourShape.T, "expected \(SixFourShape.T) image descriptors with LCT; saw \(lctCount)")
     }
 
+    // MARK: - Comment Extension (embedded metadata)
+
+    @Test func commentExtensionIsEmbeddedAndReadable() throws {
+        let encoder = GIFEncoder(width: 64, height: 64, fps: 20)
+        let palettes = Array(repeating: synthPalette256(seed: 5), count: SixFourShape.T)
+        let volume = try #require(CompleteVoxelVolume(checkingFrames: surjectiveFrames()))
+        // Multi-line + a >255-byte payload to exercise sub-block chunking.
+        let comment = "SixFour 64×64×64 GIF\nextractor=Wu+KM dither=blueNoise/GPU 4ms\n"
+            + String(repeating: "x", count: 300)
+        let url = scratchURL("comment.gif")
+        try encoder.encode(volume: volume, perFramePalettes: palettes, to: url, comment: comment)
+
+        let bytes = try Data(contentsOf: url)
+        try expectMagic(bytes)
+        #expect(extractGIFComment(bytes) == comment, "embedded comment did not round-trip")
+        // No comment → no comment extension.
+        let url2 = scratchURL("nocomment.gif")
+        try encoder.encode(volume: volume, perFramePalettes: palettes, to: url2)
+        #expect(extractGIFComment(try Data(contentsOf: url2)) == nil)
+    }
+
+    /// Walk the blocks after the header and return the first Comment Extension's
+    /// text (0x21 0xFE … 0x00), mirroring how exiftool reads the Comment tag.
+    private func extractGIFComment(_ bytes: Data) -> String? {
+        var i = 13  // header (6) + logical screen descriptor (7); no GCT here
+        var data = [UInt8]()
+        var found = false
+        while i < bytes.count {
+            let b = bytes[i]
+            if b == 0x3B || b == 0x2C { break }   // trailer or first image → done
+            guard b == 0x21 else { i += 1; continue }
+            let label = bytes[i + 1]; i += 2
+            if label == 0xFE { found = true }
+            while i < bytes.count {                // sub-blocks until 0x00
+                let n = Int(bytes[i]); i += 1
+                if n == 0 { break }
+                if label == 0xFE { data.append(contentsOf: bytes[i..<(i + n)]) }
+                i += n
+            }
+            if found { break }
+        }
+        return found ? String(decoding: data, as: UTF8.self) : nil
+    }
+
     // MARK: - LZW round-trip
 
     /// Encode a complete per-frame volume, run our LZW decoder over the first

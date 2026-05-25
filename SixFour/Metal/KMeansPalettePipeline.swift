@@ -36,6 +36,11 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
     /// MSE-comparison test and as a fallback.
     var seed: Seed = .wuInit
 
+    /// Wall-clock (ms) the last `extractBatch` spent on CPU Wu seeding (0 when
+    /// `seed == .uniformStride`). Read by `GIFRenderer` to stamp the GIF's
+    /// metadata comment so the cost is in the file, not just the logs.
+    private(set) var lastWuSeedMillis: Int = 0
+
     // Exposed for tests that drive the kernels directly.
     var device: any MTLDevice { gpu.device }
     var queue: any MTLCommandQueue { gpu.queue }
@@ -139,6 +144,7 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
         // into the shared centroid buffers BEFORE the command buffer runs; the
         // seed dispatch is then skipped (`seedOnGPU: false`).
         let seedOnGPU = (seed == .uniformStride)
+        lastWuSeedMillis = 0
         if seed == .wuInit {
             let wuStart = ContinuousClock().now
             for i in 0..<frameCount {
@@ -147,6 +153,7 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
                 for k in 0..<kMeansK { dst[k] = seeds[k] }
             }
             let wuMs = Self.millis(ContinuousClock().now - wuStart)
+            lastWuSeedMillis = wuMs
             // .notice (not .info) so it persists + shows in Console by default
             // for on-device benchmarking.
             Self.logger.notice("[bench] Wu+KM seed (CPU, ×\(frameCount) frames): \(wuMs)ms total (\(wuMs / max(1, frameCount))ms/frame)")

@@ -49,6 +49,9 @@ struct PaletteGenerator: Sendable {
         let perFramePalettes: [[SIMD3<Float>]]   // T × K
         let frameIndices: [[UInt8]]              // T × H·W indices into that frame's palette
         let stageAMillis: Int                    // wall-clock for refine + dither + rescue
+        /// Human-readable dither summary for the GIF metadata comment,
+        /// e.g. "blueNoise/GPU 4ms" or "errorDiffusion/CPU 33ms".
+        let ditherSummary: String
     }
 
     /// Refine + dither + per-frame surjectivity rescue for every tile.
@@ -77,10 +80,11 @@ struct PaletteGenerator: Sendable {
         }()
 
         var indices: [[UInt8]]
+        var ditherSummary: String
         let ditherStart = ContinuousClock().now
         if ditherMethod == .blueNoise, let mask {
             let thresholds = (0..<frameCount).map { Array(mask[($0 * perFrame)..<(($0 + 1) * perFrame)]) }
-            indices = ditherBlueNoise(tiles: tiles, palettes: palettes, thresholds: thresholds)
+            (indices, ditherSummary) = ditherBlueNoise(tiles: tiles, palettes: palettes, thresholds: thresholds)
         } else {
             let kernel = self.dither
             let useSerpentine = self.serpentine
@@ -96,7 +100,9 @@ struct PaletteGenerator: Sendable {
                 while let (i, idx) = await group.next() { out[i] = idx }
             }
             indices = out
-            Self.logger.notice("[bench] dither errorDiffusion (CPU SIMD8, ×\(frameCount)): \(Self.milliseconds(ContinuousClock().now - ditherStart))ms")
+            let edMs = Self.milliseconds(ContinuousClock().now - ditherStart)
+            ditherSummary = "errorDiffusion/CPU \(edMs)ms"
+            Self.logger.notice("[bench] dither errorDiffusion (CPU SIMD8, ×\(frameCount)): \(edMs)ms")
         }
 
         // Phase 3: strict per-frame surjectivity rescue — guarantees every frame
@@ -111,7 +117,8 @@ struct PaletteGenerator: Sendable {
 
         let stageAMs = Self.milliseconds(ContinuousClock().now - t0)
         Self.logger.info("[palette] refine+dither+rescue (×\(frameCount) frames): \(stageAMs)ms")
-        return Output(perFramePalettes: palettes, frameIndices: indices, stageAMillis: stageAMs)
+        return Output(perFramePalettes: palettes, frameIndices: indices,
+                      stageAMillis: stageAMs, ditherSummary: ditherSummary)
     }
 
     /// Blue-noise dither for all frames. Runs on GPU when available (operational
@@ -121,7 +128,7 @@ struct PaletteGenerator: Sendable {
         tiles: [OKLabTile],
         palettes: [[SIMD3<Float>]],
         thresholds: [[UInt8]]
-    ) -> [[UInt8]] {
+    ) -> (indices: [[UInt8]], summary: String) {
         let frameCount = tiles.count
 
         func runCPU() -> (result: [[UInt8]], ms: Int) {
@@ -135,7 +142,7 @@ struct PaletteGenerator: Sendable {
         guard let gpu = blueNoiseGPU else {
             let cpu = runCPU()
             Self.logger.notice("[bench] dither blueNoise CPU=\(cpu.ms)ms (no GPU pipeline)")
-            return cpu.result
+            return (cpu.result, "blueNoise/CPU \(cpu.ms)ms")
         }
 
         do {
@@ -148,13 +155,15 @@ struct PaletteGenerator: Sendable {
                 let cpu = runCPU()
                 let ratio = gpuMs > 0 ? Double(cpu.ms) / Double(gpuMs) : 0
                 Self.logger.notice("[bench] dither blueNoise CPU=\(cpu.ms)ms GPU=\(gpuMs)ms (\(String(format: "%.2f", ratio))× CPU/GPU, batched ×\(frameCount))")
+                return (gpuResult, "blueNoise/GPU \(gpuMs)ms (cpu \(cpu.ms)ms)")
             } else {
                 Self.logger.notice("[bench] dither blueNoise GPU=\(gpuMs)ms (batched ×\(frameCount))")
+                return (gpuResult, "blueNoise/GPU \(gpuMs)ms")
             }
-            return gpuResult
         } catch {
             Self.logger.error("[bench] blueNoise GPU failed (\(String(describing: error))); CPU fallback")
-            return runCPU().result
+            let cpu = runCPU()
+            return (cpu.result, "blueNoise/CPU \(cpu.ms)ms (gpu failed)")
         }
     }
 
