@@ -2,13 +2,19 @@
 //! palette-environment descriptor (MATH.md §8). The shared foundation for the
 //! `viz` tool and the future per-user "look" NN (burn).
 
+pub mod collapse;
 pub mod color;
 pub mod cyclic;
+pub mod geometry;
 pub mod gif_io;
+pub mod synth;
 
+pub use collapse::{candidates, fidelity, median_cut, population_value, weighted_kmeans};
 pub use color::Oklab;
 pub use cyclic::{descriptor, CyclicStack, Frame, Params, DESCRIPTOR_DIM};
+pub use geometry::{color_pca, distinct_count, effective_dim, mean_nn_spacing};
 pub use gif_io::{load_stack, synth_color, synthetic_stack, write_sample_gif};
+pub use synth::{synth_stack, SynthParams};
 
 #[cfg(test)]
 mod tests {
@@ -106,5 +112,40 @@ mod tests {
             assert!(f.weights.iter().all(|&w| w > 0.0), "surjective: every colour used");
         }
         assert_eq!(descriptor(Params::default(), &stk).len(), DESCRIPTOR_DIM);
+    }
+
+    // --- Phase A study primitives (sanity; the directional findings are
+    //     measured in the `explore` binary, not asserted here) ---
+
+    #[test]
+    fn fidelity_increases_with_spread() {
+        use crate::{collapse, synth::{synth_stack, SynthParams}};
+        let base = SynthParams { n_clusters: 6, spread: 0.02, drift: 0.1, gamut: 0.8, conc_skew: 1.0, seed: 3 };
+        let wide = SynthParams { spread: 0.15, ..base };
+        let fid = |p: &SynthParams| {
+            let s = synth_stack(p, 16, 64);
+            let c = collapse::candidates(&s);
+            collapse::fidelity(&collapse::weighted_kmeans(&c, 64, 10, 1), &c)
+        };
+        let (lo, hi) = (fid(&base), fid(&wide));
+        assert!(hi > lo, "more intra-cluster spread must raise collapse error: lo={lo}, hi={hi}");
+    }
+
+    #[test]
+    fn population_value_runs_finite() {
+        use crate::{collapse, synth::{synth_stack, SynthParams}};
+        let s = synth_stack(&SynthParams { conc_skew: 2.5, ..SynthParams::default() }, 24, 128);
+        let (fw, fu) = collapse::population_value(&collapse::candidates(&s), 64, 12, 1);
+        assert!(fw.is_finite() && fu.is_finite() && fw >= 0.0 && fu >= 0.0);
+    }
+
+    #[test]
+    fn geometry_sane() {
+        use crate::{collapse, geometry, synth::{synth_stack, SynthParams}};
+        let c = collapse::candidates(&synth_stack(&SynthParams::default(), 16, 128));
+        let ed = geometry::effective_dim(geometry::color_pca(&c));
+        assert!(ed > 0.5 && ed <= 3.0001, "effective dim out of range: {ed}");
+        assert!(geometry::distinct_count(&c, 0.01) > 0);
+        assert!(geometry::mean_nn_spacing(&c, 64, 1) >= 0.0);
     }
 }

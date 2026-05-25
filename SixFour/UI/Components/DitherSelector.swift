@@ -11,30 +11,37 @@ import SwiftUI
 struct DitherSelector: View {
     @Binding var selection: DitherMethod
 
-    private func caption(_ m: DitherMethod) -> String {
-        switch m {
-        case .errorDiffusion: return "sequential"
-        case .blueNoise:      return "parallel"
-        }
-    }
-
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(DitherMethod.allCases, id: \.self) { method in
-                segment(
-                    title: method.label,
-                    caption: caption(method),
-                    isSelected: selection == method,
-                    action: { selection = method }
-                )
-                .accessibilityLabel("\(method.label) dither, \(caption(method))")
-                .accessibilityAddTraits(selection == method ? .isSelected : [])
+        VStack(spacing: 6) {
+            HStack(spacing: 4) {
+                ForEach(DitherMethod.allCases, id: \.self) { method in
+                    segment(
+                        title: method.label,
+                        caption: method.tagline,
+                        isSelected: selection == method,
+                        action: { selection = method }
+                    )
+                    .accessibilityLabel("\(method.label) dither, \(method.tagline). \(method.blurb)")
+                    .accessibilityAddTraits(selection == method ? .isSelected : [])
+                }
             }
+            .padding(4)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Dither method selector")
+
+            // Communicate the tradeoff, not just the choice: a one-line
+            // explainer that updates with the selected method.
+            Text(selection.blurb)
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .transition(.opacity)
+                .id(selection)
+                .accessibilityHidden(true)   // already voiced via the segment label
         }
-        .padding(4)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Dither method selector")
+        .animation(.snappy(duration: 0.2), value: selection)
     }
 
     @ViewBuilder

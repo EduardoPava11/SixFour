@@ -33,6 +33,28 @@ enum DitherMethod: String, Codable, Sendable, Hashable, CaseIterable {
         case .blueNoise:      return "Blue noise"
         }
     }
+
+    /// One-word benefit shown under the selector segment title.
+    var tagline: String {
+        switch self {
+        case .errorDiffusion: return "detail"
+        case .blueNoise:      return "stable · fast"
+        }
+    }
+
+    /// One-line explainer of the tradeoff, shown under the selector so the
+    /// choice is communicated, not just offered. The split that matters for a
+    /// 64-frame animation is detail-per-frame vs temporal stability across
+    /// frames (Floyd–Steinberg ignores the time axis; the 3-D spatiotemporal
+    /// blue-noise mask is decorrelated across frames).
+    var blurb: String {
+        switch self {
+        case .errorDiffusion:
+            return "Sharpest detail & texture. Each frame is dithered on its own (CPU), so fine grain can shimmer a little across the 64 frames."
+        case .blueNoise:
+            return "Clean gradients, steady across all 64 frames (3-D blue-noise), GPU-fast. Slightly softer on the finest texture."
+        }
+    }
 }
 
 enum Dither {

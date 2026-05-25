@@ -26,9 +26,14 @@ fn srgb_to_linear(x: f64) -> f64 {
 /// sRGB 8-bit triple → OKLab. (`f64::cbrt` returns the real cube root for
 /// negative inputs, matching `Color.hs`'s explicit negative-safe `cbrt`.)
 pub fn srgb8_to_oklab(c: [u8; 3]) -> Oklab {
-    let r = srgb_to_linear(c[0] as f64 / 255.0);
-    let g = srgb_to_linear(c[1] as f64 / 255.0);
-    let b = srgb_to_linear(c[2] as f64 / 255.0);
+    srgb_to_oklab([c[0] as f64 / 255.0, c[1] as f64 / 255.0, c[2] as f64 / 255.0])
+}
+
+/// sRGB triple in [0,1] → OKLab.
+pub fn srgb_to_oklab(c: [f64; 3]) -> Oklab {
+    let r = srgb_to_linear(c[0]);
+    let g = srgb_to_linear(c[1]);
+    let b = srgb_to_linear(c[2]);
     let l = M1[0][0] * r + M1[0][1] * g + M1[0][2] * b;
     let m = M1[1][0] * r + M1[1][1] * g + M1[1][2] * b;
     let s = M1[2][0] * r + M1[2][1] * g + M1[2][2] * b;
