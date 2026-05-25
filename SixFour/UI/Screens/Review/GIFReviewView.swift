@@ -38,32 +38,30 @@ struct GIFReviewView: View {
             // needed; the raw OKLab tiles are kept in
             // `vm.currentBundle`. Disabled during in-flight
             // re-extraction so the user can't queue multiple.
-            extractorEditPicker(primary: primary)
+            ditherEditPicker(primary: primary)
             actionRow(primary: primary)
         }
         .padding(.vertical)
     }
 
-    /// Segmented picker bound to the current output's extractor.
-    /// On change → `vm.reExtract` re-runs extraction + render with
-    /// the cached `currentBundle.tiles`. The picker label sits
-    /// above the segments to disambiguate from the capture-screen
-    /// picker (which sets the algorithm for the NEXT capture, not
-    /// for editing the current one).
+    /// Segmented picker bound to the current output's dither method.
+    /// On change → `vm.reExtract` re-renders the cached `currentBundle.tiles`
+    /// with the new dither (no re-capture). Lets the user A/B the two looks
+    /// on the same scene; the extraction algorithm is fixed at Wu+KM.
     @ViewBuilder
-    private func extractorEditPicker(primary: CaptureOutput) -> some View {
+    private func ditherEditPicker(primary: CaptureOutput) -> some View {
         VStack(spacing: 4) {
-            Text("Edit · Extractor")
+            Text("Edit · Dither")
                 .font(.system(.caption2, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.6))
-            Picker("Re-extract algorithm", selection: Binding(
-                get: { primary.extractorChoice },
-                set: { newChoice in
-                    Task { await vm.reExtract(with: newChoice) }
+            Picker("Re-render dither", selection: Binding(
+                get: { primary.ditherMethod },
+                set: { newMethod in
+                    Task { await vm.reExtract(with: newMethod) }
                 }
             )) {
-                ForEach(Composition.ExtractorChoice.allCases, id: \.self) { choice in
-                    Text(choice.label).tag(choice)
+                ForEach(DitherMethod.allCases, id: \.self) { method in
+                    Text(method.label).tag(method)
                 }
             }
             .pickerStyle(.segmented)
@@ -140,9 +138,9 @@ private struct RenderPanel: View {
             PaletteStripView(palettes: output.palettesForDisplay)
                 .padding(.horizontal, 2)
 
-            // 3-D palette globe: the 256 colours as a rotatable sphere stepping
-            // through the 64 frames. The strip is the 1-D read; this is the
-            // spatial tool (drag to rotate, scrub a step, tap a colour).
+            // ⚠️ EXPERIMENTAL / PARKED spike — the palette-visualization product
+            // is the standalone Rust tool (~/Desktop/sixfour-studio), not this.
+            // Left wired as a reference; remove if it gets in the way.
             PaletteSphereView(palettes: output.palettesForDisplay)
                 .padding(.horizontal, 2)
 
@@ -159,7 +157,7 @@ private struct RenderPanel: View {
                 .interpolation(.none)
                 .resizable()
                 .aspectRatio(1, contentMode: .fit)
-                .accessibilityLabel("Rendered GIF, \(output.extractorChoice.label) palette algorithm, sixty-four frames at twenty fps")
+                .accessibilityLabel("Rendered GIF, \(output.ditherMethod.label) dither, sixty-four frames at twenty fps")
         } else {
             Rectangle().fill(.white.opacity(0.04))
                 .overlay(ProgressView().tint(.white))

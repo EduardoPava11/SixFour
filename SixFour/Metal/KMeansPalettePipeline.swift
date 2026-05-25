@@ -31,7 +31,10 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
     ///     clusters than a uniform stride. Costs one CPU Wu pass per tile;
     ///     opt-in until on-device benchmarking justifies making it the default.
     enum Seed: Sendable { case uniformStride, wuInit }
-    var seed: Seed = .uniformStride
+    /// Default is Wu+KM (the literature's quality leader) now that it is the
+    /// app's sole extraction path. `.uniformStride` is retained for the
+    /// MSE-comparison test and as a fallback.
+    var seed: Seed = .wuInit
 
     // Exposed for tests that drive the kernels directly.
     var device: any MTLDevice { gpu.device }

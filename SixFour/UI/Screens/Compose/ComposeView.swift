@@ -17,17 +17,18 @@ struct ComposeView: View {
                 Section("Active composition") {
                     LabeledContent("Name", value: composition.name)
                     LabeledContent("Metric", value: composition.metric ?? "—")
-                    LabeledContent("Algorithm", value: algorithmLabel)
+                    LabeledContent("Algorithm", value: "Wu + K-means")
+                    LabeledContent("Dither", value: composition.ditherMethod.label)
                 }
 
                 Section {
                     HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "arrow.up.right.circle")
+                        Image(systemName: "sparkles")
                             .foregroundStyle(.secondary)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Palette algorithm lives on the capture screen")
+                            Text("Quality-first palette")
                                 .font(.subheadline.weight(.medium))
-                            Text("K-means · Wu · Octree — the three per-frame extraction families.")
+                            Text("Every GIF uses Wu-initialized k-means — the research quality leader — then your chosen dither, on the capture screen.")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -74,22 +75,14 @@ struct ComposeView: View {
             name: "custom",
             metric: hash,
             createdAt: Date(),
-            extractorChoice: composition.extractorChoice
+            ditherMethod: composition.ditherMethod
         )
     }
 
-    private var algorithmLabel: String {
-        composition.extractorChoice.label
-    }
-
     private var algorithmBlurb: String {
-        switch composition.extractorChoice {
-        case .kMeans:
-            return "Iterative Lloyd k-means on the GPU — adapts 256 centroids to the scene. Fastest; best for high-variance content."
-        case .wu:
-            return "Wu 1992 recursive variance-minimizing bipartition. Deterministic, globally variance-aware, and produces the richest per-cluster statistics for editing tools."
-        case .octree:
-            return "Hierarchical octree with count-based reduction to 256 leaves. Most predictable structure; best for flat-colored content."
-        }
+        "Wu-initialized k-means (Celebi 2011): Wu's variance boxes seed the GPU "
+        + "Lloyd loop, the literature's near-optimal quantizer. Each of the 64 "
+        + "frames keeps its own complete 256-colour palette (a full 64³ voxel "
+        + "volume, no empty slots)."
     }
 }

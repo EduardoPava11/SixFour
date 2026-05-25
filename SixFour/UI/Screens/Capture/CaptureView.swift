@@ -177,19 +177,12 @@ struct CaptureView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 14) {
-            // The algorithm selector is the primary creative control. Three
-            // processing-model families — K-means (iterative Lloyd, GPU, fast),
-            // Wu (recursive variance bipartition, rich statistics), Octree
-            // (hierarchical count merge, predictable). Each fills every frame
-            // with its own complete 256-colour palette (per-frame 64³ voxel
-            // volume, no empty slots). Selection persists across launches via
-            // CaptureViewModel.extractorChoiceBinding.
-            AlgorithmSelector(selection: vm.extractorChoiceBinding)
-                .frame(maxWidth: 320)
-
-            // Dither method — the second creative option. Both methods still
-            // emit a complete 64³ voxel volume; this is a pure look choice
-            // (and selects the GPU-eligible path for .blueNoise).
+            // One creative control: the dither method. The extraction
+            // algorithm is fixed at Wu-initialized k-means (the research
+            // quality leader), so every capture is the best-quality 64³ voxel
+            // volume; the user's choice is purely the dither *look*. Both
+            // methods stay complete (no empty slots); .blueNoise is the
+            // GPU-eligible path. Persists via CaptureViewModel.ditherMethodBinding.
             DitherSelector(selection: vm.ditherMethodBinding)
                 .frame(maxWidth: 320)
 

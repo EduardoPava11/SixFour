@@ -17,11 +17,10 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     /// sRGB UInt8 palettes for the PaletteStripView — 64 entries (one
     /// per frame) of 256 colours each (the per-frame voxel volume).
     let palettesForDisplay: [[SIMD3<UInt8>]]
-    /// Which extractor produced the per-frame palettes for this render.
-    let extractorChoice: Composition.ExtractorChoice
+    /// Which dither method produced this render (the one creative option).
+    let ditherMethod: DitherMethod
     /// Mean per-frame extraction MSE (OKLab units²). Surfaced in
-    /// StatsFooterView so users can A/B compare extractors on the
-    /// same scene.
+    /// StatsFooterView as a fidelity readout.
     let meanExtractMSE: Float
     /// Mean centroid condition number κ across the 64 per-frame
     /// palettes. κ ≈ 1 → orthogonal centroids (well-conditioned
@@ -99,7 +98,6 @@ final class CaptureViewModel {
 
     func bootstrap() async {
         composition = composition.with(
-            extractorChoice: settings.defaultExtractor,
             ditherMethod: settings.defaultDitherMethod
         )
 
@@ -136,9 +134,7 @@ final class CaptureViewModel {
 
             self.pipeline = pipeline
             self.engines = PaletteEngines(
-                kMeans: try KMeansPalettePipeline(tileSide: 64),
-                wu: try WuPalettePipeline(tileSide: 64),
-                octree: try OctreePalettePipeline(tileSide: 64)
+                kMeans: try KMeansPalettePipeline(tileSide: 64)
             )
             self.session = session
             self.store = store
@@ -308,7 +304,7 @@ final class CaptureViewModel {
             fileSize: report.fileSize,
             timingSummary: summary,
             palettesForDisplay: report.palettesForDisplay,
-            extractorChoice: report.extractorChoice,
+            ditherMethod: composition.ditherMethod,
             meanExtractMSE: report.meanExtractMSE,
             meanCentroidConditionNumber: kappa,
             meanAdmissionRateAt05: admissionRate
@@ -377,9 +373,8 @@ final class CaptureViewModel {
     ///
     /// The popped entry's GIF + contact-sheet files are deleted in
     /// the background to keep Documents tidy without blocking the
-    /// UI. The `composition.extractorChoice` is reverted to the
-    /// previous entry's extractor so the picker on screen reflects
-    /// the now-current state.
+    /// UI. The dither selector is synced to the restored render's
+    /// method so the picker reflects the now-current state.
     func undo() {
         guard let restored = history.undo() else { return }
         Haptics.impact(.light)
@@ -388,41 +383,32 @@ final class CaptureViewModel {
             bundle.perFrameStatistics = restored.perFrameStatistics
             currentBundle = bundle
         }
-        // Sync the picker selection to whatever the restored render
-        // was extracted with.
-        let restoredChoice = restored.output.extractorChoice
-        if composition.extractorChoice != restoredChoice {
-            self.composition = composition.with(extractorChoice: restoredChoice)
-            self.settings.defaultExtractor = restoredChoice
+        let restoredMethod = restored.output.ditherMethod
+        if composition.ditherMethod != restoredMethod {
+            self.composition = composition.with(ditherMethod: restoredMethod)
+            self.settings.defaultDitherMethod = restoredMethod
         }
     }
 
-    /// Re-extract palettes from the cached capture bundle with a
-    /// different extractor family and re-render the GIF in place.
-    /// No re-capture — the raw OKLab tiles in `currentBundle.tiles`
-    /// are the input. Updates `primaryOutput` + `currentBundle
-    /// .perFrameStatistics` on success.
+    /// Re-render the cached capture bundle with a different dither method,
+    /// in place. No re-capture — the raw OKLab tiles in `currentBundle.tiles`
+    /// are the input, re-quantized (Wu+KM) and re-dithered. Updates
+    /// `primaryOutput` + `currentBundle.perFrameStatistics` on success.
     ///
-    /// Editing-tool entry point #1: lets the user A/B different
-    /// extractors on the same scene without retaking. Future edits
-    /// (parameter sliders, χ²-refill toggle, K=64/128/256) will use
-    /// the same pattern — pass new params + reuse bundle.tiles.
-    ///
-    /// Updates `composition.extractorChoice` so subsequent captures
-    /// default to the new pick. The AppStorage persistence flows
-    /// through `extractorChoiceBinding`.
-    func reExtract(with choice: Composition.ExtractorChoice) async {
+    /// Editing-tool entry point: lets the user A/B the two dither looks on
+    /// the same scene without retaking. (The extraction algorithm is fixed at
+    /// Wu+KM, so dither is the only thing left to vary here.)
+    func reExtract(with method: DitherMethod) async {
         guard let bundle = currentBundle,
               let store = store,
               let engines = engines else { return }
-        // No-op if the user re-picked the same extractor; saves a
-        // GPU/CPU pass and a Documents write.
-        if composition.extractorChoice == choice && primaryOutput != nil { return }
+        // No-op if the user re-picked the same method; saves a pass + write.
+        if composition.ditherMethod == method && primaryOutput != nil { return }
 
         Haptics.impact(.light)
-        let newComposition = composition.with(extractorChoice: choice)
+        let newComposition = composition.with(ditherMethod: method)
         self.composition = newComposition
-        self.settings.defaultExtractor = choice
+        self.settings.defaultDitherMethod = method
 
         phase = .renderingStageA
         do {
@@ -434,9 +420,7 @@ final class CaptureViewModel {
                 summary: bundle.burstTiming.summary
             )
             primaryOutput = renderResult.output
-            // Replace the cached perFrameStatistics with the new
-            // extractor's output. Tiles are unchanged (still
-            // re-extractable for further edits).
+            // Tiles are unchanged (still re-renderable for further edits).
             currentBundle = CaptureBundle(
                 id: bundle.id,
                 captureTimestamp: bundle.captureTimestamp,
@@ -473,21 +457,6 @@ final class CaptureViewModel {
                 guard let self else { return }
                 self.composition = self.composition.with(ditherMethod: newMethod)
                 self.settings.defaultDitherMethod = newMethod
-                Haptics.selection()
-            }
-        )
-    }
-
-    /// Binding for the algorithm selector in CaptureView. Persists the
-    /// chosen family and fires a haptic. The next capture uses the
-    /// new choice; previously rendered GIFs / bundles aren't affected.
-    var extractorChoiceBinding: Binding<Composition.ExtractorChoice> {
-        Binding(
-            get: { [weak self] in self?.composition.extractorChoice ?? .kMeans },
-            set: { [weak self] newChoice in
-                guard let self else { return }
-                self.composition = self.composition.with(extractorChoice: newChoice)
-                self.settings.defaultExtractor = newChoice
                 Haptics.selection()
             }
         )

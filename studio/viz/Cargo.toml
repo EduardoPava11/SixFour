@@ -1,0 +1,12 @@
+[package]
+name = "viz"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+# rerun — DEV/PROTOTYPE visualizer only (Apache-2.0 OR MIT). Not shipped in the
+# product; the product UI is bespoke egui. Keeps OFL-font/re_ui items out of ship.
+rerun = "0.32"
+analysis-core = { path = "../analysis-core" }

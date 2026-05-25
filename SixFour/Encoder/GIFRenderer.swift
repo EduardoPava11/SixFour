@@ -35,9 +35,6 @@ struct GIFRenderer {
         let fileSize: Int
         /// sRGB palette stack for the UI's PaletteStripView.
         let palettesForDisplay: [[SIMD3<UInt8>]]
-        /// Which extractor produced the per-frame palettes. Surfaced
-        /// in the StatsFooter so the user sees which algorithm ran.
-        let extractorChoice: Composition.ExtractorChoice
         /// Per-frame extraction MSE in OKLab units² — the universal
         /// quality metric for comparing extractors on the same scene.
         /// Lower = tighter quantization. We surface the mean across
@@ -100,9 +97,7 @@ struct GIFRenderer {
             let sum = perFrameStats.reduce(Float(0)) { $0 + $1.provenance.mse }
             return sum / Float(max(1, perFrameStats.count))
         }()
-        Self.logger.info(
-            "[renderer] extractor=\(self.composition.extractorChoice.rawValue, privacy: .public) meanMSE=\(meanExtractMSE)"
-        )
+        Self.logger.info("[renderer] extractor=wu+km meanMSE=\(meanExtractMSE)")
 
         var generator = PaletteGenerator()
         generator.refinementMetric = refinementMetric
@@ -141,7 +136,6 @@ struct GIFRenderer {
             totalMillis: output.stageAMillis + encodeMs,
             fileSize: fileSize,
             palettesForDisplay: displayPalettes,
-            extractorChoice: composition.extractorChoice,
             meanExtractMSE: meanExtractMSE,
             perFrameStatistics: perFrameStats
         )

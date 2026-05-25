@@ -1,0 +1,12 @@
+# SixFour Studio — proprietary workspace (analysis · NN · share · app).
+# License gate: every dependency must pass `cargo deny check licenses`
+# (permissive only) BEFORE it is added. See deny.toml + README.
+[workspace]
+resolver = "2"
+members = ["analysis-core", "viz"]
+# future members: "look-nn" (burn), "share" (iroh), "app" (egui)
+
+[workspace.package]
+edition = "2021"
+license = "LicenseRef-Proprietary"
+publish = false

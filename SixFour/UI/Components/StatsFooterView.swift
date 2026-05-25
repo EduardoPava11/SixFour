@@ -38,10 +38,10 @@ struct StatsFooterView: View {
         .accessibilityLabel(voiceOverDescription)
     }
 
-    /// Extractor family label (K-means / Wu / Octree). First field
-    /// in the footer so the user sees immediately which algorithm
-    /// produced the visible GIF.
-    private var extractorText: String { output.extractorChoice.label }
+    /// Dither method label (Diffusion / Blue noise) — the one creative
+    /// variable now that the extractor is fixed at Wu+KM. First field so the
+    /// user sees immediately which look produced the visible GIF.
+    private var extractorText: String { output.ditherMethod.label }
 
     /// Mean extraction MSE in OKLab units². Lower = tighter
     /// quantization. Surfaced so users can A/B compare extractors
@@ -100,7 +100,7 @@ struct StatsFooterView: View {
     private var witnessTint: Color { .green }
 
     private var voiceOverDescription: String {
-        "\(extractorText) algorithm, \(sizeText), rendered in \(timeText)."
+        "\(extractorText) dither, \(sizeText), rendered in \(timeText)."
     }
 
     // MARK: - Building blocks

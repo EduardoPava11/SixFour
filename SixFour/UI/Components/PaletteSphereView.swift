@@ -1,3 +1,8 @@
+// ⚠️ EXPERIMENTAL / PARKED — an unsanctioned in-app spike. The palette
+// visualization direction is the standalone proprietary Rust tool
+// (~/SixFour/studio/, analysis-core + rerun/egui), NOT this view.
+// Not wired into the shipped flow by default. Kept only as a reference spike;
+// remove if it drifts. See memory: feedback_sixfour_palette_viz.
 import SwiftUI
 import simd
 
