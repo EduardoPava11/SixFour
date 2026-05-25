@@ -116,18 +116,16 @@ struct PaletteGenerator: Sendable {
             )
             palette = refined.centroids
         }
-        let idx: [UInt8]
-        if serpentine {
-            idx = Dither.errorDiffuseSerpentine(
-                tile: tile, palette: palette,
-                metric: EuclideanOKLabMetric(), kernel: kernel
-            )
-        } else {
-            idx = Dither.errorDiffuse(
-                tile: tile, palette: palette,
-                metric: EuclideanOKLabMetric(), kernel: kernel
-            )
-        }
+        // The dither always uses the Euclidean OKLab metric (the learned
+        // metric, if any, only steers the refine above). So we take the
+        // vectorised SIMD8 path: build the palette as a struct-of-arrays
+        // `CentroidSet` once, then error-diffuse with an 8-wide
+        // nearest-centroid search. The generic `Dither.errorDiffuse` remains
+        // the scalar parity oracle.
+        let centroids = CentroidSet(palette)
+        let idx = Dither.errorDiffuseSIMD(
+            tile: tile, centroids: centroids, kernel: kernel, serpentine: serpentine
+        )
         return (palette, idx)
     }
 

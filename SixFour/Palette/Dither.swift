@@ -98,6 +98,57 @@ enum Dither {
         return out
     }
 
+    /// Euclidean SIMD8 error-diffusion — the production path. Equivalent to
+    /// `errorDiffuse`/`errorDiffuseSerpentine` with `EuclideanOKLabMetric`,
+    /// but the per-pixel nearest-centroid search runs vectorised over 8
+    /// centroids at a time via `CentroidSet.nearest` (the always-on hot loop).
+    /// The error-diffusion sweep itself stays sequential (its inter-pixel
+    /// dependency is irreducible); only the 256-wide centroid search is
+    /// vectorised. Pass `serpentine: true` for the boustrophedon sweep.
+    ///
+    /// The generic `errorDiffuse(tile:palette:metric:kernel:)` above remains
+    /// the scalar parity oracle (and the path for non-Euclidean metrics).
+    static func errorDiffuseSIMD(
+        tile: OKLabTile,
+        centroids: CentroidSet,
+        kernel: ErrorKernel = .floydSteinberg,
+        serpentine: Bool = false
+    ) -> [UInt8] {
+        precondition(centroids.count <= 256, "Palette must fit in UInt8")
+        let side = tile.side
+        var buf = tile.pixels
+        var out = [UInt8](repeating: 0, count: side * side)
+
+        // Acquire the SoA pointers ONCE for the whole frame — never per pixel.
+        centroids.withProbe { probe in
+            for y in 0..<side {
+                let leftToRight = !serpentine || (y % 2 == 0)
+                let xStart = leftToRight ? 0 : side - 1
+                let xEnd = leftToRight ? side : -1
+                let xStep = leftToRight ? 1 : -1
+                var x = xStart
+                while x != xEnd {
+                    let idx = y * side + x
+                    let here = buf[idx]
+                    let bestK = probe.nearest(here)
+                    out[idx] = UInt8(bestK)
+                    let err = here - probe.color(bestK)
+                    for tap in kernel.taps {
+                        // Mirror dx on right-to-left passes so error propagates ahead of the scan.
+                        let dx = leftToRight ? tap.dx : -tap.dx
+                        let nx = x + dx
+                        let ny = y + tap.dy
+                        if nx < 0 || nx >= side || ny < 0 || ny >= side { continue }
+                        let nidx = ny * side + nx
+                        buf[nidx] += err * tap.weight
+                    }
+                    x += xStep
+                }
+            }
+        }
+        return out
+    }
+
     struct Tap: Sendable {
         let dx: Int
         let dy: Int
