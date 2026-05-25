@@ -25,6 +25,7 @@ library
         SixFour.Spec.Gauge
         SixFour.Spec.StageA
         SixFour.Spec.Coverage
+        SixFour.Spec.Collapse
         SixFour.Spec.Net
         SixFour.Spec.Cyclic
         SixFour.Spec.Look
@@ -95,6 +96,7 @@ test-suite spec-tests
         Properties.Surjectivity
         Properties.Wu
         Properties.Coverage
+        Properties.Collapse
         Properties.Hybrid
         Properties.Cyclic
         Properties.Look
