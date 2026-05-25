@@ -12,13 +12,15 @@ struct GIFEncoderTests {
     // MARK: - Per-frame (LCT) mode
 
     @Test func perFrameModeWritesNoGCTAnd64LocalTables() throws {
-        let encoder = GIFEncoder(width: 8, height: 8, fps: 20)
-        let frames: [[UInt8]] = Array(repeating: Array(repeating: 0, count: 64), count: 4)
+        let encoder = GIFEncoder(width: 64, height: 64, fps: 20)
         let palettes: [[SIMD3<UInt8>]] = Array(
-            repeating: synthPalette256(seed: 1), count: 4
+            repeating: synthPalette256(seed: 1), count: SixFourShape.T
         )
+        // The per-frame encoder accepts only a CompleteVoxelVolume — a small
+        // 8×8×4 fixture can no longer reach it, which is the gate working.
+        let volume = try #require(CompleteVoxelVolume(checkingFrames: surjectiveFrames()))
         let url = scratchURL("perframe.gif")
-        try encoder.encode(frames: frames, perFramePalettes: palettes, to: url)
+        try encoder.encode(volume: volume, perFramePalettes: palettes, to: url)
 
         let bytes = try Data(contentsOf: url)
         try expectMagic(bytes)
@@ -30,7 +32,7 @@ struct GIFEncoderTests {
         // Walk and count image descriptors (0x2C) — each must carry an LCT
         // packed byte at offset+9 with bit 7 set.
         let lctCount = countImageDescriptors(bytes, expectLCT: true)
-        #expect(lctCount == 4, "expected 4 image descriptors with LCT; saw \(lctCount)")
+        #expect(lctCount == SixFourShape.T, "expected \(SixFourShape.T) image descriptors with LCT; saw \(lctCount)")
     }
 
     // MARK: - Global (GCT) mode
@@ -67,15 +69,14 @@ struct GIFEncoderTests {
     /// 64-frame GIF. Verify directly on a 64-frame fixture.
     @Test func globalModeIsAtLeast47KBSmallerOn64Frames() throws {
         let encoder = GIFEncoder(width: 64, height: 64, fps: 20)
-        let frames: [[UInt8]] = Array(
-            repeating: Array(repeating: 0, count: 64 * 64), count: 64
-        )
+        let frames = surjectiveFrames()
         let palette = synthPalette256(seed: 42)
-        let palettes = Array(repeating: palette, count: 64)
+        let palettes = Array(repeating: palette, count: SixFourShape.T)
+        let volume = try #require(CompleteVoxelVolume(checkingFrames: frames))
 
         let lctURL = scratchURL("64frame_lct.gif")
         let gctURL = scratchURL("64frame_gct.gif")
-        try encoder.encode(frames: frames, perFramePalettes: palettes, to: lctURL)
+        try encoder.encode(volume: volume, perFramePalettes: palettes, to: lctURL)
         try encoder.encode(frames: frames, globalPalette: palette, to: gctURL)
 
         let lctSize = try Data(contentsOf: lctURL).count
@@ -112,13 +113,90 @@ struct GIFEncoderTests {
         #expect(decoded == pixels, "LZW round-trip lost pixels: got \(decoded)")
     }
 
+    // MARK: - CompleteVoxelVolume brand (completeness gate)
+
+    @Test func brandAcceptsACompletePerFrameSurjectiveVolume() {
+        #expect(CompleteVoxelVolume(checkingFrames: surjectiveFrames()) != nil)
+    }
+
+    @Test func brandRejectsWrongFrameCount() {
+        var frames = surjectiveFrames()
+        frames.removeLast()                                   // 63 frames
+        #expect(CompleteVoxelVolume(checkingFrames: frames) == nil)
+    }
+
+    @Test func brandRejectsAShortFrame() {
+        var frames = surjectiveFrames()
+        frames[10].removeLast()                               // 4095 pixels
+        #expect(CompleteVoxelVolume(checkingFrames: frames) == nil)
+    }
+
+    @Test func brandRejectsANonSurjectiveFrame() {
+        var frames = surjectiveFrames()
+        frames[0] = frames[0].map { $0 == 255 ? 0 : $0 }      // frame 0 never uses 255
+        #expect(CompleteVoxelVolume(checkingFrames: frames) == nil)
+    }
+
+    // MARK: - Per-frame surjectivity rescue (producer side)
+
+    @Test func rescueFillsAllSlotsWhenDitherCollapsedToOne() {
+        // Pathological dither output: every pixel landed on slot 0.
+        let indices = [UInt8](repeating: 0, count: SixFourShape.pixelsPerFrame)
+        let (_, fixed) = PerFrameSurjectivity.rescue(
+            palette: distinctPalette(), indices: indices, pixels: gradientPixels()
+        )
+        #expect(Set(fixed).count == SixFourShape.K, "rescue must use all K slots")
+        #expect(CompleteVoxelVolume(checkingFrames:
+            Array(repeating: fixed, count: SixFourShape.T)) != nil)
+    }
+
+    @Test func rescueIsNoOpOnAnAlreadySurjectiveFrame() {
+        let indices = surjectiveFrames()[0]
+        let (_, fixed) = PerFrameSurjectivity.rescue(
+            palette: distinctPalette(), indices: indices, pixels: gradientPixels()
+        )
+        #expect(fixed == indices, "already-surjective frame must be returned unchanged")
+    }
+
+    @Test func rescueSucceedsOnAFlatScene() {
+        // The adversarial case Global mode throws on: every pixel identical.
+        // Strict per-frame mode must still produce 256 distinct indices.
+        let flat = [SIMD3<Float>](repeating: SIMD3<Float>(0.5, 0, 0),
+                                  count: SixFourShape.pixelsPerFrame)
+        let indices = [UInt8](repeating: 0, count: SixFourShape.pixelsPerFrame)
+        let (_, fixed) = PerFrameSurjectivity.rescue(
+            palette: distinctPalette(), indices: indices, pixels: flat
+        )
+        #expect(Set(fixed).count == SixFourShape.K)
+    }
+
     // MARK: - Helpers (fixtures + tiny parser)
+
+    /// 4096 OKLab pixels spanning the L axis, for rescue donor-ordering.
+    private func gradientPixels() -> [SIMD3<Float>] {
+        (0..<SixFourShape.pixelsPerFrame).map { i in
+            SIMD3<Float>(Float(i % 256) / 255.0, Float((i * 7) % 256) / 255.0 - 0.5, 0)
+        }
+    }
+
+    /// 256 distinct OKLab palette colours.
+    private func distinctPalette() -> [SIMD3<Float>] {
+        (0..<SixFourShape.K).map { SIMD3<Float>(Float($0) / 255.0, 0, 0) }
+    }
 
     private func scratchURL(_ name: String) -> URL {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appending(path: "sixfour-tests", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appending(path: name)
+    }
+
+    /// The minimal `CompleteVoxelVolume` fixture: `T` frames, each
+    /// `pixelsPerFrame` indices, each frame surjective onto `0..<K` (every
+    /// palette slot used exactly `pixelsPerFrame / K` = 16 times).
+    private func surjectiveFrames() -> [[UInt8]] {
+        let frame = (0..<SixFourShape.pixelsPerFrame).map { UInt8($0 % SixFourShape.K) }
+        return Array(repeating: frame, count: SixFourShape.T)
     }
 
     /// Deterministic 256-entry palette derived from a seed — values cover the

@@ -19,6 +19,7 @@ module SixFour.Spec.Gauge
   , identityPermutation
   , gaugeAction
   , gather
+  , permuteVector
   ) where
 
 import qualified Data.Vector         as V
@@ -81,6 +82,17 @@ gaugeAction (Permutation sigma) (Palette ps) (IndexTensor ix) =
 gather :: Palette k -> IndexTensor t h w k -> V.Vector OKLab
 gather (Palette ps) (IndexTensor ix) =
   V.generate (U.length ix) (\p -> ps V.! (ix U.! p))
+
+-- | Apply @σ@ to an arbitrary length-@K@ vector with the palette
+-- convention @(σ · v)[i] = v[σ⁻¹(i)]@ — the same reindexing 'gaugeAction'
+-- uses on the palette. Lets callers permute weights (or any per-slot
+-- attribute) in lock-step with the palette so the (colour, weight)
+-- pairing is preserved.
+permuteVector :: Permutation k -> V.Vector a -> V.Vector a
+permuteVector (Permutation sigma) v =
+  let n    = U.length sigma
+      sInv = inverseRaw sigma n
+  in V.generate n (\i -> v V.! (sInv U.! i))
 
 -- Internal: raw inverse over an unboxed vector.
 inverseRaw :: U.Vector Int -> Int -> U.Vector Int

@@ -33,9 +33,9 @@ jobs:
 
       - name: Verify Generated/ has not drifted
         run: |
-          if ! git diff --quiet -- SixFour/Generated/ trainer/generated/; then
-            echo "::error::SixFour/Generated/ or trainer/generated/ differs from spec output."
-            git diff -- SixFour/Generated/ trainer/generated/
+          if ! git diff --quiet -- SixFour/Generated/ trainer/generated/ SixFour/Resources/stbn3d-8.bin; then
+            echo "::error::SixFour/Generated/, trainer/generated/, or SixFour/Resources/stbn3d-8.bin differs from spec output."
+            git diff -- SixFour/Generated/ trainer/generated/ SixFour/Resources/stbn3d-8.bin
             exit 1
           fi
 

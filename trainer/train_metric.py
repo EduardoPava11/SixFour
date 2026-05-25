@@ -12,9 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import pathlib
-import time
 from dataclasses import dataclass
 
 import mlx.core as mx

@@ -24,7 +24,7 @@ struct UnauthorizedView: View {
                 Label("Open Settings", systemImage: "gear")
                     .padding(.horizontal, 8)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
             .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

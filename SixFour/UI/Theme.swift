@@ -32,4 +32,16 @@ enum SFTheme {
     static let mutedFill = Color.white.opacity(0.06)
     static let mutedText = Color.white.opacity(0.85)
     static let dimText   = Color.white.opacity(0.6)
+
+    // MARK: Liquid Glass (iOS 26)
+
+    /// Diameter of a circular glass icon button. 44pt is Apple's minimum
+    /// comfortable hit target — keep new toolbar buttons on this size so
+    /// the floating control cluster stays visually + tonally uniform.
+    static let glassIconButtonSize: CGFloat = 44
+
+    /// Spacing passed to `GlassEffectContainer`. It is the distance within
+    /// which sibling glass shapes share one sampling region and morph into
+    /// one another; tune it to roughly the gap between clustered controls.
+    static let glassClusterSpacing: CGFloat = 10
 }

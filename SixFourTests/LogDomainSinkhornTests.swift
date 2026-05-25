@@ -8,56 +8,15 @@ import simd
 /// success cases here can compare palettes directly.
 struct LogDomainSinkhornTests {
 
-    private struct Fixture {
-        let palettes: [[SIMD3<Float>]]
-        let indices: [[UInt8]]
-    }
-
-    /// 8-frame × 4096-pixel fixture (each slot used 16 times per frame).
-    /// Larger than the previous 2 × 256 fixture so adaptive-θ Sinkhorn
-    /// reliably hits a surjective hard-NN remap — small candidate sets
-    /// don't have enough donor mass for K=256 surjectivity.
-    private func makeFixture(seed: UInt64) -> Fixture {
-        var state = seed &+ 0x9E37_79B9_7F4A_7C15
-        func next01() -> Double {
-            state = state &* 6364136223846793005 &+ 1442695040888963407
-            return Double(state >> 11) / Double(1 << 53)
-        }
-        func nextU() -> UInt64 {
-            state = state &* 6364136223846793005 &+ 1442695040888963407
-            return state
-        }
-        var palettes: [[SIMD3<Float>]] = []
-        var indices: [[UInt8]] = []
-        for _ in 0..<8 {
-            var pal: [SIMD3<Float>] = []
-            for _ in 0..<256 {
-                let l = Float(next01())
-                let a = Float(next01() * 0.8 - 0.4)
-                let b = Float(next01() * 0.8 - 0.4)
-                pal.append(SIMD3<Float>(l, a, b))
-            }
-            palettes.append(pal)
-            var idx: [UInt8] = []
-            idx.reserveCapacity(4096)
-            for slot in 0..<256 {
-                for _ in 0..<16 { idx.append(UInt8(slot)) }
-            }
-            for i in stride(from: idx.count - 1, to: 0, by: -1) {
-                let j = Int(nextU() % UInt64(i + 1))
-                idx.swapAt(i, j)
-            }
-            indices.append(idx)
-        }
-        return Fixture(palettes: palettes, indices: indices)
-    }
+    // Fixtures live in SixFourTests/Support/Fixtures.swift
+    // (`makeSinkhornFixture` / `SeedableLCG`), shared with StageBSinkhornTests.
 
     /// At θ = 0.05, direct-exp and log-domain Sinkhorn produce
     /// numerically-close palettes. Tolerant of synthetic-uniform-fixture
     /// failures — both must throw the same way *or* succeed with
     /// matching palettes.
     @Test func sharedThetaAgreementBetweenDirectExpAndLogDomain() {
-        let fx = makeFixture(seed: 11)
+        let fx = makeSinkhornFixture(seed: 11, frames: 8)
         let directParams = StageBSinkhorn.Params(
             theta: 0.05, thetaFloor: 0.05,
             sinkhornIterations: 20, kmeansIterations: 3, logDomain: false)
@@ -96,7 +55,7 @@ struct LogDomainSinkhornTests {
     /// `.global` adaptive search either lands on a tight palette or
     /// fails the surjectivity floor. Both are correct.
     @Test func globalThetaProducesRank1CollapseWhenSucceeds() {
-        let fx = makeFixture(seed: 12)
+        let fx = makeSinkhornFixture(seed: 12, frames: 8)
         let merger = StageBSinkhorn(params: .global)
         do {
             let r = try merger.mergeAdaptive(
@@ -134,7 +93,7 @@ struct LogDomainSinkhornTests {
     /// behavior is exercised by the perf test below, which uses a
     /// looser budget.)
     @Test func successfulGlobalMergerCompletesWithin1500ms() {
-        let fx = makeFixture(seed: 17)
+        let fx = makeSinkhornFixture(seed: 17, frames: 8)
         let merger = StageBSinkhorn(params: .global)
         let start = ContinuousClock().now
         let result = Result {
@@ -162,7 +121,7 @@ struct LogDomainSinkhornTests {
     /// the budget covers `5 × per-attempt`. Real on-device scenes are
     /// clustered and typically succeed in one attempt.
     @Test func productionScaleGlobalMergeFinishesUnder8Seconds() {
-        let fx = makeProductionFixture(seed: 23)
+        let fx = makeSinkhornFixture(seed: 23, frames: 64, pixelsPerFrame: 256)
         let merger = StageBSinkhorn(params: .global)
         let start = ContinuousClock().now
         let r = try? merger.mergeAdaptive(
@@ -181,32 +140,4 @@ struct LogDomainSinkhornTests {
                 "Production-scale Global merge took \(ms) ms — exceeds 8 s adversarial budget")
     }
 
-    private func makeProductionFixture(seed: UInt64) -> Fixture {
-        var state = seed &+ 0x9E37_79B9_7F4A_7C15
-        func next01() -> Double {
-            state = state &* 6364136223846793005 &+ 1442695040888963407
-            return Double(state >> 11) / Double(1 << 53)
-        }
-        var palettes: [[SIMD3<Float>]] = []
-        var indices: [[UInt8]] = []
-        for _ in 0..<64 {
-            var pal: [SIMD3<Float>] = []
-            pal.reserveCapacity(256)
-            for _ in 0..<256 {
-                let l = Float(next01())
-                let a = Float(next01() * 0.8 - 0.4)
-                let b = Float(next01() * 0.8 - 0.4)
-                pal.append(SIMD3<Float>(l, a, b))
-            }
-            palettes.append(pal)
-            var idx: [UInt8] = (0..<256).map { UInt8($0) }
-            for i in stride(from: idx.count - 1, to: 0, by: -1) {
-                state = state &* 6364136223846793005 &+ 1442695040888963407
-                let j = Int(state % UInt64(i + 1))
-                idx.swapAt(i, j)
-            }
-            indices.append(idx)
-        }
-        return Fixture(palettes: palettes, indices: indices)
-    }
 }

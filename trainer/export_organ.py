@@ -1,10 +1,9 @@
 """Wrap a trained model into an OrganDescriptor + payload pair, ready for AirDrop.
 
-For the JSON-based organs (metric, dither), this just packages the trained JSON
-under a content-hashed filename and emits the matching index.json snippet.
-
-For Core ML organs (postProc, ranker), see export_postproc.py / export_ranker.py
-(those scripts will be added once the corresponding trainer is written).
+Packages the trained metric JSON under a content-hashed filename and emits the
+matching index.json snippet. Only the `metric` slot ships today (see
+SixFour/Organs/Organ.swift); add a new slot here only when its trainer and the
+Swift loader land in the same change.
 """
 from __future__ import annotations
 
@@ -18,7 +17,7 @@ from datetime import datetime, timezone
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--slot", required=True, choices=["metric", "postProc", "dither", "ranker"])
+    p.add_argument("--slot", required=True, choices=["metric"])
     p.add_argument("--input", required=True, help="Trained model file (JSON or .mlpackage)")
     p.add_argument("--name", required=True, help="Human-readable organ name")
     p.add_argument("--generation", type=int, default=0)
@@ -34,10 +33,8 @@ def main():
     digest = hashlib.sha256(payload).hexdigest()[:16]
 
     ext = src.suffix.lstrip(".")
-    if args.slot in ("metric", "dither") and ext != "json":
+    if ext != "json":
         sys.exit(f"Slot {args.slot} expects a JSON input, got .{ext}")
-    if args.slot in ("postProc", "ranker") and ext != "mlpackage":
-        sys.exit(f"Slot {args.slot} expects a .mlpackage input, got .{ext}")
 
     filename = f"{digest}.{ext}"
     out_dir = pathlib.Path(args.out_dir) / args.slot

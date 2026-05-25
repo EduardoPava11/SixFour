@@ -122,12 +122,12 @@ struct CaptureView: View {
                     topBar
                     Spacer()
                     if let summary = vm.lastTimingSummary {
-                        Text(summary)
-                            .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .padding(8)
-                            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
-                            .padding(.horizontal)
+                        GlassInfoChip(cornerRadius: 6) {
+                            Text(summary)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.85))
+                        }
+                        .padding(.horizontal)
                     }
                     bottomBar
                 }
@@ -142,35 +142,36 @@ struct CaptureView: View {
                 .font(.system(.title2, design: .monospaced, weight: .bold))
                 .foregroundStyle(.white.opacity(0.9))
             Spacer()
-            // Preview toggle — swaps the full-res camera preview for
-            // the live 64×64 downsampled tile (the actual GIF look,
-            // upscaled with nearest-neighbour). Icon flips between a
-            // sharp-edged camera and a pixel grid so the current
-            // mode is unambiguous.
-            Button {
-                previewMode = (previewMode == .fullRes) ? .pixelated : .fullRes
-            } label: {
-                Image(systemName: previewMode == .fullRes
-                      ? "squareshape.split.2x2"
-                      : "camera")
-                    .font(.title2)
-                    .foregroundStyle(.white)
-                    .padding(8)
-                    .background(.ultraThinMaterial, in: Circle())
+            // Floating glass control cluster. The two buttons share one
+            // GlassEffectContainer sampling region (no glass-on-glass
+            // artifacts). To add a future control — e.g. a Settings gear —
+            // append one more GlassIconButton here; no extra glass plumbing.
+            GlassToolbarCluster {
+                // Preview toggle — swaps the full-res camera preview for
+                // the live 64×64 downsampled tile (the actual GIF look,
+                // upscaled with nearest-neighbour). Icon flips between a
+                // sharp-edged camera and a pixel grid; the swap animates
+                // via the symbol-replace transition baked into
+                // GlassIconButton, driven by the withAnimation below.
+                GlassIconButton(
+                    systemImage: previewMode == .fullRes
+                        ? "squareshape.split.2x2"
+                        : "camera",
+                    accessibilityLabel: previewMode == .fullRes
+                        ? "Switch to 64×64 pixelated preview"
+                        : "Switch to full-resolution preview"
+                ) {
+                    withAnimation(.snappy) {
+                        previewMode = (previewMode == .fullRes) ? .pixelated : .fullRes
+                    }
+                }
+                GlassIconButton(
+                    systemImage: "slider.horizontal.3",
+                    accessibilityLabel: "Open advanced composition settings"
+                ) {
+                    showCompose = true
+                }
             }
-            .accessibilityLabel(previewMode == .fullRes
-                                ? "Switch to 64×64 pixelated preview"
-                                : "Switch to full-resolution preview")
-            Button {
-                showCompose = true
-            } label: {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.title2)
-                    .foregroundStyle(.white)
-                    .padding(8)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            .accessibilityLabel("Open advanced composition settings")
         }
     }
 
@@ -262,25 +263,25 @@ struct CaptureView: View {
         // top of the live capture scene.
         switch vm.phase {
         case .locking:
-            bannerText("Locking exposure, focus, white balance…", tint: .black)
+            bannerText("Locking exposure, focus, white balance…")
         case .renderingStageA:
-            bannerText("Stage A: per-frame palettes…", tint: .black)
+            bannerText("Stage A: per-frame palettes…")
         case .renderingStageB:
-            bannerText("Stage B: Sinkhorn merge…", tint: .black)
+            bannerText("Stage B: Sinkhorn merge…")
         case .renderingEncode:
-            bannerText("Encoding GIF…", tint: .black)
+            bannerText("Encoding GIF…")
         default:
             EmptyView()
         }
     }
 
-    private func bannerText(_ s: String, tint: Color) -> some View {
+    private func bannerText(_ s: String) -> some View {
         Text(s)
             .font(.system(.caption, design: .monospaced))
+            .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(tint.opacity(0.6), in: Capsule())
-            .foregroundStyle(.white)
+            .glassEffect(.regular, in: Capsule())
             .padding(.top, 8)
     }
 

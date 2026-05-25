@@ -7,9 +7,10 @@ import os
 ///
 /// Pipeline (see `spec/MATH.md` for the framework):
 ///   1. Resolve the optional metric organ from the composition.
-///   2. `MetalPipeline.runStageAKMeansBatch(tiles:)` — GPU Lloyd k-means on
-///      all 64 tiles in a single command buffer, after the burst is done
-///      (per the no-fallback / device-stability fix; folding this into
+///   2. `composition.makeExtractor(engines:).extractBatch(tiles:)` — per-frame
+///      palette extraction via the chosen algorithm's `PalettePipeline`
+///      (K-means GPU / Wu / Octree), on all 64 tiles after the burst is done
+///      (per the no-fallback / device-stability fix; folding GPU work into
 ///      `submitAsync` caused frame drops).
 ///   3. `PaletteGenerator.generate(tiles, mode)` — CPU refine + dither
 ///      + optional Stage B Sinkhorn merge. May `throw` if Global mode
@@ -57,12 +58,12 @@ struct GIFRenderer {
 
     let composition: Composition
     let store: GeneStore
-    let pipeline: MetalPipeline
+    let engines: PaletteEngines
 
-    init(composition: Composition, store: GeneStore, pipeline: MetalPipeline) {
+    init(composition: Composition, store: GeneStore, engines: PaletteEngines) {
         self.composition = composition
         self.store = store
-        self.pipeline = pipeline
+        self.engines = engines
     }
 
     func render(
@@ -90,8 +91,8 @@ struct GIFRenderer {
         // statistics flow through Report.perFrameStatistics so
         // CaptureViewModel can build a CaptureBundle for editing
         // tools.
-        let extractor = composition.makeExtractor(pipeline: pipeline)
-        let perFrameStats = try extractor.extractBatch(tiles: tiles, K: pipeline.kMeansK)
+        let extractor = composition.makeExtractor(engines: engines)
+        let perFrameStats = try extractor.extractBatch(tiles: tiles, K: SixFourShape.K)
         let tilesWithPalettes: [OKLabTile] = zip(tiles, perFrameStats).map { tile, stats in
             OKLabTile(
                 side: tile.side,
@@ -128,8 +129,15 @@ struct GIFRenderer {
             let srgbPalettes: [[SIMD3<UInt8>]] = output.perFramePalettes.map { palette in
                 palette.map { ColorScience.okLabToSRGB8(OKLab($0)) }
             }
+            // Completeness gate: the per-frame surjectivity rescue in
+            // PaletteGenerator guarantees this succeeds. If it ever returns
+            // nil, an empty-slot GIF was about to ship — fail loud, never
+            // silently emit an incomplete voxel volume.
+            guard let volume = CompleteVoxelVolume(checkingFrames: output.frameIndices) else {
+                throw GIFEncoderError.incompleteVoxelVolume
+            }
             try encoder.encode(
-                frames: output.frameIndices,
+                volume: volume,
                 perFramePalettes: srgbPalettes,
                 to: url
             )

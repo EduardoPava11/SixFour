@@ -26,14 +26,27 @@ cabal test
 cabal run spec-codegen
 ```
 
-`cabal run spec-codegen` writes:
+`cabal run spec-codegen` writes 6 files + 1 resource:
 
 - `SixFour/Generated/StageContract.swift`
 - `SixFour/Generated/NetContract.swift`
+- `SixFour/Generated/HybridContract.swift`
+- `SixFour/Resources/stbn3d-8.bin` — 8³ STBN3D scalar mask, tiled to 64³ at runtime
 - `trainer/generated/stages.py`
 - `trainer/generated/net_shape.py`
+- `trainer/generated/__init__.py` — empty package marker
 
 Each contains constants and assertions the iOS app and MLX trainer
 import. The Haskell spec is the only source allowed to change those
 constants; if they drift, `cabal test` fails and the codegen targets
 won't rebuild cleanly.
+
+## Generated but not yet wired
+
+`NetContract.swift`, `HybridContract.swift`, and `stbn3d-8.bin` are emitted for
+the planned hybrid / STBN3D temporal pipeline. They compile and ship, but the
+Swift app does not consume them yet — `StageContract.swift` is the only
+generated Swift contract currently used (via `SixFourShape`). They are kept
+intentionally (not dead code) so the contracts stay drift-checked against the
+spec while the pipeline is brought online. Do not hand-edit them; change
+`src/SixFour/Codegen/` and regenerate.

@@ -26,6 +26,7 @@ library
         SixFour.Spec.StageB
         SixFour.Spec.Pipeline
         SixFour.Spec.Net
+        SixFour.Spec.Cyclic
         SixFour.Spec.Laws
         SixFour.Spec.Hybrid.Shape
         SixFour.Spec.Hybrid.Trunk
@@ -94,6 +95,7 @@ test-suite spec-tests
         Properties.Wu
         Properties.Sinkhorn
         Properties.Hybrid
+        Properties.Cyclic
     build-depends:
         base
       , sixfour-spec

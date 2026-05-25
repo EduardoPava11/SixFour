@@ -41,7 +41,7 @@ struct ExtractorPropertyTests {
     /// Every pixel is assigned to exactly one cluster.
     @Test func wuClusterCountSumEqualsPixels() throws {
         let tile = Self.diverseTile()
-        let extractor = WuExtractor()
+        let extractor = WuReference()
         let stats = try extractor.extract(tile: tile, K: 256)
         let total = stats.clusters.reduce(0) { $0 + Int($1.count) }
         #expect(total == tile.side * tile.side,
@@ -50,7 +50,7 @@ struct ExtractorPropertyTests {
 
     @Test func octreeClusterCountSumEqualsPixels() throws {
         let tile = Self.diverseTile()
-        let extractor = OctreeExtractor()
+        let extractor = OctreeReference()
         let stats = try extractor.extract(tile: tile, K: 256)
         let total = stats.clusters.reduce(0) { $0 + Int($1.count) }
         #expect(total == tile.side * tile.side,
@@ -61,7 +61,7 @@ struct ExtractorPropertyTests {
     /// every index must be in [0, K).
     @Test func wuAssignmentsAreInRange() throws {
         let tile = Self.diverseTile()
-        let extractor = WuExtractor()
+        let extractor = WuReference()
         let stats = try extractor.extract(tile: tile, K: 256)
         #expect(stats.assignments.count == tile.side * tile.side)
         for a in stats.assignments {
@@ -71,7 +71,7 @@ struct ExtractorPropertyTests {
 
     @Test func octreeAssignmentsAreInRange() throws {
         let tile = Self.diverseTile()
-        let extractor = OctreeExtractor()
+        let extractor = OctreeReference()
         let stats = try extractor.extract(tile: tile, K: 256)
         #expect(stats.assignments.count == tile.side * tile.side)
         for a in stats.assignments {
@@ -86,7 +86,7 @@ struct ExtractorPropertyTests {
     /// but the test asserts non-empty clusters specifically.
     @Test func wuCovariancesArePSD() throws {
         let tile = Self.diverseTile()
-        let extractor = WuExtractor()
+        let extractor = WuReference()
         let stats = try extractor.extract(tile: tile, K: 256)
         for (k, cluster) in stats.clusters.enumerated() where cluster.count > 0 {
             let s = cluster.covariance
@@ -102,7 +102,7 @@ struct ExtractorPropertyTests {
 
     @Test func octreeCovariancesArePSD() throws {
         let tile = Self.diverseTile()
-        let extractor = OctreeExtractor()
+        let extractor = OctreeReference()
         let stats = try extractor.extract(tile: tile, K: 256)
         for (k, cluster) in stats.clusters.enumerated() where cluster.count > 0 {
             let s = cluster.covariance
@@ -120,7 +120,7 @@ struct ExtractorPropertyTests {
     /// on the input but for our 12-stamp tile we expect << 1.0.
     @Test func wuMSEIsFinite() throws {
         let tile = Self.diverseTile()
-        let extractor = WuExtractor()
+        let extractor = WuReference()
         let stats = try extractor.extract(tile: tile, K: 256)
         #expect(stats.provenance.mse >= 0,
                 "Wu MSE \(stats.provenance.mse) must be ≥ 0")
@@ -130,7 +130,7 @@ struct ExtractorPropertyTests {
 
     @Test func octreeMSEIsFinite() throws {
         let tile = Self.diverseTile()
-        let extractor = OctreeExtractor()
+        let extractor = OctreeReference()
         let stats = try extractor.extract(tile: tile, K: 256)
         #expect(stats.provenance.mse >= 0,
                 "Octree MSE \(stats.provenance.mse) must be ≥ 0")
@@ -141,8 +141,8 @@ struct ExtractorPropertyTests {
     /// Provenance.family must match the extractor's reported family.
     @Test func provenanceFamilyMatchesExtractor() throws {
         let tile = Self.diverseTile()
-        let wu = WuExtractor()
-        let oct = OctreeExtractor()
+        let wu = WuReference()
+        let oct = OctreeReference()
         let ws = try wu.extract(tile: tile, K: 256)
         let os = try oct.extract(tile: tile, K: 256)
         #expect(ws.provenance.family == .recursiveBipartitionWu)
@@ -155,8 +155,8 @@ struct ExtractorPropertyTests {
     /// Local Color Table per frame.
     @Test func clustersAlwaysHaveKEntries() throws {
         let tile = Self.diverseTile()
-        let wu = WuExtractor()
-        let oct = OctreeExtractor()
+        let wu = WuReference()
+        let oct = OctreeReference()
         let ws = try wu.extract(tile: tile, K: 256)
         let os = try oct.extract(tile: tile, K: 256)
         #expect(ws.clusters.count == 256)

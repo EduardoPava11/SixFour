@@ -94,12 +94,3 @@ func okLabDistanceSquared(_ a: OKLab, _ b: OKLab) -> Float {
     let db = a.b - b.b
     return dL * dL + da * da + db * db
 }
-
-/// CIEDE2000 in OKLab — overkill for most uses; preserved as a reference
-/// against which custom metrics can be sanity-checked.
-/// For the hot path (k-means inner loop), use `okLabDistanceSquared` or a learned metric.
-func ciede2000Lab(_ lab1: OKLab, _ lab2: OKLab) -> Float {
-    // OKLab is already perceptually uniform; CIEDE2000 in OKLab degenerates close to Euclidean.
-    // Keep this as a stub returning sqrt(distSq) so the API surface exists for organ training.
-    sqrtf(okLabDistanceSquared(lab1, lab2))
-}

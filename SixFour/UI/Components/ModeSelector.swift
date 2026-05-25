@@ -40,7 +40,10 @@ struct ModeSelector: View {
             .accessibilityAddTraits(selection == .global ? .isSelected : [])
         }
         .padding(4)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        // The selector is one glass surface; the per-segment highlight
+        // (a solid white-opacity fill) sits *on* it as content, which is
+        // fine — only sibling glass shapes must share a container.
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Palette mode selector")
     }

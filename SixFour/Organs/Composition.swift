@@ -18,7 +18,7 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
 
     /// User-facing palette-extraction algorithm choice. Each case
     /// maps to one `PaletteExtractor` implementation; the mapping
-    /// is centralized in `makeExtractor(pipeline:)` so the UI only
+    /// is centralized in `makeExtractor(engines:)` so the UI only
     /// needs to know the enum value.
     enum ExtractorChoice: String, Codable, Sendable, Hashable, CaseIterable {
         /// Iterative refinement — GPU Lloyd k-means (today's default,
@@ -47,11 +47,11 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
     /// burst. Returns an `any PaletteExtractor` (existential) since
     /// the choice is data-driven and there's no compile-time
     /// information to specialize on.
-    func makeExtractor(pipeline: MetalPipeline) -> any PaletteExtractor {
+    func makeExtractor(engines: PaletteEngines) -> any PaletteExtractor {
         switch extractorChoice {
-        case .kMeans: return KMeansExtractor(pipeline: pipeline)
-        case .wu:     return WuExtractor()
-        case .octree: return OctreeExtractor()
+        case .kMeans: return KMeansExtractor(pipeline: engines.kMeans)
+        case .wu:     return WuExtractor(pipeline: engines.wu)
+        case .octree: return OctreeExtractor(pipeline: engines.octree)
         }
     }
 
@@ -70,6 +70,27 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
         self.createdAt = createdAt
         self.paletteMode = paletteMode
         self.extractorChoice = extractorChoice
+    }
+
+    /// Returns a copy with the given fields overridden; any field left `nil`
+    /// is carried over unchanged. Replaces the full 5-argument
+    /// re-construction that previously appeared at every mutation site — so
+    /// adding a new stored field touches only this method and the
+    /// initializer, not each caller. `metric`/`createdAt` are always carried
+    /// over (callers never partially override them; the compose screen builds
+    /// a fresh "custom" composition directly instead).
+    func with(
+        name: String? = nil,
+        paletteMode: PaletteGenerator.Mode? = nil,
+        extractorChoice: ExtractorChoice? = nil
+    ) -> Composition {
+        Composition(
+            name: name ?? self.name,
+            metric: self.metric,
+            createdAt: self.createdAt,
+            paletteMode: paletteMode ?? self.paletteMode,
+            extractorChoice: extractorChoice ?? self.extractorChoice
+        )
     }
 
     /// Backwards-compatible decode. Older JSON files include

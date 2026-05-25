@@ -7,7 +7,7 @@ import Test.QuickCheck
 import qualified Data.Set as Set
 import           Data.Maybe (fromJust, isJust, isNothing)
 
-import SixFour.Spec.Indices (mkIndexTensor, mkSurjective256)
+import SixFour.Spec.Indices (mkIndexTensor, mkSurjective256, mkCompleteVoxelVolume)
 
 -- Tiny @K = 4@, @T*H*W = 12@ case so the witness is meaningful.
 
@@ -34,4 +34,19 @@ tests = testGroup "Surjectivity"
   , testProperty "wrong-length indices fail mkIndexTensor" $
       once $
         isNothing (mkIndexTensor @T @H @W @K [0,1,2,3])
+
+  -- CompleteVoxelVolume: strict per-frame surjectivity.
+  , testProperty "CompleteVoxelVolume accepts a per-frame-surjective tensor" $
+      once $
+        let v = [0,1,2,3, 0,1,2,3, 0,1,2,3]   -- every frame == {0,1,2,3}
+            it = fromJust (mkIndexTensor @T @H @W @K v)
+        in isJust (mkCompleteVoxelVolume @T @H @W @K it)
+  , testProperty "CompleteVoxelVolume REJECTS a globally- but not per-frame-surjective tensor" $
+      once $
+        -- Whole cube covers {0,1,2,3}, but frame 1 = {0,1} and frame 2 = {2,3}.
+        -- mkSurjective256 accepts this; mkCompleteVoxelVolume must not.
+        let v = [0,1,2,3, 0,1,0,1, 2,3,2,3]
+            it = fromJust (mkIndexTensor @T @H @W @K v)
+        in isJust    (mkSurjective256      @T @H @W @K it)
+        && isNothing (mkCompleteVoxelVolume @T @H @W @K it)
   ]

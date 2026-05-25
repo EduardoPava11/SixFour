@@ -8,6 +8,7 @@ import qualified Properties.Surjectivity as Surj
 import qualified Properties.Wu           as Wu
 import qualified Properties.Sinkhorn     as Sinkhorn
 import qualified Properties.Hybrid       as Hybrid
+import qualified Properties.Cyclic       as Cyclic
 
 main :: IO ()
 main = defaultMain $ testGroup "sixfour-spec"
@@ -17,4 +18,5 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Wu.tests
   , Sinkhorn.tests
   , Hybrid.tests
+  , Cyclic.tests
   ]

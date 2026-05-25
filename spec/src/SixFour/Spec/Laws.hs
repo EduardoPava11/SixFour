@@ -18,6 +18,12 @@ module SixFour.Spec.Laws
   , lawWuShapesOut
     -- * Sinkhorn marginal law
   , lawSinkhornBalancedColumns
+    -- * Cyclic-environment laws (MATH.md §8)
+  , lawCyclicClosedness
+  , lawDescriptorGaugeInvariant
+  , lawDescriptorCyclicShiftInvariant
+  , lawPaletteEntropyBounds
+  , lawSpectralEntropyBounds
   ) where
 
 import qualified Data.Vector         as V
@@ -29,8 +35,11 @@ import SixFour.Spec.Indices
 import SixFour.Spec.Palette
 import SixFour.Spec.Gauge
 import SixFour.Spec.StageA   (StageA, Frame(..), runStageA)
-import SixFour.Spec.StageB   (StageBOutput(..))
+import SixFour.Spec.StageB   (StageBOutput(..), SinkhornParams)
 import SixFour.Spec.Shape    (kVal, pixelsPerFrame)
+import SixFour.Spec.Cyclic
+  ( Weights, CyclicStack(..), descriptor, alignedDelta
+  , paletteEntropy, spectralEntropy )
 
 -- | OKLab round-trip: @srgbToOKLab . okLabToSRGB@ should be identity
 -- to within tolerance, for sRGB values in @[0,1]@.
@@ -90,3 +99,67 @@ lawSinkhornBalancedColumns tol plan =
       sums     = [colSum k | k <- [0 .. nK - 1]]
       mu       = sum sums / fromIntegral (max 1 nK)
   in all (\s -> abs (s - mu) <= tol) sums
+
+-- | Thm 4 (cyclic closedness). Under the identity correspondence the
+-- per-colour cyclic deltas telescope to zero around the loop:
+-- @Σ_t Δ[t,k] = 0@ for every colour @k@.
+lawCyclicClosedness
+  :: forall t k. (KnownNat t)
+  => Double -> CyclicStack t k -> Bool
+lawCyclicClosedness tol stk =
+  let deltas = alignedDelta stk            -- T × K of OKLab
+      nt     = V.length deltas
+  in nt == 0 ||
+     let nk = V.length (deltas V.! 0)
+         sumK k = V.foldl'
+           (\(aL, aA, aB) t -> let OKLab l a b = (deltas V.! t) V.! k
+                               in (aL + l, aA + a, aB + b))
+           (0, 0, 0) (V.enumFromN 0 nt)
+     in all (\k -> let (l, a, b) = sumK k
+                   in abs l <= tol && abs a <= tol && abs b <= tol)
+            [0 .. nk - 1]
+
+-- | Thm 5 (@S_K@ invariance). Permuting every frame's palette and weights
+-- by the same σ (colour↔weight pairing preserved) leaves the descriptor
+-- unchanged.
+lawDescriptorGaugeInvariant
+  :: forall t k. (KnownNat t, KnownNat k)
+  => SinkhornParams -> Double -> Permutation k -> CyclicStack t k -> Bool
+lawDescriptorGaugeInvariant params tol sigma stk@(CyclicStack frames) =
+  let permuted :: CyclicStack t k
+      permuted = CyclicStack $ V.map
+        (\(Palette pv, w) -> (Palette (permuteVector sigma pv), permuteVector sigma w))
+        frames
+  in vecClose tol (descriptor params stk) (descriptor params permuted)
+
+-- | Thm 5 (@Z_T@ invariance). Rotating the loop's start frame leaves the
+-- descriptor unchanged.
+lawDescriptorCyclicShiftInvariant
+  :: forall t k. (KnownNat t, KnownNat k)
+  => SinkhornParams -> Double -> CyclicStack t k -> Bool
+lawDescriptorCyclicShiftInvariant params tol stk@(CyclicStack frames) =
+  let nt = V.length frames
+      rotated :: CyclicStack t k
+      rotated = CyclicStack $ V.generate nt (\i -> frames V.! ((i + 1) `mod` nt))
+  in vecClose tol (descriptor params stk) (descriptor params rotated)
+
+-- | Def 15 bounds: @0 ≤ H(w) ≤ log K@. Palette size @K@ passed as a
+-- plain 'Int' (the bound is the only place it appears).
+lawPaletteEntropyBounds :: Int -> Weights -> Bool
+lawPaletteEntropyBounds kSize w =
+  let h  = paletteEntropy w
+      hi = log (fromIntegral (max 1 kSize) :: Double)
+  in h >= -1e-9 && h <= hi + 1e-9
+
+-- | Def 18 bounds: @0 ≤ H_spec ≤ log(N-1)@ over the AC bins.
+lawSpectralEntropyBounds :: [Double] -> Bool
+lawSpectralEntropyBounds xs =
+  let h  = spectralEntropy xs
+      n  = length xs
+      hi = if n <= 1 then 0 else log (fromIntegral (n - 1))
+  in h >= -1e-9 && h <= hi + 1e-9
+
+-- Internal: element-wise closeness of two descriptor vectors.
+vecClose :: Double -> V.Vector Double -> V.Vector Double -> Bool
+vecClose tol a b =
+  V.length a == V.length b && V.and (V.zipWith (\x y -> abs (x - y) <= tol) a b)

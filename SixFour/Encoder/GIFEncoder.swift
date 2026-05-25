@@ -6,14 +6,18 @@ enum GIFEncoderError: Error {
     case wrongFrameSize(expected: Int, got: Int)
     case paletteWrongSize(expected: Int, got: Int)
     case mismatchedFrameAndPaletteCount
+    /// The per-frame index volume failed the `CompleteVoxelVolume` check:
+    /// wrong frame count, a short frame, or a frame missing a palette index.
+    case incompleteVoxelVolume
     case writeFailed(underlying: Error)
 }
 
 /// GIF89a encoder for SixFour: fixed 64×64, 64 frames.
 ///
 /// Two modes:
-///   - **Per-frame** (`encode(frames:perFramePalettes:to:)`): each frame writes
+///   - **Per-frame** (`encode(volume:perFramePalettes:to:)`): each frame writes
 ///     its own 256-entry Local Color Table. ~49 KB of palette data per GIF.
+///     Gated on a `CompleteVoxelVolume` so the frames are provably complete.
 ///   - **Global** (`encode(frames:globalPalette:to:)`): one 256-entry Global
 ///     Color Table in the file header; frames carry no palette. ~768 B of
 ///     palette data per GIF (≈48 KB smaller).
@@ -32,14 +36,19 @@ struct GIFEncoder {
         self.frameDelayCentiseconds = UInt16(cs)
     }
 
-    /// `frames[i]`: row-major UInt8 indices in 0...255 for that frame.
+    /// Per-frame Local Color Table mode, gated on completeness.
+    ///
+    /// `volume`: a `CompleteVoxelVolume` — the type itself proves there are
+    /// exactly `T` frames, each `pixelsPerFrame` indices long, and each frame
+    /// surjective onto all `K` colours. An incomplete volume cannot be
+    /// constructed, so it cannot reach this encoder.
     /// `perFramePalettes[i]`: 256 sRGB triplets, the local color table for frame i.
     func encode(
-        frames: [[UInt8]],
+        volume: CompleteVoxelVolume,
         perFramePalettes: [[SIMD3<UInt8>]],
         to url: URL
     ) throws {
-        guard !frames.isEmpty else { throw GIFEncoderError.emptyFrames }
+        let frames = volume.frames
         guard frames.count == perFramePalettes.count else {
             throw GIFEncoderError.mismatchedFrameAndPaletteCount
         }

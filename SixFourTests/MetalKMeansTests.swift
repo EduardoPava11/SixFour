@@ -5,7 +5,7 @@ import simd
 @testable import SixFour
 
 /// Parity + convergence tests for the GPU Lloyd k-means kernels in
-/// `Shaders.metal`, driven via `MetalPipeline.encodeKMeans`. The point of
+/// `Shaders.metal`, driven via `KMeansPalettePipeline.encodeKMeans`. The point of
 /// these tests is to ensure the GPU path agrees with the CPU `KMeansLab.run`
 /// reference within tolerable numerical drift after 15 iterations — the
 /// fixed iteration count used in production submission.
@@ -22,7 +22,7 @@ struct MetalKMeansTests {
 
     @MainActor
     private func runGPU(pixels: [SIMD3<Float>], side: Int, K: Int, iterations: Int) throws -> GPURun {
-        let pipeline = try MetalPipeline(tileSide: side, kMeansK: K)
+        let pipeline = try KMeansPalettePipeline(tileSide: side, kMeansK: K)
         pipeline.kMeansIterations = iterations
         let device = pipeline.device
 
@@ -50,7 +50,7 @@ struct MetalKMeansTests {
         }
 
         let centroidsBytes  = K * MemoryLayout<SIMD4<Float>>.stride
-        let binsBytes       = K * MetalPipeline.kMeansBinStride
+        let binsBytes       = K * KMeansPalettePipeline.kMeansBinStride
         let assignmentBytes = side * side * MemoryLayout<UInt16>.stride
         let centroids   = try #require(device.makeBuffer(length: centroidsBytes,  options: [.storageModeShared]))
         let bins        = try #require(device.makeBuffer(length: binsBytes,       options: [.storageModePrivate]))

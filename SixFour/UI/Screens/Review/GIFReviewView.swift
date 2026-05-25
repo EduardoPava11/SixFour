@@ -95,26 +95,26 @@ struct GIFReviewView: View {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.callout.weight(.semibold))
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.glass)
             .tint(.white)
             .disabled(!vm.canUndo || isReRendering)
-            .accessibilityLabel("Undo edit (\(vm.editHistory.count - 1) edit\(vm.editHistory.count == 2 ? "" : "s") in history)")
+            .accessibilityLabel("Undo edit (\(vm.editCount - 1) edit\(vm.editCount == 2 ? "" : "s") in history)")
 
             ShareLink(item: primary.gifURL) {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
 
             if let contact = primary.contactURL {
                 ShareLink(item: contact) {
                     Label("Sheet", systemImage: "square.grid.3x3")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .tint(.cyan)
             }
 
             Button("Retake") { vm.reset() }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .tint(.white)
         }
         .padding(.horizontal)

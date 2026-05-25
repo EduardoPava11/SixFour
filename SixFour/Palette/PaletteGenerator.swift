@@ -106,7 +106,21 @@ struct PaletteGenerator: Sendable {
         Self.logger.info("[palette] Stage A CPU (×\(frameCount) frames refine+dither): \(stageAMs)ms")
 
         if mode == .perFrame {
-            Self.logger.info("[palette] Stage B skipped (mode=.perFrame)")
+            // Strict per-frame surjectivity: every frame must use all K
+            // colours so it can join a CompleteVoxelVolume. Dithering can
+            // leave dead palette slots on low-variance frames; the rescue
+            // relocates them onto worst-fit donor pixels (guaranteed to
+            // succeed since pixelsPerFrame ≥ K). See PerFrameSurjectivity.
+            for i in 0..<frameCount {
+                let (pal, idx) = PerFrameSurjectivity.rescue(
+                    palette: palettes[i],
+                    indices: indices[i],
+                    pixels: tiles[i].pixels
+                )
+                palettes[i] = pal
+                indices[i] = idx
+            }
+            Self.logger.info("[palette] Stage B skipped (mode=.perFrame); per-frame surjectivity enforced")
             return Output(
                 mode: .perFrame,
                 perFramePalettes: palettes,

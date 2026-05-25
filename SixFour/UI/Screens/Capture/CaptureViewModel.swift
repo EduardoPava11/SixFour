@@ -67,11 +67,10 @@ final class CaptureViewModel {
     var composition: Composition = .classicalBaseline
     var lastTimingSummary: String? = nil
 
-    /// Persisted last-used mode. Versioned `String` so adding modes later
-    /// won't require an Int↔enum lookup table. Legacy `Int 0/1` files
-    /// decode as `.perFrame` / `.shared`.
-    @ObservationIgnored
-    @AppStorage("sixfour.paletteMode.v2") private var storedMode: String = "perFrame"
+    /// Persisted user preferences (default palette mode + extractor today,
+    /// plus Settings-screen seams). A future SettingsView binds to this; the
+    /// capture screen reads it on `bootstrap` and writes back on change.
+    let settings = AppSettings()
 
     var primaryOutput: CaptureOutput?
 
@@ -90,49 +89,25 @@ final class CaptureViewModel {
     /// without re-shooting.
     var currentBundle: CaptureBundle?
 
-    /// Edit history stack. Index 0 = the initial render produced by
-    /// `capture()`. Each `reExtract()` appends a new entry. `undo()`
-    /// pops the head (refuses to drop below index 0). Capped at 10
-    /// entries; eldest non-initial gets evicted on overflow with
-    /// background file cleanup.
-    private(set) var editHistory: [EditHistoryEntry] = []
+    /// Bounded undo stack of render snapshots (see `EditHistory`). Reset on
+    /// each capture, pushed on each `reExtract`, popped by `undo`.
+    private(set) var history = EditHistory()
 
-    /// One entry on the edit history stack — a complete render
-    /// snapshot (user-visible CaptureOutput + the rich
-    /// ClusterStatistics that produced it). Carrying both lets
-    /// `undo()` restore primaryOutput + the bundle's
-    /// perFrameStatistics atomically.
-    struct EditHistoryEntry: Sendable {
-        let output: CaptureOutput
-        let perFrameStatistics: [ClusterStatistics]
-    }
-
-    /// Editing UI binds this to enable/disable the Undo button.
-    var canUndo: Bool { editHistory.count > 1 }
-
-    /// Max entries kept on the edit history stack. The initial
-    /// render plus 9 user edits — covers the typical A/B/C
-    /// comparison flow without growing storage forever.
-    static let editHistoryCap: Int = 10
-
-    /// Persisted last-used extractor choice (K-means / Wu / Octree).
-    /// Restored on bootstrap. Format: the enum's `rawValue` string.
-    @ObservationIgnored
-    @AppStorage("sixfour.extractor.v1") private var storedExtractor: String = "kMeans"
+    /// Editing UI binds these to drive the Undo button + its label.
+    var canUndo: Bool { history.canUndo }
+    var editCount: Int { history.count }
 
     private(set) var session: CaptureSession?
     private(set) var pipeline: MetalPipeline?
+    /// Per-algorithm palette pipelines, created once at bootstrap and handed
+    /// to GIFRenderer; `Composition.makeExtractor` picks the right one.
+    private(set) var engines: PaletteEngines?
     private(set) var store: GeneStore?
 
     func bootstrap() async {
-        let restoredMode = restoredMode()
-        let restoredChoice = restoredExtractorChoice()
-        composition = Composition(
-            name: composition.name,
-            metric: composition.metric,
-            createdAt: composition.createdAt,
-            paletteMode: restoredMode,
-            extractorChoice: restoredChoice
+        composition = composition.with(
+            paletteMode: settings.defaultPaletteMode,
+            extractorChoice: settings.defaultExtractor
         )
 
         do {
@@ -167,6 +142,11 @@ final class CaptureViewModel {
             }
 
             self.pipeline = pipeline
+            self.engines = PaletteEngines(
+                kMeans: try KMeansPalettePipeline(tileSide: 64),
+                wu: try WuPalettePipeline(tileSide: 64),
+                octree: try OctreePalettePipeline(tileSide: 64)
+            )
             self.session = session
             self.store = store
 
@@ -212,8 +192,8 @@ final class CaptureViewModel {
     }
 
     func capture() async {
-        guard let session, let pipeline, let store else { return }
-        Self.fireHapticImpact(.medium)
+        guard let session, let pipeline, let engines, let store else { return }
+        Haptics.impact(.medium)
         phase = .locking
         let lockResult = await session.lockExposureAndWhiteBalance(timeoutMs: 400)
         Self.logger.info("[viewmodel] AE/AWB lock: \(String(describing: lockResult), privacy: .public)")
@@ -234,7 +214,7 @@ final class CaptureViewModel {
                 mode: mode,
                 composition: composition,
                 store: store,
-                pipeline: pipeline,
+                engines: engines,
                 summary: result.timing.summary
             )
             primaryOutput = renderResult.output
@@ -253,28 +233,28 @@ final class CaptureViewModel {
             // Any previous edits' GIF files leak slightly here (the
             // OS deletes them on next app launch via Documents
             // recycling); explicit cleanup not critical at burst-size.
-            editHistory = [EditHistoryEntry(
+            history.reset(to: EditHistory.Entry(
                 output: renderResult.output,
                 perFrameStatistics: renderResult.perFrameStatistics
-            )]
+            ))
             saveBundleAsync()
             phase = .done
-            Self.fireHapticNotification(.success)
+            Haptics.notification(.success)
         } catch let err as StageBSinkhorn.StageBError {
             let msg = String(describing: err)
             Self.logger.error("[viewmodel] capture failed: \(msg, privacy: .public)")
             phase = .failed(msg)
-            Self.fireHapticNotification(.warning)
+            Haptics.notification(.warning)
         } catch let err as CaptureSession.CaptureError {
             let msg = String(describing: err)
             Self.logger.error("[viewmodel] capture failed: \(msg, privacy: .public)")
             phase = .failed(msg)
-            Self.fireHapticNotification(.warning)
+            Haptics.notification(.warning)
         } catch {
             let msg = String(describing: error)
             Self.logger.error("[viewmodel] capture failed: \(msg, privacy: .public)")
             phase = .failed(msg)
-            Self.fireHapticNotification(.warning)
+            Haptics.notification(.warning)
         }
     }
 
@@ -294,7 +274,7 @@ final class CaptureViewModel {
         mode: PaletteGenerator.Mode,
         composition: Composition,
         store: GeneStore,
-        pipeline: MetalPipeline,
+        engines: PaletteEngines,
         summary: String
     ) async throws -> RenderResult {
         let baseURL = makeOutputURL(extension: "gif")
@@ -311,7 +291,7 @@ final class CaptureViewModel {
             }
         }
 
-        let renderer = GIFRenderer(composition: composition, store: store, pipeline: pipeline)
+        let renderer = GIFRenderer(composition: composition, store: store, engines: engines)
         let report = try await Task.detached(priority: .userInitiated) {
             try await renderer.render(tiles: tiles, to: baseURL, fps: 20, onPhase: onPhase)
         }.value
@@ -421,11 +401,8 @@ final class CaptureViewModel {
     /// previous entry's extractor so the picker on screen reflects
     /// the now-current state.
     func undo() {
-        guard canUndo else { return }
-        let popped = editHistory.removeLast()
-        let restored = editHistory.last!  // safe: count > 1 verified above
-        Self.fireHapticImpact(.light)
-        Self.deleteFilesAsync(for: popped.output)
+        guard let restored = history.undo() else { return }
+        Haptics.impact(.light)
         primaryOutput = restored.output
         if var bundle = currentBundle {
             bundle.perFrameStatistics = restored.perFrameStatistics
@@ -435,30 +412,8 @@ final class CaptureViewModel {
         // was extracted with.
         let restoredChoice = restored.output.extractorChoice
         if composition.extractorChoice != restoredChoice {
-            self.composition = Composition(
-                name: composition.name,
-                metric: composition.metric,
-                createdAt: composition.createdAt,
-                paletteMode: composition.paletteMode,
-                extractorChoice: restoredChoice
-            )
-            self.storedExtractor = restoredChoice.rawValue
-        }
-    }
-
-    /// Background file cleanup. Deletes the GIF + (optional)
-    /// contact-sheet for an evicted/popped EditHistoryEntry. Errors
-    /// are swallowed — best-effort; the OS recycles Documents on
-    /// next launch anyway, and the user shouldn't see hitches
-    /// because Undo is supposed to feel instant.
-    nonisolated static func deleteFilesAsync(for output: CaptureOutput) {
-        let gif = output.gifURL
-        let contact = output.contactURL
-        Task.detached(priority: .background) {
-            try? FileManager.default.removeItem(at: gif)
-            if let contact = contact {
-                try? FileManager.default.removeItem(at: contact)
-            }
+            self.composition = composition.with(extractorChoice: restoredChoice)
+            self.settings.defaultExtractor = restoredChoice
         }
     }
 
@@ -479,21 +434,15 @@ final class CaptureViewModel {
     func reExtract(with choice: Composition.ExtractorChoice) async {
         guard let bundle = currentBundle,
               let store = store,
-              let pipeline = pipeline else { return }
+              let engines = engines else { return }
         // No-op if the user re-picked the same extractor; saves a
         // GPU/CPU pass and a Documents write.
         if composition.extractorChoice == choice && primaryOutput != nil { return }
 
-        Self.fireHapticImpact(.light)
-        let newComposition = Composition(
-            name: composition.name,
-            metric: composition.metric,
-            createdAt: composition.createdAt,
-            paletteMode: composition.paletteMode,
-            extractorChoice: choice
-        )
+        Haptics.impact(.light)
+        let newComposition = composition.with(extractorChoice: choice)
         self.composition = newComposition
-        self.storedExtractor = choice.rawValue
+        self.settings.defaultExtractor = choice
 
         phase = .renderingStageA
         do {
@@ -502,7 +451,7 @@ final class CaptureViewModel {
                 mode: newComposition.paletteMode,
                 composition: newComposition,
                 store: store,
-                pipeline: pipeline,
+                engines: engines,
                 summary: bundle.burstTiming.summary
             )
             primaryOutput = renderResult.output
@@ -520,28 +469,23 @@ final class CaptureViewModel {
             // Push onto edit history. If we exceed the cap, evict
             // the SECOND entry (preserve the initial render at
             // index 0 + most recent N-1 edits).
-            let entry = EditHistoryEntry(
+            history.push(EditHistory.Entry(
                 output: renderResult.output,
                 perFrameStatistics: renderResult.perFrameStatistics
-            )
-            editHistory.append(entry)
-            if editHistory.count > Self.editHistoryCap {
-                let evicted = editHistory.remove(at: 1)
-                Self.deleteFilesAsync(for: evicted.output)
-            }
+            ))
             saveBundleAsync()
             phase = .done
-            Self.fireHapticNotification(.success)
+            Haptics.notification(.success)
         } catch let err as StageBSinkhorn.StageBError {
             let msg = String(describing: err)
             Self.logger.error("[viewmodel] reExtract failed: \(msg, privacy: .public)")
             phase = .failed(msg)
-            Self.fireHapticNotification(.warning)
+            Haptics.notification(.warning)
         } catch {
             let msg = String(describing: error)
             Self.logger.error("[viewmodel] reExtract failed: \(msg, privacy: .public)")
             phase = .failed(msg)
-            Self.fireHapticNotification(.warning)
+            Haptics.notification(.warning)
         }
     }
 
@@ -551,15 +495,9 @@ final class CaptureViewModel {
             get: { [weak self] in self?.composition.paletteMode ?? .perFrame },
             set: { [weak self] newMode in
                 guard let self else { return }
-                self.composition = Composition(
-                    name: self.composition.name,
-                    metric: self.composition.metric,
-                    createdAt: self.composition.createdAt,
-                    paletteMode: newMode,
-                    extractorChoice: self.composition.extractorChoice
-                )
-                self.storedMode = Self.encode(mode: newMode)
-                Self.fireHapticSelection()
+                self.composition = self.composition.with(paletteMode: newMode)
+                self.settings.defaultPaletteMode = newMode
+                Haptics.selection()
             }
         )
     }
@@ -572,65 +510,11 @@ final class CaptureViewModel {
             get: { [weak self] in self?.composition.extractorChoice ?? .kMeans },
             set: { [weak self] newChoice in
                 guard let self else { return }
-                self.composition = Composition(
-                    name: self.composition.name,
-                    metric: self.composition.metric,
-                    createdAt: self.composition.createdAt,
-                    paletteMode: self.composition.paletteMode,
-                    extractorChoice: newChoice
-                )
-                self.storedExtractor = newChoice.rawValue
-                Self.fireHapticSelection()
+                self.composition = self.composition.with(extractorChoice: newChoice)
+                self.settings.defaultExtractor = newChoice
+                Haptics.selection()
             }
         )
-    }
-
-    private func restoredMode() -> PaletteGenerator.Mode {
-        switch storedMode {
-        case "perFrame": return .perFrame
-        case "shared":   return .shared
-        case "global":   return .global
-        // Legacy fallthroughs: the pre-v2 storage encoded 0/1 (perFrame/global).
-        // Round to the nearest live endpoint so old installs keep their pick.
-        case "0":        return .perFrame
-        case "1":        return .shared
-        default:         return .perFrame
-        }
-    }
-
-    /// Restore the extractor pick from AppStorage. Defaults to
-    /// .kMeans for first launch (matches the prior behavior).
-    private func restoredExtractorChoice() -> Composition.ExtractorChoice {
-        Composition.ExtractorChoice(rawValue: storedExtractor) ?? .kMeans
-    }
-
-    private static func encode(mode: PaletteGenerator.Mode) -> String {
-        switch mode {
-        case .perFrame: return "perFrame"
-        case .shared:   return "shared"
-        case .global:   return "global"
-        }
-    }
-
-    // MARK: - Haptics
-
-    nonisolated private static func fireHapticImpact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        Task { @MainActor in
-            let gen = UIImpactFeedbackGenerator(style: style)
-            gen.impactOccurred()
-        }
-    }
-
-    nonisolated private static func fireHapticNotification(_ kind: UINotificationFeedbackGenerator.FeedbackType) {
-        Task { @MainActor in
-            UINotificationFeedbackGenerator().notificationOccurred(kind)
-        }
-    }
-
-    nonisolated private static func fireHapticSelection() {
-        Task { @MainActor in
-            UISelectionFeedbackGenerator().selectionChanged()
-        }
     }
 
     /// Convert one 64×64 OKLab tile into a UIImage in the sRGB color

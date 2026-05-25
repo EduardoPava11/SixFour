@@ -383,6 +383,13 @@ rather than the document silently extended.
 | Global estimator (Theorem 2) | `Mode.global` (θ = 50, log-domain) | `Palette/PaletteGenerator.swift`; `StageBSinkhorn.Params.global` + `logSumExp` path |
 | Surjectivity witness | `Surjective256(checking:)` | `Generated/StageContract.swift` |
 | Semi-parametric estimator (deferred NN) | not implemented; no slot exists in `NetContract` until a trainer ships | — |
+| Cyclic palette stack (§8) | `Cyclic.CyclicStack` | `spec/.../Spec/Cyclic.hs` |
+| Transition transport plan $\mathbf{\Gamma}_t$ (§8 Def 13) | `Cyclic.transitionPlan` | `spec/.../Spec/Cyclic.hs` |
+| Delta field $\mathbf{\Delta}$ (§8 Def 14) | `Cyclic.alignedDelta` | `spec/.../Spec/Cyclic.hs` |
+| Palette / Gaussian entropy (§8 Def 15–16) | `Cyclic.paletteEntropy`, `Cyclic.gaussianColorEntropy` | `spec/.../Spec/Cyclic.hs` |
+| Spectral entropy / rate (§8 Def 18–19) | `Cyclic.spectralEntropy`, `Cyclic.entropyRate` | `spec/.../Spec/Cyclic.hs` |
+| Holonomy defect (§8 Thm 4) | `Cyclic.holonomyDefect` | `spec/.../Spec/Cyclic.hs` |
+| Invariant descriptor $\mathbf{D}$ (§8 Def 20) | `Cyclic.descriptor` | `spec/.../Spec/Cyclic.hs` |
 
 ---
 
@@ -406,6 +413,138 @@ without specifying.
 
 ---
 
+## 8. The Cyclic Palette Environment and Its Entropy — Fahmy §9 + App C
+
+§§1–7 treat one realisation $\mathbf{X}(\omega)$ as 64 frames estimated
+into a palette stack $\mathbf{P}$. This section reads the *same*
+$\mathbf{P}$ as a **looping process**: a GIF repeats, so frame $T-1$
+transitions back to frame $0$, and the object of study becomes the
+$256$ per-colour trajectories and their cyclic deltas. We import Shannon
+entropy and KL exactly as Remark 2 already does (transport entropy); the
+*backbone* is Fahmy's time-series chapter (§9: covariance stationarity
+Def 38, the difference operator $\Delta X_t$) and his multivariate-normal
+covariance (App C, eq. C.8).
+
+### §8.1 The cyclic structure and its two gauges
+
+**Definition 11** (cyclic palette stack). The palette stack
+$\mathbf{P} \in (\mathbb{R}^3)^{T\times K}$ of Definition 4, re-indexed by
+$t \in \mathbb{Z}_T = \mathbb{Z}/64\mathbb{Z}$, equipped with per-frame
+**population weights** $\mathbf{w}_t \in \Delta^{K-1}$ (the normalised
+cluster counts; a pmf in the sense of Fahmy Definition 6). As a sequence
+in $t$ it is a **stochastic process** (Fahmy §9.1). Typed as
+`Cyclic.CyclicStack` of `(Palette k, Weights)`.
+
+**Definition 12** (the two gauges). Two groups act without changing the
+decoded loop:
+
+- the **cyclic shift** $\sigma : t \mapsto t+1 \bmod T$, generating
+  $\mathbb{Z}_T$ (a GIF has no canonical start frame); and
+- the **palette gauge** $S_K$ of §`Spec.Gauge`, relabelling the $K$
+  slots per frame (no canonical colour order).
+
+The *environment* is the orbit of $\mathbf{P}$ under
+$\mathbb{Z}_T \times S_K$. **Every quantity below is invariant under
+this group** — the design constraint that forces transport-defined
+deltas (§8.2) over naïve per-index differences.
+
+### §8.2 The delta field — Fahmy §9 difference operator
+
+**Definition 13** (transition transport plan). For consecutive frames
+the **plan** $\mathbf{\Gamma}_t \in \mathbb{R}^{K\times K}_{\ge 0}$ is the
+entropic-OT (Sinkhorn) coupling of $(\mathbf{P}_t,\mathbf{w}_t)$ and
+$(\mathbf{P}_{t+1},\mathbf{w}_{t+1})$ at regularisation $\theta$ — the
+same kernel $\mathbf{K}_{ij}=\exp(-\|\cdot\|^2/\theta)$ as Remark 2,
+scaled to the weight marginals (`Cyclic.transitionPlan`). $\mathbf{\Gamma}_t$
+is $S_K$-equivariant, so all scalars built from it are $S_K$-invariant.
+
+**Definition 14** (delta field). The **delta field** is the cyclic first
+difference (Fahmy §9 $\Delta X_t$): under the correspondence induced by
+$\mathbf{\Gamma}_t$,
+
+$$
+\mathbf{\Delta}_{t,k} \;=\; \mathbf{P}_{t+1,\,k} - \mathbf{P}_{t,k}
+\qquad (t \in \mathbb{Z}_T),
+$$
+
+the $256$ closed per-colour trajectories of the loop
+(`Cyclic.alignedDelta` gives the identity-correspondence case).
+
+**Theorem 4** (closedness ⇔ trivial holonomy). Let
+$\mathbf{M}_t = \mathrm{diag}(\mathbf{w}_t)^{-1}\mathbf{\Gamma}_t$ be the
+row-stochastic transport map and
+$\mathbf{M} = \mathbf{M}_{T-1}\cdots\mathbf{M}_0$ the **holonomy**.
+Under a consistent correspondence the per-colour deltas telescope,
+$\sum_{t\in\mathbb{Z}_T}\mathbf{\Delta}_{t,k}=0$ for all $k$, **iff**
+$\mathbf{M}=\mathbf{I}$. *Proof sketch.* A telescoping sum on a cycle
+closes exactly when each colour returns to itself, i.e. the composed
+correspondence is the identity. ∎ The **holonomy defect**
+$(K-\operatorname{tr}\mathbf{M})/K \ge 0$ is the computable proxy
+(`Cyclic.holonomyDefect`); it is a *trace*, hence
+conjugation-invariant, hence $\mathbb{Z}_T$-invariant — the start frame
+cannot be read off it.
+
+### §8.3 The entropy functionals (imported; grounded in Fahmy)
+
+**Definition 15** (palette entropy). $H(\mathbf{P}_t) = -\sum_k w_{t,k}\log w_{t,k}$
+(natural log). $S_K$-invariant; $0\le H\le \log K$ (`Cyclic.paletteEntropy`).
+
+**Definition 16** (Gaussian colour entropy). With $\mathbf{\Sigma}_t$ the
+weighted $3\times3$ OKLab covariance (Fahmy App C eq. C.8), the
+differential entropy of the Gaussian fit is
+$H_g(\mathbf{P}_t) = \tfrac12\log\!\big((2\pi e)^3 |\mathbf{\Sigma}_t|\big)$
+(`Cyclic.gaussianColorEntropy`). This is the **bridge** from Fahmy's
+covariance machinery to entropy; $|\mathbf{\Sigma}_t|$ is a closed-form
+$3\times3$ determinant.
+
+**Definition 17** (transition cost / entropy).
+$C_t = \sum_{i,j}\Gamma_{t,ij}\,\|\mathbf{P}_{t,i}-\mathbf{P}_{t+1,j}\|^2$
+and $H(\mathbf{\Gamma}_t) = -\sum_{ij}\Gamma_{t,ij}\log\Gamma_{t,ij}$.
+The cyclic total $\sum_t C_t$ is the literal "environment seen through
+the $256$ deltas."
+
+**Definition 18** (spectral entropy). For a gauge-invariant scalar
+trajectory $f:\mathbb{Z}_T\to\mathbb{R}$ (e.g. $H(\mathbf{P}_t)$ or
+$C_t$), let $\hat f$ be its DFT; the **spectral entropy** is the Shannon
+entropy of the normalised power $|\hat f_k|^2$ over the AC bins. It is
+$\mathbb{Z}_T$-**invariant** (a cyclic shift is a phase rotation, leaving
+$|\hat f_k|$ fixed). A still loop scores $0$; a single-frequency loop is
+near-$0$ (energy in one bin); a broadband/irregular loop approaches
+$\log(T{-}1)$ (`Cyclic.spectralEntropy`).
+
+**Definition 19** (entropy rate). The Kolmogorov–Szegő rate of the
+covariance-stationary cyclic Gaussian process (Fahmy §9 stationarity),
+estimated from the AC periodogram (`Cyclic.entropyRate`).
+
+### §8.4 The invariant descriptor (the deferred-NN feature seam)
+
+**Definition 20** (the descriptor). The **descriptor**
+$\mathbf{D}\in\mathbb{R}^{16}$ collects $\mathbb{Z}_T\times S_K$-invariant
+scalars: $\{\mathrm{mean}_t,\mathrm{sd}_t\}$ of $H(\mathbf{P}_t)$ and
+$H_g(\mathbf{P}_t)$; total and mean transport cost; mean
+$H(\mathbf{\Gamma}_t)$; spectral entropy of $H(\mathbf{P}_t)$, of
+$H_g(\mathbf{P}_t)$ and of $C_t$; the entropy rate of $H(\mathbf{P}_t)$;
+the holonomy defect; and the first four AC power magnitudes of
+$H(\mathbf{P}_t)$ (`Cyclic.descriptor`, `Cyclic.descriptorDim = 16`).
+
+**Theorem 5** (invariance). $\mathbf{D}(\sigma\cdot\mathbf{P})=\mathbf{D}(\mathbf{P})$
+and $\mathbf{D}(\tau\cdot\mathbf{P})=\mathbf{D}(\mathbf{P})$ for every
+cyclic shift $\sigma\in\mathbb{Z}_T$ and per-frame relabel $\tau\in S_K$.
+*Proof sketch.* Each component is built only from $S_K$-invariant
+per-frame scalars (Def 15–17) and $\mathbb{Z}_T$-invariant aggregate /
+spectral / trace functionals (Def 18–19, Thm 4). ∎ Verified at 100
+QuickCheck cases each in `Properties.Cyclic` (laws
+`lawDescriptorGaugeInvariant`, `lawDescriptorCyclicShiftInvariant`).
+
+**Remark 4** (this is Definition 10's input). $\mathbf{D}$ is the
+concrete, fixed-dimensional input contract for the deferred
+semi-parametric estimator $\hat\theta$ of Definition 10 — and, more
+generally, for a categorisation estimator over the loop. It commits no
+code surface beyond the reference functions, per the no-stubs rule; no
+trainer consumes it yet.
+
+---
+
 ## Bibliography
 
 - Fahmy, H. (2017). *Mathematics of Statistical Modelling: Abstract to
@@ -414,5 +553,8 @@ without specifying.
   doubly stochastic matrices. *Pacific J. Math.* 21(2), 343–348.
 - Cuturi, M. (2013). Sinkhorn distances: Lightspeed computation of
   optimal transport. *NeurIPS 26*.
+- Cover, T. M., & Thomas, J. A. (1991). *Elements of Information Theory.*
+  Wiley. (Shannon entropy, relative entropy, spectral/entropy rate —
+  the §8 information-theoretic tools Fahmy does not cover.)
 - Ottosson, B. (2020). *A perceptual color space for image processing.*
   https://bottosson.github.io/posts/oklab/
