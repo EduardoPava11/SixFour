@@ -83,6 +83,25 @@ executable spec-codegen
         DataKinds
       , TypeApplications
 
+-- Research-grade analysis of the global-collapse task (dev-only; not shipped
+-- in the Rust product). hmatrix + statistics are BSD-3 (no GSL/GPL).
+executable analysis
+    import:           warnings
+    main-is:          Main.hs
+    build-depends:
+        base
+      , vector
+      , bytestring
+      , hmatrix
+      , statistics
+      , directory
+      , filepath
+    hs-source-dirs:   analysis
+    default-language: Haskell2010
+    default-extensions:
+        ScopedTypeVariables
+      , BangPatterns
+
 test-suite spec-tests
     import:           warnings
     type:             exitcode-stdio-1.0

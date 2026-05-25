@@ -87,6 +87,51 @@ pub fn effective_dim(eig: [f64; 3]) -> f64 {
     }
 }
 
+/// Eigenvalues (descending) of a symmetric matrix via cyclic Jacobi rotations.
+/// For correlation-matrix effective-dimensionality of heterogeneous-scale data.
+pub fn jacobi_eigenvalues(mut a: Vec<Vec<f64>>) -> Vec<f64> {
+    let n = a.len();
+    if n == 0 {
+        return vec![];
+    }
+    for _sweep in 0..100 {
+        let mut off = 0.0;
+        for p in 0..n {
+            for q in (p + 1)..n {
+                off += a[p][q] * a[p][q];
+            }
+        }
+        if off < 1e-20 {
+            break;
+        }
+        for p in 0..n {
+            for q in (p + 1)..n {
+                if a[p][q].abs() < 1e-300 {
+                    continue;
+                }
+                let theta = (a[q][q] - a[p][p]) / (2.0 * a[p][q]);
+                let t = theta.signum() / (theta.abs() + (theta * theta + 1.0).sqrt());
+                let c = 1.0 / (t * t + 1.0).sqrt();
+                let s = t * c;
+                // A' = Jᵀ A J : rotate columns p,q then rows p,q.
+                for k in 0..n {
+                    let (akp, akq) = (a[k][p], a[k][q]);
+                    a[k][p] = c * akp - s * akq;
+                    a[k][q] = s * akp + c * akq;
+                }
+                for k in 0..n {
+                    let (apk, aqk) = (a[p][k], a[q][k]);
+                    a[p][k] = c * apk - s * aqk;
+                    a[q][k] = s * apk + c * aqk;
+                }
+            }
+        }
+    }
+    let mut e: Vec<f64> = (0..n).map(|i| a[i][i]).collect();
+    e.sort_by(|x, y| y.partial_cmp(x).unwrap());
+    e
+}
+
 /// Mean nearest-neighbour spacing in OKLab over a stride sample of queries.
 pub fn mean_nn_spacing(cands: &[(Oklab, f64)], sample: usize, seed: u64) -> f64 {
     let n = cands.len();

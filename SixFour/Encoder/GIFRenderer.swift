@@ -102,22 +102,27 @@ struct GIFRenderer {
         }
         let meanExtractMSE = Self.meanMSE(perFrameStats)
         let wuSeedMillis = engines.kMeans.lastWuSeedMillis
-        Self.logger.info("[renderer] extractor=wu+km meanMSE=\(meanExtractMSE)")
+        // Primary metric: LAB gamut COVERAGE — how much colour the 64 frames
+        // sampled (the diversity objective), not reconstruction fidelity.
+        let coverage = ClusterStatisticsOps.gamutCoverage(perFrame: perFrameStats)
+        Self.logger.notice("[bench] coverage occupiedBins=\(coverage.occupiedBins) (\(String(format: "%.1f%%", coverage.fraction * 100)) of 16³)  meanMSE=\(meanExtractMSE)")
 
-        // Seed A/B: is Wu+KM's ~6.5s seed actually buying quality on this real
-        // scene vs instant uniform-stride? Run a uniform-stride pass for
-        // comparison, log + stamp the MSE delta. Gated by `benchmarkSeed`
-        // (extra full extraction); flip false once measured.
+        // Seed A/B on COVERAGE (the right yardstick): does Wu+KM's ~6.5s seed
+        // capture MORE of the gamut than instant uniform-stride on this real
+        // scene? Run a uniform-stride pass, compare occupied-bin coverage, stamp
+        // the delta. Gated by `benchmarkSeed`; flip false once measured.
         var seedComparison: String? = nil
         if benchmarkSeed {
             let original = engines.kMeans.seed
             engines.kMeans.seed = .uniformStride
             if let uni = try? engines.kMeans.extractBatch(tiles: tiles, K: SixFourShape.K) {
-                let uniMSE = Self.meanMSE(uni)
-                let deltaPct = uniMSE > 0 ? (uniMSE - meanExtractMSE) / uniMSE * 100 : 0
+                let uniCov = ClusterStatisticsOps.gamutCoverage(perFrame: uni)
+                let deltaPct = uniCov.fraction > 0
+                    ? (coverage.fraction - uniCov.fraction) / uniCov.fraction * 100 : 0
                 seedComparison = String(
-                    format: "wuMSE=%.6f uniformMSE=%.6f (Wu+KM %.1f%% lower, cost %dms)",
-                    meanExtractMSE, uniMSE, deltaPct, wuSeedMillis
+                    format: "wuCoverage=%d uniformCoverage=%d bins (Wu+KM %+.1f%%, cost %dms); wuMSE=%.6f uniMSE=%.6f",
+                    coverage.occupiedBins, uniCov.occupiedBins, deltaPct, wuSeedMillis,
+                    meanExtractMSE, Self.meanMSE(uni)
                 )
                 Self.logger.notice("[bench] seed \(seedComparison!, privacy: .public)")
             }
@@ -150,6 +155,7 @@ struct GIFRenderer {
         // `exiftool file.gif` or `strings`) — no copy-pasting Console.
         let metadata = Self.renderComment(
             tiles: tiles,
+            coverage: coverage,
             meanMSE: meanExtractMSE,
             wuSeedMillis: wuSeedMillis,
             ditherSummary: output.ditherSummary,
@@ -184,6 +190,7 @@ struct GIFRenderer {
     /// Read it back with `exiftool file.gif` (Comment tag) or `strings file.gif`.
     private static func renderComment(
         tiles: [OKLabTile],
+        coverage: (occupiedBins: Int, fraction: Float),
         meanMSE: Float,
         wuSeedMillis: Int,
         ditherSummary: String,
@@ -193,8 +200,10 @@ struct GIFRenderer {
         let ts = ISO8601DateFormatter().string(from: Date())
         let side = tiles.first?.side ?? SixFourShape.W
         let seedLine = seedComparison.map { "\nseedAB=\($0)" } ?? ""
+        // Coverage (LAB diversity captured) is the headline; MSE is secondary.
         return """
         SixFour \(side)×\(side)×\(tiles.count) GIF
+        labCoverage=\(coverage.occupiedBins)/4096 bins (\(String(format: "%.1f%%", coverage.fraction * 100)) of OKLab 16³)
         extractor=Wu+KM  dither=\(ditherSummary)  meanMSE=\(String(format: "%.6f", meanMSE))
         wuSeedMs=\(wuSeedMillis)  stageA(refine+dither+rescue)Ms=\(stageAMillis)  frames=\(tiles.count)  K=\(SixFourShape.K)\(seedLine)
         rendered=\(ts)

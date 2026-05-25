@@ -283,6 +283,41 @@ enum ClusterStatisticsOps {
         return scaled
     }
 
+    // MARK: - Gamut coverage (LAB diversity — the per-frame-palette objective)
+
+    /// Volume of the 1σ OKLab spread ellipsoid of one palette — a measure of how
+    /// much colour the frame *captured* (the diversity objective), as opposed to
+    /// how faithfully it reconstructs (MSE). From the pooled (within+between)
+    /// covariance's eigenvalues λ: V = (4/3)π·√(λ₁λ₂λ₃). Larger = wider gamut.
+    static func gamutEllipsoidVolume(_ clusters: [ClusterStatistics.Cluster]) -> Float {
+        let μ = pooledMean(clusters)
+        let λ = eigendecomposePSD(pooledCovariance(clusters, pooledMean: μ)).values
+        let prod = max(0, λ.x) * max(0, λ.y) * max(0, λ.z)
+        return (4.0 / 3.0) * Float.pi * sqrt(prod)
+    }
+
+    /// Cross-frame gamut coverage: the fraction of a coarse OKLab voxel grid the
+    /// whole burst's centroids occupy — "how much of the colour space the 64
+    /// frames sampled." The headline diversity metric: the per-frame palettes
+    /// are diverse samples the NN will collapse, so coverage *across* frames is
+    /// what we maximize. OKLab working range L∈[0,1], a,b∈[-0.5,0.5];
+    /// `binsPerAxis³` cells.
+    static func gamutCoverage(
+        perFrame: [ClusterStatistics],
+        binsPerAxis: Int = 16
+    ) -> (occupiedBins: Int, fraction: Float) {
+        let n = binsPerAxis
+        @inline(__always) func binL(_ v: Float) -> Int { min(max(0, Int(v * Float(n))), n - 1) }
+        @inline(__always) func binAB(_ v: Float) -> Int { min(max(0, Int((v + 0.5) * Float(n))), n - 1) }
+        var occupied = Set<Int>()
+        for stats in perFrame {
+            for c in stats.clusters where c.count > 0 {
+                occupied.insert((binL(c.mean.x) * n + binAB(c.mean.y)) * n + binAB(c.mean.z))
+            }
+        }
+        return (occupied.count, Float(occupied.count) / Float(n * n * n))
+    }
+
     // MARK: - Multicollinearity (Fahmy Ch 6)
 
     /// Condition number of the K-centroid matrix C ∈ ℝ^(K×3),

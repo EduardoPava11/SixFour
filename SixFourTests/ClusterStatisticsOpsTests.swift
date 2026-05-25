@@ -249,4 +249,55 @@ struct ClusterStatisticsOpsTests {
         #expect(a == empty.mean)
         #expect(b == empty.mean)
     }
+
+    // MARK: - Gamut coverage (LAB diversity)
+
+    private func cluster(_ m: SIMD3<Float>) -> ClusterStatistics.Cluster {
+        ClusterStatistics.Cluster(
+            mean: m,
+            covariance: simd_float3x3(diagonal: SIMD3<Float>(repeating: 1e-6)),
+            count: 1
+        )
+    }
+
+    private func stats(_ means: [SIMD3<Float>]) -> ClusterStatistics {
+        ClusterStatistics(
+            clusters: means.map(cluster),
+            assignments: [],
+            provenance: ClusterStatistics.Provenance(
+                family: .iterativeKMeans,
+                parameters: .kMeans(seed: .uniformStride, iterations: 0),
+                extractMillis: 0, mse: 0
+            )
+        )
+    }
+
+    /// Wider OKLab spread → larger gamut-ellipsoid volume (the diversity metric).
+    @Test func gamutVolumeLargerForWiderSpread() {
+        let tight = [SIMD3<Float>(0.5, 0, 0), SIMD3<Float>(0.51, 0.01, 0), SIMD3<Float>(0.49, -0.01, 0)].map(cluster)
+        let wide  = [SIMD3<Float>(0.1, -0.3, -0.3), SIMD3<Float>(0.9, 0.3, 0.3), SIMD3<Float>(0.5, 0, 0)].map(cluster)
+        #expect(ClusterStatisticsOps.gamutEllipsoidVolume(wide)
+              > ClusterStatisticsOps.gamutEllipsoidVolume(tight))
+    }
+
+    /// Coverage counts distinct OKLab voxels; repeating the same palette across
+    /// frames doesn't inflate it (union over frames).
+    @Test func gamutCoverageCountsDistinctBins() {
+        let frame = stats([
+            SIMD3<Float>(0.1, -0.3, -0.3),
+            SIMD3<Float>(0.5,  0.0,  0.0),
+            SIMD3<Float>(0.9,  0.3,  0.3),
+        ])
+        let (occ, frac) = ClusterStatisticsOps.gamutCoverage(perFrame: Array(repeating: frame, count: 8))
+        #expect(occ == 3)
+        #expect(abs(frac - Float(3) / Float(16 * 16 * 16)) < 1e-7)
+    }
+
+    /// Coverage is the UNION across frames — a colour only one frame sees still
+    /// counts (that's the point of per-frame palette variation).
+    @Test func gamutCoverageUnionsAcrossFrames() {
+        let f1 = stats([SIMD3<Float>(0.1, -0.3, -0.3), SIMD3<Float>(0.5, 0, 0)])
+        let f2 = stats([SIMD3<Float>(0.9, 0.3, 0.3)])
+        #expect(ClusterStatisticsOps.gamutCoverage(perFrame: [f1, f2]).occupiedBins == 3)
+    }
 }

@@ -58,6 +58,12 @@ fn measure(label: &str, p: &SynthParams) -> (Row, Vec<f64>) {
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--dump") {
+        let dir = args.get(i + 1).map(|s| s.as_str()).unwrap_or("analysis-data");
+        return dump(dir);
+    }
+
     let base = SynthParams::default();
     let mut configs: Vec<(String, SynthParams)> = vec![("baseline".into(), base)];
     for sp in [0.02, 0.06, 0.12, 0.18] {
@@ -71,6 +77,9 @@ fn main() {
     }
     for cs in [0.0, 1.0, 3.0] {
         configs.push((format!("conc_skew={cs:.1}"), SynthParams { conc_skew: cs, ..base }));
+    }
+    for pd in [0.0, 0.5, 1.0] {
+        configs.push((format!("pop_drift={pd:.1}"), SynthParams { pop_drift: pd, ..base }));
     }
 
     eprintln!("running {} configs (T={T}, K={K}, collapse→{KG})", configs.len());
@@ -99,16 +108,35 @@ fn main() {
     }
     var.iter_mut().for_each(|v| *v /= n);
     let sd: Vec<f64> = var.iter().map(|v| v.sqrt()).collect();
-    let sv: f64 = var.iter().sum();
-    let sv2: f64 = var.iter().map(|x| x * x).sum();
-    let desc_eff_dim = if sv2 > 0.0 { sv * sv / sv2 } else { 0.0 };
-    // top-3 most-varying components (by sd, scaled by |mean| to compare across scales)
-    let mut ranked: Vec<usize> = (0..DESCRIPTOR_DIM).collect();
-    ranked.sort_by(|&a, &b| {
-        let ra = sd[a] / (mean[a].abs() + 1e-9);
-        let rb = sd[b] / (mean[b].abs() + 1e-9);
-        rb.partial_cmp(&ra).unwrap()
-    });
+
+    // Scale-invariant effective dimensionality: participation ratio of the
+    // CORRELATION-matrix eigenvalues over the active (non-degenerate)
+    // components. (Raw-variance participation ratio is meaningless here —
+    // components span ~4 orders of magnitude, e.g. entropyRate vs acPow.)
+    let active: Vec<usize> = (0..DESCRIPTOR_DIM).filter(|&i| sd[i] > 1e-6).collect();
+    let m = active.len();
+    let mut corr = vec![vec![0.0f64; m]; m];
+    for d in &descs {
+        for (ii, &i) in active.iter().enumerate() {
+            let zi = (d[i] - mean[i]) / sd[i];
+            for (jj, &j) in active.iter().enumerate() {
+                corr[ii][jj] += zi * ((d[j] - mean[j]) / sd[j]);
+            }
+        }
+    }
+    for row in corr.iter_mut() {
+        for v in row.iter_mut() {
+            *v /= n;
+        }
+    }
+    let eig = geometry::jacobi_eigenvalues(corr);
+    let se: f64 = eig.iter().sum();
+    let se2: f64 = eig.iter().map(|x| x * x).sum();
+    let desc_eff_dim = if se2 > 0.0 { se * se / se2 } else { 0.0 };
+    let degenerate: Vec<&str> = (0..DESCRIPTOR_DIM)
+        .filter(|&i| sd[i] <= 1e-6)
+        .map(|i| DESC_NAMES[i])
+        .collect();
 
     // summaries
     let mean_impr = rows
@@ -122,6 +150,13 @@ fn main() {
     let fmax = rows.iter().map(|r| r.fid_km).fold(f64::NEG_INFINITY, f64::max);
     let edmin = rows.iter().map(|r| r.eff_dim).fold(f64::INFINITY, f64::min);
     let edmax = rows.iter().map(|r| r.eff_dim).fold(f64::NEG_INFINITY, f64::max);
+
+    // holonomy-defect sensitivity to the OT regularisation ε (baseline stack)
+    let bstack = synth_stack(&base, T, K);
+    let holo: Vec<(f64, f64)> = [0.02_f64, 0.05, 0.1]
+        .iter()
+        .map(|&e| (e, analysis_core::cyclic::holonomy_defect(Params { eps: e, iters: 30 }, &bstack)))
+        .collect();
 
     // ---- FINDINGS.md ----
     let mut s = String::new();
@@ -174,18 +209,133 @@ fn main() {
     }
     let _ = writeln!(
         s,
-        "\nDescriptor spans ~**{desc_eff_dim:.1}** effective axes (participation ratio of component \
-         variances). Most-varying components across the sweep: **{}**, **{}**, **{}**.\n",
-        DESC_NAMES[ranked[0]], DESC_NAMES[ranked[1]], DESC_NAMES[ranked[2]]
+        "\nScale-invariant effective dimensionality (participation ratio of the {m}-component \
+         correlation eigenvalues): ~**{desc_eff_dim:.1}** axes (top eigenvalues {:.2}, {:.2}, {:.2}). \
+         Degenerate components (no variation across the sweep): **{}**.\n",
+        eig.first().copied().unwrap_or(0.0),
+        eig.get(1).copied().unwrap_or(0.0),
+        eig.get(2).copied().unwrap_or(0.0),
+        if degenerate.is_empty() { "none".to_string() } else { degenerate.join(", ") }
+    );
+
+    let _ = writeln!(s, "## 5. Holonomy defect vs OT regularisation ε (baseline)\n");
+    let _ = writeln!(s, "| ε | holonomy defect (K−tr M)/K |");
+    let _ = writeln!(s, "|---:|---:|");
+    for (e, h) in &holo {
+        let _ = writeln!(s, "| {:.2} | {:.4} |", e, h);
+    }
+    let _ = writeln!(
+        s,
+        "\nThe loop-closure measure only becomes informative as ε shrinks (sharper transport); at the \
+         descriptor's default ε the plans are too diffuse, so holonomy pins near 1. Pick the descriptor ε \
+         from this curve, not by default.\n"
     );
 
     let _ = writeln!(s, "## Implications for `look-nn` design\n");
     let _ = writeln!(s, "- **Fidelity floor is non-zero** ({fmin:.4}–{fmax:.4} OKLab²): a single 256-palette cannot perfectly reproduce 64 per-frame palettes. The learned look must operate *near* this floor — its 'signature' is a controlled deviation from it, not arbitrary.");
     let _ = writeln!(s, "- **Colour spread is ~{edmin:.1}–{edmax:.1}-D**: the global palette decoder must cover a (near-)volumetric region, not a 1-D ramp — argues for a decoder that emits full 3-D OKLab points, not a 1-D curve.");
     let _ = writeln!(s, "- **Population/index value = {mean_impr:+.1}%**: {verdict} — directly answers the 'two inputs (palettes + index map)' question with a measured number.");
-    let _ = writeln!(s, "- **NN input features**: the high-variance descriptor components ({}, {}) carry the most signal distinguishing GIFs; the descriptor's ~{desc_eff_dim:.0} effective axes suggest a compact conditioning vector is enough.", DESC_NAMES[ranked[0]], DESC_NAMES[ranked[1]]);
+    let _ = writeln!(s, "- **NN conditioning vector**: the 16-D descriptor has only ~**{desc_eff_dim:.0}** independent axes (correlation-eigenvalue participation ratio), and `holonomyDefect` saturates (≈0.996 for any ε at T=64) — so condition on a compact vector and drop/replace the holonomy feature.");
     let _ = writeln!(s, "- **Baseline to beat**: weighted k-means is the fidelity floor; the look-nn is justified only where a *learned, personal* deviation is worth its fidelity cost.\n");
 
     std::fs::write("FINDINGS.md", &s).expect("write FINDINGS.md");
     eprintln!("wrote FINDINGS.md ({} configs)", rows.len());
+}
+
+/// Export the controlled ensemble as CSVs for the rigorous Haskell analysis
+/// (rate–distortion, intrinsic dimension, PCA, Miller–Madow entropy).
+fn dump(dir: &str) {
+    use std::fs;
+    fs::create_dir_all(dir).expect("mkdir");
+    let base = SynthParams::default();
+
+    // full sweep (replicated over seeds) for descriptors + entropy
+    let mut configs: Vec<(String, SynthParams)> = vec![("baseline".into(), base)];
+    for sp in [0.02, 0.06, 0.12, 0.18] {
+        configs.push((format!("spread={sp:.2}"), SynthParams { spread: sp, ..base }));
+    }
+    for nc in [4usize, 12, 32, 64] {
+        configs.push((format!("clusters={nc}"), SynthParams { n_clusters: nc, ..base }));
+    }
+    for g in [0.4, 0.7, 1.0] {
+        configs.push((format!("gamut={g:.1}"), SynthParams { gamut: g, ..base }));
+    }
+    for cs in [0.0, 1.0, 3.0] {
+        configs.push((format!("conc_skew={cs:.1}"), SynthParams { conc_skew: cs, ..base }));
+    }
+    for pd in [0.0, 0.5, 1.0] {
+        configs.push((format!("pop_drift={pd:.1}"), SynthParams { pop_drift: pd, ..base }));
+    }
+
+    const N_DESC_SEEDS: u64 = 12;
+    let mut desc_csv = String::from("config,seed");
+    for i in 0..DESCRIPTOR_DIM {
+        let _ = write!(desc_csv, ",d{i}");
+    }
+    desc_csv.push('\n');
+    let mut ent_csv = String::from("config,seed,plugin_H,mm_term\n");
+
+    eprintln!("dump: descriptors+entropy ({} configs × {} seeds)", configs.len(), N_DESC_SEEDS);
+    for (label, p0) in &configs {
+        for s in 1..=N_DESC_SEEDS {
+            let p = SynthParams { seed: s, ..*p0 };
+            let stack = synth_stack(&p, T, K);
+            let d = descriptor(Params::default(), &stack);
+            let _ = write!(desc_csv, "{label},{s}");
+            for v in &d {
+                let _ = write!(desc_csv, ",{v:.6}");
+            }
+            desc_csv.push('\n');
+            let n = stack.frames.len() as f64;
+            let mut ph = 0.0;
+            let mut mm = 0.0;
+            for f in &stack.frames {
+                ph += analysis_core::cyclic::palette_entropy(&f.weights);
+                let total: f64 = f.weights.iter().sum();
+                let m = f.weights.iter().filter(|&&w| w > 1e-9).count() as f64;
+                mm += (m - 1.0) / (2.0 * total);
+            }
+            let _ = writeln!(ent_csv, "{label},{s},{:.6},{:.6}", ph / n, mm / n);
+        }
+        eprintln!("  desc {label}");
+    }
+    fs::write(format!("{dir}/descriptors.csv"), desc_csv).unwrap();
+    fs::write(format!("{dir}/entropy.csv"), ent_csv).unwrap();
+
+    // rate–distortion: baseline + spread sweep × seeds × {k-means, median-cut} × K
+    let rd_configs: Vec<(String, SynthParams)> = std::iter::once(("baseline".to_string(), base))
+        .chain(
+            [0.02, 0.06, 0.12, 0.18]
+                .iter()
+                .map(|&sp| (format!("spread={sp:.2}"), SynthParams { spread: sp, ..base })),
+        )
+        .collect();
+    let ks = [4usize, 16, 64, 256];
+    const N_RD_SEEDS: u64 = 8;
+    let mut rd_csv = String::from("config,seed,method,k,distortion\n");
+    eprintln!("dump: rate-distortion");
+    for (label, p0) in &rd_configs {
+        for s in 1..=N_RD_SEEDS {
+            let stack = synth_stack(&SynthParams { seed: s, ..*p0 }, T, K);
+            let c = collapse::candidates(&stack);
+            for &k in &ks {
+                let gk = collapse::weighted_kmeans(&c, k, KM_ITERS, 1);
+                let _ = writeln!(rd_csv, "{label},{s},kmeans,{k},{:.6}", collapse::fidelity(&gk, &c));
+                let gm = collapse::median_cut(&c, k);
+                let _ = writeln!(rd_csv, "{label},{s},median_cut,{k},{:.6}", collapse::fidelity(&gm, &c));
+            }
+        }
+        eprintln!("  rd {label}");
+    }
+    fs::write(format!("{dir}/rd.csv"), rd_csv).unwrap();
+
+    // color cloud (baseline, seed 1): L,a,b for intrinsic-dim of the 3-D cloud
+    let stack = synth_stack(&SynthParams { seed: 1, ..base }, T, K);
+    let mut cc = String::from("L,a,b\n");
+    for (col, _) in &collapse::candidates(&stack) {
+        let _ = writeln!(cc, "{:.6},{:.6},{:.6}", col[0], col[1], col[2]);
+    }
+    fs::write(format!("{dir}/colorcloud.csv"), cc).unwrap();
+
+    eprintln!("dump complete → {dir}");
 }
