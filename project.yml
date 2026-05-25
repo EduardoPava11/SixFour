@@ -28,7 +28,7 @@ settings:
     # without --deep, failing with "code object is not signed at all".
     OTHER_CODE_SIGN_FLAGS: "--deep"
     ENABLE_USER_SCRIPT_SANDBOXING: NO
-    # Opt into the modern CBLAS interface so StageBSinkhorn's cblas_dgemm /
+    # Opt into the modern CBLAS interface so ClusterStatisticsOps' cblas_dgemm /
     # cblas_dgemv calls don't emit macOS 13.3 deprecation warnings.
     GCC_PREPROCESSOR_DEFINITIONS: "$(inherited) ACCELERATE_NEW_LAPACK=1"
   configs:

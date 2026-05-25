@@ -9,10 +9,9 @@ import ImageIO
 ///   [ Optional fallback banner ]
 ///   [ Save · Share · Retake ]
 ///
-/// The previous two-endpoint compare flow was retired with the move from
-/// two ModeSelector buttons to three (Per-frame / Shared / Global) — the
-/// "other endpoint" is no longer a single thing. To compare modes, retake
-/// at the new mode; the existing burst isn't preserved.
+/// To compare algorithms (K-means / Wu / Octree) on the same scene, use the
+/// in-place re-extract path (`CaptureViewModel.reExtract`) — the cached burst
+/// is re-quantized without re-shooting.
 struct GIFReviewView: View {
     let vm: CaptureViewModel
 
@@ -79,7 +78,7 @@ struct GIFReviewView: View {
     /// enum as the initial capture path.
     private var isReRendering: Bool {
         switch vm.phase {
-        case .renderingStageA, .renderingStageB, .renderingEncode: return true
+        case .renderingStageA, .renderingEncode: return true
         default: return false
         }
     }
@@ -141,6 +140,12 @@ private struct RenderPanel: View {
             PaletteStripView(palettes: output.palettesForDisplay)
                 .padding(.horizontal, 2)
 
+            // 3-D palette globe: the 256 colours as a rotatable sphere stepping
+            // through the 64 frames. The strip is the 1-D read; this is the
+            // spatial tool (drag to rotate, scrub a step, tap a colour).
+            PaletteSphereView(palettes: output.palettesForDisplay)
+                .padding(.horizontal, 2)
+
             StatsFooterView(output: output)
         }
         .task { loadFrames() }
@@ -154,7 +159,7 @@ private struct RenderPanel: View {
                 .interpolation(.none)
                 .resizable()
                 .aspectRatio(1, contentMode: .fit)
-                .accessibilityLabel("Rendered GIF, \(output.mode.accessibilityName) mode, sixty-four frames at twenty fps")
+                .accessibilityLabel("Rendered GIF, \(output.extractorChoice.label) palette algorithm, sixty-four frames at twenty fps")
         } else {
             Rectangle().fill(.white.opacity(0.04))
                 .overlay(ProgressView().tint(.white))
@@ -191,16 +196,6 @@ private struct RenderPanel: View {
             Task { @MainActor in
                 frameIndex = (frameIndex + 1) % max(1, frames.count)
             }
-        }
-    }
-}
-
-private extension PaletteGenerator.Mode {
-    var accessibilityName: String {
-        switch self {
-        case .perFrame: return "per-frame"
-        case .shared:   return "shared"
-        case .global:   return "global"
         }
     }
 }

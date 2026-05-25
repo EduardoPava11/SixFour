@@ -10,10 +10,11 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
     let name: String
     let metric: String?     // descriptor hash of the metric organ, or nil
     let createdAt: Date
-    /// Which of the three Sinkhorn modes the user picked.
-    let paletteMode: PaletteGenerator.Mode
-    /// Which per-frame palette-extraction family the user picked.
-    /// Default `.kMeans` matches the pre-Phase-A behavior.
+    /// Which per-frame palette-extraction algorithm the user picked.
+    /// This is now the single creative palette control — every capture
+    /// produces a complete per-frame 64×64×64 voxel volume; the former
+    /// `.shared` / `.global` cross-frame Sinkhorn modes were removed.
+    /// Default `.kMeans` matches the original behavior.
     let extractorChoice: ExtractorChoice
 
     /// User-facing palette-extraction algorithm choice. Each case
@@ -62,13 +63,11 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
         name: String,
         metric: String?,
         createdAt: Date,
-        paletteMode: PaletteGenerator.Mode = .perFrame,
         extractorChoice: ExtractorChoice = .kMeans
     ) {
         self.name = name
         self.metric = metric
         self.createdAt = createdAt
-        self.paletteMode = paletteMode
         self.extractorChoice = extractorChoice
     }
 
@@ -81,34 +80,27 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
     /// a fresh "custom" composition directly instead).
     func with(
         name: String? = nil,
-        paletteMode: PaletteGenerator.Mode? = nil,
         extractorChoice: ExtractorChoice? = nil
     ) -> Composition {
         Composition(
             name: name ?? self.name,
             metric: self.metric,
             createdAt: self.createdAt,
-            paletteMode: paletteMode ?? self.paletteMode,
             extractorChoice: extractorChoice ?? self.extractorChoice
         )
     }
 
-    /// Backwards-compatible decode. Older JSON files include
-    /// postProc/dither/ranker hashes; we silently drop them (the slots
-    /// no longer exist). The pre-v3 `paletteMode` encoded `.global` as
-    /// `θ → ∞`; today that maps to `.global` directly. The old
-    /// `.spectrum(θ)` case is rounded to `.shared` (the nearest live
-    /// endpoint). Pre-Phase-C JSON has no `extractorChoice` key; we
-    /// default to `.kMeans` so existing saved compositions reproduce
-    /// the original behavior.
+    /// Backwards-compatible decode. Older JSON files carry now-removed keys
+    /// (postProc/dither/ranker hashes, and the pre-deprecation `paletteMode`
+    /// for the old `.shared` / `.global` Sinkhorn modes); they are simply not
+    /// read, so old gene bundles still decode. Pre-Phase-C JSON has no
+    /// `extractorChoice` key; we default to `.kMeans` so existing saved
+    /// compositions reproduce the original behavior.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.name       = try c.decode(String.self, forKey: .name)
         self.metric     = try c.decodeIfPresent(String.self, forKey: .metric)
         self.createdAt  = try c.decode(Date.self, forKey: .createdAt)
-        let mode = (try? c.decode(PaletteGenerator.Mode.self,
-                                  forKey: .paletteMode)) ?? .perFrame
-        self.paletteMode = mode
         let choice = (try? c.decode(ExtractorChoice.self,
                                     forKey: .extractorChoice)) ?? .kMeans
         self.extractorChoice = choice
@@ -118,7 +110,6 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
         name: Composition.baselineName,
         metric: nil,
         createdAt: Date(timeIntervalSince1970: 0),
-        paletteMode: .perFrame,
         extractorChoice: .kMeans
     )
 }

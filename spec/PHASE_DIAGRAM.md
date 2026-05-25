@@ -1,13 +1,19 @@
 # Trunk + Delta Phase Diagram
 
+> **Status note (2026-05-25).** This describes the **deferred, unwired** hybrid
+> trunk+delta NN pipeline (the `Spec/Hybrid/*` groundwork). The shipped app is
+> now **per-frame only** — the `.global` GCT mode referenced at `r = 1` was
+> removed, so that endpoint is hypothetical until/unless the hybrid pipeline is
+> brought online. `r = 0` still corresponds to the live `.perFrame` mode.
+
 The hybrid GIF mode has one degree of freedom: the **trunk fraction**
 
   r := kT / K  with  kT + kD = K = 256.
 
-`r ∈ [0, 1]` continuously interpolates between two existing SixFour modes:
+`r ∈ [0, 1]` continuously interpolates between two endpoints:
 
-* `r = 0` (kT=0, kD=256) ≡ the current `.perFrame` LCT mode.
-* `r = 1` (kT=256, kD=0) ≡ the current `.global` GCT mode.
+* `r = 0` (kT=0, kD=256) ≡ the live `.perFrame` per-frame LCT mode.
+* `r = 1` (kT=256, kD=0) ≡ the removed `.global` GCT mode (hypothetical endpoint).
 
 The hybrid is the *interior* of that interval. There is no universally
 optimal `r`; the optimum depends on two scene-level scalars derived

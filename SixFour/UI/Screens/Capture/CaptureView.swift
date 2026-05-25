@@ -177,20 +177,14 @@ struct CaptureView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 14) {
-            // Palette-extraction algorithm picker. Three processing-model
-            // families: K-means (iterative refinement, GPU, fast),
-            // Wu (recursive bipartition, CPU, rich statistics),
-            // Octree (hierarchical merging, CPU, deterministic).
-            // All three produce the same ClusterStatistics shape so
-            // downstream code is unchanged regardless of choice.
-            extractorPicker
-                .frame(maxWidth: 320)
-
-            // The mode selector is the primary creative control. Three honest
-            // endpoints of the Sinkhorn spectrum — Per-frame (θ=0), Shared
-            // (θ≈0.05), Global (θ→∞ via log-domain). See spec/MATH.md
-            // Theorems 1, §3.bis, 2.
-            ModeSelector(selection: vm.paletteModeBinding)
+            // The algorithm selector is the primary creative control. Three
+            // processing-model families — K-means (iterative Lloyd, GPU, fast),
+            // Wu (recursive variance bipartition, rich statistics), Octree
+            // (hierarchical count merge, predictable). Each fills every frame
+            // with its own complete 256-colour palette (per-frame 64³ voxel
+            // volume, no empty slots). Selection persists across launches via
+            // CaptureViewModel.extractorChoiceBinding.
+            AlgorithmSelector(selection: vm.extractorChoiceBinding)
                 .frame(maxWidth: 320)
 
             HStack {
@@ -200,19 +194,6 @@ struct CaptureView: View {
             }
         }
         .padding(.bottom, 16)
-    }
-
-    /// Segmented picker for the per-frame palette-extraction algorithm.
-    /// Selection persists across launches via @AppStorage inside
-    /// CaptureViewModel.extractorChoiceBinding.
-    private var extractorPicker: some View {
-        Picker("Extractor", selection: vm.extractorChoiceBinding) {
-            ForEach(Composition.ExtractorChoice.allCases, id: \.self) { choice in
-                Text(choice.label).tag(choice)
-            }
-        }
-        .pickerStyle(.segmented)
-        .accessibilityLabel("Palette extraction algorithm")
     }
 
     @ViewBuilder
@@ -242,7 +223,7 @@ struct CaptureView: View {
 
     private var isCurrentlyBusy: Bool {
         switch vm.phase {
-        case .locking, .capturing, .renderingStageA, .renderingStageB, .renderingEncode:
+        case .locking, .capturing, .renderingStageA, .renderingEncode:
             return true
         default:
             return false
@@ -251,7 +232,7 @@ struct CaptureView: View {
 
     private var isCurrentlyRendering: Bool {
         switch vm.phase {
-        case .renderingStageA, .renderingStageB, .renderingEncode: return true
+        case .renderingStageA, .renderingEncode: return true
         default: return false
         }
     }
@@ -265,9 +246,7 @@ struct CaptureView: View {
         case .locking:
             bannerText("Locking exposure, focus, white balance…")
         case .renderingStageA:
-            bannerText("Stage A: per-frame palettes…")
-        case .renderingStageB:
-            bannerText("Stage B: Sinkhorn merge…")
+            bannerText("Building per-frame palettes…")
         case .renderingEncode:
             bannerText("Encoding GIF…")
         default:

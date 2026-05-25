@@ -5,8 +5,9 @@ import simd
 
 /// Byte-level acceptance of `GIFEncoder`. We don't import a third-party GIF
 /// parser; we walk the bytes ourselves. The tests pin every header field that
-/// matters for the spec ("per-frame LCT" vs "global GCT") so refactors can't
-/// silently change which mode is on the wire.
+/// matters for the spec (per-frame Local Color Tables, no Global Color Table)
+/// so refactors can't silently change what's on the wire. There is one
+/// encoder mode now — per-frame LCT, gated on a `CompleteVoxelVolume`.
 struct GIFEncoderTests {
 
     // MARK: - Per-frame (LCT) mode
@@ -35,82 +36,24 @@ struct GIFEncoderTests {
         #expect(lctCount == SixFourShape.T, "expected \(SixFourShape.T) image descriptors with LCT; saw \(lctCount)")
     }
 
-    // MARK: - Global (GCT) mode
-
-    @Test func globalModeWritesOneGCTAndNoLocalTables() throws {
-        let encoder = GIFEncoder(width: 8, height: 8, fps: 20)
-        let frames: [[UInt8]] = Array(repeating: Array(repeating: 0, count: 64), count: 4)
-        let url = scratchURL("global.gif")
-        try encoder.encode(frames: frames, globalPalette: synthPalette256(seed: 7), to: url)
-
-        let bytes = try Data(contentsOf: url)
-        try expectMagic(bytes)
-        // Packed byte at offset 10 = 0xF7 → GCT flag ON, size = 256 entries.
-        #expect(bytes[10] == 0xF7, "global mode must write a Global Color Table (expected 0xF7)")
-        #expect(bytes.last == 0x3B)
-
-        // The 768-byte GCT immediately follows the 13-byte header + LSD.
-        // Header (6) + LSD (7) = 13. GCT runs 13..13+768.
-        let palette = synthPalette256(seed: 7)
-        for i in 0..<256 {
-            let base = 13 + i * 3
-            #expect(bytes[base + 0] == palette[i].x)
-            #expect(bytes[base + 1] == palette[i].y)
-            #expect(bytes[base + 2] == palette[i].z)
-        }
-
-        let lctCount = countImageDescriptors(bytes, expectLCT: false)
-        #expect(lctCount == 4, "expected 4 image descriptors with NO LCT; saw \(lctCount)")
-    }
-
-    // MARK: - Size invariant the user actually pays for
-
-    /// The product claim is: global mode trims ~48 KB of palette tables off a
-    /// 64-frame GIF. Verify directly on a 64-frame fixture.
-    @Test func globalModeIsAtLeast47KBSmallerOn64Frames() throws {
-        let encoder = GIFEncoder(width: 64, height: 64, fps: 20)
-        let frames = surjectiveFrames()
-        let palette = synthPalette256(seed: 42)
-        let palettes = Array(repeating: palette, count: SixFourShape.T)
-        let volume = try #require(CompleteVoxelVolume(checkingFrames: frames))
-
-        let lctURL = scratchURL("64frame_lct.gif")
-        let gctURL = scratchURL("64frame_gct.gif")
-        try encoder.encode(volume: volume, perFramePalettes: palettes, to: lctURL)
-        try encoder.encode(frames: frames, globalPalette: palette, to: gctURL)
-
-        let lctSize = try Data(contentsOf: lctURL).count
-        let gctSize = try Data(contentsOf: gctURL).count
-        let saved = lctSize - gctSize
-        // 63 frames × 768 bytes of removed LCT = 48,384 B saved
-        // (the global mode adds back one 768-byte GCT — that's the 1-frame baseline).
-        #expect(saved >= 47_000, "global mode saved only \(saved) bytes; expected ≥ 47 KB")
-    }
-
     // MARK: - LZW round-trip
 
-    /// Encode a constant-color frame, run our LZW decoder over the
-    /// LZW-encoded image data, and confirm the pixel stream comes back
+    /// Encode a complete per-frame volume, run our LZW decoder over the first
+    /// frame's LZW image data, and confirm the pixel stream comes back
     /// identical. Guards against future minCodeSize / clear-code regressions.
-    @Test func lzwRoundTripOnConstantFrame() throws {
-        let encoder = GIFEncoder(width: 4, height: 4, fps: 20)
-        let pixels: [UInt8] = [
-            3, 3, 3, 3,
-            3, 7, 7, 3,
-            3, 7, 7, 3,
-            3, 3, 3, 3
-        ]
+    /// (Exercised through the only public encode path — per-frame LCT.)
+    @Test func lzwRoundTripOnFirstFrame() throws {
+        let encoder = GIFEncoder(width: 64, height: 64, fps: 20)
+        let frames = surjectiveFrames()
+        let palettes = Array(repeating: synthPalette256(seed: 99), count: SixFourShape.T)
+        let volume = try #require(CompleteVoxelVolume(checkingFrames: frames))
         let url = scratchURL("lzw.gif")
-        try encoder.encode(
-            frames: [pixels],
-            globalPalette: synthPalette256(seed: 99),
-            to: url
-        )
+        try encoder.encode(volume: volume, perFramePalettes: palettes, to: url)
 
         let bytes = try Data(contentsOf: url)
         let imageDataStart = locateFirstImageDataBlock(bytes)
         let decoded = decodeLZWBlocks(bytes, startingAt: imageDataStart)
-        #expect(decoded == pixels, "LZW round-trip lost pixels: got \(decoded)")
+        #expect(decoded == frames[0], "LZW round-trip lost pixels on frame 0")
     }
 
     // MARK: - CompleteVoxelVolume brand (completeness gate)
@@ -159,8 +102,8 @@ struct GIFEncoderTests {
     }
 
     @Test func rescueSucceedsOnAFlatScene() {
-        // The adversarial case Global mode throws on: every pixel identical.
-        // Strict per-frame mode must still produce 256 distinct indices.
+        // Adversarial case: every pixel identical. Strict per-frame
+        // surjectivity must still produce 256 distinct indices.
         let flat = [SIMD3<Float>](repeating: SIMD3<Float>(0.5, 0, 0),
                                   count: SixFourShape.pixelsPerFrame)
         let indices = [UInt8](repeating: 0, count: SixFourShape.pixelsPerFrame)

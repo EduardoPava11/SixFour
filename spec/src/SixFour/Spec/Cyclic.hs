@@ -28,6 +28,8 @@ Two design commitments (see @MATH.md §8@):
 module SixFour.Spec.Cyclic
   ( -- * Types
     Weights
+  , SinkhornParams(..)
+  , sharedSinkhornParams
   , CyclicStack(..)
   , mkCyclicStack
   , descriptorDim
@@ -59,11 +61,34 @@ import           Data.Proxy          (Proxy(..))
 
 import SixFour.Spec.Color   (OKLab(..), okLabDistanceSquared)
 import SixFour.Spec.Palette (Palette(..))
-import SixFour.Spec.StageB  (SinkhornParams(..))
 
 -- | Per-frame population weights over the @K@ palette slots (Fahmy
 -- Def 6 pmf). Normalised internally; need not sum to 1 on input.
 type Weights = Vector Double
+
+-- | Entropic-OT tuning knobs for the cyclic transition transport
+-- ('transitionPlan'). @spEpsilon@ is the entropic regularisation θ
+-- (smaller = sharper transport); @spIterCount@ is the Sinkhorn-Knopp
+-- scaling iteration count. @spKMeansIts@ is carried for source
+-- compatibility (the cyclic oracle does not run a k-means outer loop).
+--
+-- These used to live in the now-removed @SixFour.Spec.StageB@; the
+-- cyclic descriptor (the deferred-NN feature seam) is the only
+-- remaining consumer, so the record lives here.
+data SinkhornParams = SinkhornParams
+  { spEpsilon   :: !Double  -- ^ entropic regularisation strength θ
+  , spIterCount :: !Int     -- ^ Sinkhorn-Knopp scaling iterations
+  , spKMeansIts :: !Int     -- ^ retained for compatibility; unused here
+  } deriving (Eq, Show)
+
+-- | A well-conditioned default (θ = 0.05). Named for the historical
+-- @.shared@ endpoint; callers tune @spEpsilon@/@spIterCount@ as needed.
+sharedSinkhornParams :: SinkhornParams
+sharedSinkhornParams = SinkhornParams
+  { spEpsilon   = 0.05
+  , spIterCount = 20
+  , spKMeansIts = 10
+  }
 
 -- | A cyclic palette stack: @T@ frames, each a palette plus its weights.
 -- The @t@ index lives in @Z_T@ (frame @T-1@ → frame @0@). Constructed

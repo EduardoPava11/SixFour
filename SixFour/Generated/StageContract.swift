@@ -38,21 +38,6 @@ public enum SixFourOKLabConstants {
 
 }
 
-/// `Surjective256` brand: a value of this type proves that the
-/// wrapped `[UInt8]` index stream contains every value 0..<K.
-/// Constructed only by `make(checking:)` which performs the O(K)
-/// scan; downstream code may then trust the invariant for free.
-public struct Surjective256: Sendable, Hashable {
-    public let indices: [UInt8]
-    public init?(checking xs: [UInt8]) {
-        var seen = Set<UInt8>()
-        seen.reserveCapacity(SixFourShape.K)
-        for x in xs { seen.insert(x) }
-        guard seen.count == SixFourShape.K else { return nil }
-        self.indices = xs
-    }
-}
-
 /// `CompleteVoxelVolume` brand: proof that a per-frame index volume is
 /// a complete T×H×W voxel cube — exactly `SixFourShape.T` frames, each
 /// of `SixFourShape.pixelsPerFrame` indices, and each frame
@@ -84,19 +69,4 @@ public protocol StageAContract {
     /// Output: (palette of K OKLab triples, indices of length H*W).
     func quantize(frameOKLab: [SIMD3<Float>])
       -> (palette: [SIMD3<Float>], indices: [UInt8])
-}
-
-/// Stage B contract: global merger.
-///
-/// Throws on inputs where no θ in the implementation's search range
-/// produces a hard-NN-surjective index tensor (Sinkhorn balance gives
-/// equal soft column-mass, not hard-NN surjectivity after rounding —
-/// see MATH.md Theorem 3). The error type and details are
-/// implementation-specific; per the project no-fallback rule, callers
-/// MUST NOT silently substitute a different result on `throws`.
-public protocol StageBContract {
-    func merge(
-        perFramePalettes: [[SIMD3<Float>]],   // length T, each length K
-        perFrameIndices:  [[UInt8]]            // length T, each length H*W
-    ) throws -> (globalPalette: [SIMD3<Float>], witness: Surjective256)
 }

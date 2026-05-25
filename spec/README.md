@@ -7,11 +7,10 @@ Layout:
 - `src/SixFour/Spec/Shape.hs` — type-level `(T=64, H=64, W=64, K=256)`.
 - `src/SixFour/Spec/Color.hs` — sRGB ↔ OKLab (mirrors `SixFour/Color/ColorScience.swift`).
 - `src/SixFour/Spec/Palette.hs` — `Palette K OKLab` + `S_K` gauge action.
-- `src/SixFour/Spec/Indices.hs` — `IndexTensor T H W K` + `Surjective256` witness.
+- `src/SixFour/Spec/Indices.hs` — `IndexTensor T H W K` + `CompleteVoxelVolume` brand (strict per-frame surjectivity).
 - `src/SixFour/Spec/Gauge.hs` — Symmetric-group action on `(palette, indices)`.
-- `src/SixFour/Spec/StageA.hs` — Wu per-frame quantizer (pinned).
-- `src/SixFour/Spec/StageB.hs` — Sinkhorn-balanced global merger (pinned, witnessed).
-- `src/SixFour/Spec/Pipeline.hs` — GADT composing Stage A ; Stage B.
+- `src/SixFour/Spec/StageA.hs` — per-frame quantizer (pinned). Each frame keeps its own 256-colour palette; there is no cross-frame merge.
+- `src/SixFour/Spec/Cyclic.hs` — cyclic palette-stack descriptor (deferred-NN feature seam; owns `SinkhornParams` for its entropic-OT transition cost).
 - `src/SixFour/Spec/Net.hs` — NN op signatures (slot-agnostic, deferred).
 - `src/SixFour/Spec/Laws.hs` — Algebraic laws collected for the test suite.
 - `src/SixFour/Codegen/Swift.hs` — Emits Swift contracts to `SixFour/Generated/`.

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Bottom pill that summarises one rendered GIF: mode · file size ·
+/// Bottom pill that summarises one rendered GIF: extractor · file size ·
 /// render time · witness status. Surfaces the math state of the capture
 /// without requiring a separate Inspector — every field traces back to a
 /// named object in `spec/MATH.md`.
@@ -15,8 +15,6 @@ struct StatsFooterView: View {
         VStack(spacing: 2) {
             HStack(spacing: 8) {
                 label(extractorText, mono: false)
-                dot
-                label(modeText, mono: false)
                 dot
                 label(sizeText, mono: true)
                 dot
@@ -76,14 +74,6 @@ struct StatsFooterView: View {
 
     // MARK: - Field projections
 
-    private var modeText: String {
-        switch output.mode {
-        case .perFrame: return "Per-frame"
-        case .shared:   return "Shared"
-        case .global:   return "Global"
-        }
-    }
-
     private var sizeText: String {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useKB, .useMB]
@@ -99,24 +89,18 @@ struct StatsFooterView: View {
     }
 
     private var witnessText: String {
-        // Non-surjective outputs no longer reach the renderer — Stage B
-        // throws and `CaptureViewModel` surfaces the error through
-        // `FailureView` instead. Every output that reaches us here has
-        // a clean Surjective256 witness.
+        // Every emitted GIF is a CompleteVoxelVolume — each of the 64
+        // frames uses all 256 palette slots (strict per-frame
+        // surjectivity, enforced by PerFrameSurjectivity + the encoder's
+        // `CompleteVoxelVolume` gate). An incomplete volume can't reach
+        // here, so the witness is always clean.
         "✓"
     }
 
     private var witnessTint: Color { .green }
 
     private var voiceOverDescription: String {
-        let stage = output.stageBMillis.map { ", Stage B took \($0) milliseconds" } ?? ""
-        let θNote: String
-        if let θ = output.achievedTheta, let n = output.attempts {
-            θNote = ", θ=\(θ) after \(n) attempt\(n == 1 ? "" : "s")"
-        } else {
-            θNote = ""
-        }
-        return "\(modeText) mode, \(sizeText), rendered in \(timeText)\(stage)\(θNote)."
+        "\(extractorText) algorithm, \(sizeText), rendered in \(timeText)."
     }
 
     // MARK: - Building blocks

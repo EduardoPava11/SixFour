@@ -1,5 +1,15 @@
 # Mathematical Foundations of SixFour
 
+> **Status note (2026-05-25).** The app now ships a **per-frame palette only**:
+> each of the 64 frames keeps its own 256-colour palette (a complete
+> `CompleteVoxelVolume`, every frame surjective onto all 256 slots). The
+> cross-frame **Stage B Sinkhorn global merge** and its user-facing `.shared`
+> (θ≈0.05) / `.global` (θ→∞) modes have been **removed** — the Stage B sections
+> below are retained as reference math, not as a shipped pipeline. The
+> entropic-OT / Sinkhorn-Knopp machinery *does* live on inside the cyclic
+> palette-stack **descriptor** (`Spec/Cyclic.hs`, §8), which is the deferred-NN
+> feature seam; read the Sinkhorn material with that as its only live consumer.
+
 This document specifies the SixFour pipeline using the framework of
 
 > **Hany Fahmy** (2017). *Mathematics of Statistical Modelling: Abstract to

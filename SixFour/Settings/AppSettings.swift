@@ -21,7 +21,6 @@ import Observation
 final class AppSettings {
     private enum Key {
         // Preserved from the original @AppStorage in CaptureViewModel.
-        static let paletteMode = "sixfour.paletteMode.v2"
         static let extractor   = "sixfour.extractor.v1"
         // New seams (no UI yet; default to today's behavior).
         static let openInPixelatedPreview = "sixfour.openInPixelatedPreview.v1"
@@ -29,13 +28,6 @@ final class AppSettings {
     }
 
     @ObservationIgnored private let defaults: UserDefaults
-
-    /// Palette mode restored on launch / persisted on change. Stored as a
-    /// versioned string so adding modes later needs no Int↔enum table; legacy
-    /// `"0"`/`"1"` decode to `.perFrame`/`.shared`.
-    var defaultPaletteMode: PaletteGenerator.Mode {
-        didSet { defaults.set(Self.encode(defaultPaletteMode), forKey: Key.paletteMode) }
-    }
 
     /// Per-frame extractor family restored on launch / persisted on change.
     var defaultExtractor: Composition.ExtractorChoice {
@@ -57,32 +49,10 @@ final class AppSettings {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // `didSet` does not fire during init, so these reads don't write back.
-        self.defaultPaletteMode = Self.decodeMode(defaults.string(forKey: Key.paletteMode))
         self.defaultExtractor = Composition.ExtractorChoice(
             rawValue: defaults.string(forKey: Key.extractor) ?? ""
         ) ?? .kMeans
         self.openInPixelatedPreview = defaults.bool(forKey: Key.openInPixelatedPreview)
         self.autoSaveToPhotos = defaults.bool(forKey: Key.autoSaveToPhotos)
-    }
-
-    private static func decodeMode(_ raw: String?) -> PaletteGenerator.Mode {
-        switch raw {
-        case "perFrame": return .perFrame
-        case "shared":   return .shared
-        case "global":   return .global
-        // Legacy pre-v2 storage encoded 0/1 (perFrame/global); round to the
-        // nearest live endpoint so old installs keep their pick.
-        case "0":        return .perFrame
-        case "1":        return .shared
-        default:         return .perFrame
-        }
-    }
-
-    private static func encode(_ mode: PaletteGenerator.Mode) -> String {
-        switch mode {
-        case .perFrame: return "perFrame"
-        case .shared:   return "shared"
-        case .global:   return "global"
-        }
     }
 }

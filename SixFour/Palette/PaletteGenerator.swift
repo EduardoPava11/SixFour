@@ -2,79 +2,49 @@ import Foundation
 import simd
 import os
 
-/// Orchestrates Stage A (provided by GPU k-means, baked into `OKLabTile`)
-/// followed by Stage B (Sinkhorn-balanced merge) and the CPU dithering pass.
+/// Per-frame palette finishing pass. Stage A (the chosen extractor's GPU/CPU
+/// quantization) has already populated each `tile.palette`; this generator does
+/// the CPU work that turns those centroids into the final per-frame indices:
 ///
-/// Stage A: the GPU does Lloyd k-means with hard-Euclidean OKLab metric
-/// inside the per-frame command buffer (`Metal/Pipeline.swift` and the
-/// three `kmeansXxxKernel` functions in `Shaders.metal`). Each tile arrives
-/// with `tile.palette` already populated. If a metric organ is loaded, this
-/// generator refines the GPU palette with the organ's `LearnedPSDMetric` on
-/// CPU via `KMeansLab.run` (5 extra iterations from the GPU centroids).
+///   1. Optional learned-metric refinement — 5 Lloyd iterations on CPU with the
+///      organ's `LearnedPSDMetric`, starting from the extractor's centroids.
+///   2. Error-diffusion dither (Floyd–Steinberg by default, optionally
+///      serpentine) against the final palette → per-frame indices.
+///   3. **Strict per-frame surjectivity rescue** — every frame must use all
+///      `K` colours so it can join a `CompleteVoxelVolume`. Dithering can leave
+///      dead palette slots on low-variance frames; `PerFrameSurjectivity`
+///      relocates them onto worst-fit donor pixels (guaranteed to succeed since
+///      `pixelsPerFrame ≥ K`).
 ///
-/// Stage B: optional cross-frame Sinkhorn merge depending on `Mode`:
-///   * `.perFrame` — skip Stage B; every frame keeps its own palette.
-///   * `.shared`   — direct-exp Sinkhorn at θ = 0.05 (MATH.md §3.bis).
-///   * `.global`   — log-domain Sinkhorn at θ = 50 (MATH.md Theorem 2).
-///
-/// Dither: CPU error-diffusion (Floyd–Steinberg by default, optionally
-/// serpentine) against the final palette, producing the per-frame indices
-/// that the GIF encoder writes out.
+/// There is exactly one palette behaviour: per-frame. Each of the 64 frames
+/// keeps its own 256-colour palette, so the emitted GIF is a complete
+/// 64×64×64 voxel volume with no empty slots. (The former cross-frame Sinkhorn
+/// merge — `.shared` / `.global` modes collapsing all frames onto a single
+/// global palette — has been removed; it was the opposite of "full of colours".)
 struct PaletteGenerator: Sendable {
 
     static let logger = Logger(subsystem: "com.sixfour.SixFour", category: "palette")
 
-    /// User-facing palette mode. Three values, each backed by executable,
-    /// tested code (no `.spectrum(θ)` interior, per the project no-stubs rule).
-    enum Mode: Sendable, Codable, Hashable {
-        case perFrame    // θ = 0
-        case shared      // θ ≈ 0.05 (direct-exp)
-        case global      // θ → ∞ (log-domain)
-
-        /// Convenience for diagnostics & UI captions.
-        var thetaLabel: String {
-            switch self {
-            case .perFrame: return "θ = 0"
-            case .shared:   return "θ ≈ 0.05"
-            case .global:   return "θ → ∞"
-            }
-        }
-    }
-
     var dither: Dither.ErrorKernel = .floydSteinberg
     var serpentine: Bool = false
     /// Optional learned PSD metric. When set, drives a 5-iter CPU
-    /// Lloyd refinement step starting from the GPU centroids.
+    /// Lloyd refinement step starting from the extractor centroids.
     var refinementMetric: LearnedPSDMetric? = nil
 
-    /// Per-burst output. No fallback diagnostics — the merger throws on
-    /// failure and the renderer surfaces it.
+    /// Per-burst output: one 256-colour palette per frame plus the per-frame
+    /// indices the GIF encoder writes out.
     struct Output: Sendable {
-        let mode: Mode
-        let perFramePalettes: [[SIMD3<Float>]]   // T × K (always present)
-        let frameIndices: [[UInt8]]              // T × H·W indices into the active palette
-        let globalPalette: [SIMD3<Float>]?       // K, populated when mode != .perFrame
-        let stageAMillis: Int                    // wall-clock for the per-frame CPU work (refine + dither)
-        let stageBMillis: Int?                   // nil iff mode == .perFrame
-        /// θ Stage B settled on. For Shared this is the static θ; for
-        /// Global this is the largest θ at which the adaptive search
-        /// produced a surjective remap. Nil iff Stage B didn't run.
-        let achievedTheta: Double?
-        /// Number of adaptive-θ attempts Stage B made (1 = first attempt
-        /// worked). Nil iff Stage B didn't run.
-        let attempts: Int?
+        let perFramePalettes: [[SIMD3<Float>]]   // T × K
+        let frameIndices: [[UInt8]]              // T × H·W indices into that frame's palette
+        let stageAMillis: Int                    // wall-clock for the per-frame CPU work (refine + dither + rescue)
     }
 
-    /// Throws `StageBSinkhorn.StageBError` if Stage B can't construct a
-    /// surjective palette at any θ in the configured range. Callers MUST
-    /// NOT silently substitute a different result on `throws` — surface
-    /// the error to the user.
-    func generate(tiles: [OKLabTile], mode: Mode = .perFrame) async throws -> Output {
+    /// Refine + dither + per-frame surjectivity rescue for every tile.
+    func generate(tiles: [OKLabTile]) async -> Output {
         precondition(!tiles.isEmpty, "Need at least one frame")
 
         let t0 = ContinuousClock().now
 
-        // Stage A is already done on GPU. CPU refines + dithers per frame.
         let frameCount = tiles.count
         var palettes: [[SIMD3<Float>]] = Array(repeating: [], count: frameCount)
         var indices: [[UInt8]] = Array(repeating: [], count: frameCount)
@@ -101,74 +71,28 @@ struct PaletteGenerator: Sendable {
             }
         }
 
-        let t1 = ContinuousClock().now
-        let stageAMs = Self.milliseconds(t1 - t0)
-        Self.logger.info("[palette] Stage A CPU (×\(frameCount) frames refine+dither): \(stageAMs)ms")
-
-        if mode == .perFrame {
-            // Strict per-frame surjectivity: every frame must use all K
-            // colours so it can join a CompleteVoxelVolume. Dithering can
-            // leave dead palette slots on low-variance frames; the rescue
-            // relocates them onto worst-fit donor pixels (guaranteed to
-            // succeed since pixelsPerFrame ≥ K). See PerFrameSurjectivity.
-            for i in 0..<frameCount {
-                let (pal, idx) = PerFrameSurjectivity.rescue(
-                    palette: palettes[i],
-                    indices: indices[i],
-                    pixels: tiles[i].pixels
-                )
-                palettes[i] = pal
-                indices[i] = idx
-            }
-            Self.logger.info("[palette] Stage B skipped (mode=.perFrame); per-frame surjectivity enforced")
-            return Output(
-                mode: .perFrame,
-                perFramePalettes: palettes,
-                frameIndices: indices,
-                globalPalette: nil,
-                stageAMillis: stageAMs,
-                stageBMillis: nil,
-                achievedTheta: nil,
-                attempts: nil
+        // Strict per-frame surjectivity: every frame must use all K colours so
+        // it can join a CompleteVoxelVolume. Dithering can leave dead palette
+        // slots on low-variance frames; the rescue relocates them onto
+        // worst-fit donor pixels (guaranteed to succeed since
+        // pixelsPerFrame ≥ K). See PerFrameSurjectivity.
+        for i in 0..<frameCount {
+            let (pal, idx) = PerFrameSurjectivity.rescue(
+                palette: palettes[i],
+                indices: indices[i],
+                pixels: tiles[i].pixels
             )
+            palettes[i] = pal
+            indices[i] = idx
         }
 
-        // Stage B Sinkhorn merge — adaptive θ; may throw if no θ in the
-        // search range yields a surjective remap.
-        let params: StageBSinkhorn.Params = (mode == .global) ? .global : .shared
-        let merger = StageBSinkhorn(params: params)
-        Self.logger.info("[palette] Stage B starting (mode=\(String(describing: mode), privacy: .public))")
-        let r = try merger.mergeAdaptive(
-            perFramePalettes: palettes,
-            perFrameIndices: indices
-        )
-        let t2 = ContinuousClock().now
-        let stageBMs = Self.milliseconds(t2 - t1)
-        let achievedTh = r.achievedTheta
-        let attemptsCt = r.attempts
-        Self.logger.info(
-            "[palette] Stage B done in \(stageBMs)ms (θ=\(achievedTh, privacy: .public), attempts=\(attemptsCt, privacy: .public))"
-        )
+        let stageAMs = Self.milliseconds(ContinuousClock().now - t0)
+        Self.logger.info("[palette] per-frame refine+dither+rescue (×\(frameCount) frames): \(stageAMs)ms")
 
-        // Repartition the global witness back into per-frame slices.
-        let perFrameLength = tiles[0].side * tiles[0].side
-        var remapped: [[UInt8]] = []
-        remapped.reserveCapacity(frameCount)
-        var cursor = 0
-        for _ in 0..<frameCount {
-            let end = cursor + perFrameLength
-            remapped.append(Array(r.witness.indices[cursor..<end]))
-            cursor = end
-        }
         return Output(
-            mode: mode,
             perFramePalettes: palettes,
-            frameIndices: remapped,
-            globalPalette: r.globalPalette,
-            stageAMillis: stageAMs,
-            stageBMillis: stageBMs,
-            achievedTheta: r.achievedTheta,
-            attempts: r.attempts
+            frameIndices: indices,
+            stageAMillis: stageAMs
         )
     }
 
@@ -179,8 +103,8 @@ struct PaletteGenerator: Sendable {
         kernel: Dither.ErrorKernel,
         serpentine: Bool
     ) -> ([SIMD3<Float>], [UInt8]) {
-        // Start from GPU centroids. If a learned metric is loaded, refine
-        // 5 Lloyd iterations on CPU with the organ's distance.
+        // Start from the extractor centroids. If a learned metric is loaded,
+        // refine 5 Lloyd iterations on CPU with the organ's distance.
         var palette = tile.palette
         if let m = refinementMetric {
             let refined = KMeansLab.run(

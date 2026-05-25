@@ -12,11 +12,9 @@ module SixFour.Spec.Laws
     lawOKLabRoundTrip
     -- * Gauge laws
   , lawGaugeIdentity
-    -- * Surjectivity laws
-  , lawSurjectiveAfterStageB
     -- * Stage A law
   , lawWuShapesOut
-    -- * Sinkhorn marginal law
+    -- * Transport marginal law (cyclic transition plan)
   , lawSinkhornBalancedColumns
     -- * Cyclic-environment laws (MATH.md §8)
   , lawCyclicClosedness
@@ -35,10 +33,9 @@ import SixFour.Spec.Indices
 import SixFour.Spec.Palette
 import SixFour.Spec.Gauge
 import SixFour.Spec.StageA   (StageA, Frame(..), runStageA)
-import SixFour.Spec.StageB   (StageBOutput(..), SinkhornParams)
 import SixFour.Spec.Shape    (kVal, pixelsPerFrame)
 import SixFour.Spec.Cyclic
-  ( Weights, CyclicStack(..), descriptor, alignedDelta
+  ( Weights, SinkhornParams, CyclicStack(..), descriptor, alignedDelta
   , paletteEntropy, spectralEntropy )
 
 -- | OKLab round-trip: @srgbToOKLab . okLabToSRGB@ should be identity
@@ -63,18 +60,6 @@ lawGaugeIdentity sigma p i =
       lhs      = gather p  i
       rhs      = gather p' i'
   in lhs == rhs
-
--- | Stage B output indices are surjective (witness exists by construction).
--- This law is trivially true at the type level; the test calls
--- 'mkSurjective256' on the raw tensor as an external sanity check.
-lawSurjectiveAfterStageB
-  :: forall t h w k. (KnownNat k)
-  => StageBOutput t h w k -> Bool
-lawSurjectiveAfterStageB out =
-  let IndexTensor v = sbGlobalIndices out
-      seen          = U.toList v
-      uniq          = length (foldr (\x acc -> if x `elem` acc then acc else x:acc) [] seen)
-  in uniq == kVal
 
 -- | After Stage A on a frame of size (H, W), the index tensor has
 -- exactly @H*W@ entries and the palette has @K@ entries.

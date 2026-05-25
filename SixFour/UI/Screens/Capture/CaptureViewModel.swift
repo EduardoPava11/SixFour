@@ -9,19 +9,13 @@ import os
 struct CaptureOutput: Sendable, Hashable, Identifiable {
     let gifURL: URL
     let contactURL: URL?
-    let mode: PaletteGenerator.Mode
     let renderMillis: Int
     let stageAMillis: Int
-    let stageBMillis: Int?
     let encodeMillis: Int
     let fileSize: Int
-    /// θ Stage B settled on (only meaningful when Stage B ran).
-    let achievedTheta: Double?
-    /// Number of adaptive-θ attempts Stage B made.
-    let attempts: Int?
     let timingSummary: String
-    /// sRGB UInt8 palettes for the PaletteStripView — either 1 (Shared/Global)
-    /// or 64 (Per-frame) entries of 256 colours each.
+    /// sRGB UInt8 palettes for the PaletteStripView — 64 entries (one
+    /// per frame) of 256 colours each (the per-frame voxel volume).
     let palettesForDisplay: [[SIMD3<UInt8>]]
     /// Which extractor produced the per-frame palettes for this render.
     let extractorChoice: Composition.ExtractorChoice
@@ -56,8 +50,7 @@ final class CaptureViewModel {
         case idle
         case locking
         case capturing(progress: Double)
-        case renderingStageA              // CPU refine + dither (Stage A is GPU)
-        case renderingStageB              // Sinkhorn-balanced global merge
+        case renderingStageA              // CPU refine + dither + per-frame surjectivity rescue
         case renderingEncode              // GIF89a emit
         case done
         case failed(String)
@@ -67,8 +60,8 @@ final class CaptureViewModel {
     var composition: Composition = .classicalBaseline
     var lastTimingSummary: String? = nil
 
-    /// Persisted user preferences (default palette mode + extractor today,
-    /// plus Settings-screen seams). A future SettingsView binds to this; the
+    /// Persisted user preferences (default extractor today, plus
+    /// Settings-screen seams). A future SettingsView binds to this; the
     /// capture screen reads it on `bootstrap` and writes back on change.
     let settings = AppSettings()
 
@@ -106,7 +99,6 @@ final class CaptureViewModel {
 
     func bootstrap() async {
         composition = composition.with(
-            paletteMode: settings.defaultPaletteMode,
             extractorChoice: settings.defaultExtractor
         )
 
@@ -206,12 +198,10 @@ final class CaptureViewModel {
             Self.logger.info("[viewmodel] burst complete: \(result.timing.summary, privacy: .public)")
 
             let tiles = result.tiles
-            let mode = composition.paletteMode
             let composition = self.composition
 
             let renderResult = try await renderOnce(
                 tiles: tiles,
-                mode: mode,
                 composition: composition,
                 store: store,
                 engines: engines,
@@ -240,11 +230,6 @@ final class CaptureViewModel {
             saveBundleAsync()
             phase = .done
             Haptics.notification(.success)
-        } catch let err as StageBSinkhorn.StageBError {
-            let msg = String(describing: err)
-            Self.logger.error("[viewmodel] capture failed: \(msg, privacy: .public)")
-            phase = .failed(msg)
-            Haptics.notification(.warning)
         } catch let err as CaptureSession.CaptureError {
             let msg = String(describing: err)
             Self.logger.error("[viewmodel] capture failed: \(msg, privacy: .public)")
@@ -271,7 +256,6 @@ final class CaptureViewModel {
 
     private func renderOnce(
         tiles: [OKLabTile],
-        mode: PaletteGenerator.Mode,
         composition: Composition,
         store: GeneStore,
         engines: PaletteEngines,
@@ -285,7 +269,6 @@ final class CaptureViewModel {
                 guard let self else { return }
                 switch stage {
                 case .stageA: self.phase = .renderingStageA
-                case .stageB: self.phase = .renderingStageB
                 case .encode: self.phase = .renderingEncode
                 }
             }
@@ -318,14 +301,10 @@ final class CaptureViewModel {
         let output = CaptureOutput(
             gifURL: baseURL,
             contactURL: contact,
-            mode: report.mode,
             renderMillis: report.totalMillis,
             stageAMillis: report.stageAMillis,
-            stageBMillis: report.stageBMillis,
             encodeMillis: report.encodeMillis,
             fileSize: report.fileSize,
-            achievedTheta: report.achievedTheta,
-            attempts: report.attempts,
             timingSummary: summary,
             palettesForDisplay: report.palettesForDisplay,
             extractorChoice: report.extractorChoice,
@@ -448,7 +427,6 @@ final class CaptureViewModel {
         do {
             let renderResult = try await renderOnce(
                 tiles: bundle.tiles,
-                mode: newComposition.paletteMode,
                 composition: newComposition,
                 store: store,
                 engines: engines,
@@ -476,11 +454,6 @@ final class CaptureViewModel {
             saveBundleAsync()
             phase = .done
             Haptics.notification(.success)
-        } catch let err as StageBSinkhorn.StageBError {
-            let msg = String(describing: err)
-            Self.logger.error("[viewmodel] reExtract failed: \(msg, privacy: .public)")
-            phase = .failed(msg)
-            Haptics.notification(.warning)
         } catch {
             let msg = String(describing: error)
             Self.logger.error("[viewmodel] reExtract failed: \(msg, privacy: .public)")
@@ -489,20 +462,7 @@ final class CaptureViewModel {
         }
     }
 
-    /// Binding for `ModeSelector`. Persists the chosen mode and fires a haptic.
-    var paletteModeBinding: Binding<PaletteGenerator.Mode> {
-        Binding(
-            get: { [weak self] in self?.composition.paletteMode ?? .perFrame },
-            set: { [weak self] newMode in
-                guard let self else { return }
-                self.composition = self.composition.with(paletteMode: newMode)
-                self.settings.defaultPaletteMode = newMode
-                Haptics.selection()
-            }
-        )
-    }
-
-    /// Binding for the extractor picker in CaptureView. Persists the
+    /// Binding for the algorithm selector in CaptureView. Persists the
     /// chosen family and fires a haptic. The next capture uses the
     /// new choice; previously rendered GIFs / bundles aren't affected.
     var extractorChoiceBinding: Binding<Composition.ExtractorChoice> {

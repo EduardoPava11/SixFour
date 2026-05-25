@@ -2,7 +2,6 @@ import Foundation
 import simd
 
 enum GIFEncoderError: Error {
-    case emptyFrames
     case wrongFrameSize(expected: Int, got: Int)
     case paletteWrongSize(expected: Int, got: Int)
     case mismatchedFrameAndPaletteCount
@@ -14,16 +13,16 @@ enum GIFEncoderError: Error {
 
 /// GIF89a encoder for SixFour: fixed 64×64, 64 frames.
 ///
-/// Two modes:
-///   - **Per-frame** (`encode(volume:perFramePalettes:to:)`): each frame writes
-///     its own 256-entry Local Color Table. ~49 KB of palette data per GIF.
-///     Gated on a `CompleteVoxelVolume` so the frames are provably complete.
-///   - **Global** (`encode(frames:globalPalette:to:)`): one 256-entry Global
-///     Color Table in the file header; frames carry no palette. ~768 B of
-///     palette data per GIF (≈48 KB smaller).
+/// One mode — **per-frame** (`encode(volume:perFramePalettes:to:)`): each frame
+/// writes its own 256-entry Local Color Table (~49 KB of palette data per GIF),
+/// gated on a `CompleteVoxelVolume` so the frames are provably complete (every
+/// frame uses all 256 colours — the full 64×64×64 voxel volume). The former
+/// shared Global-Color-Table path was removed with the cross-frame Sinkhorn
+/// merge; collapsing 64 frames onto one palette is the opposite of "full of
+/// colours".
 ///
-/// Disposal method 1 (do not dispose) in both modes — every frame fully
-/// overwrites the canvas, so no transparency tricks are needed.
+/// Disposal method 1 (do not dispose) — every frame fully overwrites the
+/// canvas, so no transparency tricks are needed.
 struct GIFEncoder {
     let width: Int
     let height: Int
@@ -88,55 +87,6 @@ struct GIFEncoder {
         catch { throw GIFEncoderError.writeFailed(underlying: error) }
     }
 
-    /// GCT (global color table) mode. Writes one 256-entry palette in the file
-    /// header; every frame's image descriptor carries no LCT, so frame indices
-    /// resolve through the GCT.
-    ///
-    /// Requires the caller to have *already remapped* every frame's indices
-    /// against the shared palette — typically by passing the merged centroids
-    /// + remapped indices from `StageBSinkhorn`.
-    func encode(
-        frames: [[UInt8]],
-        globalPalette: [SIMD3<UInt8>],
-        to url: URL
-    ) throws {
-        guard !frames.isEmpty else { throw GIFEncoderError.emptyFrames }
-        guard globalPalette.count == 256 else {
-            throw GIFEncoderError.paletteWrongSize(expected: 256, got: globalPalette.count)
-        }
-        let pixelCount = width * height
-        for f in frames where f.count != pixelCount {
-            throw GIFEncoderError.wrongFrameSize(expected: pixelCount, got: f.count)
-        }
-
-        var data = Data()
-        data.append(contentsOf: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61])  // "GIF89a"
-
-        // Logical screen descriptor WITH global color table.
-        // Packed: bit 7 = GCT flag (1), bits 4-6 = color resolution (7),
-        // bit 3 = sort (0), bits 0-2 = GCT size (7 → 256 entries). 0xF7 total.
-        data.append(contentsOf: u16(width))
-        data.append(contentsOf: u16(height))
-        data.append(0xF7)
-        data.append(0x00)  // background color index
-        data.append(0x00)  // pixel aspect ratio
-
-        data.append(contentsOf: colorTable(globalPalette))
-
-        data.append(contentsOf: netscapeLoop(count: 0))
-
-        for frame in frames {
-            data.append(contentsOf: graphicsControl(delay: frameDelayCentiseconds))
-            data.append(contentsOf: imageDescriptorNoLCT(width: width, height: height))
-            data.append(lzwEncode(frame, minCodeSize: 8))
-        }
-
-        data.append(0x3B)
-
-        do { try data.write(to: url) }
-        catch { throw GIFEncoderError.writeFailed(underlying: error) }
-    }
-
     // MARK: - Block builders
 
     private func u16(_ v: Int) -> [UInt8] {
@@ -188,12 +138,6 @@ struct GIFEncoder {
         // Packed: bit 7 = LCT (1), bit 6 = interlace (0), bit 5 = sort (0),
         // bits 0-2 = size (7 → 256 entries). 0x87 total.
         imageDescriptor(width: width, height: height, packed: 0x87)
-    }
-
-    /// Image descriptor with NO local color table — frames resolve indices
-    /// through the file's global color table. Packed byte 0x00.
-    private func imageDescriptorNoLCT(width: Int, height: Int) -> [UInt8] {
-        imageDescriptor(width: width, height: height, packed: 0x00)
     }
 
     private func imageDescriptor(width: Int, height: Int, packed: UInt8) -> [UInt8] {

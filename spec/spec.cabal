@@ -3,10 +3,11 @@ name:               sixfour-spec
 version:            0.1.0.0
 synopsis:           Algebraic spec for the SixFour 64-frame, 256-color GIF pipeline.
 description:
-  Haskell source-of-truth for the SixFour two-stage palette pipeline
-  (Wu per-frame quantizer + Sinkhorn-balanced global merger) plus the
-  on-device NN slot signatures. Emits Swift and Python contracts so
-  the iOS app and the MLX trainer cannot drift from the spec.
+  Haskell source-of-truth for the SixFour per-frame palette pipeline
+  (K-means / Wu / Octree quantizers, each producing a per-frame
+  CompleteVoxelVolume) plus the on-device NN slot signatures. Emits
+  Swift and Python contracts so the iOS app and the MLX trainer cannot
+  drift from the spec.
 author:             Daniel
 build-type:         Simple
 extra-source-files: README.md
@@ -23,8 +24,6 @@ library
         SixFour.Spec.Indices
         SixFour.Spec.Gauge
         SixFour.Spec.StageA
-        SixFour.Spec.StageB
-        SixFour.Spec.Pipeline
         SixFour.Spec.Net
         SixFour.Spec.Cyclic
         SixFour.Spec.Laws
@@ -93,7 +92,6 @@ test-suite spec-tests
         Properties.Gauge
         Properties.Surjectivity
         Properties.Wu
-        Properties.Sinkhorn
         Properties.Hybrid
         Properties.Cyclic
     build-depends:

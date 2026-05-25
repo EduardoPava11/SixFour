@@ -10,9 +10,9 @@ import           Data.Maybe  (fromJust)
 import SixFour.Spec.Color   (OKLab(..))
 import SixFour.Spec.Palette (Palette, mkPalette)
 import SixFour.Spec.Gauge   (Permutation, mkPermutation)
-import SixFour.Spec.StageB  (SinkhornParams(..), sharedSinkhornParams)
 import SixFour.Spec.Cyclic
-  ( Weights, CyclicStack, mkCyclicStack, descriptor, descriptorDim
+  ( Weights, SinkhornParams(..), sharedSinkhornParams
+  , CyclicStack, mkCyclicStack, descriptor, descriptorDim
   , spectralEntropy )
 import SixFour.Spec.Laws
   ( lawCyclicClosedness
