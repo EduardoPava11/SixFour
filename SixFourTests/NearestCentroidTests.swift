@@ -95,6 +95,54 @@ struct NearestCentroidTests {
                 "SIMD8 dither MSE \(mse(simdIdx)) vs scalar \(mse(scalarIdx))")
     }
 
+    // MARK: - Blue-noise (parallel ordered) dither
+
+    /// nearest2 must return the true two nearest centroids (distance-faithful).
+    @Test func nearest2MatchesScalarTop2() {
+        let palette = makePalette(256, seed: 5)
+        let cs = CentroidSet(palette)
+        cs.withProbe { probe in
+            for p in makePixels(1024, seed: 6) {
+                let (i0, i1) = probe.nearest2(p)
+                // Scalar top-2 by distance.
+                var d = (0..<256).map { (idx: $0, dist: d2(p, palette[$0])) }
+                d.sort { $0.dist < $1.dist }
+                #expect(abs(d2(p, palette[i0]) - d[0].dist) < 1e-6)
+                #expect(abs(d2(p, palette[i1]) - d[1].dist) < 1e-6)
+                #expect(i0 != i1)
+            }
+        }
+    }
+
+    @Test func blueNoiseDitherIsDeterministicAndInRange() {
+        let palette = makePalette(256, seed: 1)
+        let pixels = makePixels(64 * 64, seed: 2)
+        let tile = OKLabTile(side: 64, pixels: pixels, captureNanos: 0, palette: palette, finalShift: 0)
+        let cs = CentroidSet(palette)
+        var rng = LCG(33)
+        let thresholds = (0..<(64 * 64)).map { _ in UInt8(rng.f01() * 255) }
+
+        let a = Dither.blueNoiseSIMD(tile: tile, centroids: cs, thresholds: thresholds)
+        let b = Dither.blueNoiseSIMD(tile: tile, centroids: cs, thresholds: thresholds)
+        #expect(a == b, "blue-noise dither must be deterministic")
+        #expect(a.allSatisfy { Int($0) < cs.count })
+    }
+
+    /// Blue-noise + the surjectivity rescue must still yield a complete 64³
+    /// voxel volume (the user's non-negotiable) even on a flat scene.
+    @Test func blueNoisePlusRescueIsCompleteOnFlatScene() {
+        let palette = makePalette(256, seed: 4)
+        let flat = [SIMD3<Float>](repeating: SIMD3<Float>(0.5, 0, 0), count: 64 * 64)
+        let tile = OKLabTile(side: 64, pixels: flat, captureNanos: 0, palette: palette, finalShift: 0)
+        var rng = LCG(9)
+        let thresholds = (0..<(64 * 64)).map { _ in UInt8(rng.f01() * 255) }
+
+        let dithered = Dither.blueNoiseSIMD(tile: tile, centroids: CentroidSet(palette), thresholds: thresholds)
+        let (_, fixed) = PerFrameSurjectivity.rescue(palette: palette, indices: dithered, pixels: flat)
+        #expect(Set(fixed).count == SixFourShape.K)
+        #expect(CompleteVoxelVolume(checkingFrames: Array(repeating: fixed, count: SixFourShape.T)) != nil)
+    }
+
     // MARK: - Microbenchmark (informational; real perf numbers come from device)
 
     @Test func benchmarkScalarVsSIMD8() {

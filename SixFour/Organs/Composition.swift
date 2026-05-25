@@ -11,11 +11,13 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
     let metric: String?     // descriptor hash of the metric organ, or nil
     let createdAt: Date
     /// Which per-frame palette-extraction algorithm the user picked.
-    /// This is now the single creative palette control — every capture
-    /// produces a complete per-frame 64×64×64 voxel volume; the former
-    /// `.shared` / `.global` cross-frame Sinkhorn modes were removed.
+    /// Every capture produces a complete per-frame 64×64×64 voxel volume; the
+    /// former `.shared` / `.global` cross-frame Sinkhorn modes were removed.
     /// Default `.kMeans` matches the original behavior.
     let extractorChoice: ExtractorChoice
+    /// Which dithering method the user picked (a second creative option).
+    /// Default `.errorDiffusion` matches the original behavior.
+    let ditherMethod: DitherMethod
 
     /// User-facing palette-extraction algorithm choice. Each case
     /// maps to one `PaletteExtractor` implementation; the mapping
@@ -63,12 +65,14 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
         name: String,
         metric: String?,
         createdAt: Date,
-        extractorChoice: ExtractorChoice = .kMeans
+        extractorChoice: ExtractorChoice = .kMeans,
+        ditherMethod: DitherMethod = .errorDiffusion
     ) {
         self.name = name
         self.metric = metric
         self.createdAt = createdAt
         self.extractorChoice = extractorChoice
+        self.ditherMethod = ditherMethod
     }
 
     /// Returns a copy with the given fields overridden; any field left `nil`
@@ -80,13 +84,15 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
     /// a fresh "custom" composition directly instead).
     func with(
         name: String? = nil,
-        extractorChoice: ExtractorChoice? = nil
+        extractorChoice: ExtractorChoice? = nil,
+        ditherMethod: DitherMethod? = nil
     ) -> Composition {
         Composition(
             name: name ?? self.name,
             metric: self.metric,
             createdAt: self.createdAt,
-            extractorChoice: extractorChoice ?? self.extractorChoice
+            extractorChoice: extractorChoice ?? self.extractorChoice,
+            ditherMethod: ditherMethod ?? self.ditherMethod
         )
     }
 
@@ -104,12 +110,16 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
         let choice = (try? c.decode(ExtractorChoice.self,
                                     forKey: .extractorChoice)) ?? .kMeans
         self.extractorChoice = choice
+        let dm = (try? c.decode(DitherMethod.self,
+                                forKey: .ditherMethod)) ?? .errorDiffusion
+        self.ditherMethod = dm
     }
 
     static let classicalBaseline = Composition(
         name: Composition.baselineName,
         metric: nil,
         createdAt: Date(timeIntervalSince1970: 0),
-        extractorChoice: .kMeans
+        extractorChoice: .kMeans,
+        ditherMethod: .errorDiffusion
     )
 }

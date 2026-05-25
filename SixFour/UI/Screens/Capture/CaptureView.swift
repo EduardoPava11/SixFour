@@ -187,6 +187,12 @@ struct CaptureView: View {
             AlgorithmSelector(selection: vm.extractorChoiceBinding)
                 .frame(maxWidth: 320)
 
+            // Dither method — the second creative option. Both methods still
+            // emit a complete 64³ voxel volume; this is a pure look choice
+            // (and selects the GPU-eligible path for .blueNoise).
+            DitherSelector(selection: vm.ditherMethodBinding)
+                .frame(maxWidth: 320)
+
             HStack {
                 Spacer()
                 shutterButton

@@ -96,6 +96,58 @@ struct CentroidSet {
             return Int(winner)
         }
 
+        /// The two nearest centroids (Euclidean OKLab): `(i0, i1)` where `i0`
+        /// is nearest and `i1` is second-nearest. Used by the parallel
+        /// blue-noise dither, which picks between them per pixel. If `count < 2`,
+        /// `i1 == i0`. Per-lane top-2 is tracked vectorised; the final 16-way
+        /// horizontal reduction (8 bests + 8 seconds) is a cheap scalar scan.
+        @inline(__always)
+        func nearest2(_ p: SIMD3<Float>) -> (i0: Int, i1: Int) {
+            let px = SIMD8<Float>(repeating: p.x)
+            let py = SIMD8<Float>(repeating: p.y)
+            let pz = SIMD8<Float>(repeating: p.z)
+            let huge = SIMD8<Float>(repeating: .greatestFiniteMagnitude)
+            var best = huge
+            var bestI = SIMD8<Int32>(repeating: 0)
+            var second = huge
+            var secondI = SIMD8<Int32>(repeating: 0)
+            let laneSeed = SIMD8<Int32>(0, 1, 2, 3, 4, 5, 6, 7)
+
+            var g = 0
+            while g < paddedCount {
+                let byte = g * MemoryLayout<Float>.stride
+                let cl = l.loadUnaligned(fromByteOffset: byte, as: SIMD8<Float>.self)
+                let ca = a.loadUnaligned(fromByteOffset: byte, as: SIMD8<Float>.self)
+                let cb = b.loadUnaligned(fromByteOffset: byte, as: SIMD8<Float>.self)
+                let dl = cl - px, da = ca - py, db = cb - pz
+                let dist = dl * dl + da * da + db * db
+                let idx = laneSeed &+ Int32(g)
+                // dist < best → demote best to second, then install new best.
+                let m1 = dist .< best
+                second.replace(with: best, where: m1)
+                secondI.replace(with: bestI, where: m1)
+                best.replace(with: dist, where: m1)
+                bestI.replace(with: idx, where: m1)
+                // best ≤ dist < second → install new second.
+                let m2 = (dist .< second) .& (.!m1)
+                second.replace(with: dist, where: m2)
+                secondI.replace(with: idx, where: m2)
+                g += 8
+            }
+
+            // 16 per-lane candidates → global nearest + second-nearest.
+            var d0: Float = .greatestFiniteMagnitude, i0: Int32 = 0
+            var d1: Float = .greatestFiniteMagnitude, i1: Int32 = 0
+            @inline(__always) func offer(_ d: Float, _ i: Int32) {
+                if d < d0 { d1 = d0; i1 = i0; d0 = d; i0 = i }
+                else if d < d1 && i != i0 { d1 = d; i1 = i }
+            }
+            for lane in 0..<8 { offer(best[lane], bestI[lane]) }
+            for lane in 0..<8 { offer(second[lane], secondI[lane]) }
+            if count < 2 { i1 = i0 }
+            return (Int(i0), Int(i1))
+        }
+
         /// The OKLab colour of centroid `i` (reassembled from the SoA arrays).
         @inline(__always)
         func color(_ i: Int) -> SIMD3<Float> {

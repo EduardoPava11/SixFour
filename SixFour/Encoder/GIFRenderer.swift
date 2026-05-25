@@ -106,6 +106,7 @@ struct GIFRenderer {
 
         var generator = PaletteGenerator()
         generator.refinementMetric = refinementMetric
+        generator.ditherMethod = composition.ditherMethod
 
         let output = await generator.generate(tiles: tilesWithPalettes)
 

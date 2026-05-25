@@ -22,6 +22,7 @@ final class AppSettings {
     private enum Key {
         // Preserved from the original @AppStorage in CaptureViewModel.
         static let extractor   = "sixfour.extractor.v1"
+        static let ditherMethod = "sixfour.ditherMethod.v1"
         // New seams (no UI yet; default to today's behavior).
         static let openInPixelatedPreview = "sixfour.openInPixelatedPreview.v1"
         static let autoSaveToPhotos       = "sixfour.autoSaveToPhotos.v1"
@@ -32,6 +33,11 @@ final class AppSettings {
     /// Per-frame extractor family restored on launch / persisted on change.
     var defaultExtractor: Composition.ExtractorChoice {
         didSet { defaults.set(defaultExtractor.rawValue, forKey: Key.extractor) }
+    }
+
+    /// Dither method restored on launch / persisted on change.
+    var defaultDitherMethod: DitherMethod {
+        didSet { defaults.set(defaultDitherMethod.rawValue, forKey: Key.ditherMethod) }
     }
 
     /// Whether the camera opens in the 64×64 pixelated preview rather than
@@ -52,6 +58,9 @@ final class AppSettings {
         self.defaultExtractor = Composition.ExtractorChoice(
             rawValue: defaults.string(forKey: Key.extractor) ?? ""
         ) ?? .kMeans
+        self.defaultDitherMethod = DitherMethod(
+            rawValue: defaults.string(forKey: Key.ditherMethod) ?? ""
+        ) ?? .errorDiffusion
         self.openInPixelatedPreview = defaults.bool(forKey: Key.openInPixelatedPreview)
         self.autoSaveToPhotos = defaults.bool(forKey: Key.autoSaveToPhotos)
     }

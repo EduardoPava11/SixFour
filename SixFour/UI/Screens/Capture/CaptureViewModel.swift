@@ -99,7 +99,8 @@ final class CaptureViewModel {
 
     func bootstrap() async {
         composition = composition.with(
-            extractorChoice: settings.defaultExtractor
+            extractorChoice: settings.defaultExtractor,
+            ditherMethod: settings.defaultDitherMethod
         )
 
         do {
@@ -460,6 +461,21 @@ final class CaptureViewModel {
             phase = .failed(msg)
             Haptics.notification(.warning)
         }
+    }
+
+    /// Binding for the dither-method selector in CaptureView. Persists the
+    /// choice and fires a haptic. Applies to the next capture; re-extract
+    /// (`reExtract`) re-renders the cached burst with the current method.
+    var ditherMethodBinding: Binding<DitherMethod> {
+        Binding(
+            get: { [weak self] in self?.composition.ditherMethod ?? .errorDiffusion },
+            set: { [weak self] newMethod in
+                guard let self else { return }
+                self.composition = self.composition.with(ditherMethod: newMethod)
+                self.settings.defaultDitherMethod = newMethod
+                Haptics.selection()
+            }
+        )
     }
 
     /// Binding for the algorithm selector in CaptureView. Persists the

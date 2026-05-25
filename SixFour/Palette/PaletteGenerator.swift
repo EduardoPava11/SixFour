@@ -27,6 +27,10 @@ struct PaletteGenerator: Sendable {
 
     var dither: Dither.ErrorKernel = .floydSteinberg
     var serpentine: Bool = false
+    /// Which dithering method to apply (user option). `.errorDiffusion`
+    /// (default) is sequential CPU; `.blueNoise` is parallel ordered dithering
+    /// against the STBN3D mask. Both feed the surjectivity rescue.
+    var ditherMethod: DitherMethod = .errorDiffusion
     /// Optional learned PSD metric. When set, drives a 5-iter CPU
     /// Lloyd refinement step starting from the extractor centroids.
     var refinementMetric: LearnedPSDMetric? = nil
@@ -52,15 +56,30 @@ struct PaletteGenerator: Sendable {
         let metric = self.refinementMetric
         let kernel = self.dither
         let useSerpentine = self.serpentine
+        let method = self.ditherMethod
+
+        // Blue-noise mode needs the tiled STBN3D mask (one threshold per voxel).
+        // Load it once; fall back to error diffusion if it's unavailable or its
+        // size doesn't match this burst (e.g. a non-64³ test fixture).
+        let perFrame = tiles[0].side * tiles[0].side
+        let mask: [UInt8]? = {
+            guard method == .blueNoise else { return nil }
+            guard let m = STBN3DMaskLoader.loadTiled(), m.count == frameCount * perFrame else { return nil }
+            return m
+        }()
+        let effectiveMethod: DitherMethod = (method == .blueNoise && mask == nil) ? .errorDiffusion : method
 
         await withTaskGroup(of: (Int, [SIMD3<Float>], [UInt8]).self) { group in
             for (i, tile) in tiles.enumerated() {
+                let thresholds: [UInt8]? = mask.map { Array($0[(i * perFrame)..<((i + 1) * perFrame)]) }
                 group.addTask {
                     let (pal, idx) = Self.processOneFrame(
                         tile: tile,
                         refinementMetric: metric,
                         kernel: kernel,
-                        serpentine: useSerpentine
+                        serpentine: useSerpentine,
+                        method: effectiveMethod,
+                        thresholds: thresholds
                     )
                     return (i, pal, idx)
                 }
@@ -101,7 +120,9 @@ struct PaletteGenerator: Sendable {
         tile: OKLabTile,
         refinementMetric: LearnedPSDMetric?,
         kernel: Dither.ErrorKernel,
-        serpentine: Bool
+        serpentine: Bool,
+        method: DitherMethod,
+        thresholds: [UInt8]?
     ) -> ([SIMD3<Float>], [UInt8]) {
         // Start from the extractor centroids. If a learned metric is loaded,
         // refine 5 Lloyd iterations on CPU with the organ's distance.
@@ -123,9 +144,17 @@ struct PaletteGenerator: Sendable {
         // nearest-centroid search. The generic `Dither.errorDiffuse` remains
         // the scalar parity oracle.
         let centroids = CentroidSet(palette)
-        let idx = Dither.errorDiffuseSIMD(
-            tile: tile, centroids: centroids, kernel: kernel, serpentine: serpentine
-        )
+        let idx: [UInt8]
+        switch method {
+        case .blueNoise where thresholds != nil:
+            idx = Dither.blueNoiseSIMD(
+                tile: tile, centroids: centroids, thresholds: thresholds!
+            )
+        case .errorDiffusion, .blueNoise:
+            idx = Dither.errorDiffuseSIMD(
+                tile: tile, centroids: centroids, kernel: kernel, serpentine: serpentine
+            )
+        }
         return (palette, idx)
     }
 

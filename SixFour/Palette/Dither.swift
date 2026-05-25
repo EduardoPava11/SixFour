@@ -13,6 +13,28 @@ import simd
 /// 4096 px). Existential `any DistanceMetric` would burn ~30 ns/call
 /// in the value-witness table; the generic specialisation shaves that
 /// to ~5 ns/call.
+/// User-selectable dithering method — a creative option alongside the
+/// extraction algorithm. Both methods feed `PerFrameSurjectivity.rescue`,
+/// so either way the output is a complete 64³ voxel volume (no empty slots).
+///
+///   * `.errorDiffusion` — Floyd–Steinberg (default look). Sequential
+///     (each pixel depends on diffused error from earlier pixels), so it
+///     runs on CPU with the SIMD8 nearest-centroid search.
+///   * `.blueNoise` — ordered dithering against a 3D blue-noise (STBN3D)
+///     mask. Each voxel is independent → fully parallel → eligible for the
+///     GPU matmul path (Phase D). Crisper, no error-diffusion "worm" artifacts.
+enum DitherMethod: String, Codable, Sendable, Hashable, CaseIterable {
+    case errorDiffusion
+    case blueNoise
+
+    var label: String {
+        switch self {
+        case .errorDiffusion: return "Diffusion"
+        case .blueNoise:      return "Blue noise"
+        }
+    }
+}
+
 enum Dither {
 
     /// Per-pixel index buffer for one frame. Indices are 0...palette.count-1.
@@ -144,6 +166,55 @@ enum Dither {
                     }
                     x += xStep
                 }
+            }
+        }
+        return out
+    }
+
+    /// Blue-noise (ordered) dithering against a 3D STBN mask — the parallel
+    /// alternative to error diffusion. For each pixel we find its two nearest
+    /// centroids and pick between them by where the pixel sits on the line
+    /// between them (`s ∈ [0,1]`) versus the per-voxel blue-noise threshold.
+    /// No error buffer, no inter-pixel dependency, so every pixel is
+    /// independent — this is what makes the whole-frame GPU matmul path
+    /// possible (Phase D). `thresholds[i] ∈ 0...255` is this frame's slice of
+    /// the tiled STBN3D mask (`STBN3DMaskLoader.loadTiled`).
+    ///
+    /// Surjectivity is NOT guaranteed here (a flat frame may touch only a few
+    /// centroids); the caller MUST follow with `PerFrameSurjectivity.rescue`,
+    /// exactly as the error-diffusion path does.
+    static func blueNoiseSIMD(
+        tile: OKLabTile,
+        centroids: CentroidSet,
+        thresholds: [UInt8]
+    ) -> [UInt8] {
+        precondition(centroids.count <= 256, "Palette must fit in UInt8")
+        let n = tile.side * tile.side
+        precondition(thresholds.count == n, "thresholds must be one per pixel")
+        var out = [UInt8](repeating: 0, count: n)
+        let pixels = tile.pixels
+
+        centroids.withProbe { probe in
+            for i in 0..<n {
+                let p = pixels[i]
+                let (i0, i1) = probe.nearest2(p)
+                if i0 == i1 {
+                    out[i] = UInt8(i0)
+                    continue
+                }
+                let c0 = probe.color(i0)
+                let c1 = probe.color(i1)
+                // Position of p along c0→c1, clamped to [0,1]. 0 = exactly at
+                // the nearest centroid, →1 = toward the second.
+                let axis = c1 - c0
+                let denom = simd_dot(axis, axis)
+                let s: Float = denom > 0
+                    ? min(max(simd_dot(p - c0, axis) / denom, 0), 1)
+                    : 0
+                // Blue-noise threshold in (0,1); pick the farther centroid when
+                // the pixel leans past the threshold toward it.
+                let t = (Float(thresholds[i]) + 0.5) / 256.0
+                out[i] = UInt8(s > t ? i1 : i0)
             }
         }
         return out
