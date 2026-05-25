@@ -24,6 +24,15 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
     /// agreement with the CPU reference at this depth).
     var kMeansIterations: Int = 15
 
+    /// How the Lloyd loop's initial centroids are chosen.
+    ///   * `.uniformStride` — the GPU `kmeansSeedKernel` (today's default).
+    ///   * `.wuInit` — seed from Wu's variance boxes (CPU), the literature's
+    ///     near-optimal "Wu+KM" (Celebi 2011): lower MSE and far fewer dead
+    ///     clusters than a uniform stride. Costs one CPU Wu pass per tile;
+    ///     opt-in until on-device benchmarking justifies making it the default.
+    enum Seed: Sendable { case uniformStride, wuInit }
+    var seed: Seed = .uniformStride
+
     // Exposed for tests that drive the kernels directly.
     var device: any MTLDevice { gpu.device }
     var queue: any MTLCommandQueue { gpu.queue }
@@ -122,6 +131,19 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
             tileTextures.append(tex)
         }
 
+        // Wu+KM (Celebi 2011): seed the Lloyd loop from Wu's variance boxes
+        // instead of the uniform-stride GPU kernel. Computed on CPU and written
+        // into the shared centroid buffers BEFORE the command buffer runs; the
+        // seed dispatch is then skipped (`seedOnGPU: false`).
+        let seedOnGPU = (seed == .uniformStride)
+        if seed == .wuInit {
+            for i in 0..<frameCount {
+                let seeds = Self.wuSeedCentroids(pixels: tiles[i].pixels, K: kMeansK)
+                let dst = centroidBufs[i].contents().bindMemory(to: SIMD4<Float>.self, capacity: kMeansK)
+                for k in 0..<kMeansK { dst[k] = seeds[k] }
+            }
+        }
+
         guard let cmd = gpu.queue.makeCommandBuffer() else {
             throw KMeansPipelineError.commandFailed
         }
@@ -134,7 +156,8 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
                 shift: shiftBufs[i],
                 assignments: assignmentBufs[i],
                 iterations: kMeansIterations,
-                K: kMeansK
+                K: kMeansK,
+                seedOnGPU: seedOnGPU
             )
             try encodeKMeansFinalizeStats(
                 cmd: cmd,
@@ -231,6 +254,9 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
     // MARK: - Kernel encoding
 
     /// Encode seed + `iterations × (reset, assign+accumulate, finalize)`.
+    /// When `seedOnGPU` is false, the centroid buffer is assumed to already
+    /// hold the initial centroids (e.g. CPU Wu+KM seeding) and the GPU seed
+    /// dispatch is skipped.
     func encodeKMeans(
         cmd: any MTLCommandBuffer,
         tile: any MTLTexture,
@@ -239,13 +265,16 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
         shift: any MTLBuffer,
         assignments: any MTLBuffer,
         iterations: Int,
-        K: Int
+        K: Int,
+        seedOnGPU: Bool = true
     ) throws {
         var kVar = UInt32(K)
-        try dispatch1D(cmd: cmd, pso: kmeansSeedPSO, threadCount: K) { enc in
-            enc.setTexture(tile, index: 0)
-            enc.setBuffer(centroids, offset: 0, index: 0)
-            enc.setBytes(&kVar, length: MemoryLayout<UInt32>.size, index: 1)
+        if seedOnGPU {
+            try dispatch1D(cmd: cmd, pso: kmeansSeedPSO, threadCount: K) { enc in
+                enc.setTexture(tile, index: 0)
+                enc.setBuffer(centroids, offset: 0, index: 0)
+                enc.setBytes(&kVar, length: MemoryLayout<UInt32>.size, index: 1)
+            }
         }
 
         let pixels = tileSide * tileSide
@@ -316,6 +345,28 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
             throw KMeansPipelineError.textureCreationFailed
         }
         return tex
+    }
+
+    /// Wu+KM seed: K initial centroids from Wu's variance boxes (CPU). Empty
+    /// Wu slots — low-diversity tiles can't always fill K boxes — are seeded
+    /// from uniformly-strided pixels so no seed sits dead at the origin (which
+    /// would just reintroduce the dead-cluster problem Wu+KM is meant to cure).
+    static func wuSeedCentroids(pixels: [SIMD3<Float>], K: Int) -> [SIMD4<Float>] {
+        let h = WuQuantizer.buildHistogramCPU(pixels: pixels)
+        let r = WuQuantizer.quantize(h, pixels: pixels, K: K)
+        var out = [SIMD4<Float>](repeating: SIMD4<Float>(0, 0, 0, 1), count: K)
+        let n = max(pixels.count, 1)
+        let stride = max(1, n / max(K, 1))
+        for k in 0..<K {
+            let c = r.clusters[k]
+            if c.count > 0 {
+                out[k] = SIMD4<Float>(c.mean.x, c.mean.y, c.mean.z, 1)
+            } else {
+                let p = pixels[(k * stride) % n]
+                out[k] = SIMD4<Float>(p.x, p.y, p.z, 1)
+            }
+        }
+        return out
     }
 
     private static func millis(_ d: Duration) -> Int {

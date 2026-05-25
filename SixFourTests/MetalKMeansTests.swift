@@ -134,6 +134,43 @@ struct MetalKMeansTests {
         }
     }
 
+    /// Wu+KM (Celebi 2011) seeding should not increase MSE versus the
+    /// uniform-stride seed, and should leave FEWER dead (empty) clusters —
+    /// the dead-cluster cause the surjectivity rescue exists to repair. We
+    /// assert the dead-cluster claim (robust) and a non-regression bound on
+    /// MSE, and print both so the on-device improvement is visible.
+    @MainActor
+    @Test func wuInitSeedReducesDeadClustersVsUniform() throws {
+        let side = 64, K = 256
+        // High-diversity tile: every pixel distinct, so uniform-stride strands
+        // centroids (dead clusters) while Wu boxes spread to cover the gamut.
+        var pixels: [SIMD3<Float>] = []
+        pixels.reserveCapacity(side * side)
+        for y in 0..<side {
+            for x in 0..<side {
+                let l = Float(x) / Float(side - 1)
+                let a = (Float(y) / Float(side - 1) - 0.5) * 0.6
+                let b = ((Float((x * 3 + y * 7) % side) / Float(side - 1)) - 0.5) * 0.6
+                pixels.append(SIMD3<Float>(l, a, b))
+            }
+        }
+        let tile = OKLabTile(side: side, pixels: pixels, captureNanos: 0, palette: [], finalShift: 0)
+
+        func run(_ seed: KMeansPalettePipeline.Seed) throws -> ClusterStatistics {
+            let p = try KMeansPalettePipeline(tileSide: side, kMeansK: K)
+            p.seed = seed
+            return try p.extractBatch(tiles: [tile], K: K)[0]
+        }
+        let uni = try run(.uniformStride)
+        let wu = try run(.wuInit)
+        let deadUni = uni.clusters.filter { $0.count == 0 }.count
+        let deadWu = wu.clusters.filter { $0.count == 0 }.count
+
+        print("[bench] kmeans seed: uniform MSE=\(uni.provenance.mse) dead=\(deadUni) | wuInit MSE=\(wu.provenance.mse) dead=\(deadWu)")
+        #expect(deadWu <= deadUni, "Wu+KM left more dead clusters (\(deadWu)) than uniform (\(deadUni))")
+        #expect(wu.provenance.mse <= uni.provenance.mse + 1e-4, "Wu+KM MSE \(wu.provenance.mse) regressed vs uniform \(uni.provenance.mse)")
+    }
+
     /// 15 iterations is enough that the per-iteration shift has shrunk below
     /// a clearly-converged threshold on a well-conditioned input. We don't
     /// pin a hard number (the GPU's atomic-fixed-point accumulation is noisier
