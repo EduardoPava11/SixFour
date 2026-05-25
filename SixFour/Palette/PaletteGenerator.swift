@@ -31,9 +31,14 @@ struct PaletteGenerator: Sendable {
     var blueNoiseGPU: BlueNoisePalettePipeline? = nil
     /// When true, the blue-noise path also runs the *other* processor (CPU when
     /// GPU is operational) purely to log a CPU-vs-GPU timing comparison. Costs
-    /// one extra dither pass on blue-noise captures; intended for on-device
-    /// benchmarking — set false for production once defaults are chosen.
-    var benchmarkDither: Bool = true
+    /// one extra dither pass on blue-noise captures.
+    ///
+    /// Set to **false** after the on-device verdict (A19 Pro, 2026-05-25):
+    /// `CPU=6802ms GPU=4ms` for the batched 64-frame blue-noise dither — GPU
+    /// wins decisively, so the CPU comparison run is no longer worth its ~6.8s
+    /// tax per capture. The GPU path stays operational and still logs its time.
+    /// Flip true again only to re-measure.
+    var benchmarkDither: Bool = false
     /// Optional learned PSD metric. When set, drives a 5-iter CPU
     /// Lloyd refinement step starting from the extractor centroids.
     var refinementMetric: LearnedPSDMetric? = nil
