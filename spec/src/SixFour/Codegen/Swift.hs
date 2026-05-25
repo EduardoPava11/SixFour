@@ -24,8 +24,9 @@ module SixFour.Codegen.Swift
 import qualified Data.Text    as T
 import           Data.Text    (Text)
 
-import SixFour.Spec.Color  (m1, m2)
+import SixFour.Spec.Color    (m1, m2)
 import SixFour.Spec.Shape
+import SixFour.Spec.Coverage (coverageBinsPerAxis)
 import SixFour.Spec.Net
 import SixFour.Spec.Hybrid.Shape
   ( kTrunkVal, kDeltaVal
@@ -56,6 +57,9 @@ emitStageContract = T.unlines
   , "    public static let pixelsPerFrame: Int = " <> tshow pixelsPerFrame
   , "    public static let pixelsPerGIF: Int   = " <> tshow pixelsPerGIF
   , "    public static let candidatesAfterStageA: Int = " <> tshow candidatesAfterStageA
+  , "    /// Bins per OKLab axis for the gamut-coverage diversity metric"
+  , "    /// (`coverageBinsPerAxis³` voxels). Pinned to SixFour.Spec.Coverage."
+  , "    public static let coverageBinsPerAxis: Int = " <> tshow coverageBinsPerAxis
   , "}"
   , ""
   , "/// OKLab triple, bit-exact mirror of `SixFour/Color/ColorScience.swift`."

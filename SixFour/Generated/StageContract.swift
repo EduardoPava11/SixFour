@@ -17,6 +17,9 @@ public enum SixFourShape {
     public static let pixelsPerFrame: Int = 4096
     public static let pixelsPerGIF: Int   = 262144
     public static let candidatesAfterStageA: Int = 16384
+    /// Bins per OKLab axis for the gamut-coverage diversity metric
+    /// (`coverageBinsPerAxis³` voxels). Pinned to SixFour.Spec.Coverage.
+    public static let coverageBinsPerAxis: Int = 16
 }
 
 /// OKLab triple, bit-exact mirror of `SixFour/Color/ColorScience.swift`.

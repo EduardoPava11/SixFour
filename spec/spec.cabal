@@ -24,6 +24,7 @@ library
         SixFour.Spec.Indices
         SixFour.Spec.Gauge
         SixFour.Spec.StageA
+        SixFour.Spec.Coverage
         SixFour.Spec.Net
         SixFour.Spec.Cyclic
         SixFour.Spec.Laws
@@ -111,6 +112,7 @@ test-suite spec-tests
         Properties.Gauge
         Properties.Surjectivity
         Properties.Wu
+        Properties.Coverage
         Properties.Hybrid
         Properties.Cyclic
     build-depends:

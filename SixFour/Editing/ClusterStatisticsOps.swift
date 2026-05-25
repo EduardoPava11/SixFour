@@ -302,9 +302,14 @@ enum ClusterStatisticsOps {
     /// are diverse samples the NN will collapse, so coverage *across* frames is
     /// what we maximize. OKLab working range L∈[0,1], a,b∈[-0.5,0.5];
     /// `binsPerAxis³` cells.
+    /// `binsPerAxis` defaults to the spec-pinned `SixFourShape.coverageBinsPerAxis`
+    /// (emitted from `SixFour.Spec.Coverage`), so the app, the Haskell oracle,
+    /// and the trainer score coverage on the identical grid. `binL`/`binAB`
+    /// mirror the spec's `okLabBin` (truncation == floor for the non-negative
+    /// working range).
     static func gamutCoverage(
         perFrame: [ClusterStatistics],
-        binsPerAxis: Int = 16
+        binsPerAxis: Int = SixFourShape.coverageBinsPerAxis
     ) -> (occupiedBins: Int, fraction: Float) {
         let n = binsPerAxis
         @inline(__always) func binL(_ v: Float) -> Int { min(max(0, Int(v * Float(n))), n - 1) }
