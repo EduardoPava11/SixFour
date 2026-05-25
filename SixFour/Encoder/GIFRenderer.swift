@@ -50,11 +50,22 @@ struct GIFRenderer {
     let composition: Composition
     let store: GeneStore
     let engines: PaletteEngines
+    /// When true, also run a uniform-stride extraction to log + stamp a Wu+KM
+    /// vs uniform seed MSE comparison (one extra full extraction per capture).
+    /// On-device measurement aid; flip false for production once the real-scene
+    /// quality delta is known.
+    var benchmarkSeed: Bool = true
 
     init(composition: Composition, store: GeneStore, engines: PaletteEngines) {
         self.composition = composition
         self.store = store
         self.engines = engines
+    }
+
+    /// Mean per-frame extraction MSE across a burst's `ClusterStatistics`.
+    static func meanMSE(_ stats: [ClusterStatistics]) -> Float {
+        let sum = stats.reduce(Float(0)) { $0 + $1.provenance.mse }
+        return sum / Float(max(1, stats.count))
     }
 
     func render(
@@ -72,16 +83,12 @@ struct GIFRenderer {
         }
 
         onPhase?(.stageA)
-        // Per-frame palette extraction via the PaletteExtractor
-        // protocol. composition.makeExtractor dispatches on the
-        // user's pick (K-means / Wu / Octree); the result is
-        // `[ClusterStatistics]` (one per tile) carrying per-cluster
-        // (μ, Σ, count) + per-pixel assignment + provenance. We
-        // stitch the centroids back into each OKLabTile.palette for
-        // downstream Dither + encoder back-compat; the rich
-        // statistics flow through Report.perFrameStatistics so
-        // CaptureViewModel can build a CaptureBundle for editing
-        // tools.
+        // Per-frame palette extraction (Wu-initialized k-means). Returns
+        // `[ClusterStatistics]` (one per tile) carrying per-cluster (μ, Σ,
+        // count) + per-pixel assignment + provenance. We stitch the centroids
+        // back into each OKLabTile.palette for the downstream Dither + encoder;
+        // the rich statistics flow through Report.perFrameStatistics for the
+        // CaptureBundle / editing tools.
         let extractor = composition.makeExtractor(engines: engines)
         let perFrameStats = try extractor.extractBatch(tiles: tiles, K: SixFourShape.K)
         let tilesWithPalettes: [OKLabTile] = zip(tiles, perFrameStats).map { tile, stats in
@@ -93,11 +100,29 @@ struct GIFRenderer {
                 finalShift: 0
             )
         }
-        let meanExtractMSE: Float = {
-            let sum = perFrameStats.reduce(Float(0)) { $0 + $1.provenance.mse }
-            return sum / Float(max(1, perFrameStats.count))
-        }()
+        let meanExtractMSE = Self.meanMSE(perFrameStats)
+        let wuSeedMillis = engines.kMeans.lastWuSeedMillis
         Self.logger.info("[renderer] extractor=wu+km meanMSE=\(meanExtractMSE)")
+
+        // Seed A/B: is Wu+KM's ~6.5s seed actually buying quality on this real
+        // scene vs instant uniform-stride? Run a uniform-stride pass for
+        // comparison, log + stamp the MSE delta. Gated by `benchmarkSeed`
+        // (extra full extraction); flip false once measured.
+        var seedComparison: String? = nil
+        if benchmarkSeed {
+            let original = engines.kMeans.seed
+            engines.kMeans.seed = .uniformStride
+            if let uni = try? engines.kMeans.extractBatch(tiles: tiles, K: SixFourShape.K) {
+                let uniMSE = Self.meanMSE(uni)
+                let deltaPct = uniMSE > 0 ? (uniMSE - meanExtractMSE) / uniMSE * 100 : 0
+                seedComparison = String(
+                    format: "wuMSE=%.6f uniformMSE=%.6f (Wu+KM %.1f%% lower, cost %dms)",
+                    meanExtractMSE, uniMSE, deltaPct, wuSeedMillis
+                )
+                Self.logger.notice("[bench] seed \(seedComparison!, privacy: .public)")
+            }
+            engines.kMeans.seed = original
+        }
 
         var generator = PaletteGenerator()
         generator.refinementMetric = refinementMetric
@@ -126,9 +151,10 @@ struct GIFRenderer {
         let metadata = Self.renderComment(
             tiles: tiles,
             meanMSE: meanExtractMSE,
-            wuSeedMillis: engines.kMeans.lastWuSeedMillis,
+            wuSeedMillis: wuSeedMillis,
             ditherSummary: output.ditherSummary,
-            stageAMillis: output.stageAMillis
+            stageAMillis: output.stageAMillis,
+            seedComparison: seedComparison
         )
         try encoder.encode(
             volume: volume,
@@ -161,14 +187,16 @@ struct GIFRenderer {
         meanMSE: Float,
         wuSeedMillis: Int,
         ditherSummary: String,
-        stageAMillis: Int
+        stageAMillis: Int,
+        seedComparison: String?
     ) -> String {
         let ts = ISO8601DateFormatter().string(from: Date())
         let side = tiles.first?.side ?? SixFourShape.W
+        let seedLine = seedComparison.map { "\nseedAB=\($0)" } ?? ""
         return """
         SixFour \(side)×\(side)×\(tiles.count) GIF
         extractor=Wu+KM  dither=\(ditherSummary)  meanMSE=\(String(format: "%.6f", meanMSE))
-        wuSeedMs=\(wuSeedMillis)  stageA(refine+dither+rescue)Ms=\(stageAMillis)  frames=\(tiles.count)  K=\(SixFourShape.K)
+        wuSeedMs=\(wuSeedMillis)  stageA(refine+dither+rescue)Ms=\(stageAMillis)  frames=\(tiles.count)  K=\(SixFourShape.K)\(seedLine)
         rendered=\(ts)
         """
     }

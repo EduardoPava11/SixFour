@@ -120,7 +120,7 @@ mod tests {
     #[test]
     fn fidelity_increases_with_spread() {
         use crate::{collapse, synth::{synth_stack, SynthParams}};
-        let base = SynthParams { n_clusters: 6, spread: 0.02, drift: 0.1, gamut: 0.8, conc_skew: 1.0, seed: 3 };
+        let base = SynthParams { n_clusters: 6, spread: 0.02, drift: 0.1, gamut: 0.8, conc_skew: 1.0, pop_drift: 0.5, seed: 3 };
         let wide = SynthParams { spread: 0.15, ..base };
         let fid = |p: &SynthParams| {
             let s = synth_stack(p, 16, 64);

@@ -18,12 +18,24 @@ pub struct SynthParams {
     pub gamut: f64,
     /// Population skew (0 ≈ uniform usage; higher ≈ a few dominant colours).
     pub conc_skew: f64,
+    /// Temporal oscillation of per-frame populations over the loop (0 ≈ constant
+    /// usage; higher ≈ which colours dominate shifts across frames). Drives the
+    /// time-varying half of the §8 descriptor (H(P_t) trajectory).
+    pub pop_drift: f64,
     pub seed: u64,
 }
 
 impl Default for SynthParams {
     fn default() -> Self {
-        SynthParams { n_clusters: 6, spread: 0.06, drift: 0.18, gamut: 0.8, conc_skew: 1.0, seed: 1 }
+        SynthParams {
+            n_clusters: 6,
+            spread: 0.06,
+            drift: 0.18,
+            gamut: 0.8,
+            conc_skew: 1.0,
+            pop_drift: 0.5,
+            seed: 1,
+        }
     }
 }
 
@@ -63,17 +75,13 @@ pub fn synth_stack(p: &SynthParams, t_count: usize, k: usize) -> CyclicStack {
             offset[s][ch] = r.gauss() * p.spread;
         }
     }
-    // Per-slot populations (constant across frames), skewed, summing to 4096.
-    let mut weights = vec![0.0f64; k];
+    // Per-slot base populations (skewed) + per-slot temporal phase.
     let exp = 1.0 + p.conc_skew * 4.0;
-    let mut wsum = 0.0;
+    let mut base_w = vec![0.0f64; k];
+    let mut wphase = vec![0.0f64; k];
     for s in 0..k {
-        let w = (r.f64()).powf(exp) + 1e-3; // +floor so every colour is used
-        weights[s] = w;
-        wsum += w;
-    }
-    for w in weights.iter_mut() {
-        *w = *w / wsum * 4096.0;
+        base_w[s] = (r.f64()).powf(exp) + 1e-3; // +floor so every colour is used
+        wphase[s] = 6.283 * r.f64();
     }
 
     let frames = (0..t_count)
@@ -89,7 +97,17 @@ pub fn synth_stack(p: &SynthParams, t_count: usize, k: usize) -> CyclicStack {
                     srgb_to_oklab(rgb)
                 })
                 .collect();
-            Frame { palette, weights: weights.clone() }
+            // Per-frame populations: base modulated by a temporal oscillation,
+            // floored positive, normalised to the 4096-pixel budget. This makes
+            // the H(P_t) trajectory vary → exercises the §8 temporal features.
+            let mut weights: Vec<f64> = (0..k)
+                .map(|s| (base_w[s] * (1.0 + p.pop_drift * (u + wphase[s]).sin())).max(1e-4))
+                .collect();
+            let wsum: f64 = weights.iter().sum();
+            for w in weights.iter_mut() {
+                *w = *w / wsum * 4096.0;
+            }
+            Frame { palette, weights }
         })
         .collect();
 
