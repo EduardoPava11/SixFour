@@ -1,0 +1,23 @@
+cabal-version:      3.0
+name:               sixfour-analysis
+version:            0.1.0.0
+synopsis:           Research-grade analysis of the global-collapse task.
+build-type:         Simple
+
+-- Own package so its heavy deps (hmatrix LAPACK, statistics — both BSD-3, no
+-- GSL/GPL) solve INDEPENDENTLY of the spec library + its test-suite. Dev-only;
+-- does not import the spec library (reads the Rust-exported CSVs).
+executable analysis
+    main-is:          Main.hs
+    build-depends:
+        base
+      , vector
+      , bytestring
+      , hmatrix
+      , statistics
+    hs-source-dirs:   .
+    default-language: Haskell2010
+    default-extensions:
+        ScopedTypeVariables
+      , BangPatterns
+    ghc-options:      -Wall -Wno-unused-imports -Wno-unused-matches

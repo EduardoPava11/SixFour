@@ -7,12 +7,14 @@ pub mod color;
 pub mod cyclic;
 pub mod geometry;
 pub mod gif_io;
+pub mod look;
 pub mod synth;
 
 pub use collapse::{candidates, fidelity, median_cut, population_value, weighted_kmeans};
 pub use color::Oklab;
 pub use cyclic::{descriptor, CyclicStack, Frame, Params, DESCRIPTOR_DIM};
 pub use geometry::{color_pca, distinct_count, effective_dim, mean_nn_spacing};
+pub use look::{affine_look, global_collapse, LookCode, LOOK_DIM};
 pub use gif_io::{load_stack, synth_color, synthetic_stack, write_sample_gif};
 pub use synth::{synth_stack, SynthParams};
 

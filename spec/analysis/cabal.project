@@ -1,0 +1,4 @@
+-- Separate project so hmatrix/statistics solve independently of the spec
+-- library + test-suite. Build/run from this dir: `cabal run analysis -- <dir>`.
+packages: .
+with-compiler: ghc-9.2.8

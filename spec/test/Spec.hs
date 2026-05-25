@@ -9,6 +9,7 @@ import qualified Properties.Wu           as Wu
 import qualified Properties.Coverage     as Coverage
 import qualified Properties.Hybrid       as Hybrid
 import qualified Properties.Cyclic       as Cyclic
+import qualified Properties.Look         as Look
 
 main :: IO ()
 main = defaultMain $ testGroup "sixfour-spec"
@@ -19,4 +20,5 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Coverage.tests
   , Hybrid.tests
   , Cyclic.tests
+  , Look.tests
   ]
