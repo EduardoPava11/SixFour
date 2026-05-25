@@ -134,7 +134,8 @@ final class CaptureViewModel {
 
             self.pipeline = pipeline
             self.engines = PaletteEngines(
-                kMeans: try KMeansPalettePipeline(tileSide: 64)
+                kMeans: try KMeansPalettePipeline(tileSide: 64),
+                blueNoise: try? BlueNoisePalettePipeline()
             )
             self.session = session
             self.store = store

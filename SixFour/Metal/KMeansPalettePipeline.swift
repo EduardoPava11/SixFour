@@ -140,11 +140,16 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
         // seed dispatch is then skipped (`seedOnGPU: false`).
         let seedOnGPU = (seed == .uniformStride)
         if seed == .wuInit {
+            let wuStart = ContinuousClock().now
             for i in 0..<frameCount {
                 let seeds = Self.wuSeedCentroids(pixels: tiles[i].pixels, K: kMeansK)
                 let dst = centroidBufs[i].contents().bindMemory(to: SIMD4<Float>.self, capacity: kMeansK)
                 for k in 0..<kMeansK { dst[k] = seeds[k] }
             }
+            let wuMs = Self.millis(ContinuousClock().now - wuStart)
+            // .notice (not .info) so it persists + shows in Console by default
+            // for on-device benchmarking.
+            Self.logger.notice("[bench] Wu+KM seed (CPU, ×\(frameCount) frames): \(wuMs)ms total (\(wuMs / max(1, frameCount))ms/frame)")
         }
 
         guard let cmd = gpu.queue.makeCommandBuffer() else {

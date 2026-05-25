@@ -207,6 +207,27 @@ struct MetalKMeansTests {
                 "GPU/CPU blue-noise agreement only \(Float(agree) / Float(cpu.count))")
     }
 
+    /// assignBatch (one command buffer, all frames) must equal per-frame
+    /// `assign` — batching is a scheduling optimization, not a semantic change.
+    @MainActor
+    @Test func gpuBlueNoiseBatchEqualsPerFrame() throws {
+        let side = 64, K = 256, frames = 3
+        var rng: UInt64 = 0xABCD
+        func f01() -> Float { rng = rng &* 6364136223846793005 &+ 1; return Float(rng >> 40) / Float(1 << 24) }
+        func oklab() -> SIMD3<Float> { SIMD3<Float>(f01(), f01() - 0.5, f01() - 0.5) }
+
+        let pipeline = try BlueNoisePalettePipeline()
+        let pixels = (0..<frames).map { _ in (0..<(side * side)).map { _ in oklab() } }
+        let palettes = (0..<frames).map { _ in (0..<K).map { _ in oklab() } }
+        let thresholds = (0..<frames).map { _ in (0..<(side * side)).map { _ in UInt8(f01() * 255) } }
+
+        let batched = try pipeline.assignBatch(pixels: pixels, centroids: palettes, thresholds: thresholds)
+        for f in 0..<frames {
+            let single = try pipeline.assign(pixels: pixels[f], centroids: palettes[f], thresholds: thresholds[f])
+            #expect(batched[f] == single, "assignBatch frame \(f) differs from single assign")
+        }
+    }
+
     /// 15 iterations is enough that the per-iteration shift has shrunk below
     /// a clearly-converged threshold on a well-conditioned input. We don't
     /// pin a hard number (the GPU's atomic-fixed-point accumulation is noisier

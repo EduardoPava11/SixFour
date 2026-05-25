@@ -102,6 +102,7 @@ struct GIFRenderer {
         var generator = PaletteGenerator()
         generator.refinementMetric = refinementMetric
         generator.ditherMethod = composition.ditherMethod
+        generator.blueNoiseGPU = engines.blueNoise
 
         let output = await generator.generate(tiles: tilesWithPalettes)
 

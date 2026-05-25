@@ -9,4 +9,8 @@
 /// Wu lives on only as the k-means seeder (`KMeansPalettePipeline.wuSeedCentroids`).
 struct PaletteEngines: Sendable {
     let kMeans: KMeansPalettePipeline
+    /// GPU blue-noise assignment, used when the dither method is `.blueNoise`.
+    /// Optional so the app still runs if the pipeline fails to build (falls
+    /// back to the CPU blue-noise path).
+    let blueNoise: BlueNoisePalettePipeline?
 }

@@ -82,4 +82,69 @@ final class BlueNoisePalettePipeline: @unchecked Sendable {
         let outPtr = outBuf.contents().bindMemory(to: UInt8.self, capacity: n)
         return Array(UnsafeBufferPointer(start: outPtr, count: n))
     }
+
+    /// Batched assignment: all frames in ONE command buffer (one commit/wait),
+    /// which is the configuration that amortizes GPU dispatch overhead across
+    /// the 64-frame burst — the fair comparison against the per-frame CPU path.
+    /// `pixels`/`centroids`/`thresholds` are parallel arrays, one entry per
+    /// frame. Returns per-frame index arrays.
+    func assignBatch(
+        pixels: [[SIMD3<Float>]],
+        centroids: [[SIMD3<Float>]],
+        thresholds: [[UInt8]]
+    ) throws -> [[UInt8]] {
+        let frames = pixels.count
+        precondition(centroids.count == frames && thresholds.count == frames,
+                     "assignBatch: parallel arrays must be the same length")
+        guard frames > 0 else { return [] }
+
+        let stride3 = MemoryLayout<SIMD3<Float>>.stride
+        guard let cmd = gpu.queue.makeCommandBuffer() else { throw BlueNoiseError.commandFailed }
+
+        var outBufs: [any MTLBuffer] = []
+        var counts: [Int] = []
+        outBufs.reserveCapacity(frames)
+        counts.reserveCapacity(frames)
+
+        for f in 0..<frames {
+            let n = pixels[f].count
+            let k = centroids[f].count
+            precondition(k <= 256, "Palette must fit in UInt8")
+            precondition(thresholds[f].count == n, "thresholds must be one per pixel")
+            guard
+                let pxBuf  = device.makeBuffer(bytes: pixels[f],     length: n * stride3, options: [.storageModeShared]),
+                let cBuf   = device.makeBuffer(bytes: centroids[f],  length: k * stride3, options: [.storageModeShared]),
+                let thBuf  = device.makeBuffer(bytes: thresholds[f], length: n,           options: [.storageModeShared]),
+                let outBuf = device.makeBuffer(length: n, options: [.storageModeShared]),
+                let enc = cmd.makeComputeCommandEncoder()
+            else { throw BlueNoiseError.bufferCreationFailed }
+
+            var kVar = UInt32(k)
+            var nVar = UInt32(n)
+            enc.setComputePipelineState(pso)
+            enc.setBuffer(pxBuf,  offset: 0, index: 0)
+            enc.setBuffer(cBuf,   offset: 0, index: 1)
+            enc.setBuffer(thBuf,  offset: 0, index: 2)
+            enc.setBuffer(outBuf, offset: 0, index: 3)
+            enc.setBytes(&kVar, length: MemoryLayout<UInt32>.size, index: 4)
+            enc.setBytes(&nVar, length: MemoryLayout<UInt32>.size, index: 5)
+            let tg = MTLSize(width: min(pso.maxTotalThreadsPerThreadgroup, max(n, 1)), height: 1, depth: 1)
+            enc.dispatchThreads(MTLSize(width: n, height: 1, depth: 1), threadsPerThreadgroup: tg)
+            enc.endEncoding()
+            outBufs.append(outBuf)
+            counts.append(n)
+        }
+
+        cmd.commit()
+        cmd.waitUntilCompleted()
+        if let err = cmd.error {
+            Self.logger.error("assignBatch GPU failed: \(err.localizedDescription)")
+            throw BlueNoiseError.commandFailed
+        }
+
+        return (0..<frames).map { f in
+            let p = outBufs[f].contents().bindMemory(to: UInt8.self, capacity: counts[f])
+            return Array(UnsafeBufferPointer(start: p, count: counts[f]))
+        }
+    }
 }

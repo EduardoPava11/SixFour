@@ -2,35 +2,38 @@ import Foundation
 import simd
 import os
 
-/// Per-frame palette finishing pass. Stage A (the chosen extractor's GPU/CPU
-/// quantization) has already populated each `tile.palette`; this generator does
-/// the CPU work that turns those centroids into the final per-frame indices:
+/// Per-frame palette finishing pass. Stage A (Wu-initialized k-means) has
+/// populated each `tile.palette`; this generator turns those centroids into the
+/// final per-frame indices:
 ///
 ///   1. Optional learned-metric refinement — 5 Lloyd iterations on CPU with the
 ///      organ's `LearnedPSDMetric`, starting from the extractor's centroids.
-///   2. Error-diffusion dither (Floyd–Steinberg by default, optionally
-///      serpentine) against the final palette → per-frame indices.
-///   3. **Strict per-frame surjectivity rescue** — every frame must use all
-///      `K` colours so it can join a `CompleteVoxelVolume`. Dithering can leave
-///      dead palette slots on low-variance frames; `PerFrameSurjectivity`
-///      relocates them onto worst-fit donor pixels (guaranteed to succeed since
-///      `pixelsPerFrame ≥ K`).
+///   2. Dither → per-frame indices. Two methods:
+///        * `.errorDiffusion` — sequential CPU (SIMD8 nearest-centroid).
+///        * `.blueNoise` — parallel ordered dithering against the STBN3D mask,
+///          run on the **GPU** (`BlueNoisePalettePipeline`) when available, with
+///          the CPU path as fallback + benchmark comparison.
+///   3. **Strict per-frame surjectivity rescue** — every frame must use all `K`
+///      colours so it can join a `CompleteVoxelVolume`.
 ///
-/// There is exactly one palette behaviour: per-frame. Each of the 64 frames
-/// keeps its own 256-colour palette, so the emitted GIF is a complete
-/// 64×64×64 voxel volume with no empty slots. (The former cross-frame Sinkhorn
-/// merge — `.shared` / `.global` modes collapsing all frames onto a single
-/// global palette — has been removed; it was the opposite of "full of colours".)
+/// One palette behaviour: per-frame. Each of the 64 frames keeps its own
+/// 256-colour palette → the GIF is a complete 64×64×64 voxel volume.
 struct PaletteGenerator: Sendable {
 
     static let logger = Logger(subsystem: "com.sixfour.SixFour", category: "palette")
 
     var dither: Dither.ErrorKernel = .floydSteinberg
     var serpentine: Bool = false
-    /// Which dithering method to apply (user option). `.errorDiffusion`
-    /// (default) is sequential CPU; `.blueNoise` is parallel ordered dithering
-    /// against the STBN3D mask. Both feed the surjectivity rescue.
+    /// Which dithering method to apply (user option).
     var ditherMethod: DitherMethod = .errorDiffusion
+    /// GPU blue-noise pipeline. When set and `ditherMethod == .blueNoise`, the
+    /// dither runs on the GPU; otherwise the CPU path is used.
+    var blueNoiseGPU: BlueNoisePalettePipeline? = nil
+    /// When true, the blue-noise path also runs the *other* processor (CPU when
+    /// GPU is operational) purely to log a CPU-vs-GPU timing comparison. Costs
+    /// one extra dither pass on blue-noise captures; intended for on-device
+    /// benchmarking — set false for production once defaults are chosen.
+    var benchmarkDither: Bool = true
     /// Optional learned PSD metric. When set, drives a 5-iter CPU
     /// Lloyd refinement step starting from the extractor centroids.
     var refinementMetric: LearnedPSDMetric? = nil
@@ -40,122 +43,124 @@ struct PaletteGenerator: Sendable {
     struct Output: Sendable {
         let perFramePalettes: [[SIMD3<Float>]]   // T × K
         let frameIndices: [[UInt8]]              // T × H·W indices into that frame's palette
-        let stageAMillis: Int                    // wall-clock for the per-frame CPU work (refine + dither + rescue)
+        let stageAMillis: Int                    // wall-clock for refine + dither + rescue
     }
 
     /// Refine + dither + per-frame surjectivity rescue for every tile.
     func generate(tiles: [OKLabTile]) async -> Output {
         precondition(!tiles.isEmpty, "Need at least one frame")
-
         let t0 = ContinuousClock().now
-
         let frameCount = tiles.count
-        var palettes: [[SIMD3<Float>]] = Array(repeating: [], count: frameCount)
-        var indices: [[UInt8]] = Array(repeating: [], count: frameCount)
-
-        let metric = self.refinementMetric
-        let kernel = self.dither
-        let useSerpentine = self.serpentine
-        let method = self.ditherMethod
-
-        // Blue-noise mode needs the tiled STBN3D mask (one threshold per voxel).
-        // Load it once; fall back to error diffusion if it's unavailable or its
-        // size doesn't match this burst (e.g. a non-64³ test fixture).
         let perFrame = tiles[0].side * tiles[0].side
+        let metric = self.refinementMetric
+
+        // Phase 1: per-frame palettes (extractor centroids + optional refine).
+        var palettes: [[SIMD3<Float>]] = Array(repeating: [], count: frameCount)
+        await withTaskGroup(of: (Int, [SIMD3<Float>]).self) { group in
+            for (i, tile) in tiles.enumerated() {
+                group.addTask { (i, Self.refinePalette(tile: tile, metric: metric)) }
+            }
+            while let (i, pal) = await group.next() { palettes[i] = pal }
+        }
+
+        // Phase 2: dither. Blue-noise needs the tiled STBN3D mask; fall back to
+        // error diffusion if it's unavailable / size-mismatched (non-64³ tests).
         let mask: [UInt8]? = {
-            guard method == .blueNoise else { return nil }
+            guard ditherMethod == .blueNoise else { return nil }
             guard let m = STBN3DMaskLoader.loadTiled(), m.count == frameCount * perFrame else { return nil }
             return m
         }()
-        let effectiveMethod: DitherMethod = (method == .blueNoise && mask == nil) ? .errorDiffusion : method
 
-        await withTaskGroup(of: (Int, [SIMD3<Float>], [UInt8]).self) { group in
-            for (i, tile) in tiles.enumerated() {
-                let thresholds: [UInt8]? = mask.map { Array($0[(i * perFrame)..<((i + 1) * perFrame)]) }
-                group.addTask {
-                    let (pal, idx) = Self.processOneFrame(
-                        tile: tile,
-                        refinementMetric: metric,
-                        kernel: kernel,
-                        serpentine: useSerpentine,
-                        method: effectiveMethod,
-                        thresholds: thresholds
-                    )
-                    return (i, pal, idx)
+        var indices: [[UInt8]]
+        let ditherStart = ContinuousClock().now
+        if ditherMethod == .blueNoise, let mask {
+            let thresholds = (0..<frameCount).map { Array(mask[($0 * perFrame)..<(($0 + 1) * perFrame)]) }
+            indices = ditherBlueNoise(tiles: tiles, palettes: palettes, thresholds: thresholds)
+        } else {
+            let kernel = self.dither
+            let useSerpentine = self.serpentine
+            var out: [[UInt8]] = Array(repeating: [], count: frameCount)
+            await withTaskGroup(of: (Int, [UInt8]).self) { group in
+                for (i, tile) in tiles.enumerated() {
+                    let pal = palettes[i]
+                    group.addTask {
+                        (i, Dither.errorDiffuseSIMD(tile: tile, centroids: CentroidSet(pal),
+                                                    kernel: kernel, serpentine: useSerpentine))
+                    }
                 }
+                while let (i, idx) = await group.next() { out[i] = idx }
             }
-            while let (i, pal, idx) = await group.next() {
-                palettes[i] = pal
-                indices[i] = idx
-            }
+            indices = out
+            Self.logger.notice("[bench] dither errorDiffusion (CPU SIMD8, ×\(frameCount)): \(Self.milliseconds(ContinuousClock().now - ditherStart))ms")
         }
 
-        // Strict per-frame surjectivity: every frame must use all K colours so
-        // it can join a CompleteVoxelVolume. Dithering can leave dead palette
-        // slots on low-variance frames; the rescue relocates them onto
-        // worst-fit donor pixels (guaranteed to succeed since
-        // pixelsPerFrame ≥ K). See PerFrameSurjectivity.
+        // Phase 3: strict per-frame surjectivity rescue — guarantees every frame
+        // uses all K colours (CompleteVoxelVolume), for BOTH dither methods.
         for i in 0..<frameCount {
             let (pal, idx) = PerFrameSurjectivity.rescue(
-                palette: palettes[i],
-                indices: indices[i],
-                pixels: tiles[i].pixels
+                palette: palettes[i], indices: indices[i], pixels: tiles[i].pixels
             )
             palettes[i] = pal
             indices[i] = idx
         }
 
         let stageAMs = Self.milliseconds(ContinuousClock().now - t0)
-        Self.logger.info("[palette] per-frame refine+dither+rescue (×\(frameCount) frames): \(stageAMs)ms")
-
-        return Output(
-            perFramePalettes: palettes,
-            frameIndices: indices,
-            stageAMillis: stageAMs
-        )
+        Self.logger.info("[palette] refine+dither+rescue (×\(frameCount) frames): \(stageAMs)ms")
+        return Output(perFramePalettes: palettes, frameIndices: indices, stageAMillis: stageAMs)
     }
 
-    /// Per-frame CPU work: optional learned-metric refinement then dither.
-    private static func processOneFrame(
-        tile: OKLabTile,
-        refinementMetric: LearnedPSDMetric?,
-        kernel: Dither.ErrorKernel,
-        serpentine: Bool,
-        method: DitherMethod,
-        thresholds: [UInt8]?
-    ) -> ([SIMD3<Float>], [UInt8]) {
-        // Start from the extractor centroids. If a learned metric is loaded,
-        // refine 5 Lloyd iterations on CPU with the organ's distance.
-        var palette = tile.palette
-        if let m = refinementMetric {
-            let refined = KMeansLab.run(
-                samples: tile.pixels,
-                seeds: palette,
-                metric: m,
-                maxIterations: 5,
-                shiftTolerance: 1e-5
-            )
-            palette = refined.centroids
+    /// Blue-noise dither for all frames. Runs on GPU when available (operational
+    /// result); when `benchmarkDither` is set, also runs the CPU path purely to
+    /// log a CPU-vs-GPU comparison. Returns the operational indices.
+    private func ditherBlueNoise(
+        tiles: [OKLabTile],
+        palettes: [[SIMD3<Float>]],
+        thresholds: [[UInt8]]
+    ) -> [[UInt8]] {
+        let frameCount = tiles.count
+
+        func runCPU() -> (result: [[UInt8]], ms: Int) {
+            let start = ContinuousClock().now
+            let out = (0..<frameCount).map { i in
+                Dither.blueNoiseSIMD(tile: tiles[i], centroids: CentroidSet(palettes[i]), thresholds: thresholds[i])
+            }
+            return (out, Self.milliseconds(ContinuousClock().now - start))
         }
-        // The dither always uses the Euclidean OKLab metric (the learned
-        // metric, if any, only steers the refine above). So we take the
-        // vectorised SIMD8 path: build the palette as a struct-of-arrays
-        // `CentroidSet` once, then error-diffuse with an 8-wide
-        // nearest-centroid search. The generic `Dither.errorDiffuse` remains
-        // the scalar parity oracle.
-        let centroids = CentroidSet(palette)
-        let idx: [UInt8]
-        switch method {
-        case .blueNoise where thresholds != nil:
-            idx = Dither.blueNoiseSIMD(
-                tile: tile, centroids: centroids, thresholds: thresholds!
-            )
-        case .errorDiffusion, .blueNoise:
-            idx = Dither.errorDiffuseSIMD(
-                tile: tile, centroids: centroids, kernel: kernel, serpentine: serpentine
-            )
+
+        guard let gpu = blueNoiseGPU else {
+            let cpu = runCPU()
+            Self.logger.notice("[bench] dither blueNoise CPU=\(cpu.ms)ms (no GPU pipeline)")
+            return cpu.result
         }
-        return (palette, idx)
+
+        do {
+            let gpuStart = ContinuousClock().now
+            let gpuResult = try gpu.assignBatch(
+                pixels: tiles.map { $0.pixels }, centroids: palettes, thresholds: thresholds
+            )
+            let gpuMs = Self.milliseconds(ContinuousClock().now - gpuStart)
+            if benchmarkDither {
+                let cpu = runCPU()
+                let ratio = gpuMs > 0 ? Double(cpu.ms) / Double(gpuMs) : 0
+                Self.logger.notice("[bench] dither blueNoise CPU=\(cpu.ms)ms GPU=\(gpuMs)ms (\(String(format: "%.2f", ratio))× CPU/GPU, batched ×\(frameCount))")
+            } else {
+                Self.logger.notice("[bench] dither blueNoise GPU=\(gpuMs)ms (batched ×\(frameCount))")
+            }
+            return gpuResult
+        } catch {
+            Self.logger.error("[bench] blueNoise GPU failed (\(String(describing: error))); CPU fallback")
+            return runCPU().result
+        }
+    }
+
+    /// Extractor centroids, optionally refined 5 Lloyd iterations with a learned
+    /// metric. The dither always uses Euclidean OKLab regardless.
+    private static func refinePalette(tile: OKLabTile, metric: LearnedPSDMetric?) -> [SIMD3<Float>] {
+        guard let m = metric else { return tile.palette }
+        return KMeansLab.run(
+            samples: tile.pixels, seeds: tile.palette, metric: m,
+            maxIterations: 5, shiftTolerance: 1e-5
+        ).centroids
     }
 
     /// Rounded milliseconds from a `Duration`.
