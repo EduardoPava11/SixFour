@@ -44,4 +44,24 @@ enum SFTheme {
     /// which sibling glass shapes share one sampling region and morph into
     /// one another; tune it to roughly the gap between clustered controls.
     static let glassClusterSpacing: CGFloat = 10
+
+    // MARK: Live diversity instrument
+
+    /// Tick count for the shutter diversity gauge — the form's signature 64
+    /// (frames), reused as "how full is the palette's gamut".
+    static let diversityTickCount: Int = 64
+    /// Diameter of the gauge ring (matches the shutter's outer stroke).
+    static let diversityRingDiameter: CGFloat = 84
+    /// Radial tick geometry for the gauge.
+    static let diversityTickLength: CGFloat = 6
+    static let diversityTickWidth: CGFloat = 2
+
+    /// Soften a raw scene colour into a **chrome-legible accent**: blend toward
+    /// white so SF symbols and the gauge ring stay readable on glass over the
+    /// live camera. Hue is preserved; lightness is raised. `towardWhite = 0`
+    /// is the raw colour, `1` is pure white.
+    static func accent(_ c: SIMD3<UInt8>, towardWhite t: Double = 0.45) -> Color {
+        @inline(__always) func lift(_ v: UInt8) -> Double { Double(v) / 255 * (1 - t) + t }
+        return Color(red: lift(c.x), green: lift(c.y), blue: lift(c.z))
+    }
 }

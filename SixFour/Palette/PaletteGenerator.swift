@@ -13,11 +13,12 @@ import os
 ///        * `.blueNoise` — parallel ordered dithering against the STBN3D mask,
 ///          run on the **GPU** (`BlueNoisePalettePipeline`) when available, with
 ///          the CPU path as fallback + benchmark comparison.
-///   3. **Strict per-frame surjectivity rescue** — every frame must use all `K`
-///      colours so it can join a `CompleteVoxelVolume`.
+///   3. **Significance split-fill** — every frame must use all `K` colours AND
+///      every slot must be backed by ≥ `minPopulation` pixels (never a count-1
+///      outlier), so it can join a `SignificantVoxelVolume`.
 ///
 /// One palette behaviour: per-frame. Each of the 64 frames keeps its own
-/// 256-colour palette → the GIF is a complete 64×64×64 voxel volume.
+/// 256-colour palette → the GIF is a complete, all-significant 64×64×64 volume.
 struct PaletteGenerator: Sendable {
 
     static let logger = Logger(subsystem: "com.sixfour.SixFour", category: "palette")
@@ -26,6 +27,10 @@ struct PaletteGenerator: Sendable {
     var serpentine: Bool = false
     /// Which dithering method to apply (user option).
     var ditherMethod: DitherMethod = .errorDiffusion
+    /// Blue-noise temporal residual spectrum: `.spatiotemporal` uses the full
+    /// 3-D mask (decorrelated across frames); `.frozen` reuses one 2-D slice on
+    /// every frame (steady, no temporal noise). Only consulted for `.blueNoise`.
+    var blueNoiseTemporal: BlueNoiseTemporalMode = .spatiotemporal
     /// GPU blue-noise pipeline. When set and `ditherMethod == .blueNoise`, the
     /// dither runs on the GPU; otherwise the CPU path is used.
     var blueNoiseGPU: BlueNoisePalettePipeline? = nil
@@ -48,13 +53,18 @@ struct PaletteGenerator: Sendable {
     struct Output: Sendable {
         let perFramePalettes: [[SIMD3<Float>]]   // T × K
         let frameIndices: [[UInt8]]              // T × H·W indices into that frame's palette
-        let stageAMillis: Int                    // wall-clock for refine + dither + rescue
+        /// T × K significance cells (mean, per-axis σ, population, provenance)
+        /// — the per-slot OKLab ranges. After split-fill every slot is
+        /// significant (count ≥ minPopulation); the GIFRenderer turns these
+        /// into a `SignificantVoxelVolume`.
+        let perFrameCells: [[SixFourSignificantCell]]
+        let stageAMillis: Int                    // wall-clock for refine + dither + split-fill
         /// Human-readable dither summary for the GIF metadata comment,
         /// e.g. "blueNoise/GPU 4ms" or "errorDiffusion/CPU 33ms".
         let ditherSummary: String
     }
 
-    /// Refine + dither + per-frame surjectivity rescue for every tile.
+    /// Refine + dither + significance split-fill for every tile.
     func generate(tiles: [OKLabTile]) async -> Output {
         precondition(!tiles.isEmpty, "Need at least one frame")
         let t0 = ContinuousClock().now
@@ -83,8 +93,19 @@ struct PaletteGenerator: Sendable {
         var ditherSummary: String
         let ditherStart = ContinuousClock().now
         if ditherMethod == .blueNoise, let mask {
-            let thresholds = (0..<frameCount).map { Array(mask[($0 * perFrame)..<(($0 + 1) * perFrame)]) }
+            // Spatiotemporal: each frame gets its own 3-D mask slice (residual
+            // decorrelated in time). Frozen: reuse slice 0 on every frame
+            // (residual zero-in-time — steady pattern).
+            let thresholds: [[UInt8]]
+            switch blueNoiseTemporal {
+            case .frozen:
+                let slice0 = Array(mask[0..<perFrame])
+                thresholds = Array(repeating: slice0, count: frameCount)
+            case .spatiotemporal:
+                thresholds = (0..<frameCount).map { Array(mask[($0 * perFrame)..<(($0 + 1) * perFrame)]) }
+            }
             (indices, ditherSummary) = ditherBlueNoise(tiles: tiles, palettes: palettes, thresholds: thresholds)
+            ditherSummary += " \(blueNoiseTemporal.rawValue)"
         } else {
             let kernel = self.dither
             let useSerpentine = self.serpentine
@@ -101,23 +122,32 @@ struct PaletteGenerator: Sendable {
             }
             indices = out
             let edMs = Self.milliseconds(ContinuousClock().now - ditherStart)
-            ditherSummary = "errorDiffusion/CPU \(edMs)ms"
+            let scan = useSerpentine ? "serpentine" : "raster"
+            ditherSummary = "errorDiffusion/\(scan)/CPU \(edMs)ms"
             Self.logger.notice("[bench] dither errorDiffusion (CPU SIMD8, ×\(frameCount)): \(edMs)ms")
         }
 
-        // Phase 3: strict per-frame surjectivity rescue — guarantees every frame
-        // uses all K colours (CompleteVoxelVolume), for BOTH dither methods.
+        // Phase 3: significance split-fill — guarantees every frame uses all K
+        // colours (CompleteVoxelVolume) AND that every slot is statistically
+        // significant (≥ minPopulation pixels, in-range donors, never a worst-
+        // fit outlier). Then derive the per-slot cells (OKLab ranges) for the
+        // SignificantVoxelVolume brand. Applies to BOTH dither methods.
+        var frameCells = [[SixFourSignificantCell]](repeating: [], count: frameCount)
         for i in 0..<frameCount {
-            let (pal, idx) = PerFrameSurjectivity.rescue(
+            let (pal, idx) = SignificantSplitFill.rescue(
                 palette: palettes[i], indices: indices[i], pixels: tiles[i].pixels
             )
             palettes[i] = pal
             indices[i] = idx
+            frameCells[i] = SignificantSplitFill.cells(
+                palette: pal, indices: idx, pixels: tiles[i].pixels
+            )
         }
 
         let stageAMs = Self.milliseconds(ContinuousClock().now - t0)
-        Self.logger.info("[palette] refine+dither+rescue (×\(frameCount) frames): \(stageAMs)ms")
+        Self.logger.info("[palette] refine+dither+split-fill (×\(frameCount) frames): \(stageAMs)ms")
         return Output(perFramePalettes: palettes, frameIndices: indices,
+                      perFrameCells: frameCells,
                       stageAMillis: stageAMs, ditherSummary: ditherSummary)
     }
 

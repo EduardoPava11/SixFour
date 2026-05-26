@@ -12,18 +12,18 @@ import os
 ///      (K-means GPU / Wu / Octree), on all 64 tiles after the burst is done
 ///      (per the no-fallback / device-stability fix; folding GPU work into
 ///      `submitAsync` caused frame drops).
-///   3. `PaletteGenerator.generate(tiles)` — CPU refine + dither + strict
-///      per-frame surjectivity rescue (every frame ends up using all 256
-///      colours → a complete 64×64×64 voxel volume).
+///   3. `PaletteGenerator.generate(tiles)` — CPU refine + dither + significance
+///      split-fill (every frame uses all 256 colours AND every slot is backed
+///      by ≥ minPopulation pixels → a complete, all-significant 64×64×64 volume).
 ///   4. Convert OKLab → sRGB UInt8.
 ///   5. Encode GIF89a with per-frame Local Color Tables, gated on a
-///      `CompleteVoxelVolume`.
+///      `SignificantVoxelVolume` (which wraps the `CompleteVoxelVolume`).
 struct GIFRenderer {
     static let logger = Logger(subsystem: "com.sixfour.SixFour", category: "renderer")
 
     /// Coarse stage label for the UI's phase banner.
     enum RenderPhase: Sendable, Equatable {
-        case stageA   // per-frame extraction + CPU refine+dither+rescue
+        case stageA   // per-frame extraction + CPU refine+dither+significance split-fill
         case encode   // GIF89a emit + disk write
     }
 
@@ -47,8 +47,10 @@ struct GIFRenderer {
         let perFrameStatistics: [ClusterStatistics]
     }
 
-    let composition: Composition
-    let store: GeneStore
+    /// The residual-shaping sampler configuration (method · kernel · serpentine
+    /// · temporal), assembled from `AppSettings`. The only render-recipe input —
+    /// the extractor is fixed at Wu+KM.
+    let dither: DitherConfig
     let engines: PaletteEngines
     /// When true, also run a uniform-stride extraction to log + stamp a Wu+KM
     /// vs uniform seed MSE comparison (one extra full extraction per capture).
@@ -56,9 +58,8 @@ struct GIFRenderer {
     /// quality delta is known.
     var benchmarkSeed: Bool = true
 
-    init(composition: Composition, store: GeneStore, engines: PaletteEngines) {
-        self.composition = composition
-        self.store = store
+    init(dither: DitherConfig, engines: PaletteEngines) {
+        self.dither = dither
         self.engines = engines
     }
 
@@ -76,12 +77,6 @@ struct GIFRenderer {
     ) async throws -> Report {
         precondition(!tiles.isEmpty)
 
-        // Resolve optional learned metric organ.
-        var refinementMetric: LearnedPSDMetric? = nil
-        if let hash = composition.metric, let mo = await store.loadMetric(named: hash) {
-            refinementMetric = mo.metric
-        }
-
         onPhase?(.stageA)
         // Per-frame palette extraction (Wu-initialized k-means). Returns
         // `[ClusterStatistics]` (one per tile) carrying per-cluster (μ, Σ,
@@ -89,7 +84,8 @@ struct GIFRenderer {
         // back into each OKLabTile.palette for the downstream Dither + encoder;
         // the rich statistics flow through Report.perFrameStatistics for the
         // CaptureBundle / editing tools.
-        let extractor = composition.makeExtractor(engines: engines)
+        // The one extraction algorithm: Wu-initialized k-means (Celebi 2011).
+        let extractor = KMeansExtractor(pipeline: engines.kMeans)
         let perFrameStats = try extractor.extractBatch(tiles: tiles, K: SixFourShape.K)
         let tilesWithPalettes: [OKLabTile] = zip(tiles, perFrameStats).map { tile, stats in
             OKLabTile(
@@ -138,8 +134,10 @@ struct GIFRenderer {
         }
 
         var generator = PaletteGenerator()
-        generator.refinementMetric = refinementMetric
-        generator.ditherMethod = composition.ditherMethod
+        generator.ditherMethod = dither.method
+        generator.dither = dither.kernel.kernel
+        generator.serpentine = dither.serpentine
+        generator.blueNoiseTemporal = dither.temporal
         generator.blueNoiseGPU = engines.blueNoise
 
         let output = await generator.generate(tiles: tilesWithPalettes)
@@ -151,13 +149,31 @@ struct GIFRenderer {
         let srgbPalettes: [[SIMD3<UInt8>]] = output.perFramePalettes.map { palette in
             palette.map { ColorScience.okLabToSRGB8(OKLab($0)) }
         }
-        // Completeness gate: the per-frame surjectivity rescue in
-        // PaletteGenerator guarantees this succeeds. If it ever returns
-        // nil, an empty-slot GIF was about to ship — fail loud, never
-        // silently emit an incomplete voxel volume.
+        // Completeness gate: the split-fill in PaletteGenerator guarantees this
+        // succeeds. If it ever returns nil, an empty-slot GIF was about to ship
+        // — fail loud, never silently emit an incomplete voxel volume.
         guard let volume = CompleteVoxelVolume(checkingFrames: output.frameIndices) else {
             throw GIFEncoderError.incompleteVoxelVolume
         }
+        // Significance gate: every per-frame palette slot must be statistically
+        // significant — backed by ≥ SixFourSignificance.minPopulation pixels,
+        // never a donated outlier — with mass conservation. The split-fill
+        // guarantees this on the SixFour shape (4096 ≥ 2·256); if the brand
+        // ever rejects, fail loud rather than ship an outlier-backed palette.
+        guard let significant = SignificantVoxelVolume(complete: volume, cells: output.perFrameCells) else {
+            throw GIFEncoderError.insignificantVoxelVolume
+        }
+        let provenanceSummary = Self.significanceSummary(significant.cells)
+        // The chosen residual-shaping sampler, so the artifact records exactly
+        // which estimator + knobs produced it (read with `exiftool file.gif`).
+        let samplerSummary: String = {
+            switch dither.method {
+            case .errorDiffusion:
+                return "diffusion/\(dither.kernel.rawValue)/\(dither.serpentine ? "serpentine" : "raster")"
+            case .blueNoise:
+                return "blueNoise/\(dither.temporal.rawValue)"
+            }
+        }()
         // Stamp the render + benchmark metadata into the GIF as a Comment
         // Extension so an AirDropped file carries its own stats (read with
         // `exiftool file.gif` or `strings`) — no copy-pasting Console.
@@ -169,7 +185,7 @@ struct GIFRenderer {
             ditherSummary: output.ditherSummary,
             stageAMillis: output.stageAMillis,
             seedComparison: seedComparison
-        )
+        ) + "\nsampler=\(samplerSummary)\nsignificance=\(provenanceSummary)"
         try encoder.encode(
             volume: volume,
             perFramePalettes: srgbPalettes,
@@ -193,6 +209,19 @@ struct GIFRenderer {
         )
     }
 
+    /// One-line significance accounting for the GIF metadata: how many of the
+    /// T·K palette slots are statistically significant (backed by
+    /// ≥ minPopulation pixels) and the minimum slot population observed across
+    /// the burst. On a real capture this reads `significant=16384/16384
+    /// minPop=…`; a value below the total would mean an outlier-backed slot
+    /// slipped past (it cannot, given the brand gated the encode).
+    private static func significanceSummary(_ cells: [[SixFourSignificantCell]]) -> String {
+        let total = cells.reduce(0) { $0 + $1.count }
+        let significant = cells.reduce(0) { $0 + $1.filter { $0.isSignificant }.count }
+        let minPop = cells.flatMap { $0 }.map { $0.count }.min() ?? 0
+        return "significant=\(significant)/\(total) minPop=\(minPop) nMin=\(SixFourSignificance.minPopulation)"
+    }
+
     /// Build the GIF metadata comment: the render + benchmark stats, embedded so
     /// the file carries its own numbers (no copy-pasting Console after AirDrop).
     /// Read it back with `exiftool file.gif` (Comment tag) or `strings file.gif`.
@@ -213,7 +242,7 @@ struct GIFRenderer {
         SixFour \(side)×\(side)×\(tiles.count) GIF
         labCoverage=\(coverage.occupiedBins)/4096 bins (\(String(format: "%.1f%%", coverage.fraction * 100)) of OKLab 16³)
         extractor=Wu+KM  dither=\(ditherSummary)  meanMSE=\(String(format: "%.6f", meanMSE))
-        wuSeedMs=\(wuSeedMillis)  stageA(refine+dither+rescue)Ms=\(stageAMillis)  frames=\(tiles.count)  K=\(SixFourShape.K)\(seedLine)
+        wuSeedMs=\(wuSeedMillis)  stageA(refine+dither+splitFill)Ms=\(stageAMillis)  frames=\(tiles.count)  K=\(SixFourShape.K)\(seedLine)
         rendered=\(ts)
         """
     }

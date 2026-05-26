@@ -8,6 +8,12 @@ enum GIFEncoderError: Error {
     /// The per-frame index volume failed the `CompleteVoxelVolume` check:
     /// wrong frame count, a short frame, or a frame missing a palette index.
     case incompleteVoxelVolume
+    /// A per-frame palette slot was not statistically significant (backed by
+    /// fewer than `SixFourSignificance.minPopulation` pixels), or the cells
+    /// failed mass conservation — the `SignificantVoxelVolume` brand rejected
+    /// it. Unreachable on the SixFour shape (4096 ≥ 2·256); fail loud rather
+    /// than ship an outlier-backed palette.
+    case insignificantVoxelVolume
     case writeFailed(underlying: Error)
 }
 

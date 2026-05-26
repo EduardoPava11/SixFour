@@ -14,8 +14,9 @@ import simd
 /// in the value-witness table; the generic specialisation shaves that
 /// to ~5 ns/call.
 /// User-selectable dithering method — a creative option alongside the
-/// extraction algorithm. Both methods feed `PerFrameSurjectivity.rescue`,
-/// so either way the output is a complete 64³ voxel volume (no empty slots).
+/// extraction algorithm. Both methods feed `SignificantSplitFill.rescue`, so
+/// either way the output is a complete 64³ voxel volume in which every slot is
+/// significant (no empty slots, no count-1 outliers).
 ///
 ///   * `.errorDiffusion` — Floyd–Steinberg (default look). Sequential
 ///     (each pixel depends on diffused error from earlier pixels), so it
@@ -55,6 +56,88 @@ enum DitherMethod: String, Codable, Sendable, Hashable, CaseIterable {
             return "Clean gradients, steady across all 64 frames (3-D blue-noise), GPU-fast. Slightly softer on the finest texture."
         }
     }
+}
+
+/// Error-diffusion kernel choice — the residual-spectrum knob for the
+/// Diffusion sampler. The kernel decides which statistical moment the
+/// diffusion preserves:
+///   * Floyd–Steinberg diffuses all 16/16 of the error to neighbours →
+///     preserves the local **mean** (smooth gradients).
+///   * Atkinson diffuses 6/8 and *absorbs* the other 25% → preserves local
+///     **contrast** (crisper, punchier at a small palette).
+enum DitherKernelChoice: String, Codable, Sendable, Hashable, CaseIterable {
+    case floydSteinberg
+    case atkinson
+
+    var label: String {
+        switch self {
+        case .floydSteinberg: return "Floyd–Steinberg"
+        case .atkinson:       return "Atkinson"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .floydSteinberg:
+            return "Diffuses all error to neighbours — preserves the local mean. Smoothest gradients."
+        case .atkinson:
+            return "Absorbs a quarter of the error — preserves local contrast. Crisper, punchier."
+        }
+    }
+
+    /// The concrete tap kernel this choice maps to.
+    var kernel: Dither.ErrorKernel {
+        switch self {
+        case .floydSteinberg: return .floydSteinberg
+        case .atkinson:       return .atkinson
+        }
+    }
+}
+
+/// Temporal residual spectrum for the Blue-noise sampler across the 64 frames.
+/// The STBN3D mask is decorrelated in time; this chooses whether to use that
+/// time variation or freeze a single 2-D slice for every frame.
+enum BlueNoiseTemporalMode: String, Codable, Sendable, Hashable, CaseIterable {
+    /// Full 3-D mask: the dither pattern is decorrelated across frames →
+    /// residual is white-in-time (no frozen texture; a faint shimmer).
+    case spatiotemporal
+    /// One 2-D slice reused every frame → residual is zero-in-time (perfectly
+    /// steady, but the dither texture sits still).
+    case frozen
+
+    var label: String {
+        switch self {
+        case .spatiotemporal: return "Spatiotemporal"
+        case .frozen:         return "Frozen"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .spatiotemporal:
+            return "3-D blue noise — the dot pattern is decorrelated across all 64 frames. No frozen texture; a faint shimmer."
+        case .frozen:
+            return "One 2-D pattern reused every frame — perfectly steady in time, but the dither texture stays put."
+        }
+    }
+}
+
+/// The full residual-shaping sampler configuration. This is the entire
+/// creative-but-statistical surface of the pipeline — read from `AppSettings`
+/// and threaded into `PaletteGenerator`/`GIFRenderer`. `.default` reproduces
+/// the shipping look (Floyd–Steinberg, raster, spatiotemporal blue noise).
+struct DitherConfig: Sendable, Hashable {
+    var method: DitherMethod
+    var kernel: DitherKernelChoice
+    var serpentine: Bool
+    var temporal: BlueNoiseTemporalMode
+
+    static let `default` = DitherConfig(
+        method: .errorDiffusion,
+        kernel: .floydSteinberg,
+        serpentine: false,
+        temporal: .spatiotemporal
+    )
 }
 
 enum Dither {
@@ -202,8 +285,8 @@ enum Dither {
     /// possible (Phase D). `thresholds[i] ∈ 0...255` is this frame's slice of
     /// the tiled STBN3D mask (`STBN3DMaskLoader.loadTiled`).
     ///
-    /// Surjectivity is NOT guaranteed here (a flat frame may touch only a few
-    /// centroids); the caller MUST follow with `PerFrameSurjectivity.rescue`,
+    /// Significance is NOT guaranteed here (a flat frame may touch only a few
+    /// centroids); the caller MUST follow with `SignificantSplitFill.rescue`,
     /// exactly as the error-diffusion path does.
     static func blueNoiseSIMD(
         tile: OKLabTile,

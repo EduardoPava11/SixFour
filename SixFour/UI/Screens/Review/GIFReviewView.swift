@@ -2,16 +2,15 @@ import SwiftUI
 import UIKit
 import ImageIO
 
-/// Post-capture review. Single-render layout:
+/// Post-capture review — the output side of the I/O appliance. Layout:
 ///   [ Looping GIF ]
 ///   [ PaletteStripView ]
 ///   [ StatsFooterView ]
-///   [ Optional fallback banner ]
-///   [ Save · Share · Retake ]
+///   [ Share · Retake ]
 ///
-/// To compare algorithms (K-means / Wu / Octree) on the same scene, use the
-/// in-place re-extract path (`CaptureViewModel.reExtract`) — the cached burst
-/// is re-quantized without re-shooting.
+/// The dither sampler is configured in Settings before capture (it is a
+/// statistical property of the form, not a per-shot review choice), so there
+/// is no re-render control here — Retake re-shoots, Share exports the GIF.
 struct GIFReviewView: View {
     let vm: CaptureViewModel
 
@@ -33,70 +32,13 @@ struct GIFReviewView: View {
             RenderPanel(output: primary)
                 .padding(.horizontal)
             Spacer()
-            // Edit affordance: re-extract from the cached bundle
-            // using a different algorithm family. No re-capture
-            // needed; the raw OKLab tiles are kept in
-            // `vm.currentBundle`. Disabled during in-flight
-            // re-extraction so the user can't queue multiple.
-            ditherEditPicker(primary: primary)
             actionRow(primary: primary)
         }
         .padding(.vertical)
     }
 
-    /// Segmented picker bound to the current output's dither method.
-    /// On change → `vm.reExtract` re-renders the cached `currentBundle.tiles`
-    /// with the new dither (no re-capture). Lets the user A/B the two looks
-    /// on the same scene; the extraction algorithm is fixed at Wu+KM.
-    @ViewBuilder
-    private func ditherEditPicker(primary: CaptureOutput) -> some View {
-        VStack(spacing: 4) {
-            Text("Edit · Dither")
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.6))
-            Picker("Re-render dither", selection: Binding(
-                get: { primary.ditherMethod },
-                set: { newMethod in
-                    Task { await vm.reExtract(with: newMethod) }
-                }
-            )) {
-                ForEach(DitherMethod.allCases, id: \.self) { method in
-                    Text(method.label).tag(method)
-                }
-            }
-            .pickerStyle(.segmented)
-            .disabled(isReRendering)
-            .frame(maxWidth: 320)
-        }
-        .padding(.horizontal)
-    }
-
-    /// Whether a re-extraction is currently in flight. We watch
-    /// `vm.phase` because `reExtract` uses the same render-stage
-    /// enum as the initial capture path.
-    private var isReRendering: Bool {
-        switch vm.phase {
-        case .renderingStageA, .renderingEncode: return true
-        default: return false
-        }
-    }
-
     private func actionRow(primary: CaptureOutput) -> some View {
         HStack(spacing: 14) {
-            // Undo button — appears whenever the user has at least
-            // one edit on top of the initial render. Disabled when
-            // vm.canUndo is false; tap restores the previous render.
-            Button {
-                vm.undo()
-            } label: {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.callout.weight(.semibold))
-            }
-            .buttonStyle(.glass)
-            .tint(.white)
-            .disabled(!vm.canUndo || isReRendering)
-            .accessibilityLabel("Undo edit (\(vm.editCount - 1) edit\(vm.editCount == 2 ? "" : "s") in history)")
-
             ShareLink(item: primary.gifURL) {
                 Label("Share", systemImage: "square.and.arrow.up")
             }

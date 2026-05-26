@@ -159,16 +159,12 @@ enum ClusterStatisticsOps {
     /// (Fahmy App E.) Table covers the 5 α values the editing UI
     /// will expose; interpolation would be needed for other α.
     enum ChiSquare3 {
-        /// Right-tail critical values: P(χ²₃ > value) = α.
+        /// Right-tail critical values: P(χ²₃ > value) = α. Single-sourced from
+        /// the spec (`SixFourSignificance.chiSquare3Critical`, generated from
+        /// `SixFour.Spec.Significance`) so the table cannot drift between the
+        /// app, the Haskell oracle, and the Python trainer.
         static func critical(alpha α: Float) -> Float {
-            switch α {
-            case 0.001: return 16.266
-            case 0.01:  return 11.345
-            case 0.025: return 9.348
-            case 0.05:  return 7.815
-            case 0.10:  return 6.251
-            default:    return 7.815  // safe default = α=0.05
-            }
+            Float(SixFourSignificance.chiSquare3Critical(alpha: Double(α)))
         }
     }
 

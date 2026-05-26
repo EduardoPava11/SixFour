@@ -25,7 +25,7 @@ import           System.Environment (getArgs)
 import           Data.Maybe (fromMaybe)
 
 import SixFour.Codegen.Swift
-  ( emitStageContract, emitNetContract, emitHybridContract )
+  ( emitStageContract, emitNetContract, emitHybridContract, emitSignificanceContract )
 import SixFour.Codegen.MLX   (emitStagesPy,      emitNetShapePy)
 import SixFour.Spec.Hybrid.STBN3D (Mask3D(..), generateSTBN3D)
 
@@ -40,6 +40,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "StageContract.swift")  emitStageContract
   writeUtf8 (swiftOutDir   </> "NetContract.swift")    emitNetContract
   writeUtf8 (swiftOutDir   </> "HybridContract.swift") emitHybridContract
+  writeUtf8 (swiftOutDir   </> "SignificanceContract.swift") emitSignificanceContract
   writeUtf8 (mlxOutDir     </> "stages.py")            emitStagesPy
   writeUtf8 (mlxOutDir     </> "net_shape.py")         emitNetShapePy
 
@@ -57,7 +58,7 @@ main = do
   let Mask3D maskBytes = generateSTBN3D @8 @8 @8
   writeBinary (resourceOutDir </> "stbn3d-8.bin") maskBytes
 
-  putStrLn "spec-codegen: wrote 6 files + 1 resource."
+  putStrLn "spec-codegen: wrote 7 files + 1 resource."
   putStrLn $ "  swift   : " <> swiftOutDir
   putStrLn $ "  mlx     : " <> mlxOutDir
   putStrLn $ "  resource: " <> resourceOutDir

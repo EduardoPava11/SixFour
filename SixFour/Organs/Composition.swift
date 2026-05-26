@@ -16,12 +16,6 @@ struct Composition: Codable, Sendable, Identifiable, Hashable {
     /// k-means). Default `.errorDiffusion` matches the original look.
     let ditherMethod: DitherMethod
 
-    /// The one extraction algorithm: Wu-initialized k-means (Celebi 2011's
-    /// near-optimal "Wu+KM"). Centralised here so callers don't construct it.
-    func makeExtractor(engines: PaletteEngines) -> any PaletteExtractor {
-        KMeansExtractor(pipeline: engines.kMeans)
-    }
-
     static let baselineName = "Baseline"
     var isBaseline: Bool { name == Composition.baselineName }
 

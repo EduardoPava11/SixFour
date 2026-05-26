@@ -21,6 +21,9 @@ import Observation
 final class AppSettings {
     private enum Key {
         static let ditherMethod = "sixfour.ditherMethod.v1"
+        static let ditherKernel = "sixfour.ditherKernel.v1"
+        static let ditherSerpentine = "sixfour.ditherSerpentine.v1"
+        static let blueNoiseTemporal = "sixfour.blueNoiseTemporal.v1"
         // New seams (no UI yet; default to today's behavior).
         static let openInPixelatedPreview = "sixfour.openInPixelatedPreview.v1"
         static let autoSaveToPhotos       = "sixfour.autoSaveToPhotos.v1"
@@ -28,9 +31,40 @@ final class AppSettings {
 
     @ObservationIgnored private let defaults: UserDefaults
 
-    /// Dither method restored on launch / persisted on change.
+    /// Dither sampler (the residual-shaping estimator) restored on launch /
+    /// persisted on change. This is the only creative-but-statistical control;
+    /// it lives in Settings, not on the capture screen.
     var defaultDitherMethod: DitherMethod {
         didSet { defaults.set(defaultDitherMethod.rawValue, forKey: Key.ditherMethod) }
+    }
+
+    /// Error-diffusion kernel (mean- vs contrast-preserving). Used only when
+    /// `defaultDitherMethod == .errorDiffusion`.
+    var ditherKernel: DitherKernelChoice {
+        didSet { defaults.set(ditherKernel.rawValue, forKey: Key.ditherKernel) }
+    }
+
+    /// Serpentine (boustrophedon) error-diffusion scan — whitens the
+    /// scan-direction anisotropy. Used only when `.errorDiffusion`.
+    var ditherSerpentine: Bool {
+        didSet { defaults.set(ditherSerpentine, forKey: Key.ditherSerpentine) }
+    }
+
+    /// Blue-noise temporal residual spectrum (3-D spatiotemporal vs frozen
+    /// 2-D). Used only when `defaultDitherMethod == .blueNoise`.
+    var blueNoiseTemporal: BlueNoiseTemporalMode {
+        didSet { defaults.set(blueNoiseTemporal.rawValue, forKey: Key.blueNoiseTemporal) }
+    }
+
+    /// The full sampler configuration assembled from the persisted fields —
+    /// the single value the render pipeline consumes.
+    var ditherConfig: DitherConfig {
+        DitherConfig(
+            method: defaultDitherMethod,
+            kernel: ditherKernel,
+            serpentine: ditherSerpentine,
+            temporal: blueNoiseTemporal
+        )
     }
 
     /// Whether the camera opens in the 64×64 pixelated preview rather than
@@ -51,6 +85,14 @@ final class AppSettings {
         self.defaultDitherMethod = DitherMethod(
             rawValue: defaults.string(forKey: Key.ditherMethod) ?? ""
         ) ?? .errorDiffusion
+        self.ditherKernel = DitherKernelChoice(
+            rawValue: defaults.string(forKey: Key.ditherKernel) ?? ""
+        ) ?? .floydSteinberg
+        // Absent key → false = raster (today's default).
+        self.ditherSerpentine = defaults.bool(forKey: Key.ditherSerpentine)
+        self.blueNoiseTemporal = BlueNoiseTemporalMode(
+            rawValue: defaults.string(forKey: Key.blueNoiseTemporal) ?? ""
+        ) ?? .spatiotemporal
         self.openInPixelatedPreview = defaults.bool(forKey: Key.openInPixelatedPreview)
         self.autoSaveToPhotos = defaults.bool(forKey: Key.autoSaveToPhotos)
     }

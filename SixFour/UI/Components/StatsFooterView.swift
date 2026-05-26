@@ -89,11 +89,12 @@ struct StatsFooterView: View {
     }
 
     private var witnessText: String {
-        // Every emitted GIF is a CompleteVoxelVolume — each of the 64
-        // frames uses all 256 palette slots (strict per-frame
-        // surjectivity, enforced by PerFrameSurjectivity + the encoder's
-        // `CompleteVoxelVolume` gate). An incomplete volume can't reach
-        // here, so the witness is always clean.
+        // Every emitted GIF is a SignificantVoxelVolume: each of the 64 frames
+        // uses all 256 palette slots AND every slot is statistically
+        // significant — backed by ≥ minPopulation pixels (never a donated
+        // outlier), enforced by SignificantSplitFill + the encoder's
+        // `SignificantVoxelVolume` gate. A volume that fails either invariant
+        // can't reach here, so the witness is always clean.
         "✓"
     }
 

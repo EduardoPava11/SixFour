@@ -34,9 +34,9 @@ final class BlueNoisePalettePipeline: @unchecked Sendable {
 
     /// Assign each pixel to a palette index via blue-noise ordered dithering.
     /// `thresholds[i] ∈ 0...255` is this frame's STBN3D mask slice. Returns one
-    /// `UInt8` index per pixel. Surjectivity is NOT guaranteed here — the
-    /// caller must follow with `PerFrameSurjectivity.rescue`, exactly as the
-    /// CPU path does.
+    /// `UInt8` index per pixel. Significance is NOT guaranteed here — the
+    /// caller must follow with `SignificantSplitFill.rescue`, exactly as the
+    /// CPU path does, so every slot ends up backed by ≥ minPopulation pixels.
     func assign(
         pixels: [SIMD3<Float>],
         centroids: [SIMD3<Float>],

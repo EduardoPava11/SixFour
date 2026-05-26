@@ -10,17 +10,16 @@ struct CaptureView: View {
     enum PreviewMode { case fullRes, pixelated }
 
     @State private var vm = CaptureViewModel()
-    @State private var showCompose = false
+    @State private var showSettings = false
     @State private var reticle: ReticleHit? = nil
     @State private var previewMode: PreviewMode = .fullRes
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         rootContent
             .task { await vm.bootstrap() }
-            .sheet(isPresented: $showCompose) {
-                if let store = vm.store {
-                    ComposeView(store: store, composition: $vm.composition)
-                }
+            .sheet(isPresented: $showSettings) {
+                SettingsView(settings: vm.settings)
             }
             .fullScreenCover(item: Binding(
                 get: { vm.primaryOutput },
@@ -159,40 +158,49 @@ struct CaptureView: View {
                         : "camera",
                     accessibilityLabel: previewMode == .fullRes
                         ? "Switch to 64×64 pixelated preview"
-                        : "Switch to full-resolution preview"
+                        : "Switch to full-resolution preview",
+                    tint: vm.sceneTint
                 ) {
                     withAnimation(.snappy) {
                         previewMode = (previewMode == .fullRes) ? .pixelated : .fullRes
                     }
                 }
                 GlassIconButton(
-                    systemImage: "slider.horizontal.3",
-                    accessibilityLabel: "Open advanced composition settings"
+                    systemImage: "gearshape",
+                    accessibilityLabel: "Open settings",
+                    tint: vm.sceneTint
                 ) {
-                    showCompose = true
+                    showSettings = true
                 }
             }
         }
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 14) {
-            // One creative control: the dither method. The extraction
-            // algorithm is fixed at Wu-initialized k-means (the research
-            // quality leader), so every capture is the best-quality 64³ voxel
-            // volume; the user's choice is purely the dither *look*. Both
-            // methods stay complete (no empty slots); .blueNoise is the
-            // GPU-eligible path. Persists via CaptureViewModel.ditherMethodBinding.
-            DitherSelector(selection: vm.ditherMethodBinding)
-                .frame(maxWidth: 320)
-
-            HStack {
-                Spacer()
+        // The capture screen is holy: the shutter, ringed by the live diversity
+        // gauge, with its readout. The shutter does double duty as the
+        // instrument that shows how much colour the camera currently sees.
+        VStack(spacing: 10) {
+            ZStack {
+                DiversityRing(gauge: vm.sceneGauge, tint: vm.sceneTint, reduceMotion: reduceMotion)
+                    .allowsHitTesting(false)
                 shutterButton
-                Spacer()
             }
+            diversityReadout
         }
         .padding(.bottom, 16)
+    }
+
+    /// The explicit "show the diversity" number — distinct colour-bins the
+    /// camera sees right now, in the machine voice. Surfaced to VoiceOver via
+    /// the shutter's `accessibilityValue`, so it's hidden here.
+    private var diversityReadout: some View {
+        Text("◇ \(vm.scene.occupiedBins) colors")
+            .font(SFTheme.captionMono)
+            .foregroundStyle(SFTheme.dimText)
+            .monospacedDigit()
+            .contentTransition(.numericText())
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder
@@ -217,7 +225,35 @@ struct CaptureView: View {
         }
         .disabled(isBusy || vm.phase == .configuring || vm.phase == .unauthorized)
         .accessibilityLabel("Capture 64-frame burst")
+        .accessibilityValue("Scene diversity \(Int((vm.sceneGauge * 100).rounded())) percent")
         .accessibilityHint("Holds focus and exposure, captures sixty-four frames at twenty fps")
+    }
+
+    /// The live diversity gauge that rings the shutter: 64 ticks (the form's
+    /// frame count), lit clockwise from the top in proportion to how much
+    /// distinct colour the camera currently sees, glowing the scene's dominant
+    /// hue. Decorative — never captures taps.
+    private struct DiversityRing: View {
+        let gauge: Float      // 0…1
+        let tint: Color
+        let reduceMotion: Bool
+
+        var body: some View {
+            let total = SFTheme.diversityTickCount
+            let lit = max(0, min(total, Int((gauge * Float(total)).rounded())))
+            let radius = SFTheme.diversityRingDiameter / 2 + SFTheme.diversityTickLength / 2 + 4
+            ZStack {
+                ForEach(0..<total, id: \.self) { i in
+                    Capsule()
+                        .fill(i < lit ? tint : SFTheme.hairline)
+                        .frame(width: SFTheme.diversityTickWidth, height: SFTheme.diversityTickLength)
+                        .offset(y: -radius)
+                        .rotationEffect(.degrees(Double(i) / Double(total) * 360))
+                }
+            }
+            .animation(reduceMotion ? nil : .snappy, value: lit)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: tint)
+        }
     }
 
     private var isCurrentlyBusy: Bool {

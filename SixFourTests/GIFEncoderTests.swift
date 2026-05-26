@@ -129,7 +129,7 @@ struct GIFEncoderTests {
     @Test func rescueFillsAllSlotsWhenDitherCollapsedToOne() {
         // Pathological dither output: every pixel landed on slot 0.
         let indices = [UInt8](repeating: 0, count: SixFourShape.pixelsPerFrame)
-        let (_, fixed) = PerFrameSurjectivity.rescue(
+        let (_, fixed) = SignificantSplitFill.rescue(
             palette: distinctPalette(), indices: indices, pixels: gradientPixels()
         )
         #expect(Set(fixed).count == SixFourShape.K, "rescue must use all K slots")
@@ -139,7 +139,7 @@ struct GIFEncoderTests {
 
     @Test func rescueIsNoOpOnAnAlreadySurjectiveFrame() {
         let indices = surjectiveFrames()[0]
-        let (_, fixed) = PerFrameSurjectivity.rescue(
+        let (_, fixed) = SignificantSplitFill.rescue(
             palette: distinctPalette(), indices: indices, pixels: gradientPixels()
         )
         #expect(fixed == indices, "already-surjective frame must be returned unchanged")
@@ -151,7 +151,7 @@ struct GIFEncoderTests {
         let flat = [SIMD3<Float>](repeating: SIMD3<Float>(0.5, 0, 0),
                                   count: SixFourShape.pixelsPerFrame)
         let indices = [UInt8](repeating: 0, count: SixFourShape.pixelsPerFrame)
-        let (_, fixed) = PerFrameSurjectivity.rescue(
+        let (_, fixed) = SignificantSplitFill.rescue(
             palette: distinctPalette(), indices: indices, pixels: flat
         )
         #expect(Set(fixed).count == SixFourShape.K)

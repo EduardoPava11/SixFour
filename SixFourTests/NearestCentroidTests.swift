@@ -138,7 +138,7 @@ struct NearestCentroidTests {
         let thresholds = (0..<(64 * 64)).map { _ in UInt8(rng.f01() * 255) }
 
         let dithered = Dither.blueNoiseSIMD(tile: tile, centroids: CentroidSet(palette), thresholds: thresholds)
-        let (_, fixed) = PerFrameSurjectivity.rescue(palette: palette, indices: dithered, pixels: flat)
+        let (_, fixed) = SignificantSplitFill.rescue(palette: palette, indices: dithered, pixels: flat)
         #expect(Set(fixed).count == SixFourShape.K)
         #expect(CompleteVoxelVolume(checkingFrames: Array(repeating: fixed, count: SixFourShape.T)) != nil)
     }

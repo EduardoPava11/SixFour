@@ -28,9 +28,39 @@ def assert_surjective(indices: np.ndarray) -> None:
             f"Surjective256 violated: {seen.size} unique values, range [{int(seen.min())}, {int(seen.max())}]"
         )
 
+# Per-frame palette significance (SixFour.Spec.Significance).
+# Significance is POPULATION: a palette slot is significant iff backed by
+# >= N_MIN pixels — never a donated single-pixel outlier. Each slot owns
+# the OKLab range  mean +/- Z_ALPHA * sigma  (the "range for each bin").
+Z_ALPHA = 1.959963984540054
+N_MIN = 2
+# chi^2_3 right-tail critical values P(chi2_3 > v) = alpha.
+CHI2_3 = {
+    0.001: 16.266,
+    0.01: 11.345,
+    0.025: 9.348,
+    0.05: 7.815,
+    0.10: 6.251,
+}
+
+def assert_significant(counts: np.ndarray) -> None:
+    """Raise unless every one of the K palette slots is backed by >= N_MIN
+    pixels (no outlier) and the counts conserve mass (sum == PIXELS_PER_FRAME).
+    `counts` is the per-slot population for a single frame."""
+    c = np.asarray(counts).reshape(-1)
+    if c.size != K:
+        raise ValueError(f"Significance: expected {K} slot counts, got {c.size}")
+    if int(c.min()) < N_MIN:
+        raise ValueError(f"Significance violated: a slot has {int(c.min())} < N_MIN={N_MIN} pixels (outlier)")
+    if int(c.sum()) != PIXELS_PER_FRAME:
+        raise ValueError(f"Mass not conserved: sum(counts)={int(c.sum())} != {PIXELS_PER_FRAME}")
+
 def assert_constants_match() -> None:
     """Sanity-check: T*H*W == PIXELS_PER_GIF, etc."""
     assert T * H * W == PIXELS_PER_GIF, (T, H, W, PIXELS_PER_GIF)
     assert H * W     == PIXELS_PER_FRAME
     assert T * K     == CANDIDATES_AFTER_STAGE_A
     assert M1.shape == (3, 3) and M2.shape == (3, 3)
+    # The all-significant guarantee is feasible iff a frame has room for
+    # N_MIN pixels in each of the K slots.
+    assert N_MIN * K <= PIXELS_PER_FRAME, (N_MIN, K, PIXELS_PER_FRAME)

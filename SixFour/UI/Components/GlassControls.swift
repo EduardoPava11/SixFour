@@ -27,13 +27,17 @@ struct GlassIconButton: View {
     let systemImage: String
     let accessibilityLabel: String
     var accessibilityHint: String? = nil
+    /// Symbol tint. Defaults to white; the capture screen passes the live
+    /// scene hue (`SFTheme.accent`) so the chrome reflects what the camera
+    /// sees — iOS 26 Liquid Glass "colour informed by surrounding content".
+    var tint: Color = .white
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.title2)
-                .foregroundStyle(.white)
+                .foregroundStyle(tint)
                 .frame(
                     width: SFTheme.glassIconButtonSize,
                     height: SFTheme.glassIconButtonSize

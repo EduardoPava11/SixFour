@@ -49,14 +49,13 @@ final class CaptureViewModel {
         case idle
         case locking
         case capturing(progress: Double)
-        case renderingStageA              // CPU refine + dither + per-frame surjectivity rescue
+        case renderingStageA              // CPU refine + dither + significance split-fill
         case renderingEncode              // GIF89a emit
         case done
         case failed(String)
     }
 
     var phase: Phase = .configuring
-    var composition: Composition = .classicalBaseline
     var lastTimingSummary: String? = nil
 
     /// Persisted user preferences (default extractor today, plus
@@ -73,6 +72,18 @@ final class CaptureViewModel {
     /// and this downsampled view. Nil until the first frame arrives.
     var previewTile: UIImage?
 
+    /// Live scene readout from the preview — the diversity gauge + dominant
+    /// hue the capture screen reflects. EMA-smoothed (see `ingestSceneReadout`)
+    /// so the gauge and tint glide rather than jitter at 10 fps.
+    private(set) var scene: SceneReadout = .empty
+
+    /// Live diversity ∈ [0,1] for the shutter gauge.
+    var sceneGauge: Float { scene.gauge }
+
+    /// Dominant scene hue, softened for chrome legibility (the buttons + the
+    /// gauge ring take this). Falls back to white at zero diversity.
+    var sceneTint: Color { SFTheme.accent(scene.tint) }
+
     /// In-memory CaptureBundle for the most-recent successful render.
     /// Holds the raw OKLab tiles + per-frame ClusterStatistics from
     /// the extractor that produced the current GIF. Replaced on each
@@ -81,26 +92,14 @@ final class CaptureViewModel {
     /// without re-shooting.
     var currentBundle: CaptureBundle?
 
-    /// Bounded undo stack of render snapshots (see `EditHistory`). Reset on
-    /// each capture, pushed on each `reExtract`, popped by `undo`.
-    private(set) var history = EditHistory()
-
-    /// Editing UI binds these to drive the Undo button + its label.
-    var canUndo: Bool { history.canUndo }
-    var editCount: Int { history.count }
-
     private(set) var session: CaptureSession?
     private(set) var pipeline: MetalPipeline?
-    /// Per-algorithm palette pipelines, created once at bootstrap and handed
-    /// to GIFRenderer; `Composition.makeExtractor` picks the right one.
+    /// Palette pipelines (Wu+KM extractor + GPU blue-noise), created once at
+    /// bootstrap and handed to GIFRenderer.
     private(set) var engines: PaletteEngines?
     private(set) var store: GeneStore?
 
     func bootstrap() async {
-        composition = composition.with(
-            ditherMethod: settings.defaultDitherMethod
-        )
-
         do {
             let authorized = await CaptureSession.requestAuthorization()
             guard authorized else {
@@ -127,8 +126,13 @@ final class CaptureViewModel {
             session.previewPipeline = pipeline
             session.previewCallback = { [weak self] tile in
                 guard let image = Self.makePreviewImage(from: tile) else { return }
+                // Analyse on the Metal completion queue (cheap, ~0.1 ms) so we
+                // don't hop to the main actor twice; publish both together.
+                let readout = LivePreviewAnalysis.analyze(tile)
                 Task { @MainActor [weak self] in
-                    self?.previewTile = image
+                    guard let self else { return }
+                    self.previewTile = image
+                    self.ingestSceneReadout(readout)
                 }
             }
 
@@ -182,7 +186,7 @@ final class CaptureViewModel {
     }
 
     func capture() async {
-        guard let session, let pipeline, let engines, let store else { return }
+        guard let session, let pipeline, let engines else { return }
         Haptics.impact(.medium)
         phase = .locking
         let lockResult = await session.lockExposureAndWhiteBalance(timeoutMs: 400)
@@ -196,12 +200,12 @@ final class CaptureViewModel {
             Self.logger.info("[viewmodel] burst complete: \(result.timing.summary, privacy: .public)")
 
             let tiles = result.tiles
-            let composition = self.composition
+            // The sampler is configured in Settings, read fresh per capture.
+            let dither = settings.ditherConfig
 
             let renderResult = try await renderOnce(
                 tiles: tiles,
-                composition: composition,
-                store: store,
+                dither: dither,
                 engines: engines,
                 summary: result.timing.summary
             )
@@ -217,14 +221,6 @@ final class CaptureViewModel {
                 tiles: tiles,
                 perFrameStatistics: renderResult.perFrameStatistics
             )
-            // New capture → reset history to a single initial entry.
-            // Any previous edits' GIF files leak slightly here (the
-            // OS deletes them on next app launch via Documents
-            // recycling); explicit cleanup not critical at burst-size.
-            history.reset(to: EditHistory.Entry(
-                output: renderResult.output,
-                perFrameStatistics: renderResult.perFrameStatistics
-            ))
             saveBundleAsync()
             phase = .done
             Haptics.notification(.success)
@@ -254,8 +250,7 @@ final class CaptureViewModel {
 
     private func renderOnce(
         tiles: [OKLabTile],
-        composition: Composition,
-        store: GeneStore,
+        dither: DitherConfig,
         engines: PaletteEngines,
         summary: String
     ) async throws -> RenderResult {
@@ -272,7 +267,7 @@ final class CaptureViewModel {
             }
         }
 
-        let renderer = GIFRenderer(composition: composition, store: store, engines: engines)
+        let renderer = GIFRenderer(dither: dither, engines: engines)
         let report = try await Task.detached(priority: .userInitiated) {
             try await renderer.render(tiles: tiles, to: baseURL, fps: 20, onPhase: onPhase)
         }.value
@@ -305,7 +300,7 @@ final class CaptureViewModel {
             fileSize: report.fileSize,
             timingSummary: summary,
             palettesForDisplay: report.palettesForDisplay,
-            ditherMethod: composition.ditherMethod,
+            ditherMethod: dither.method,
             meanExtractMSE: report.meanExtractMSE,
             meanCentroidConditionNumber: kappa,
             meanAdmissionRateAt05: admissionRate
@@ -367,100 +362,23 @@ final class CaptureViewModel {
         // new capture.
     }
 
-    /// Pop the head of the edit history, restore the previous render
-    /// to `primaryOutput` + `currentBundle.perFrameStatistics`.
-    /// Refuses to pop below index 0 (the initial capture render is
-    /// never lost — Retake is the way out of that state).
-    ///
-    /// The popped entry's GIF + contact-sheet files are deleted in
-    /// the background to keep Documents tidy without blocking the
-    /// UI. The dither selector is synced to the restored render's
-    /// method so the picker reflects the now-current state.
-    func undo() {
-        guard let restored = history.undo() else { return }
-        Haptics.impact(.light)
-        primaryOutput = restored.output
-        if var bundle = currentBundle {
-            bundle.perFrameStatistics = restored.perFrameStatistics
-            currentBundle = bundle
-        }
-        let restoredMethod = restored.output.ditherMethod
-        if composition.ditherMethod != restoredMethod {
-            self.composition = composition.with(ditherMethod: restoredMethod)
-            self.settings.defaultDitherMethod = restoredMethod
-        }
-    }
-
-    /// Re-render the cached capture bundle with a different dither method,
-    /// in place. No re-capture — the raw OKLab tiles in `currentBundle.tiles`
-    /// are the input, re-quantized (Wu+KM) and re-dithered. Updates
-    /// `primaryOutput` + `currentBundle.perFrameStatistics` on success.
-    ///
-    /// Editing-tool entry point: lets the user A/B the two dither looks on
-    /// the same scene without retaking. (The extraction algorithm is fixed at
-    /// Wu+KM, so dither is the only thing left to vary here.)
-    func reExtract(with method: DitherMethod) async {
-        guard let bundle = currentBundle,
-              let store = store,
-              let engines = engines else { return }
-        // No-op if the user re-picked the same method; saves a pass + write.
-        if composition.ditherMethod == method && primaryOutput != nil { return }
-
-        Haptics.impact(.light)
-        let newComposition = composition.with(ditherMethod: method)
-        self.composition = newComposition
-        self.settings.defaultDitherMethod = method
-
-        phase = .renderingStageA
-        do {
-            let renderResult = try await renderOnce(
-                tiles: bundle.tiles,
-                composition: newComposition,
-                store: store,
-                engines: engines,
-                summary: bundle.burstTiming.summary
-            )
-            primaryOutput = renderResult.output
-            // Tiles are unchanged (still re-renderable for further edits).
-            currentBundle = CaptureBundle(
-                id: bundle.id,
-                captureTimestamp: bundle.captureTimestamp,
-                burstTiming: bundle.burstTiming,
-                colorSpaceTag: bundle.colorSpaceTag,
-                tiles: bundle.tiles,
-                perFrameStatistics: renderResult.perFrameStatistics
-            )
-            // Push onto edit history. If we exceed the cap, evict
-            // the SECOND entry (preserve the initial render at
-            // index 0 + most recent N-1 edits).
-            history.push(EditHistory.Entry(
-                output: renderResult.output,
-                perFrameStatistics: renderResult.perFrameStatistics
-            ))
-            saveBundleAsync()
-            phase = .done
-            Haptics.notification(.success)
-        } catch {
-            let msg = String(describing: error)
-            Self.logger.error("[viewmodel] reExtract failed: \(msg, privacy: .public)")
-            phase = .failed(msg)
-            Haptics.notification(.warning)
-        }
-    }
-
-    /// Binding for the dither-method selector in CaptureView. Persists the
-    /// choice and fires a haptic. Applies to the next capture; re-extract
-    /// (`reExtract`) re-renders the cached burst with the current method.
-    var ditherMethodBinding: Binding<DitherMethod> {
-        Binding(
-            get: { [weak self] in self?.composition.ditherMethod ?? .errorDiffusion },
-            set: { [weak self] newMethod in
-                guard let self else { return }
-                self.composition = self.composition.with(ditherMethod: newMethod)
-                self.settings.defaultDitherMethod = newMethod
-                Haptics.selection()
-            }
+    /// EMA-blend a fresh raw readout into the published `scene` so the gauge,
+    /// dominant tint, and bin count glide rather than jitter at 10 fps. The
+    /// View decides whether to *animate* the change (it snaps under
+    /// reduce-motion); the signal itself is always smoothed.
+    private func ingestSceneReadout(_ r: SceneReadout) {
+        let a: Float = 0.2  // EMA weight per ~10 fps tick
+        let g = scene.gauge * (1 - a) + r.gauge * a
+        let bins = Int((Float(scene.occupiedBins) * (1 - a) + Float(r.occupiedBins) * a).rounded())
+        let old = SIMD3<Float>(Float(scene.tint.x), Float(scene.tint.y), Float(scene.tint.z))
+        let new = SIMD3<Float>(Float(r.tint.x), Float(r.tint.y), Float(r.tint.z))
+        let b = old * (1 - a) + new * a
+        let tint = SIMD3<UInt8>(
+            UInt8(min(255, max(0, b.x.rounded()))),
+            UInt8(min(255, max(0, b.y.rounded()))),
+            UInt8(min(255, max(0, b.z.rounded())))
         )
+        scene = SceneReadout(occupiedBins: bins, gauge: g, tint: tint, accents: r.accents)
     }
 
     /// Convert one 64×64 OKLab tile into a UIImage in the sRGB color
