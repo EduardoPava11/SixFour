@@ -2,43 +2,95 @@ import SwiftUI
 import UIKit
 import ImageIO
 
-/// Post-capture review — the output side of the I/O appliance. Layout:
-///   [ Looping GIF ]
-///   [ PaletteStripView ]
-///   [ StatsFooterView ]
-///   [ Share · Retake ]
-///
-/// The dither sampler is configured in Settings before capture (it is a
-/// statistical property of the form, not a per-shot review choice), so there
-/// is no re-render control here — Retake re-shoots, Share exports the GIF.
+/// Post-capture review — the output side of the I/O appliance. A clean vertical
+/// stack (no overlap): the looping GIF, then the palette globe (the 256 colours
+/// as rotatable circles — the verifier you can *see*), then a per-frame status
+/// line that proves `256/256 ✓` and surfaces the per-frame numbers, then the
+/// actions. The sampler is a Settings decision, so there is no re-render
+/// control — Retake re-shoots, Share exports.
 struct GIFReviewView: View {
     let vm: CaptureViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-
             if let primary = vm.primaryOutput {
-                singlePanelLayout(primary: primary)
+                reviewLayout(primary: primary)
             } else {
                 ProgressView().tint(.white)
             }
         }
     }
 
-    @ViewBuilder
-    private func singlePanelLayout(primary: CaptureOutput) -> some View {
-        VStack(spacing: 14) {
-            RenderPanel(output: primary)
+    private func reviewLayout(primary: CaptureOutput) -> some View {
+        // Content scrolls (GIF + globe + status are together taller than a
+        // 17 Pro screen); actions pin to the bottom so they're always reachable.
+        // A plain stack — nothing floats over the GIF, so no overlap.
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 14) {
+                    // The looping GIF, square, same 64×64 look as the preview.
+                    GIFCanvas(output: primary)
+                        .aspectRatio(1, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: SFTheme.cardCorner))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: SFTheme.cardCorner)
+                                .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                        )
+
+                    perFrameStatus(primary)
+
+                    // The palette globe: 256 colours as circles on a rotatable
+                    // sphere, breathing through the 64 frames — the verifier you
+                    // can see, and the moving-parts look.
+                    PaletteSphereView(palettes: primary.palettesForDisplay)
+                }
                 .padding(.horizontal)
-            Spacer()
+                .padding(.top)
+            }
             actionRow(primary: primary)
+                .padding()
         }
-        .padding(.vertical)
+    }
+
+    /// Proves the guarantee and surfaces the per-frame numbers, in the machine
+    /// voice, cycling with the loop (frozen on frame 0 under reduce-motion).
+    @ViewBuilder
+    private func perFrameStatus(_ o: CaptureOutput) -> some View {
+        let n = max(o.palettesForDisplay.count, 1)
+        if reduceMotion {
+            statusLine(o, frame: 0, n: n)
+        } else {
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { ctx in
+                let i = Int((ctx.date.timeIntervalSinceReferenceDate * 20).rounded(.down)) % n
+                statusLine(o, frame: i, n: n)
+            }
+        }
+    }
+
+    private func statusLine(_ o: CaptureOutput, frame i: Int, n: Int) -> some View {
+        let sig = o.perFrameSignificant.indices.contains(i) ? o.perFrameSignificant[i] : 0
+        let cov = o.perFrameCoverage.indices.contains(i) ? o.perFrameCoverage[i] : 0
+        let m   = o.perFrameMSE.indices.contains(i) ? o.perFrameMSE[i] : 0
+        let full = sig >= 256
+        return HStack(spacing: 8) {
+            HStack(spacing: 3) {
+                Text("\(sig)/256")
+                Image(systemName: full ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+            }
+            .foregroundStyle(full ? Color.green : Color.yellow)
+            Text("·").foregroundStyle(SFTheme.dimText)
+            Text("frame \(i + 1)/\(n) · \(cov) bins · mse \(String(format: "%.4f", m))")
+                .foregroundStyle(SFTheme.dimText)
+        }
+        .font(SFTheme.captionMono)
+        .monospacedDigit()
+        .accessibilityLabel("\(sig) of 256 colours significant, frame \(i + 1) of \(n)")
     }
 
     private func actionRow(primary: CaptureOutput) -> some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             ShareLink(item: primary.gifURL) {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
@@ -46,24 +98,26 @@ struct GIFReviewView: View {
 
             if let contact = primary.contactURL {
                 ShareLink(item: contact) {
-                    Label("Sheet", systemImage: "square.grid.3x3")
+                    Image(systemName: "square.grid.3x3")
+                        .accessibilityLabel("Share contact sheet")
                 }
                 .buttonStyle(.glass)
-                .tint(.cyan)
             }
 
             Button("Retake") { vm.reset() }
                 .buttonStyle(.glass)
-                .tint(.white)
         }
-        .padding(.horizontal)
+        .lineLimit(1)
+        .controlSize(.large)
+        .tint(.white)
     }
 }
 
-// MARK: - RenderPanel
+// MARK: - GIFCanvas
 
-/// One GIF + strip + stats group.
-private struct RenderPanel: View {
+/// The looping GIF, played frame-by-frame at 20 fps. Nearest-neighbour
+/// upscaled so the 64×64 pixels stay hard. Freezes on frame 0 under reduce-motion.
+private struct GIFCanvas: View {
     let output: CaptureOutput
 
     @State private var frames: [UIImage] = []
@@ -72,38 +126,20 @@ private struct RenderPanel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 10) {
-            gifImage
-                .frame(maxWidth: .infinity)
-                .aspectRatio(1, contentMode: .fit)
-
-            PaletteStripView(palettes: output.palettesForDisplay)
-                .padding(.horizontal, 2)
-
-            // ⚠️ EXPERIMENTAL / PARKED spike — the palette-visualization product
-            // is the standalone Rust tool (~/Desktop/sixfour-studio), not this.
-            // Left wired as a reference; remove if it gets in the way.
-            PaletteSphereView(palettes: output.palettesForDisplay)
-                .padding(.horizontal, 2)
-
-            StatsFooterView(output: output)
+        Group {
+            if let img = currentImage {
+                Image(uiImage: img)
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .accessibilityLabel("Rendered GIF, \(output.ditherMethod.label) dither, sixty-four frames at twenty fps")
+            } else {
+                Rectangle().fill(.white.opacity(0.04))
+                    .overlay(ProgressView().tint(.white))
+            }
         }
         .task { loadFrames() }
         .onDisappear { timer?.invalidate(); timer = nil }
-    }
-
-    @ViewBuilder
-    private var gifImage: some View {
-        if let img = currentImage {
-            Image(uiImage: img)
-                .interpolation(.none)
-                .resizable()
-                .aspectRatio(1, contentMode: .fit)
-                .accessibilityLabel("Rendered GIF, \(output.ditherMethod.label) dither, sixty-four frames at twenty fps")
-        } else {
-            Rectangle().fill(.white.opacity(0.04))
-                .overlay(ProgressView().tint(.white))
-        }
     }
 
     private var currentImage: UIImage? {

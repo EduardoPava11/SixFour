@@ -33,7 +33,22 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     /// tools (future) can use this to drive auto-prune+refill.
     let meanAdmissionRateAt05: Float
 
+    // Per-frame computation, surfaced for the Review verifier (length T = 64).
+    /// 256 significance cells per frame (mean, σ/range, population, provenance).
+    let perFrameCells: [[SixFourSignificantCell]]
+    /// Significant-slot count per frame — proves 256 (the guarantee).
+    let perFrameSignificant: [Int]
+    /// Occupied 16³ OKLab bins per frame (single-frame coverage).
+    let perFrameCoverage: [Int]
+    /// Extraction MSE per frame (OKLab units²).
+    let perFrameMSE: [Float]
+
     var id: URL { gifURL }
+
+    // Identity is the GIF URL; the per-frame arrays aren't Hashable and don't
+    // need to participate (two outputs are equal iff they're the same file).
+    static func == (lhs: CaptureOutput, rhs: CaptureOutput) -> Bool { lhs.gifURL == rhs.gifURL }
+    func hash(into hasher: inout Hasher) { hasher.combine(gifURL) }
 }
 
 @MainActor
@@ -303,7 +318,11 @@ final class CaptureViewModel {
             ditherMethod: dither.method,
             meanExtractMSE: report.meanExtractMSE,
             meanCentroidConditionNumber: kappa,
-            meanAdmissionRateAt05: admissionRate
+            meanAdmissionRateAt05: admissionRate,
+            perFrameCells: report.perFrameCells,
+            perFrameSignificant: report.perFrameSignificant,
+            perFrameCoverage: report.perFrameCoverage,
+            perFrameMSE: report.perFrameMSE
         )
         return RenderResult(output: output, perFrameStatistics: report.perFrameStatistics)
     }

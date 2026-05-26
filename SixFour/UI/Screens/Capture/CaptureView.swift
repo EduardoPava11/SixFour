@@ -1,18 +1,9 @@
 import SwiftUI
 
 struct CaptureView: View {
-    /// Preview mode for the camera viewport. .fullRes shows the
-    /// AVCaptureVideoPreviewLayer at sensor resolution (the framing
-    /// reference). .pixelated shows the 64×64 OKLab tile rendered
-    /// through the actual capture pipeline, upscaled with
-    /// nearest-neighbour so the user sees exactly what the GIF will
-    /// look like. Toggle button in the top bar switches between them.
-    enum PreviewMode { case fullRes, pixelated }
-
     @State private var vm = CaptureViewModel()
     @State private var showSettings = false
     @State private var reticle: ReticleHit? = nil
-    @State private var previewMode: PreviewMode = .fullRes
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -56,9 +47,11 @@ struct CaptureView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                // Square camera preview, centered. .resizeAspectFill in CameraPreview
-                // means we see the central crop of the 4K sensor frame, which matches
-                // (within 1%) the actual integer-multiple crop we ship to Metal.
+                // The canvas: ALWAYS the live 64×64 tile (nearest-neighbour
+                // upscaled), never the raw camera feed — you live inside the
+                // 64³ world. The AVCaptureVideoPreviewLayer is kept at
+                // opacity 0 purely as the tap-to-focus + session layer; the
+                // tile rides on top with hit-testing off so taps reach it.
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
                     ZStack {
@@ -71,28 +64,18 @@ struct CaptureView: View {
                                 )
                                 reticle = ReticleHit(point: absolutePoint, id: UUID())
                             }
-                            .opacity(previewMode == .fullRes ? 1 : 0)
-                            // The pixelated preview overlay rides on top
-                            // when the user toggles to .pixelated. It's
-                            // the same 64×64 OKLab tile the burst pipeline
-                            // produces, rendered through CGImage with
-                            // nearest-neighbour upscaling for the
-                            // unmistakable 64×64 look.
-                            if previewMode == .pixelated {
-                                if let img = vm.previewTile {
-                                    Image(uiImage: img)
-                                        .interpolation(.none)
-                                        .resizable()
-                                        .scaledToFill()
-                                } else {
-                                    // First-frame fallback — black until
-                                    // the preview path delivers its
-                                    // first tile (~100 ms after bootstrap).
-                                    Color.black
-                                }
-                            }
+                            .opacity(0)
+                        }
+                        if let img = vm.previewTile {
+                            Image(uiImage: img)
+                                .interpolation(.none)
+                                .resizable()
+                                .scaledToFill()
+                                .allowsHitTesting(false)   // taps fall through to focus layer
                         } else {
-                            Rectangle().fill(.black)
+                            // First-frame fallback — black until the preview
+                            // path delivers its first tile (~100 ms).
+                            Color.black
                         }
                     }
                     .frame(width: side, height: side)
@@ -146,25 +129,9 @@ struct CaptureView: View {
             // artifacts). To add a future control — e.g. a Settings gear —
             // append one more GlassIconButton here; no extra glass plumbing.
             GlassToolbarCluster {
-                // Preview toggle — swaps the full-res camera preview for
-                // the live 64×64 downsampled tile (the actual GIF look,
-                // upscaled with nearest-neighbour). Icon flips between a
-                // sharp-edged camera and a pixel grid; the swap animates
-                // via the symbol-replace transition baked into
-                // GlassIconButton, driven by the withAnimation below.
-                GlassIconButton(
-                    systemImage: previewMode == .fullRes
-                        ? "squareshape.split.2x2"
-                        : "camera",
-                    accessibilityLabel: previewMode == .fullRes
-                        ? "Switch to 64×64 pixelated preview"
-                        : "Switch to full-resolution preview",
-                    tint: vm.sceneTint
-                ) {
-                    withAnimation(.snappy) {
-                        previewMode = (previewMode == .fullRes) ? .pixelated : .fullRes
-                    }
-                }
+                // Settings is the only chrome control: the canvas is always
+                // the 64×64 tile (no preview mode to toggle), and the sampler
+                // lives in Settings. The button tint reflects the live scene.
                 GlassIconButton(
                     systemImage: "gearshape",
                     accessibilityLabel: "Open settings",
@@ -195,12 +162,32 @@ struct CaptureView: View {
     /// camera sees right now, in the machine voice. Surfaced to VoiceOver via
     /// the shutter's `accessibilityValue`, so it's hidden here.
     private var diversityReadout: some View {
-        Text("◇ \(vm.scene.occupiedBins) colors")
-            .font(SFTheme.captionMono)
-            .foregroundStyle(SFTheme.dimText)
-            .monospacedDigit()
-            .contentTransition(.numericText())
-            .accessibilityHidden(true)
+        VStack(spacing: 2) {
+            Text("◇ \(vm.scene.occupiedBins) colors")
+                .font(SFTheme.captionMono)
+                .foregroundStyle(SFTheme.dimText)
+                .monospacedDigit()
+                .contentTransition(.numericText())
+            // The active sampler — updates the instant a Settings toggle flips
+            // (the chrome shows the setting, never inert).
+            Text(samplerTag)
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(SFTheme.dimText.opacity(0.85))
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// Compact machine-voice description of the active residual sampler,
+    /// derived live from `AppSettings`.
+    private var samplerTag: String {
+        let c = vm.settings.ditherConfig
+        switch c.method {
+        case .errorDiffusion:
+            let k = c.kernel == .floydSteinberg ? "FS" : "Atkinson"
+            return "diffusion · \(k) · \(c.serpentine ? "serpentine" : "raster")"
+        case .blueNoise:
+            return "blue · \(c.temporal == .spatiotemporal ? "3D" : "frozen")"
+        }
     }
 
     @ViewBuilder

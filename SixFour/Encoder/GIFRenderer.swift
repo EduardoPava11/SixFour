@@ -45,6 +45,16 @@ struct GIFRenderer {
         /// stitches this into a CaptureBundle for downstream editing
         /// tools (re-run extraction, χ²-significance tests, etc.).
         let perFrameStatistics: [ClusterStatistics]
+        /// Per-frame palette cells (256 each) — the significance result made
+        /// visible: mean, per-axis σ (range), population, provenance. Length T.
+        let perFrameCells: [[SixFourSignificantCell]]
+        /// Per-frame count of significant slots (each should be K = 256 — the
+        /// guarantee, surfaced so the UI can *prove* it). Length T.
+        let perFrameSignificant: [Int]
+        /// Per-frame occupied 16³ OKLab bins (single-frame coverage). Length T.
+        let perFrameCoverage: [Int]
+        /// Per-frame extraction MSE (OKLab units²). Length T.
+        let perFrameMSE: [Float]
     }
 
     /// The residual-shaping sampler configuration (method · kernel · serpentine
@@ -198,6 +208,14 @@ struct GIFRenderer {
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
         Self.logger.info("[renderer] encode done in \(encodeMs)ms (\(fileSize) bytes)")
 
+        // Per-frame numbers, surfaced so the Review screen can show (and the
+        // user can verify) every figure the pipeline computed per frame.
+        let perFrameSignificant = output.perFrameCells.map { $0.filter(\.isSignificant).count }
+        let perFrameCoverage = perFrameStats.map {
+            ClusterStatisticsOps.gamutCoverage(perFrame: [$0]).occupiedBins
+        }
+        let perFrameMSE = perFrameStats.map { $0.provenance.mse }
+
         return Report(
             stageAMillis: output.stageAMillis,
             encodeMillis: encodeMs,
@@ -205,7 +223,11 @@ struct GIFRenderer {
             fileSize: fileSize,
             palettesForDisplay: displayPalettes,
             meanExtractMSE: meanExtractMSE,
-            perFrameStatistics: perFrameStats
+            perFrameStatistics: perFrameStats,
+            perFrameCells: output.perFrameCells,
+            perFrameSignificant: perFrameSignificant,
+            perFrameCoverage: perFrameCoverage,
+            perFrameMSE: perFrameMSE
         )
     }
 
