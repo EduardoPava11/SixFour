@@ -79,6 +79,16 @@ tests = testGroup "CoreMLContract (Codegen.CoreML emits constants identical to t
       once (contains "self.w1.weight * self.sigma_mask" emitLookNetTorch
          && contains "self.w2.weight * self.sigma_mask" emitLookNetTorch)
 
+  , testProperty "L4Block uses tanh (odd activation) — required for σ-equivariance under sign-flips" $
+      once (contains "torch.tanh"     emitLookNetTorch
+         && not (contains "F.gelu"    emitLookNetTorch)
+         && not (contains "F.relu"    emitLookNetTorch)
+         && not (contains "F.silu"    emitLookNetTorch))
+
+  , testProperty "L3Encoder uses no bias (a constant bias breaks σ-equivariance unless σ-fixed)" $
+      once (contains "bias=False" emitLookNetTorch
+         && not (contains "self.phi1" emitLookNetTorch))
+
   , testProperty "PyTorch module sum-pools tokens in L3Encoder (permutation-invariant)" $
       once (contains "h.sum(dim=1)" emitLookNetTorch)
 
