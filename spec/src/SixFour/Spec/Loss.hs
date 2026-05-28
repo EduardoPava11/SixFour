@@ -17,9 +17,16 @@ module pins WHAT a "good" palette /means/ relative to its input capture:
      'SixFour.Spec.Coverage.gamutCoverageFraction' on the 16³ voxel grid;
      loss is @1 - coverage@. Lower = fuller gamut.
 
-  3. __'beautyLoss'__ — Ou & Luo's two-colour harmony model summed over all 255
+  3. __'beautyLoss'__ — an /Ou-Luo-inspired/ heuristic summed over all 255
      σ-pairs in the Haar tree. Each pair @(parent + δ, parent − δ)@ contributes
-     three terms (decomposed below). Lower = more harmonious.
+     three terms (decomposed below). Lower = more harmonious. NOTE: the published
+     Ou-Luo paper (Color Res. Appl., 2006) fits a regression model on 1431
+     human-rated CIELAB pairs; the actual regression coefficients are paywalled
+     and not reproduced here. The forms below are the qualitative claims
+     (similar hue ↑ harmony; different lightness ↑ harmony; high combined
+     lightness ↑ harmony) operationalised as the simplest monotone proxies
+     for each. The trainer must FIT the per-term weights against either a real
+     human-harmony validation set or a published Ou-Luo proxy.
 
 The total 'lookNetLoss' is the weighted sum; the trainer chooses the weights.
 The spec pins WHAT is measured; the trainer pins HOW MUCH each term counts.
@@ -95,9 +102,8 @@ module SixFour.Spec.Loss
 import           Data.List           (foldl')
 
 import SixFour.Spec.Color    (OKLab(..))
-import SixFour.Spec.GMM      (Gaussian(..), GMM, pointMassGMM, mixtureMean)
+import SixFour.Spec.GMM      (Gaussian(..), GMM, pointMassGMM, mixtureMean, mixtureCovariance)
 import SixFour.Spec.Bures    (buresDistanceSq)
-import SixFour.Spec.Diversity (Cov3)
 import SixFour.Spec.Coverage (gamutCoverageFraction)
 import SixFour.Spec.Palette  (mkPalette)
 import SixFour.Spec.PairTree (HaarPalette(..), reconstruct, pairOffsets, levels, root)
@@ -132,24 +138,23 @@ fidelityLoss hp stack =
       g_out     = mixtureAsGaussian outputGmm
   in buresDistanceSq g_in g_out
 
--- | Treat a mixture as a single Gaussian via its first two moments. The Bures
--- distance is exact on Gaussians, so this is a sound monotone approximation
--- to the true Wasserstein-2 between mixtures (which is intractable in closed
--- form). The trainer can replace this with a Sinkhorn approximation if more
--- precision is needed; the spec pins the mathematical CONTRACT, not the
--- specific numerical method.
+-- | Treat a mixture as a single Gaussian via its first two moments — the
+-- 'mixtureMean' and 'mixtureCovariance' from "SixFour.Spec.GMM". The Bures
+-- distance is exact on Gaussians; this approximation collapses each mixture
+-- to its moment-matched Gaussian, so 'fidelityLoss' measures the Bures
+-- distance between the moment-matched Gaussians — strictly weaker than the
+-- true Wasserstein-2 between mixtures (which has no closed form in 3-D), but
+-- structurally honest about both mean AND spread differences.
+--
+-- The trainer can replace this with a Sinkhorn approximation if tighter
+-- bounds are needed; the spec pins the FUNCTIONAL CONTRACT (moment-matching),
+-- not the specific approximation order.
 mixtureAsGaussian :: GMM -> Gaussian
 mixtureAsGaussian gmm =
   let m  = mixtureMean gmm
-      -- Total weight as the Gaussian's weight; covariance approximated as the
-      -- empirical mixture covariance (computed lazily here as identity for
-      -- the spec's minimal contract). The trainer should swap in the true
-      -- mixture covariance from 'SixFour.Spec.GMM.mixtureCovariance' for a
-      -- tighter fidelity score.
+      c  = mixtureCovariance gmm
       w  = sum (map gWeight gmm)
-      zeroCov :: Cov3
-      zeroCov = (0, 0, 0, 0, 0, 0)
-  in Gaussian m zeroCov w
+  in Gaussian m c w
 
 -- | Gamut-coverage loss: @1 − gamutCoverageFraction@ over the 16³ OKLab voxel
 -- grid. Lower = fuller gamut spanning.
