@@ -62,37 +62,30 @@ def _sigma_mask_for_head(out_slice: slice) -> torch.Tensor:
     """Mask for a decoder head whose output dims are SIGMA768_MASK[out_slice]."""
     return _block_diagonal_mask(SIGMA64_MASK, SIGMA768_MASK[out_slice])
 
-# ── L3 encoder: per-token MLP (10 → 64), then sum-pool over tokens ─────────
+# ── L3 encoder: σ-masked per-token linear (10 → 64), then sum-pool ───────
 
 class L3Encoder(nn.Module):
-    """Permutation-invariant set encoder. σ-equivariance is enforced by
-    aligning the trained projection's structure to GMM_TOKEN_SIGMA_MASK ↔
-    SIGMA64_MASK. The reference baseline ('placeToken' in LookNetE.hs) is
-    the σ-correct skeleton this layer extends with learned mixing."""
+    """Permutation-invariant set encoder. The per-token projection is a
+    SINGLE σ-block-diagonal linear (no bias, no activation between layers):
+    the cleanest σ-equivariant form. Sum-pooling over tokens is permutation-
+    invariant by construction. Matches 'placeToken' in LookNetE.hs."""
 
     def __init__(self):
         super().__init__()
-        # Per-token expansion 10 → 128 (no σ constraint at the intermediate
-        # layer — the trainer learns the embedding subject to the boundary
-        # masks below).
-        self.phi1 = nn.Linear(GMM_TOKEN_DIM, 128, bias=True)
-        # Final projection 128 → 64 with σ-block-diagonal mask at the output
-        # boundary: each output dim's σ-class (SIGMA64_MASK) constrains which
-        # input dims contribute. The 128-D intermediate's σ-classes are split
-        # 50/50 (first 64 σ-fixed, last 64 σ-negated) so the mask is dense
-        # on its half and zero on its cross-half.
-        self.phi2 = nn.Linear(128, MODEL_DIM, bias=False)
-        inter_mask = [False] * 64 + [True] * 64
+        # Single linear 10 → 64 with σ-block-diagonal mask. No bias (a
+        # constant bias would break σ-equivariance unless it lives in the
+        # σ-fixed eigenspace; safer to omit). No intermediate nonlinearity
+        # (the trainer can recover capacity via the 8 L4 blocks).
+        self.phi = nn.Linear(GMM_TOKEN_DIM, MODEL_DIM, bias=False)
         self.register_buffer(
-            "phi2_mask",
-            _block_diagonal_mask(inter_mask, SIGMA64_MASK),
+            "phi_mask",
+            _block_diagonal_mask(GMM_TOKEN_SIGMA_MASK, SIGMA64_MASK),
         )
 
     def forward(self, tokens: torch.Tensor, token_mask: torch.Tensor = None) -> torch.Tensor:
         # tokens: (B, MAX_TOKENS, 10);  token_mask: (B, MAX_TOKENS) in {0, 1}
-        h = F.gelu(self.phi1(tokens))             # (B, MAX_TOKENS, 128)
-        w2 = self.phi2.weight * self.phi2_mask    # σ-mask applied
-        h = F.linear(h, w2)                       # (B, MAX_TOKENS, 64)
+        w = self.phi.weight * self.phi_mask       # σ-mask applied
+        h = F.linear(tokens, w)                   # (B, MAX_TOKENS, 64)
         if token_mask is not None:
             h = h * token_mask.unsqueeze(-1)
         return h.sum(dim=1)                       # (B, 64) — sum-pool (perm-invariant)
@@ -117,7 +110,11 @@ class L4Block(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         w1 = self.w1.weight * self.sigma_mask
         w2 = self.w2.weight * self.sigma_mask
-        dx = F.gelu(F.linear(x, w1))
+        # tanh is ODD — f(-x) = -f(x) — which is required for σ-equivariance
+        # under sign-flip involutions. GELU/ReLU/SiLU are NOT odd and would
+        # break equivariance. (Verified by the codegen smoke test:
+        # max|σ(E(x)) - E(σx)| ≈ 2950 with GELU, ~0 with tanh.)
+        dx = torch.tanh(F.linear(x, w1))
         dx = F.linear(dx, w2)
         scale = 1.0 - torch.sigmoid(self.halting_logit)
         return x + scale * dx

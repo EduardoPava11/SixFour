@@ -19,6 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
 import coremltools as ct
 
@@ -67,16 +68,16 @@ def build(weights_path: Path, out_path: Path) -> None:
             ct.TensorType(
                 name="tokens",
                 shape=(1, MAX_TOKENS, GMM_TOKEN_DIM),
-                dtype=ct.float32,
+                dtype=np.float32,
             ),
             ct.TensorType(
                 name="token_mask",
                 shape=(1, MAX_TOKENS),
-                dtype=ct.float32,
+                dtype=np.float32,
             ),
         ],
         outputs=[
-            ct.TensorType(name="haar_coeffs", dtype=ct.float16),
+            ct.TensorType(name="haar_coeffs", dtype=np.float16),
         ],
         convert_to="mlprogram",
         compute_precision=ct.precision.FLOAT16,
