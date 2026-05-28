@@ -34,6 +34,7 @@ import qualified Properties.LookNetR     as LookNetR
 import qualified Properties.LookNetD     as LookNetD
 import qualified Properties.LookNetCompose as LookNetCompose
 import qualified Properties.CoreMLContract as CoreMLContract
+import qualified Properties.Loss         as Loss
 
 main :: IO ()
 main = defaultMain $ testGroup "sixfour-spec"
@@ -69,4 +70,5 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LookNetD.tests
   , LookNetCompose.tests
   , CoreMLContract.tests
+  , Loss.tests
   ]
