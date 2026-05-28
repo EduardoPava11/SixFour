@@ -7,7 +7,7 @@ palette AND the index mapping** (the whole @T×H×W@ GIF). This is a *dimensiona
 contract*, not a stub network (the no-stubs rule): the **deterministic** layers are
 total reference functions; the **learnable** layers (encoder @E@, core @R@, decoder
 @D@) are pinned by 'NetIO' shape contracts only — their weights live in the Phase-C
-trainer. Mirrors the typed-pipeline pattern of @SixFour.Spec.Hybrid.Pipeline@.
+trainer. The typed-Stage extensions for L3/L4/L5 live in @SixFour.Spec.LookNetE/R/D@.
 
 The substrate is the **continuous OKLab Gaussian mixture** ("SixFour.Spec.GMM"), not
 the discrete 11-category code: each palette is a set of @(μ,Σ,w)@ components, fed to a

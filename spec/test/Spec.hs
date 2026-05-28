@@ -25,9 +25,15 @@ import qualified Properties.Quad4Fit     as Quad4Fit
 import qualified Properties.SigmaPairHead as SigmaPairHead
 import qualified Properties.Pipeline     as Pipeline
 import qualified Properties.Significance as Significance
-import qualified Properties.Hybrid       as Hybrid
+import qualified Properties.STBN3D       as STBN3D
 import qualified Properties.Cyclic       as Cyclic
 import qualified Properties.Look         as Look
+import qualified Properties.Tensor       as Tensor
+import qualified Properties.LookNetE     as LookNetE
+import qualified Properties.LookNetR     as LookNetR
+import qualified Properties.LookNetD     as LookNetD
+import qualified Properties.LookNetCompose as LookNetCompose
+import qualified Properties.CoreMLContract as CoreMLContract
 
 main :: IO ()
 main = defaultMain $ testGroup "sixfour-spec"
@@ -53,8 +59,14 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SigmaPairHead.tests
   , Pipeline.tests
   , Significance.tests
-  , Hybrid.tests
+  , STBN3D.tests
   , Cyclic.tests
   , Look.tests
   , Scale.tests
+  , Tensor.tests
+  , LookNetE.tests
+  , LookNetR.tests
+  , LookNetD.tests
+  , LookNetCompose.tests
+  , CoreMLContract.tests
   ]

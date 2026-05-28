@@ -48,19 +48,16 @@ library
         SixFour.Spec.Cyclic
         SixFour.Spec.Look
         SixFour.Spec.Laws
-        SixFour.Spec.Hybrid.Shape
-        SixFour.Spec.Hybrid.Trunk
-        SixFour.Spec.Hybrid.Delta
-        SixFour.Spec.Hybrid.Hybrid
-        SixFour.Spec.Hybrid.Indices
-        SixFour.Spec.Hybrid.STBN3D
-        SixFour.Spec.Hybrid.StageB1
-        SixFour.Spec.Hybrid.StageB2
-        SixFour.Spec.Hybrid.Pipeline
-        SixFour.Spec.Hybrid.Laws
+        SixFour.Spec.Tensor
+        SixFour.Spec.LookNetE
+        SixFour.Spec.LookNetR
+        SixFour.Spec.LookNetD
+        SixFour.Spec.LookNetCompose
+        SixFour.Spec.STBN3D
         SixFour.Codegen.Swift
         SixFour.Codegen.MLX
         SixFour.Codegen.Burn
+        SixFour.Codegen.CoreML
     build-depends:
         base       >=4.16 && <5
       , vector     >=0.13 && <0.14
@@ -205,14 +202,21 @@ test-suite spec-tests
         Properties.SigmaPairHead
         Properties.Pipeline
         Properties.Significance
-        Properties.Hybrid
+        Properties.STBN3D
         Properties.Cyclic
         Properties.Look
+        Properties.Tensor
+        Properties.LookNetE
+        Properties.LookNetR
+        Properties.LookNetD
+        Properties.LookNetCompose
+        Properties.CoreMLContract
     build-depends:
         base
       , sixfour-spec
       , vector
       , containers
+      , text
       , QuickCheck >=2.14 && <2.16
       , tasty      >=1.4  && <1.6
       , tasty-quickcheck >=0.10 && <0.12

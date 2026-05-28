@@ -107,7 +107,7 @@ mod tests {
         a.len() == b.len() && a.iter().zip(b).all(|(&x, &y)| (x - y).abs() <= tol)
     }
 
-    // The fixture from `Codegen.Burn` (studio/look-nn/src/generated/contract.rs::golden).
+    // The fixture from `Codegen.Burn` (studio/look-nn-baseline/src/generated/contract.rs::golden).
     fn fixture() -> Vec<Gaussian> {
         point_mass_gmm(&[([0.20, 0.05, -0.10], 1.0), ([0.80, -0.10, 0.10], 2.0)])
     }

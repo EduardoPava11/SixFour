@@ -1,12 +1,18 @@
-//! look-nn — the per-user "look" network: collapse the 64 per-frame OKLab Gaussian
-//! mixtures into one global 256-colour palette, organised as the σ-balanced Haar tree.
+//! look-nn-baseline — the **non-NN baseline-to-beat oracle** for the math-first look-NN.
 //!
-//! v1 (this crate) is **pure Rust**: a forward net at the contract shapes (L3–L5) plus
-//! a gradient-free **1+1-ES** over the **direct 768-coefficient genome** — the encoding
-//! `COMPETITION.md` committed to. It consumes the generated dimensional contract
-//! (`Codegen.Burn` → `generated/contract.rs`) and the `analysis-core` GMM/Bures math
-//! (themselves golden-checked against the Haskell spec). The `burn` autodiff backend is
-//! the v2 gradient-training upgrade.
+//! This crate is a gradient-free **1+1-ES** over the 768-coefficient Haar genome that
+//! maximises gamut coverage. It is **NOT** a neural network: no autodiff, no MLX/PyTorch,
+//! no dataset. Its role is to answer "what's the best a *non-learned* search can do?"
+//! so the trained CoreML look-NN (Spec.LookNetE/R/D → Codegen.CoreML → .mlpackage) has
+//! an honest baseline to beat.
+//!
+//! Renamed 2026-05-28 from `look-nn` to clarify its role: the actual look-NN is the
+//! ANE-resident model built from the typed Haskell spec; this crate is the reference
+//! ceiling that learned models must outperform to justify their fidelity cost.
+//!
+//! Consumes the generated dimensional contract (`Codegen.Burn` → `generated/contract.rs`)
+//! and the `analysis-core` GMM/Bures math (themselves golden-checked against the Haskell
+//! spec).
 
 #[path = "generated/contract.rs"]
 pub mod contract;

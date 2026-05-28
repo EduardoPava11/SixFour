@@ -25,10 +25,11 @@ import           System.Environment (getArgs)
 import           Data.Maybe (fromMaybe)
 
 import SixFour.Codegen.Swift
-  ( emitStageContract, emitNetContract, emitHybridContract, emitSignificanceContract )
-import SixFour.Codegen.MLX   (emitStagesPy,      emitNetShapePy)
-import SixFour.Codegen.Burn  (emitBurnContract)
-import SixFour.Spec.Hybrid.STBN3D (Mask3D(..), generateSTBN3D)
+  ( emitStageContract, emitNetContract, emitSTBN3DContract, emitSignificanceContract )
+import SixFour.Codegen.MLX    (emitStagesPy,      emitNetShapePy)
+import SixFour.Codegen.Burn   (emitBurnContract)
+import SixFour.Codegen.CoreML (emitLookNetTorch,  emitBuildMlpackage)
+import SixFour.Spec.STBN3D    (Mask3D(..), generateSTBN3D)
 
 main :: IO ()
 main = do
@@ -37,14 +38,16 @@ main = do
       swiftOutDir   = fromMaybe "../SixFour/Generated"  (lookup "--swift-out" opts)
       mlxOutDir     = fromMaybe "../trainer/generated"  (lookup "--mlx-out"   opts)
       resourceOutDir = fromMaybe "../SixFour/Resources" (lookup "--res-out"   opts)
-      burnOutDir    = fromMaybe "../studio/look-nn/src/generated" (lookup "--burn-out" opts)
+      burnOutDir    = fromMaybe "../studio/look-nn-baseline/src/generated" (lookup "--burn-out" opts)
 
   writeUtf8 (swiftOutDir   </> "StageContract.swift")  emitStageContract
   writeUtf8 (swiftOutDir   </> "NetContract.swift")    emitNetContract
-  writeUtf8 (swiftOutDir   </> "HybridContract.swift") emitHybridContract
+  writeUtf8 (swiftOutDir   </> "STBN3DContract.swift") emitSTBN3DContract
   writeUtf8 (swiftOutDir   </> "SignificanceContract.swift") emitSignificanceContract
   writeUtf8 (mlxOutDir     </> "stages.py")            emitStagesPy
   writeUtf8 (mlxOutDir     </> "net_shape.py")         emitNetShapePy
+  writeUtf8 (mlxOutDir     </> "look_net_torch.py")    emitLookNetTorch
+  writeUtf8 (mlxOutDir     </> "build_mlpackage.py")   emitBuildMlpackage
   writeUtf8 (burnOutDir    </> "contract.rs")          emitBurnContract
 
   -- Drop a Python __init__.py so `from generated import …` works.
@@ -52,7 +55,7 @@ main = do
 
   -- 8³ scalar STBN3D mask, written as a raw binary the Swift loader
   -- tiles 8×8×8 → 64×64×64 at runtime. Bit-exact ground truth:
-  -- SixFour.Spec.Hybrid.STBN3D.generateSTBN3D @8 @8 @8. The tile is
+  -- SixFour.Spec.STBN3D.generateSTBN3D @8 @8 @8. The tile is
   -- toroidally distanced, so tiling is mathematically clean (no edge
   -- discontinuities); periodicity at the 8-voxel boundary is the
   -- only spectral loss vs a true 64³ mask. Upgrading to a true 64³

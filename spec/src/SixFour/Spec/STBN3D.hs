@@ -1,5 +1,5 @@
 {- |
-Module      : SixFour.Spec.Hybrid.STBN3D
+Module      : SixFour.Spec.STBN3D
 Description : Scalar 3D spatio-temporal blue-noise mask (void-and-cluster reference).
 
 The mask is a @t × h × w@ array of bytes in @[0, 255]@. When used as
@@ -19,8 +19,16 @@ the codegen driver calls 'generateSTBN3D' once and emits the result
 as a binary resource. The Haskell reference is the bit-exact ground
 truth — the Swift runtime never recomputes the mask, it only reads
 the bytes.
+
+== Module history
+
+This module was formerly @SixFour.Spec.Hybrid.STBN3D@, part of the
+"trunk + delta" hybrid palette direction. That direction was retired
+in favour of the math-first global-palette pipeline (Spec.LookNetE/R/D).
+STBN3D is kept because it generates the production blue-noise mask
+that PaletteGenerator.swift's @.blueNoise@ dither path loads at runtime.
 -}
-module SixFour.Spec.Hybrid.STBN3D
+module SixFour.Spec.STBN3D
   ( Mask3D(..)
   , mkMask3D
   , mask3DLookup
@@ -88,20 +96,13 @@ generateSTBN3D = runST $ do
       n  = nt * nh * nw
       initialOnes = max 1 (n `div` 10)   -- 10 % seed
 
-  -- Mutable bit-pattern: 0 / 1
-  pat <- MU.replicate n (0 :: Word8)
-
-  -- Mutable rank array (final output, in rank units 0..n-1).
+  pat   <- MU.replicate n (0 :: Word8)
   ranks <- MU.replicate n (0 :: Int)
 
-  -- 1. Seed via stride (deterministic, no RNG).
   let stride = max 1 (n `div` initialOnes)
   let initialIdxs = [i * stride `mod` n | i <- [0 .. initialOnes - 1]]
   mapM_ (\i -> MU.write pat i 1) initialIdxs
 
-  -- 2. Tighten until stable. Bound the iteration count to avoid
-  --    pathological loops on tiny cubes; the algorithm converges
-  --    quickly because each swap strictly improves the energy.
   let maxTightenSteps = 4 * initialOnes
   tightenRef <- newSTRef (0 :: Int)
   loop <- newSTRef True
@@ -123,15 +124,10 @@ generateSTBN3D = runST $ do
               _ -> writeSTRef loop False >> pure ()
   go
 
-  -- Snapshot of the well-distributed initial pattern.
   initPat <- U.freeze pat
 
-  -- 3. Rank-out: remove tightest 1 one at a time → ranks 0..ones-1
-  --    written in REVERSE order (lowest threshold for cells removed
-  --    LAST, i.e. the seeds that survive the longest).
   let onesIxs = [i | i <- [0 .. n - 1], initPat U.! i == 1]
       ones    = length onesIxs
-  -- Mutable working copy for rank-out.
   rmPat <- U.thaw initPat
   let rankOut r
         | r < 0     = pure ()
@@ -145,8 +141,6 @@ generateSTBN3D = runST $ do
                 rankOut (r - 1)
   rankOut (ones - 1)
 
-  -- 4. Rank-in: place 1 into the largest void of the cleared pattern,
-  --    assigning ranks ones..n-1 in order.
   addPat <- U.thaw initPat
   let rankIn r
         | r >= n    = pure ()
@@ -160,7 +154,6 @@ generateSTBN3D = runST $ do
                 rankIn (r + 1)
   rankIn ones
 
-  -- 5. Map rank → byte.
   out <- MU.new n
   let denom = max 1 (n - 1)
   let writeByte i = do
@@ -171,9 +164,6 @@ generateSTBN3D = runST $ do
 
   Mask3D <$> U.freeze out
   where
-    -- Find the index in the *current* pattern with the highest filter
-    -- response among 1-cells (mode @True@, "tightest cluster") or the
-    -- lowest response among 0-cells (mode @False@, "largest void").
     argTight nt nh nw pat lookingForOnes =
       let n = U.length pat
           response i =
@@ -201,21 +191,17 @@ generateSTBN3D = runST $ do
       let df = wrap (f1 - f2) nt
           dy = wrap (y1 - y2) nh
           dx = wrap (x1 - x2) nw
-          sigma2 = 1.5 :: Double   -- Ulichney's stock σ; works at all scales used here
+          sigma2 = 1.5 :: Double
       in (fromIntegral (df*df + dy*dy + dx*dx) :: Double) / (2 * sigma2)
 
     wrap d n =
       let d' = d `mod` n
       in if 2 * abs d' > n then n - abs d' else abs d'
 
--- | A cheap correlation that returns the difference between the mask
--- variance along x (high if the mask is white-noise-flat in space)
--- and the variance after a 1×3 average box (low if blue noise dominates).
--- A blue-noise pattern's value is positive: averaging neighbouring
--- pixels collapses the high-frequency variance, but white noise stays
--- roughly the same. The property test uses this score as a
--- *necessary* (not sufficient) check that the mask is bluer than
--- white in the spatial axes.
+-- | A cheap correlation: variance of the mask minus variance after a 1×3
+-- horizontal box-average. Blue noise: positive (averaging collapses
+-- high-frequency variance). White noise: ≈ zero. Necessary (not sufficient)
+-- spectrum check.
 horizontalBlueScore :: forall t h w. (KnownNat t, KnownNat h, KnownNat w)
                     => Mask3D t h w -> Double
 horizontalBlueScore m@(Mask3D v) =
@@ -243,6 +229,6 @@ horizontalBlueScore m@(Mask3D v) =
             smMean = sum smVals / total
             smAcc  = sum [(s - smMean)^(2 :: Int) | s <- smVals]
         in smAcc / total
-      _t = nt   -- keep the t reflection live to silence -Wunused
+      _t = nt
       _m = m
   in var - smoothedVar

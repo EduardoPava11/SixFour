@@ -40,11 +40,6 @@ struct GIFReviewView: View {
                         )
 
                     perFrameStatus(primary)
-
-                    // The palette globe: 256 colours as circles on a rotatable
-                    // sphere, breathing through the 64 frames — the verifier you
-                    // can see, and the moving-parts look.
-                    PaletteSphereView(palettes: primary.palettesForDisplay)
                 }
                 .padding(.horizontal)
                 .padding(.top)
