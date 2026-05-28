@@ -89,13 +89,80 @@ def main() -> int:
     print("=== Step 6: verify .mlpackage loads in CoreML ===")
     assert mlpackage.exists(), f"mlpackage not produced at {mlpackage}"
     import coremltools as ct
+    import numpy as np
     mlmodel = ct.models.MLModel(str(mlpackage))
     spec = mlmodel.get_spec()
     print(f"  loaded:  {mlpackage}")
     print(f"  inputs:  {[i.name for i in spec.description.input]}")
     print(f"  outputs: {[o.name for o in spec.description.output]}")
-    print("\n✓ END-TO-END SPEC → .mlpackage VERIFIED")
-    return 0
+
+    print("\n=== Step 7: numerical round-trip — PyTorch vs .mlpackage ===")
+    # Run the SAME input through both backends. The .mlpackage is FP16 internally
+    # (compute_precision=FLOAT16); PyTorch is FP32. FP16 has ~10 mantissa bits ⇒
+    # ~5e-4 relative precision per op; with O(MAX_TOKENS) reductions inside L3
+    # sum-pool the error can amplify by ~√MAX_TOKENS ≈ 128, giving ~6e-2 relative
+    # drift as a generous bound. Outputs scale ~√MAX_TOKENS naturally under random
+    # init (sum of 16384 unit-variance things), so ABSOLUTE tolerance is the wrong
+    # frame; use RELATIVE (numpy.allclose-style atol + rtol).
+    ml_in_tokens = tokens.numpy().astype(np.float32)
+    ml_in_mask = token_mask.numpy().astype(np.float32)
+    ml_out = mlmodel.predict({"tokens": ml_in_tokens, "token_mask": ml_in_mask})
+    ml_haar = np.array(ml_out["haar_coeffs"]).astype(np.float32)
+    torch_haar = out_orig.numpy().astype(np.float32)
+    abs_diff = np.abs(ml_haar - torch_haar)
+    max_abs = abs_diff.max()
+    mean_abs = abs_diff.mean()
+    pt_max = np.abs(torch_haar).max()
+    rel = max_abs / max(pt_max, 1e-9)
+    print(f"  PyTorch output range:   [{torch_haar.min():+.4f}, {torch_haar.max():+.4f}] (|max| = {pt_max:.4f})")
+    print(f"  mlpackage output range: [{ml_haar.min():+.4f}, {ml_haar.max():+.4f}]")
+    print(f"  max |mlpackage - pytorch| = {max_abs:.4f}  (relative: {rel:.2e} of |max|)")
+    print(f"  mean|mlpackage - pytorch| = {mean_abs:.4f}")
+    # Tolerance is derived from the architecture, not picked from a hat. The L3
+    # sum-pool reduces MAX_TOKENS=16384 FP16 summands of per-summand magnitude
+    # ~√GMM_TOKEN_DIM ≈ 3.16. The FP16 ulp at magnitude 3 is ~1.5e-3 absolute;
+    # a random-walk accumulation over N summands has stddev √N · per-summand-ulp
+    # ≈ 128 · 1.5e-3 ≈ 0.19 — i.e. ~0.5 is the architectural FP16 noise floor
+    # for this layer's reduction. We allow that absolute bound + 5e-3 relative
+    # for elements above the noise floor (standard FP16 per-op precision).
+    # Anything beyond this is a real coremltools lowering bug, not numerics.
+    RTOL = 5e-3
+    ATOL = 0.5   # derived from √MAX_TOKENS · ulp(√GMM_TOKEN_DIM)
+    numerical_ok = bool(np.allclose(ml_haar, torch_haar, rtol=RTOL, atol=ATOL))
+    if numerical_ok:
+        print(f"  ✓ within FP16 lowering tolerance (rtol={RTOL:.0e}, atol={ATOL:.0e})")
+    else:
+        print(f"  ✗ NUMERICAL DRIFT exceeds rtol={RTOL:.0e}, atol={ATOL:.0e}")
+        # Show worst-offender index for debugging.
+        worst = int(np.unravel_index(abs_diff.argmax(), abs_diff.shape)[1])
+        print(f"    worst at idx {worst}: pytorch={torch_haar[0, worst]:+.4f}  mlpackage={ml_haar[0, worst]:+.4f}")
+
+    print("\n=== Step 8: σ-equivariance preserved through .mlpackage lowering ===")
+    # Run σ(x) through the .mlpackage; compare to σ(MLPkg(x)).
+    ml_in_tokens_sigma = (tokens * flip_in).numpy().astype(np.float32)
+    ml_out_sigma = mlmodel.predict({"tokens": ml_in_tokens_sigma, "token_mask": ml_in_mask})
+    ml_haar_sigma = np.array(ml_out_sigma["haar_coeffs"]).astype(np.float32)
+    flip_out_np = flip_out.numpy().astype(np.float32)
+    expected_sigma_out = ml_haar * flip_out_np
+    delta_sigma = np.abs(ml_haar_sigma - expected_sigma_out).max()
+    mean_sigma = np.abs(ml_haar_sigma - expected_sigma_out).mean()
+    print(f"  max |σ(MLPkg(x)) - MLPkg(σx)| = {delta_sigma:.2e}")
+    print(f"  mean|σ(MLPkg(x)) - MLPkg(σx)| = {mean_sigma:.2e}")
+    TOL_SIGMA = 1e-2
+    if delta_sigma > TOL_SIGMA:
+        print(f"  ✗ σ-EQUIVARIANCE BROKEN in .mlpackage (>{TOL_SIGMA})")
+        sigma_ok = False
+    else:
+        print(f"  ✓ σ-equivariance survives the lowering (within {TOL_SIGMA:.0e})")
+        sigma_ok = True
+
+    print()
+    if numerical_ok and sigma_ok:
+        print("✓ END-TO-END SPEC → .mlpackage VERIFIED (PyTorch agreement + σ-equivariance)")
+        return 0
+    else:
+        print("✗ END-TO-END FAILED — see diagnostics above")
+        return 1
 
 
 if __name__ == "__main__":
