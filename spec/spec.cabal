@@ -29,6 +29,13 @@ library
         SixFour.Spec.Diversity
         SixFour.Spec.GMM
         SixFour.Spec.Bures
+        SixFour.Spec.PairTree
+        SixFour.Spec.Dither
+        SixFour.Spec.LookNet
+        SixFour.Spec.LookCore
+        SixFour.Spec.Layer
+        SixFour.Spec.Scale
+        SixFour.Spec.Preference
         SixFour.Spec.Significance
         SixFour.Spec.Net
         SixFour.Spec.Cyclic
@@ -46,6 +53,7 @@ library
         SixFour.Spec.Hybrid.Laws
         SixFour.Codegen.Swift
         SixFour.Codegen.MLX
+        SixFour.Codegen.Burn
     build-depends:
         base       >=4.16 && <5
       , vector     >=0.13 && <0.14
@@ -104,6 +112,13 @@ test-suite spec-tests
         Properties.Diversity
         Properties.GMM
         Properties.Bures
+        Properties.PairTree
+        Properties.Dither
+        Properties.LookNet
+        Properties.LookCore
+        Properties.Layer
+        Properties.Scale
+        Properties.Preference
         Properties.Significance
         Properties.Hybrid
         Properties.Cyclic

@@ -11,6 +11,13 @@ import qualified Properties.Collapse     as Collapse
 import qualified Properties.Diversity    as Diversity
 import qualified Properties.GMM          as GMM
 import qualified Properties.Bures        as Bures
+import qualified Properties.PairTree     as PairTree
+import qualified Properties.Dither       as Dither
+import qualified Properties.LookNet      as LookNet
+import qualified Properties.LookCore     as LookCore
+import qualified Properties.Layer        as Layer
+import qualified Properties.Scale        as Scale
+import qualified Properties.Preference   as Preference
 import qualified Properties.Significance as Significance
 import qualified Properties.Hybrid       as Hybrid
 import qualified Properties.Cyclic       as Cyclic
@@ -27,8 +34,15 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Diversity.tests
   , GMM.tests
   , Bures.tests
+  , PairTree.tests
+  , Dither.tests
+  , LookNet.tests
+  , LookCore.tests
+  , Layer.tests
+  , Preference.tests
   , Significance.tests
   , Hybrid.tests
   , Cyclic.tests
   , Look.tests
+  , Scale.tests
   ]

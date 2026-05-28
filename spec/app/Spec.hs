@@ -27,6 +27,7 @@ import           Data.Maybe (fromMaybe)
 import SixFour.Codegen.Swift
   ( emitStageContract, emitNetContract, emitHybridContract, emitSignificanceContract )
 import SixFour.Codegen.MLX   (emitStagesPy,      emitNetShapePy)
+import SixFour.Codegen.Burn  (emitBurnContract)
 import SixFour.Spec.Hybrid.STBN3D (Mask3D(..), generateSTBN3D)
 
 main :: IO ()
@@ -36,6 +37,7 @@ main = do
       swiftOutDir   = fromMaybe "../SixFour/Generated"  (lookup "--swift-out" opts)
       mlxOutDir     = fromMaybe "../trainer/generated"  (lookup "--mlx-out"   opts)
       resourceOutDir = fromMaybe "../SixFour/Resources" (lookup "--res-out"   opts)
+      burnOutDir    = fromMaybe "../studio/look-nn/src/generated" (lookup "--burn-out" opts)
 
   writeUtf8 (swiftOutDir   </> "StageContract.swift")  emitStageContract
   writeUtf8 (swiftOutDir   </> "NetContract.swift")    emitNetContract
@@ -43,6 +45,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "SignificanceContract.swift") emitSignificanceContract
   writeUtf8 (mlxOutDir     </> "stages.py")            emitStagesPy
   writeUtf8 (mlxOutDir     </> "net_shape.py")         emitNetShapePy
+  writeUtf8 (burnOutDir    </> "contract.rs")          emitBurnContract
 
   -- Drop a Python __init__.py so `from generated import …` works.
   writeUtf8 (mlxOutDir </> "__init__.py") T.empty
@@ -58,9 +61,10 @@ main = do
   let Mask3D maskBytes = generateSTBN3D @8 @8 @8
   writeBinary (resourceOutDir </> "stbn3d-8.bin") maskBytes
 
-  putStrLn "spec-codegen: wrote 7 files + 1 resource."
+  putStrLn "spec-codegen: wrote 8 files + 1 resource."
   putStrLn $ "  swift   : " <> swiftOutDir
   putStrLn $ "  mlx     : " <> mlxOutDir
+  putStrLn $ "  burn    : " <> burnOutDir
   putStrLn $ "  resource: " <> resourceOutDir
   putStrLn $ "  stbn3d-8.bin size: " <> show (U.length maskBytes) <> " bytes"
 
