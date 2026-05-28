@@ -22,6 +22,7 @@ import qualified Properties.Bottleneck16 as Bottleneck16
 import qualified Properties.SigmaDecomp  as SigmaDecomp
 import qualified Properties.Quad4        as Quad4
 import qualified Properties.Quad4Fit     as Quad4Fit
+import qualified Properties.SigmaPairHead as SigmaPairHead
 import qualified Properties.Pipeline     as Pipeline
 import qualified Properties.Significance as Significance
 import qualified Properties.Hybrid       as Hybrid
@@ -49,6 +50,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SigmaDecomp.tests
   , Quad4.tests
   , Quad4Fit.tests
+  , SigmaPairHead.tests
   , Pipeline.tests
   , Significance.tests
   , Hybrid.tests

@@ -41,6 +41,7 @@ library
         SixFour.Spec.Quad4
         SixFour.Spec.LinAlg
         SixFour.Spec.Quad4Fit
+        SixFour.Spec.SigmaPairHead
         SixFour.Spec.Pipeline
         SixFour.Spec.Significance
         SixFour.Spec.Net
@@ -201,6 +202,7 @@ test-suite spec-tests
         Properties.SigmaDecomp
         Properties.Quad4
         Properties.Quad4Fit
+        Properties.SigmaPairHead
         Properties.Pipeline
         Properties.Significance
         Properties.Hybrid
