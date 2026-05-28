@@ -39,6 +39,8 @@ library
         SixFour.Spec.Bottleneck16
         SixFour.Spec.SigmaDecomp
         SixFour.Spec.Quad4
+        SixFour.Spec.LinAlg
+        SixFour.Spec.Quad4Fit
         SixFour.Spec.Pipeline
         SixFour.Spec.Significance
         SixFour.Spec.Net
@@ -198,6 +200,7 @@ test-suite spec-tests
         Properties.Bottleneck16
         Properties.SigmaDecomp
         Properties.Quad4
+        Properties.Quad4Fit
         Properties.Pipeline
         Properties.Significance
         Properties.Hybrid
