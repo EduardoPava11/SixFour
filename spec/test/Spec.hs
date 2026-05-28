@@ -18,6 +18,9 @@ import qualified Properties.LookCore     as LookCore
 import qualified Properties.Layer        as Layer
 import qualified Properties.Scale        as Scale
 import qualified Properties.Preference   as Preference
+import qualified Properties.Bottleneck16 as Bottleneck16
+import qualified Properties.SigmaDecomp  as SigmaDecomp
+import qualified Properties.Quad4        as Quad4
 import qualified Properties.Significance as Significance
 import qualified Properties.Hybrid       as Hybrid
 import qualified Properties.Cyclic       as Cyclic
@@ -40,6 +43,9 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LookCore.tests
   , Layer.tests
   , Preference.tests
+  , Bottleneck16.tests
+  , SigmaDecomp.tests
+  , Quad4.tests
   , Significance.tests
   , Hybrid.tests
   , Cyclic.tests

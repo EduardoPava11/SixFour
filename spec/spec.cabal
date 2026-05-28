@@ -36,6 +36,9 @@ library
         SixFour.Spec.Layer
         SixFour.Spec.Scale
         SixFour.Spec.Preference
+        SixFour.Spec.Bottleneck16
+        SixFour.Spec.SigmaDecomp
+        SixFour.Spec.Quad4
         SixFour.Spec.Significance
         SixFour.Spec.Net
         SixFour.Spec.Cyclic
@@ -191,6 +194,9 @@ test-suite spec-tests
         Properties.Layer
         Properties.Scale
         Properties.Preference
+        Properties.Bottleneck16
+        Properties.SigmaDecomp
+        Properties.Quad4
         Properties.Significance
         Properties.Hybrid
         Properties.Cyclic
