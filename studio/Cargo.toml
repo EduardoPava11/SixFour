@@ -3,8 +3,8 @@
 # (permissive only) BEFORE it is added. See deny.toml + README.
 [workspace]
 resolver = "2"
-members = ["analysis-core", "viz", "explore"]
-# future members: "look-nn" (burn), "share" (iroh), "app" (egui)
+members = ["analysis-core", "viz", "explore", "look-nn"]
+# future members: "share" (iroh), "app" (egui)
 
 [workspace.package]
 edition = "2021"

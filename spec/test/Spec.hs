@@ -8,6 +8,9 @@ import qualified Properties.Surjectivity as Surj
 import qualified Properties.Wu           as Wu
 import qualified Properties.Coverage     as Coverage
 import qualified Properties.Collapse     as Collapse
+import qualified Properties.Diversity    as Diversity
+import qualified Properties.GMM          as GMM
+import qualified Properties.Bures        as Bures
 import qualified Properties.Significance as Significance
 import qualified Properties.Hybrid       as Hybrid
 import qualified Properties.Cyclic       as Cyclic
@@ -21,6 +24,9 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Wu.tests
   , Coverage.tests
   , Collapse.tests
+  , Diversity.tests
+  , GMM.tests
+  , Bures.tests
   , Significance.tests
   , Hybrid.tests
   , Cyclic.tests

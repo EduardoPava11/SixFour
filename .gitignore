@@ -7,6 +7,7 @@ xcuserdata/
 .swiftpm/
 .build/
 spec/dist-newstyle/
+spec/**/dist-newstyle/
 *.hi
 *.o
 trainer/.venv/

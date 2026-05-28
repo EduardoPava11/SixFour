@@ -2,16 +2,23 @@
 //! palette-environment descriptor (MATH.md §8). The shared foundation for the
 //! `viz` tool and the future per-user "look" NN (burn).
 
+pub mod bures;
 pub mod collapse;
 pub mod color;
 pub mod cyclic;
 pub mod geometry;
 pub mod gif_io;
+pub mod gmm;
 pub mod look;
 pub mod synth;
 
 pub use collapse::{candidates, fidelity, median_cut, population_value, weighted_kmeans};
 pub use color::Oklab;
+pub use gmm::{
+    gaussian_token, mixture_covariance, mixture_mean, point_mass, point_mass_gmm, pool_gmm,
+    Cov6, Gaussian, GMM_TOKEN_DIM,
+};
+pub use bures::{bures_barycenter_cov, bures_distance_sq, sqrt_psd};
 pub use cyclic::{descriptor, CyclicStack, Frame, Params, DESCRIPTOR_DIM};
 pub use geometry::{color_pca, distinct_count, effective_dim, mean_nn_spacing};
 pub use look::{affine_look, global_collapse, LookCode, LOOK_DIM};
@@ -149,5 +156,25 @@ mod tests {
         assert!(ed > 0.5 && ed <= 3.0001, "effective dim out of range: {ed}");
         assert!(geometry::distinct_count(&c, 0.01) > 0);
         assert!(geometry::mean_nn_spacing(&c, 64, 1) >= 0.0);
+    }
+
+    // Golden source for the Haskell `spec-gen` cross-check: print the §8
+    // descriptor of a fixed synth stack so SixFour.Gen.Synth (a bit-exact port
+    // of synth.rs) can be asserted against it. Run:
+    //   cargo test -p analysis-core print_synth_golden -- --nocapture
+    #[test]
+    fn print_synth_golden() {
+        use crate::synth::{synth_stack, SynthParams};
+        use crate::cyclic::{descriptor, palette_entropy, Params};
+        let p = SynthParams {
+            n_clusters: 3, spread: 0.06, drift: 0.18, gamut: 0.8,
+            conc_skew: 1.0, pop_drift: 0.5, seed: 42,
+        };
+        let stk = synth_stack(&p, 8, 12);
+        let d = descriptor(Params { eps: 0.1, iters: 20 }, &stk);
+        eprintln!("GOLDEN_DESCRIPTOR {:?}", d);
+        eprintln!("GOLDEN_HW0 {}", palette_entropy(&stk.frames[0].weights));
+        eprintln!("GOLDEN_W0_FIRST3 {:?}", &stk.frames[0].weights[0..3]);
+        eprintln!("GOLDEN_P0_0 {:?}", stk.frames[0].palette[0]);
     }
 }

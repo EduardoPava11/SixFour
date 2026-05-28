@@ -10,6 +10,15 @@
 > palette-stack **descriptor** (`Spec/Cyclic.hs`, §8), which is the deferred-NN
 > feature seam; read the Sinkhorn material with that as its only live consumer.
 
+> **Pivot note (2026-05-27).** The deferred NN's input is no longer the §8 Def-20
+> 16-D descriptor *via 11 colour categories*. It is the continuous OKLab **Gaussian
+> mixture** (`SixFour.Spec.GMM`), collapsed by the **Wasserstein-2 / Bures** barycenter
+> (`SixFour.Spec.Bures`). This *promotes* the machinery already here: Def 16 (Gaussian
+> colour entropy, the per-frame covariance Σ) becomes the substrate's building block,
+> and the §8 transport/Sinkhorn kernel is the barycenter's. The k-means collapse of
+> §§1–4 remains the free-support W₂ barycenter floor (the Bures path reduces to it as
+> Σ→0). See `spec/LOOK_NN.md`'s pivot banner.
+
 This document specifies the SixFour pipeline using the framework of
 
 > **Hany Fahmy** (2017). *Mathematics of Statistical Modelling: Abstract to

@@ -328,7 +328,10 @@ descriptor params stk@(CyclicStack frames) =
       tpEnts  = map snd transitions
       acPow   = let ac = drop 1 (dftPower hW)
                     tot = sum ac
-                in if tot <= 1e-12 then repeat 0 else map (/ tot) ac
+                -- finite zero list (NOT `repeat 0`) on a constant trajectory,
+                -- so `length acPow` below terminates; matches the Rust oracle's
+                -- `vec![0.0; ac.len()]`. A constant H(P_t) loop has no AC power.
+                in if tot <= 1e-12 then map (const 0) ac else map (/ tot) ac
       coeff i = if i < length acPow then acPow !! i else 0
   in V.fromList
        [ meanL hW                 -- 0  mean palette entropy

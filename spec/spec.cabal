@@ -26,6 +26,9 @@ library
         SixFour.Spec.StageA
         SixFour.Spec.Coverage
         SixFour.Spec.Collapse
+        SixFour.Spec.Diversity
+        SixFour.Spec.GMM
+        SixFour.Spec.Bures
         SixFour.Spec.Significance
         SixFour.Spec.Net
         SixFour.Spec.Cyclic
@@ -98,6 +101,9 @@ test-suite spec-tests
         Properties.Wu
         Properties.Coverage
         Properties.Collapse
+        Properties.Diversity
+        Properties.GMM
+        Properties.Bures
         Properties.Significance
         Properties.Hybrid
         Properties.Cyclic

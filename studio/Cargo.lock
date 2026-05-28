@@ -4509,6 +4509,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "look-nn"
+version = "0.1.0"
+dependencies = [
+ "analysis-core",
+]
+
+[[package]]
 name = "lru"
 version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
