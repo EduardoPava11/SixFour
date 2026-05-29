@@ -5,6 +5,192 @@ newest first.
 
 ---
 
+## 2026-05-29 — Next session: FULL GIF creation in Zig (per-frame LAB palette, 20 fps)
+
+> **Entry point for the next session.** The owned Zig core (`Native/`) currently ships
+> exactly one kernel — `s4_load_look_net` (blob parser, `Native/src/root.zig:64`). This
+> brief scopes the next real kernel: the **full GIF-creation pipeline in fixed-point Zig**,
+> driven by the existing Swift capture/Metal/display layer. Decision lineage:
+> [[sixfour-zig-quantized-core]] (integerize the palette pipeline with a deterministic
+> argmin tie-break so GIF↔tensor round-trips are bit-exact MLX↔device). **Reproduce the
+> existing algorithms faithfully — do NOT invent new ones.** The Haskell spec (`spec/`)
+> is the verified source of truth and emits the contracts + golden vectors we gate against.
+
+### 1. GOAL + acceptance
+Product flow: **Swift/AVFoundation capture → 64 frames → per-frame 256-colour OKLab
+palette that BALANCES the camera input (max LAB diversity/coverage, NOT MSE) → 64×64 GIF
+frames → shown to the user @ 20 fps gold standard.** Zig owns the deterministic quantized
+core; Swift keeps capture + Metal decode + display.
+
+- **Accept (quality):** GIF quality ≈ current float Swift/Metal path — negligible loss.
+  Per-frame palette is **surjective** (all 256 colours used) and **significant** (every
+  slot ≥ `minPopulation` pixels). Coverage metric (not MSE) is the objective.
+- **Accept (timing):** capture @ 20 fps (`activeVideo{Min,Max}FrameDuration = 1/20`),
+  display @ 20 fps (5 centiseconds/frame in the GIF + a 20 fps `Timer`), nearest-neighbor
+  upscale. Extraction+encode run **post-burst, offline** (no real-time deadline on Zig).
+- **Accept (bit-exact):** once integerized, Zig output is bit-identical to the Haskell
+  golden vectors (goldens shift from tolerance → EXACT) and reproducible Python/Swift↔Zig.
+
+### 2. ALGORITHM MAP (concrete algo · canonical file:line to read · how verified)
+
+**A. Per-frame palette extraction (cluster → select → nearest-centroid → significance)**
+- **Wu variance-cut seeding** — 32³ moment histogram (hist + 9 moment tables), cumulate
+  along L,a,b, greedily split highest-WCSS box on highest-variance axis until K=256.
+  Read `SixFour/Palette/WuQuantizer.swift:99` (quantize), `:256` (bestSplit), `:233`
+  (WCSS); CPU wrapper `Metal/KMeansPalettePipeline.swift:378`. Spec: `spec/src/SixFour/Spec/StageA.hs:77`.
+  Verified: `SixFourTests/WuQuantizerTests.swift`, `Properties/Significance.hs`.
+- **Lloyd K-means** — assign to nearest centroid (squared OKLab L2, strict `<` tie→idx0),
+  accumulate linear+outer-product sums, divide by count (keep old centroid if count==0).
+  15 iters GPU / 3 iters CPU+spec. Read Metal `Shaders.metal:375` (assign+accumulate,
+  tie-break `:402`), `:443` (finalize), `:489` (finalize-stats covariance). Spec
+  `StageA.hs:96` (lloydStep). Verified: `MetalKMeansTests.swift`, Haskell `varianceCutReference`.
+- **Farthest-point (maximin) seeding** — diversity objective: seed0 = argmax dist-from-mean,
+  then iteratively argmax min-dist-to-chosen. Read `KMeansPalettePipeline.swift:402`;
+  spec `Significance.hs:269`. Verified: `lawSigMaximinVariety`.
+- **Nearest-centroid assignment** — argmin squared OKLab L2 with **strict `<`, lowest
+  index wins**. SIMD8 path `Palette/NearestCentroid.swift:67` (mask replace + horizontal
+  reduction `:91`); scalar oracle `:165`; GPU `Shaders.metal:402`. Spec `Significance.hs:245`.
+  Verified: `NearestCentroidTests.swift:46`.
+- **Significance split-fill (rebalance)** — every slot count ≥ `minPopulation`; for each
+  deficient slot pull the pixel NEAREST to palette[k] from a surplus slot (count > min).
+  Terminates since 4096 ≥ 256·2. Read `Palette/SignificantSplitFill.swift:34` (rescue),
+  `:78` (cells: mean/σ/count/provenance). Spec `Significance.hs:304`. Verified:
+  `lawSigAllSignificant`, `lawSigMassConservation`, `SignificantSplitFillTests.swift`.
+- **Covariance** — E[xxᵀ]−μμᵀ, upper triangle (LL,La,Lb,aa,ab,bb), empty→(1e-6,0,0,1e-6,0,1e-6).
+  Read `Shaders.metal:489`/`:420`; assembly `KMeansPalettePipeline.swift:232`; spec `Significance.hs:193`.
+
+**B. LAB/OKLab transforms + diversity/coverage objective**
+- **OKLab transform** — sRGB↔linear (piecewise gamma) · M1 (lin→LMS) · cbrt · M2 (→OKLab);
+  inverse uses M2⁻¹, cube, M1⁻¹. 18 bit-exact Ottosson constants. Read
+  `spec/src/SixFour/Spec/Color.hs:45`, Swift `Color/ColorScience.swift:34`. Verified:
+  `Properties/Color.hs` round-trip ≤1e-5 over 33³ grid, `ColorScienceTests.swift`.
+- **Gamut coverage (16³ voxel grid)** — bin OKLab into 4096 voxels (`floor((v+0.5)·n)`),
+  coverage = occupied/4096; this is the diversity objective maximized by farthest-point.
+  Read `Spec/Coverage.hs:40`, `Spec/Bottleneck16.hs:44`, Swift `Editing/ClusterStatisticsOps.swift:306`.
+  Verified: `Properties/Coverage.hs` (∈[0,1], monotone-under-union).
+- **Diversity measures** — weighted covariance → Gaussian entropy ½ln((2πe)³|Σ|),
+  effective-dim (trΣ)²/tr(Σ²)∈[0,3]. Read `Spec/Diversity.hs:38`, Swift `ClusterStatisticsOps.swift:288`.
+
+**C. GIF encoder (LZW + per-frame palette table + STBN3D dither + 64×64 + timing)**
+- **LZW (8-bit alphabet, variable code size, LSB-first)** — dict init [0..255], clearCode=256,
+  endCode=257, first new=258; code size 9→12, increment when nextCode==(1<<codeSize); sub-blocks
+  ≤255 bytes, 0x00 terminator. Read `Encoder/GIFEncoder.swift:190`; spec `gen/SixFour/Gen/GifWire.hs:203`.
+  Verified: `GIFEncoderTests.swift` round-trip via `decodeLZWBlocks():274`.
+- **GIF89a frame builder (per-frame Local Color Tables, no GCT)** — header 'GIF89a',
+  LSD (packed 0x70), NETSCAPE2.0 loop, then 64× {GCE 0x04+delay, Image Descriptor 0x2C…0x87,
+  768-byte LCT, LZW data}, trailer 0x3B. Read `GIFEncoder.swift:32`; spec `GifWire.hs:73`.
+  Verified: byte-level structure tests in `GIFEncoderTests.swift:15`.
+- **OKLab→8-bit sRGB** — `byte = clamp(round(x*255),0,255)` per channel after `okLabToSRGB`.
+  Read `GifWire.hs:177`; Swift via `simd` + `okLabToSRGB`.
+- **STBN3D blue-noise dither** — pre-computed 8³ mask (void-and-cluster, toroidal Gaussian
+  σ²=1.5), tiled 8×8×8→64³; threshold picks nearest2 farther centroid. **Load
+  `SixFour/Resources/stbn3d-8.bin` (512 bytes) — never regenerate.** Read
+  `Generated/STBN3DContract.swift:28` (loadTiled), `Palette/Dither.swift:291` (blueNoiseSIMD);
+  spec `Spec/STBN3D.hs:76`. Error-diffusion (Floyd–Steinberg/Atkinson) `Dither.swift:148`/`:334`,
+  spec `Spec/Dither.hs:22`.
+- **Brands gating the encode** — `CompleteVoxelVolume` (per-frame surjectivity, `Spec/Indices.hs:59`,
+  Swift `SignificantVoxelVolume.swift`) + `SignificantSplitFill.rescue`. Encode consumes the
+  witness at `GIFEncoder.swift:56`.
+
+**D. Capture → frame → display + 20 fps timing**
+- **20 fps burst** — `AVCaptureVideoDataOutput` delegate (x420 10-bit YCbCr), frame-rate
+  clamped 1/20. Read `Capture/CaptureSession.swift:382` (clamp), `:499` (captureBurst),
+  `:651` (delegate).
+- **Metal YCbCr10→OKLab** — crop/downsample/linearize (colorSpaceTag OETF) → linear→OKLab →
+  unsharp-L (0.6). Read `Metal/Pipeline.swift:25`/`:243` (readback OKLabTile). Stays Swift/Metal.
+- **GIF display @ 20 fps** — `Timer` interval 1/20, `Image(...).interpolation(.none)`
+  nearest-neighbor; reduceMotion freezes frame 0. Read `UI/Screens/Review/GIFReviewView.swift:115`,
+  per-frame status `TimelineView(.animation(1/20))` `:54`. Encode delay 5cs `GIFEncoder.swift:40`.
+
+### 3. ZIG INTEGERIZATION BOUNDARY
+
+**Becomes fixed-point Zig (the owned quantized core):**
+1. **Wu histogram + variance-cut seeding** (32³ moment tables → greedy split → centroids).
+2. **Lloyd K-means** (fixed-point atomic-style accumulation; keep-old-on-empty; matched scale).
+3. **Nearest-centroid argmin** — i32 squared distance, **DETERMINISTIC tie-break: strict
+   `<`, lowest index wins** (mirror Swift/Haskell exactly). Output UInt16 indices [0,256).
+4. **Split-fill rebalance** — distance-based donor pull (nearest-to-palette[k] from surplus).
+5. **LZW + GIF89a serialization** — byte-for-byte port of `GIFEncoder.swift:190`/`GifWire.hs:203`
+   (LSB-first, sub-block chunking, little-endian fields, minCodeSize=8).
+- Fixed-point: Q16/Q24; `toFixedPoint(f32)→i32`, `distanceFixed→i64`. OKLab cube-root via
+  Newton-Raphson if conversion is done Zig-side (or accept float centroids from Swift and
+  convert). Fixed-point accumulation scale must match Metal's ×2^16 / ÷65536 (`Shaders.metal:460`/`:507`).
+
+**Stays Swift/Metal (the seam):**
+- AVFoundation capture + 20 fps timing (`CaptureSession`), Metal YCbCr→OKLab + unsharp
+  (`Pipeline.swift`), live 10 fps preview, GIF display `Timer` (`GIFReviewView`).
+- **STBN3D mask generation** — load the pre-computed `stbn3d-8.bin`; Zig tiles it, never regenerates.
+- Blue-noise GPU dither path (`BlueNoisePalettePipeline.swift`) stays Metal. (Error-diffusion
+  CPU dither MAY be ported but is optional — it is a Swift-only refinement, not in the spec.)
+- `CompleteVoxelVolume` + `SignificantSplitFill` type-safe gates orchestration in Swift.
+
+**Reuse the established C-ABI + bridge pattern** (cite `s4_load_look_net`):
+- Static lib: `Native/build-ios.sh` → `zig build-lib src/root.zig -target {aarch64-ios,
+  aarch64-ios-simulator} -O{ReleaseFast,ReleaseSafe}` → `libsixfour_native.a`.
+- Header: `Native/include/sixfour_native.h` (C signatures). Bridge:
+  `SixFour-Bridging-Header.h`. Swift wrapper: `SixFour/Native/SixFourNative.swift`.
+  Link wired in `project.yml` (`preBuildScript` → build-ios.sh, `LIBRARY_SEARCH_PATHS`,
+  `OTHER_LDFLAGS=-lsixfour_native`). Proposed new exports (caller-allocated outputs, no
+  alloc crosses FFI):
+  - `s4_quantize_frame(pixels[4096*3] f32, centroids[K*3] f32, K, out_indices[*]u16) i32`
+  - `s4_gif_encode(frames u8*, frames_len, palettes (RGB8) , palette_count, out_path) i32`
+- **Zig 0.16 facts:** `pub const panic = std.debug.no_panic` (no stack-trace symbols in the
+  host binary); `align(1)` ptrs OK for scalar f32 loads on arm64 (SIMD/Metal consumers must
+  re-pack); default integer wraparound `+%` (argmin comparisons are naturally checked);
+  `zig build-lib` arm64-ios + simulator both green (s4_load_look_net shipped & tested).
+
+### 4. REPRODUCTION RISKS / bit-exactness watch-list
+- **Tie-break = strict `<`, lowest-index-wins** everywhere (scalar, SIMD8 lane-scan, GPU,
+  Zig). Any `>` / `≤` / lazy handling flips indices on exact ties. (`NearestCentroid.swift:91`.)
+- **Fixed-point scale parity** with Metal ×2^16/÷65536 (`Shaders.metal:460`,`:507`).
+- **Lloyd iteration count** (15 GPU / 3 CPU+spec) — pick a mode and match it.
+- **Empty-cluster = keep old centroid** (`Shaders.metal:454`, `StageA.hs:106`).
+- **Covariance order** = (LL,La,Lb,aa,ab,bb); population divisor /n (NOT n−1).
+- **Voxel bin** = `floor((v+0.5)·n)` truncation-as-floor; mixed round/floor misaligns coverage.
+- **OKLab→sRGB = round (not truncate)**, then clamp; 18 M1/M2 constants bit-exact (1 ULP compounds).
+- **LZW edge cases:** LSB-first bit order; code-size increment threshold `nextCode==(1<<codeSize)`
+  (off-by-one corrupts); sub-blocks ≤255 bytes + 0x00 terminator; all multi-byte fields little-endian.
+- **STBN3D determinism** — load `stbn3d-8.bin`, never regenerate (Euclidean ≠ toroidal mask).
+- **Surjectivity check is PER-FRAME** (set cardinality == K for each frame), not global union.
+- **Constants from contract, not hardcoded** — `minPopulation=2`, confidence Z=1.959963984540054,
+  binsPerAxis=32 flow from `Significance.hs` codegen → Swift `SignificanceContract.swift`.
+- **Order-of-eval** in fixed-point Lloyd accumulation — enforce row-major pixel scan
+  (rounding makes addition order-dependent).
+- **Cross-frame remap** not implemented; if introduced it must compose with quantization in
+  Zig to keep commuting at fixed-point precision.
+
+### 5. VERIFICATION STRATEGY (how to gate the Zig port)
+- **Golden vectors from the Haskell spec** — `cabal run spec-codegen` already emits forward
+  goldens (`trainer/generated/look_net_golden.json`, `Generated/*Contract.swift`). Add
+  quantization + LZW + GIF-bytes goldens via `Codegen.Golden`. **Once integerized, flip the
+  Swift↔spec goldens from tolerance (≤5e-3 / 1e-5) to EXACT byte/index equality.**
+- **Cross-language fixture test** (mirror `Native/src/fixture_test.zig`, which checks the
+  S4LN blob byte-exactly): Python/Swift writes a synthetic frame + centroids (+ expected
+  indices/GIF bytes) as a fixture; Zig reproduces bit-exactly; `zig build test` gates it
+  (skip-if-absent like the current fixture). Then an iOS integration test feeds Zig's
+  quantize output into `PaletteGenerator.generate()` → dither → encode and asserts the GIF
+  is byte-identical to the Swift path (`GIFEncoderTests.swift` round-trip on all 64 frames).
+- **On-phone benchmark (iPhone 17 Pro, iOS 26)** — confirm 20 fps capture + 20 fps display
+  hold, and measure quality (coverage, per-frame MSE diagnostics already surfaced in
+  `GIFReviewView` perFrameStatus) ≈ current float path. Extraction+encode are offline, so
+  only correctness/quality is gated here, not latency.
+
+### 6. OPEN QUESTIONS for the user
+1. **Fixed-point width:** Q16 or Q24 for OKLab? (Q16 cheaper; Q24 safer on the cbrt cube-root
+   round-trip near gamut edges.) Need a target last-bit tolerance that does NOT flip indices.
+2. **OKLab conversion locus:** does Zig do sRGB→OKLab (needs Newton-Raphson cbrt) or does
+   Swift/Metal hand Zig float OKLab pixels + centroids and Zig only does integer argmin/LZW?
+   (The capture survey says OKLab pixels already exist post-Metal — leaning toward the latter.)
+3. **LZW in Zig now, or later?** It is the highest-risk byte-exact port but has no float
+   nondeterminism. Port it together with quantization, or land quantize first and keep the
+   Swift encoder until goldens are EXACT?
+4. **Lloyd iteration count to standardize** for the device path: 15 (GPU parity) or 3 (spec)?
+5. **Seeder of record:** Wu variance-cut vs farthest-point as the shipped default for the
+   "balances the camera input / max diversity" objective (the 3-way selector currently
+   picks K-means/Wu/Octree — which one is the Zig core's primary)?
+
+---
+
 ## 2026-05-29 — Haskell→MLX alignment audit: open gaps (flags only)
 
 > **Closure status (2026-05-29, branch `feat/haskell-mlx-alignment`, 6 commits, 289 spec
