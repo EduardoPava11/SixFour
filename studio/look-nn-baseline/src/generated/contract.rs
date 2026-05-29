@@ -24,7 +24,7 @@ pub const MAX_PONDER_DEPTH: usize = 8;  // = Haar levels
 // ---- Learnable-layer IO shapes (L3 encoder, L4 core, L5 decoder) ----
 pub struct LayerIo { pub in_dim: usize, pub out_dim: usize, pub desc: &'static str }
 pub const ENCODER_IO: LayerIo = LayerIo { in_dim: 10, out_dim: 64, desc: "L3 set encoder E: per-component (mu,Sigma,w)=10 -> dM context (perm-invariant, set-pooled)" };
-pub const CORE_IO: LayerIo = LayerIo { in_dim: 64, out_dim: 64, desc: "L4 recursive core R: dM -> dM context, depth-recurrent (amortized W2/Bures barycenter, ponder <= N)" };
+pub const CORE_IO: LayerIo = LayerIo { in_dim: 64, out_dim: 64, desc: "L4 core R: dM -> dM context; ONE weight-shared block reused over 8 Haar levels (Mixture-of-Recursions), σ-invariant per-level halting (ponder <= N)" };
 pub const DECODER_IO: LayerIo = LayerIo { in_dim: 64, out_dim: 768, desc: "L5 tree decoder D: dM -> 768 Haar coefficients (root + 255 sigma-balanced offsets)" };
 
 /// Golden cross-check vectors — computed by the Haskell reference (Spec.GMM /

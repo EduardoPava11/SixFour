@@ -74,6 +74,12 @@ tests = testGroup "PairTree (Haar pairing pyramid — the NN's dimensional space
     testProperty "golden decay ratio between levels is 1/φ" $
       once $ abs (goldenDecay 1 1 / goldenDecay 1 0 - 1 / phi) < 1e-12
 
+  , testProperty "golden decay is self-similar across all paletteDepth levels (ratio 1/φ)" $
+      forAll (choose (0.01, 10) :: Gen Double) (lawGoldenDecayRatio 1e-9)
+
+  , testProperty "golden decay = halting prior: per-level ponder budget strictly decreasing (signal→noise)" $
+      forAll (choose (0.01, 10) :: Gen Double) lawGoldenDecayHaltPriorMonotone
+
   , -- Knowledge: a φ-decaying tree's measured per-level magnitudes ratio to 1/φ.
     testProperty "a golden-decaying tree has level-magnitude ratios ≈ 1/φ" $
       once $

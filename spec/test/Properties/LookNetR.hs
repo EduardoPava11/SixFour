@@ -20,16 +20,25 @@ genHiddenContext = do
   pure (HiddenContext (Tensor1 (U.fromList xs)))
 
 tests :: TestTree
-tests = testGroup "LookNetR (L4 recursive core — σ-block-diagonal weights, identity baseline)"
+tests = testGroup "LookNetR (L4 shared-block recursion — Mixture-of-Recursions over Haar levels, σ-invariant halting)"
 
-  [ testProperty "structural constants: depth=8, halting=1 per block" $
+  [ testProperty "structural constants: depth=8, halting=1 per step" $
       once (coreDepth == 8 && haltingWeightSlot == 1)
+
+  , testProperty "exactly ONE shared block reused coreDepth=8 times (Mixture-of-Recursions)" $
+      forAll genHiddenContext lawSharedBlockReuse
 
   , testProperty "reference core IS the identity (the spec is a contract, not a computation)" $
       forAll genHiddenContext lawCoreRefIsIdentity
 
   , testProperty "reference core σ-equivariance: id ∘ σ = σ ∘ id (trivial base case)" $
       forAll genHiddenContext lawCoreRefSigmaEquivariance
+
+  , testProperty "recursion is σ-equivariant inductively ∀ n≤coreDepth (id refine, tol 1e-12)" $
+      forAll genHiddenContext (lawRecursionSigmaEquivariance 1e-12)
+
+  , testProperty "halting head is σ-INVARIANT (squares kill chroma sign — EXACT, ==)" $
+      forAll genHiddenContext lawHaltingSigmaInvariance
 
   , testProperty "σ-block-diagonal mask: weight free iff input/output dims share σ-class" $
       once lawBlockDiagonalMaskRespectsSigma

@@ -61,7 +61,9 @@ module SixFour.Spec.LookNetD
     -- * Output type
   , DecoderOutput(..)
   , toHaarPalette
+  , flattenHaar
   , decoderReference
+  , decoderFromRecursion
     -- * σ₇₆₈ — the OKLab-triple-wise σ on the flat 768-D output
   , sigma768Mask
   , sigma768
@@ -77,14 +79,17 @@ module SixFour.Spec.LookNetD
   , lawDecoderRefIsZero
   , lawDecoderRefSigmaEquivariance
   , lawDecoderPruningArithmetic
+  , lawHaarFlattenRoundTrip
+  , lawDecoderFromRecursionMatchesZero
   ) where
 
 import qualified Data.Vector.Unboxed as U
 
 import SixFour.Spec.Color    (OKLab(..))
-import SixFour.Spec.PairTree (HaarPalette(..), degreesOfFreedom, levelDof, paletteDepth)
+import SixFour.Spec.PairTree (HaarPalette(..), degreesOfFreedom, levelDof, paletteDepth, treeDepth, wellFormed)
 import SixFour.Spec.Tensor   (Tensor1(..), hiddenAchromaticDim, hiddenRedGreenDim, hiddenBlueYellowDim)
 import SixFour.Spec.LookNetE (HiddenContext(..))
+import SixFour.Spec.LookNetR (SharedBlock, runRecursion, sharedReferenceBlock)
 
 -- =============================================================================
 -- Structural constants
@@ -140,6 +145,41 @@ toHaarPalette (DecoderOutput (Tensor1 v)) =
 -- Total, σ-equivariant trivially (the zero map commutes with σ₇₆₈).
 decoderReference :: HiddenContext -> DecoderOutput
 decoderReference _ = DecoderOutput (Tensor1 (U.replicate 768 0.0))
+
+-- | The exact left-inverse of 'toHaarPalette': flatten a 'HaarPalette' (root +
+-- per-level offsets, top-down) into the 768-D flat layout. Order: root triple,
+-- then level 0's 1 offset, level 1's 2 offsets, … level 7's 128 offsets — each
+-- as @[L, a, b]@. For a well-formed depth-'paletteDepth' palette this is the
+-- byte-exact inverse of 'toHaarPalette' ('lawHaarFlattenRoundTrip').
+flattenHaar :: HaarPalette -> DecoderOutput
+flattenHaar (HaarPalette rt lvls) =
+  let triple (OKLab l a b) = [l, a, b]
+      flat = concatMap triple (rt : concat lvls)
+  in DecoderOutput (Tensor1 (U.fromList flat))
+
+-- | The decoder expressed as the Mixture-of-Recursions over the Haar tree
+-- ("SixFour.Spec.LookNetR".'runRecursion'): the root reads the initial context,
+-- and Haar level @ℓ@ reads the context after @ℓ+1@ shared-block refinements, so
+-- deeper recursion feeds finer detail. The /reference/ shared block emits zeros
+-- (identity refine, zero offsets), so this equals 'decoderReference' on every
+-- input ('lawDecoderFromRecursionMatchesZero'); the trained decoder supplies
+-- σ-block-diagonal per-level heads. Output byte-layout is identical to
+-- 'decoderReference' (via 'flattenHaar' / 'toHaarPalette' order).
+decoderFromRecursion :: SharedBlock -> HiddenContext -> DecoderOutput
+decoderFromRecursion blk ctx0 =
+  let contexts = runRecursion blk ctx0                 -- length paletteDepth + 1
+      rt       = referenceRoot (head contexts)
+      lvls     = [ referenceLevelEmit l (contexts !! (l + 1))
+                 | l <- [0 .. paletteDepth - 1] ]
+  in flattenHaar (HaarPalette rt lvls)
+  where
+    -- Reference emission heads: the zero map. The trained decoder replaces these
+    -- with σ-block-diagonal Linear heads (one per level, per the per-head pruning
+    -- accounting below); the spec pins the structure, not the weights.
+    referenceRoot :: HiddenContext -> OKLab
+    referenceRoot _ = OKLab 0 0 0
+    referenceLevelEmit :: Int -> HiddenContext -> [OKLab]
+    referenceLevelEmit lvl _ = replicate (2 ^ lvl) (OKLab 0 0 0)
 
 -- =============================================================================
 -- σ₇₆₈ — the OKLab-triple-wise σ on the flat decoder output
@@ -246,3 +286,22 @@ lawDecoderPruningArithmetic =
   && decoderFreeParams  == 27136
   && decoderNaiveParams == 49152
   && abs (decoderPruningRatio - 27136 / 49152) < 1e-12
+
+-- | 'flattenHaar' is the exact left-inverse of 'toHaarPalette' for well-formed
+-- depth-'paletteDepth' palettes: @toHaarPalette (flattenHaar hp) == hp@. EXACT
+-- (no arithmetic — the same 'Double's are sliced out and reassembled), so the
+-- recursion-driven decoder produces the same flat 768 layout the flat decoder
+-- does. Guards on well-formedness + correct depth (other shapes don't fit 768).
+lawHaarFlattenRoundTrip :: HaarPalette -> Bool
+lawHaarFlattenRoundTrip hp =
+  treeDepth hp /= paletteDepth || not (wellFormed hp)
+  || toHaarPalette (flattenHaar hp) == hp
+
+-- | The recursion-driven decoder with the reference shared block equals the zero
+-- decoder, on every input. Pins that the Mixture-of-Recursions restructuring
+-- preserves the reference contract (and hence 'lawLookNetReferenceIsZero').
+lawDecoderFromRecursionMatchesZero :: HiddenContext -> Bool
+lawDecoderFromRecursionMatchesZero x =
+  let DecoderOutput (Tensor1 a) = decoderFromRecursion sharedReferenceBlock x
+      DecoderOutput (Tensor1 b) = decoderReference x
+  in U.length a == U.length b && U.and (U.zipWith (==) a b)

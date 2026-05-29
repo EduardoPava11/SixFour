@@ -3,11 +3,18 @@
 
 {- |
 Module      : SixFour.Spec.LookNetR
-Description : L4 recursive core — 8 unrolled residual blocks with σ-block-diagonal weights.
+Description : L4 recursive core — ONE weight-shared block applied over 8 Haar levels (Mixture-of-Recursions) with σ-invariant halting.
 
-The /core/ of the look-NN. Eight residual blocks @x ↦ x + φ_n(x)@ amortize the
-Wasserstein-2 / Bures barycenter iteration into a fixed-depth network (the
-@maxPonderDepth = 8@ ceiling, tied to the Haar pairing depth).
+The /core/ of the look-NN. A SINGLE weight-shared block @g@ (the @sbRefine@ map)
+is applied recursively, once per Haar pairing level @ℓ = 0..coreDepth-1@
+(Universal-Transformer / Mixture-of-Recursions style — one set of weights reused
+@coreDepth@ times, not @coreDepth@ distinct blocks). Each application amortizes
+one Wasserstein-2 / Bures barycenter-iteration step; the @maxPonderDepth = 8@
+ceiling is tied to 'SixFour.Spec.PairTree.paletteDepth' (one recursion per Haar
+level). 'runRecursion' exposes the SEQUENCE of per-step contexts so the decoder's
+level-ℓ head ('SixFour.Spec.LookNetD.decoderFromRecursion') can read the context
+after ℓ refinements — coarse Haar levels read shallow contexts, fine levels read
+deep ones.
 
 == The σ-equivariance constraint forces a block-diagonal weight matrix
 
@@ -15,60 +22,70 @@ The L4 input AND output is the 64-D 'HiddenContext' from "SixFour.Spec.LookNetE"
 Both sides carry the same σ-action: 'SixFour.Spec.Tensor.sigma64' (the Hurvich-Jameson
 22+21+21 decomposition — 22 achromatic dims σ-fixed, 42 chromatic dims σ-negated).
 
-An L4 block @x ↦ x + W·x@ (linear, no nonlinearity for the spec; the trainer adds
-GELU between two such Ws) is σ-equivariant iff:
+A refine step @x ↦ x + W·x@ (the trainer puts tanh between two such Ws) is
+σ-equivariant iff:
 
 >   W · sigma64 = sigma64 · W                     [equivariance condition]
->   ⇔ W · diag(s) = diag(s) · W      where s = ±1 per the sigma64Mask
->   ⇔ W[i,j] · s[j] = s[i] · W[i,j]
 >   ⇔ W[i,j] = 0  whenever s[i] ≠ s[j]            [block-diagonal forcing]
 
-So @W@ MUST be **block-diagonal** in the achromatic/chromatic partition:
+So @W@ MUST be **block-diagonal** in the achromatic/chromatic partition: a 22×22
+achromatic block (484 free) + a 42×42 chromatic block (1764 free) = 2248 free,
+vs the naive 4096 — σ-equivariance prunes **45%** of parameters /by symmetry/,
+not by training (group-equivariant CNNs, Cohen & Welling 2016; Lengyel 2023).
+Because the block is SHARED across all recursion steps, this 2248-free matrix is
+fit once and reused 8×.
 
->   W = ⎡ W_AA      0   ⎤      A = achromatic block (22×22)
->       ⎣  0     W_CC   ⎦      C = chromatic   block (42×42)
+== The /halting/ structure ("ponder") — Mixture-of-Recursions over Haar levels
 
-The achromatic block is 22×22 = 484 free parameters; the chromatic block is
-42×42 = 1764 free parameters. Total per W: 2248. The "naive dense" 64×64 W
-would have 4096 — so σ-equivariance prunes **45%** of parameters /by symmetry/,
-not by training. This is an exact analogue of the parameter sharing in
-group-equivariant CNNs (Cohen & Welling 2016, Lengyel 2023).
+This is the redesign's heart. The shared block carries a halting head @sbHalt@
+producing @λ_ℓ ∈ [0,1]@ per recursion step (PonderNet / MoR per-token routing,
+where the "tokens" are the 8 Haar levels). The φ self-similar coefficient decay
+('SixFour.Spec.PairTree.goldenDecay') makes this principled: coarse levels carry
+SIGNAL (large offsets), fine levels carry NOISE (offsets shrinking by 1/φ per
+level), so adaptive depth = adaptive wavelet truncation — halt early on the fine
+(noise) levels, ponder on the coarse (signal) levels.
 
-== The mask is exposed for the codegen path
+CRITICAL σ-CONSTRAINT: @λ_ℓ@ must be **σ-INVARIANT** — sign-flipping the chroma
+channels (red↔green, blue↔yellow) must NOT change how many levels we generate.
+'sigmaInvariantFeatures' projects the context onto @(‖achromatic‖², ‖chromatic‖²)@,
+which is σ-invariant /exactly/: σ only flips signs within the chromatic block, and
+@(−x)² = x²@. The halting head reads ONLY these two scalars
+('haltingFromFeatures'), so σ-invariance is true by construction
+('lawHaltingSigmaInvariance', proved with @==@, no tolerance).
 
-'sigmaBlockDiagonalMask' returns the 64×64 bit-matrix where 1 = "weight is free
-to learn" and 0 = "weight must be exactly zero." 'SixFour.Codegen.CoreML' (when
-it lands) will multiply this mask into every L4 weight tensor at codegen time so
-the trained `.mlpackage` cannot violate the constraint at inference.
+== Inference contract: hard static unroll
+
+The /spec reference/ and the on-device forward pass run all @coreDepth@ steps
+(static unroll, control-flow-free — friendly to a hand-written Metal/Swift
+forward pass and to the dormant CoreML/ANE fallback). @sbHalt@ and the per-level
+halt schedule are exposed for the /trainer's/ soft-PonderNet objective (the
+expected-output marginalization over halt step), but the shipped contract — and
+the golden vectors — are the hard unroll. The trainer must distill/evaluate
+against the hard unroll.
 
 == The reference baseline
 
-'coreReferenceBlock' is the IDENTITY block — @step x = x + 0@. It satisfies σ-equivariance
-trivially (the zero matrix commutes with everything) and gives a total reference
-the trainer is a controlled deviation from. The /full/ reference core
-'coreReferenceFull' is 8 unrolled identity blocks, hence still the identity. This
-is mathematically interesting: the spec says the core IS the identity until trained,
-matching the Pipeline.hs philosophy of "deterministic boundary, learned middle."
-
-== The /halting/ structure ("ponder")
-
-Adaptive-depth recursion (Graves ACT / Mixture-of-Recursions) is rejected for
-the on-device path: variable-depth control flow is CPU-only in CoreML's MIL and
-breaks the SoA zero-copy story. Instead, halting is AMORTIZED at training time:
-each block has a learned scalar @h_n ∈ [0,1]@; the cumulative halting product
-@∏ (1 - h_n)@ multiplies each block's contribution. At inference, all 8 blocks
-ALWAYS run (the unroll is exact), so there is no control flow — the halting is
-already baked into the weights via training. 'haltingWeightSlot' just declares
-the scalar dimension; the spec doesn't model the training dynamics.
+'sharedReferenceBlock' is the IDENTITY refine (@sbRefine = id@) with never-halt
+(@sbHalt = const 0@). 'coreReferenceFull' = the final context after
+@coreDepth@ identity refinements = the identity on 'HiddenContext'. A total
+reference the trainer is a controlled deviation from — matching the Pipeline.hs
+philosophy of "deterministic boundary, learned middle."
 -}
 module SixFour.Spec.LookNetR
   ( -- * Core structure
     coreDepth
   , haltingWeightSlot
-    -- * The block + its σ-correct mask
-  , CoreBlock(..)
-  , coreReferenceBlock
+  , sharedBlockCount
+    -- * The shared recursive block (Mixture-of-Recursions)
+  , SharedBlock(..)
+  , sharedReferenceBlock
+  , runRecursion
+  , recursionFinalContext
   , coreReferenceFull
+    -- * σ-invariant halting head
+  , sigmaInvariantFeatures
+  , haltingFromFeatures
+    -- * The σ-correct weight mask + pruning accounting
   , sigmaBlockDiagonalMask
   , freeParameterCount
   , naiveParameterCount
@@ -78,71 +95,106 @@ module SixFour.Spec.LookNetR
     -- * Laws (predicates; QuickCheck'd in Properties.LookNetR)
   , lawCoreRefSigmaEquivariance
   , lawCoreRefIsIdentity
+  , lawRecursionSigmaEquivariance
+  , lawHaltingSigmaInvariance
   , lawBlockDiagonalMaskRespectsSigma
   , lawSymmetryPruningRatio
+  , lawSharedBlockReuse
   ) where
 
 import qualified Data.Vector.Unboxed as U
 
-import SixFour.Spec.Tensor   (Tensor1(..), sigma64Mask)
+import SixFour.Spec.Tensor   (Tensor1(..), sigma64Mask, hiddenAchromaticDim)
 import SixFour.Spec.LookNetE (HiddenContext(..), sigmaHiddenContext)
 
 -- =============================================================================
 -- Structural constants
 -- =============================================================================
 
--- | The L4 core depth — 8 unrolled residual blocks. Tied to 'SixFour.Spec.PairTree.paletteDepth'
--- (the Haar pairing depth): one barycenter-iteration step per Haar level is the
--- natural ceiling. Fixed at the type-and-value level for static-shape ANE compatibility.
+-- | The L4 recursion depth — the shared block is applied 8 times, once per Haar
+-- pairing level. Tied to 'SixFour.Spec.PairTree.paletteDepth' (= 'maxPonderDepth'):
+-- one barycenter-iteration step per Haar level is the natural ceiling. Fixed at
+-- the value level for static-shape ANE/Metal compatibility.
 coreDepth :: Int
 coreDepth = 8
 
--- | Per-block halting scalar. The trainer learns one @h_n ∈ [0,1]@ per block;
--- the cumulative halting product @∏ (1 - h_n)@ amortizes adaptive depth into
--- the per-block weights. At inference this is a constant baked into the .mlpackage.
+-- | Halting-scalar dimension: one @λ_ℓ ∈ [0,1]@ per recursion step.
 haltingWeightSlot :: Int
 haltingWeightSlot = 1
 
+-- | The number of distinct weight-bearing blocks: exactly ONE (the shared block
+-- @g@), reused 'coreDepth' times. This is the Mixture-of-Recursions invariant —
+-- contrast the retired design's 8 distinct blocks. ('lawSharedBlockReuse'.)
+sharedBlockCount :: Int
+sharedBlockCount = 1
+
 -- =============================================================================
--- The block (algebraic specification, no learned weights)
+-- The shared recursive block (algebraic specification, no learned weights)
 -- =============================================================================
 
--- | An L4 residual block @x ↦ x + φ(x)@. The reference spec carries no weights;
--- 'coreReferenceBlock' is the identity (@φ = 0@). The trained core supplies
--- weights that satisfy the σ-block-diagonal constraint
--- ('sigmaBlockDiagonalMask') by construction.
-data CoreBlock = CoreBlock
-  { cbResidual :: !(HiddenContext -> HiddenContext)
-    -- ^ the @φ@ map; for the reference spec, @const (HiddenContext zeros)@.
-  , cbHalting  :: !Double
-    -- ^ the learned halting scalar @h ∈ [0,1]@; the reference uses @0@
-    -- (no halting — full contribution from every block).
+-- | The ONE weight-shared block reused across all 'coreDepth' recursion steps.
+-- The reference carries no weights: 'sbRefine' is the identity and 'sbHalt'
+-- never halts. The trained block supplies a 'sbRefine' that satisfies the
+-- σ-block-diagonal constraint ('sigmaBlockDiagonalMask') by construction, and a
+-- 'sbHalt' that factors through 'sigmaInvariantFeatures' (σ-invariant by
+-- construction).
+data SharedBlock = SharedBlock
+  { sbRefine :: !(HiddenContext -> HiddenContext)
+    -- ^ the σ-equivariant context update applied at every recursion step;
+    -- reference = 'id'.
+  , sbHalt   :: !(HiddenContext -> Double)
+    -- ^ the σ-INVARIANT halting head @λ_ℓ ∈ [0,1]@; reference = @const 0@
+    -- (never halt — every level runs). MUST factor through
+    -- 'sigmaInvariantFeatures' to stay σ-invariant.
   }
 
--- | The identity reference block: @φ = 0@, no halting, output ≡ input.
-coreReferenceBlock :: CoreBlock
-coreReferenceBlock = CoreBlock
-  { cbResidual = \(HiddenContext (Tensor1 _)) ->
-      HiddenContext (Tensor1 (U.replicate 64 0.0))
-  , cbHalting  = 0
+-- | The identity reference block: @sbRefine = id@, @sbHalt = const 0@.
+sharedReferenceBlock :: SharedBlock
+sharedReferenceBlock = SharedBlock
+  { sbRefine = id
+  , sbHalt   = haltingFromFeatures (const 0)
   }
 
--- | Apply one block: @x' = x + (1 - h) · φ(x)@. With the reference block this
--- reduces to @x' = x@ (identity); with a trained block, this is the standard
--- residual update with the amortized halting weight.
-applyBlock :: CoreBlock -> HiddenContext -> HiddenContext
-applyBlock (CoreBlock phi h) ctx@(HiddenContext (Tensor1 x)) =
-  let HiddenContext (Tensor1 dx) = phi ctx
-      scale = 1 - h
-      x'    = U.zipWith (\xi di -> xi + scale * di) x dx
-  in HiddenContext (Tensor1 x')
+-- | The sequence of per-step contexts: @[ctx₀, ctx₁, …, ctx_coreDepth]@, where
+-- @ctxₙ@ is the context after @n@ applications of 'sbRefine'. Length
+-- @coreDepth + 1@. The decoder reads @ctx₀@ for the root and @ctx_{ℓ+1}@ for
+-- Haar level @ℓ@, so deeper recursion feeds finer detail.
+runRecursion :: SharedBlock -> HiddenContext -> [HiddenContext]
+runRecursion blk = take (coreDepth + 1) . iterate (sbRefine blk)
 
--- | The full reference core: 8 unrolled identity blocks. Identity ∘ identity =
--- identity, so 'coreReferenceFull' is the identity on 'HiddenContext'. The
--- trained core is a controlled deviation; its σ-equivariance is the composition
--- of 8 σ-equivariant block instances.
+-- | The final context after all 'coreDepth' refinements (= @step \@L4Core@).
+recursionFinalContext :: SharedBlock -> HiddenContext -> HiddenContext
+recursionFinalContext blk = last . runRecursion blk
+
+-- | The full reference core = the final context under the identity block =
+-- the identity on 'HiddenContext' (@iterate id x@ is constant, so the last
+-- element is @x@). The trained core is a controlled deviation; its
+-- σ-equivariance is 'lawRecursionSigmaEquivariance'.
 coreReferenceFull :: HiddenContext -> HiddenContext
-coreReferenceFull = foldr (.) id (replicate coreDepth (applyBlock coreReferenceBlock))
+coreReferenceFull = recursionFinalContext sharedReferenceBlock
+
+-- =============================================================================
+-- σ-invariant halting head
+-- =============================================================================
+
+-- | The σ-INVARIANT summary the halting head is allowed to read:
+-- @(‖achromatic block‖², ‖chromatic block‖²)@. The achromatic block is the
+-- first 'hiddenAchromaticDim' (22) coordinates (σ-fixed); the chromatic block is
+-- the remaining 42 (σ-negated). Both are sums of squares over a σ-class, so they
+-- are unchanged under 'sigmaHiddenContext' EXACTLY (negation then squaring is
+-- bit-identical in 'Double'). See 'lawHaltingSigmaInvariance'.
+sigmaInvariantFeatures :: HiddenContext -> (Double, Double)
+sigmaInvariantFeatures (HiddenContext (Tensor1 v)) =
+  let (achroma, chroma) = U.splitAt hiddenAchromaticDim v   -- 22 | 42
+  in (U.sum (U.map sq achroma), U.sum (U.map sq chroma))
+  where sq x = x * x
+
+-- | Build a halting head from a function of the σ-invariant features. Any head
+-- so constructed is σ-invariant by composition. The reference uses
+-- @const 0@ (never halt); the trainer supplies a small MLP @(Double, Double) ->
+-- Double@ (with a final sigmoid to land in @[0,1]@).
+haltingFromFeatures :: ((Double, Double) -> Double) -> HiddenContext -> Double
+haltingFromFeatures f = f . sigmaInvariantFeatures
 
 -- =============================================================================
 -- The σ-block-diagonal constraint
@@ -151,11 +203,8 @@ coreReferenceFull = foldr (.) id (replicate coreDepth (applyBlock coreReferenceB
 -- | The 64×64 binary mask where @1@ = "this weight is FREE to learn" and @0@ =
 -- "this weight MUST be exactly zero for σ-equivariance." Computed by the rule
 -- @mask[i,j] = (sigma64Mask[i] == sigma64Mask[j])@: a weight is free iff its
--- input and output dims belong to the same σ-class (both achromatic or both
--- chromatic). Cross-class weights would couple σ-fixed dims to σ-negated dims,
--- which breaks the equivariance condition @W·σ = σ·W@.
---
--- Stored row-major: index @(i * 64 + j)@.
+-- input and output dims belong to the same σ-class. Stored row-major
+-- (@i * 64 + j@). Applied to the SHARED block's weights at codegen time.
 sigmaBlockDiagonalMask :: U.Vector Int
 sigmaBlockDiagonalMask =
   let s = sigma64Mask
@@ -165,9 +214,7 @@ sigmaBlockDiagonalMask =
        in if (s !! i) == (s !! j) then 1 else 0)
 
 -- | The number of FREE parameters per σ-block-diagonal 64×64 weight matrix:
--- @22² + 42² = 484 + 1764 = 2248@. This is what the trainer actually fits per
--- block W (× 2 W matrices per block × 8 blocks = 35968 total L4 parameters,
--- vs the naive 65536 if no σ structure were enforced).
+-- @22² + 42² = 484 + 1764 = 2248@ (fit once, reused 'coreDepth' times).
 freeParameterCount :: Int
 freeParameterCount = U.sum sigmaBlockDiagonalMask
 
@@ -175,11 +222,8 @@ freeParameterCount = U.sum sigmaBlockDiagonalMask
 naiveParameterCount :: Int
 naiveParameterCount = 64 * 64
 
--- | The symmetry-pruning ratio: @freeParameterCount / naiveParameterCount@.
--- For the Hurvich-Jameson 22+42 split this is @2248/4096 ≈ 0.549@ — the
--- σ-equivariance constraint /forces/ ~45% of weights to zero by symmetry, not
--- by training. (Compare to L1/L2/L∞ weight sparsity, which is achieved by
--- regularization; this is achieved by structure.)
+-- | The symmetry-pruning ratio @freeParameterCount / naiveParameterCount ≈ 0.549@
+-- — σ-equivariance /forces/ ~45% of weights to zero by structure, not training.
 symmetryPruningRatio :: Double
 symmetryPruningRatio =
   fromIntegral freeParameterCount / fromIntegral naiveParameterCount
@@ -188,9 +232,8 @@ symmetryPruningRatio =
 -- σ-action on the hidden context (re-export of LookNetE.sigmaHiddenContext)
 -- =============================================================================
 
--- | σ on the 64-D core context. Just re-exports 'sigmaHiddenContext' from
--- "SixFour.Spec.LookNetE" with a name local to L4. Same fixed diagonal
--- involution; the equivariance condition is @core ∘ σ = σ ∘ core@.
+-- | σ on the 64-D core context. Re-exports 'sigmaHiddenContext' with a name
+-- local to L4. The equivariance condition is @core ∘ σ = σ ∘ core@.
 sigmaCoreContext :: HiddenContext -> HiddenContext
 sigmaCoreContext = sigmaHiddenContext
 
@@ -199,8 +242,6 @@ sigmaCoreContext = sigmaHiddenContext
 -- =============================================================================
 
 -- | The reference core (identity) is σ-equivariant: @id ∘ σ = σ ∘ id@. Exact.
--- This is the trivial base case; the trained core inherits equivariance from
--- the per-block σ-block-diagonal weight constraint.
 lawCoreRefSigmaEquivariance :: HiddenContext -> Bool
 lawCoreRefSigmaEquivariance x =
   let HiddenContext (Tensor1 a) = coreReferenceFull (sigmaCoreContext x)
@@ -208,18 +249,41 @@ lawCoreRefSigmaEquivariance x =
   in U.length a == U.length b && U.and (U.zipWith (==) a b)
 
 -- | The reference core IS the identity: @coreReferenceFull x ≡ x@ for all x.
--- Pins the "deterministic boundary, learned middle" philosophy: the spec
--- doesn't compute anything; it only declares the dimensional + symmetry contract
--- that the trained core must satisfy.
 lawCoreRefIsIdentity :: HiddenContext -> Bool
 lawCoreRefIsIdentity x@(HiddenContext (Tensor1 v)) =
   let HiddenContext (Tensor1 y) = coreReferenceFull x
   in U.length v == U.length y && U.and (U.zipWith (==) v y)
 
--- | The block-diagonal mask respects σ: every position @(i,j)@ with
--- @mask[i,j] = 1@ has @sigma64Mask[i] == sigma64Mask[j]@. The contrapositive
--- (mask=0 ⇒ classes differ) is also asserted. This is the algebraic
--- correctness criterion for 'sigmaBlockDiagonalMask'.
+-- | INDUCTIVE recursion σ-equivariance: if the shared block's 'sbRefine' is
+-- σ-equivariant, then applying it @n@ times stays σ-equivariant, for every
+-- @n ∈ [0, coreDepth]@. This is the law that lets one σ-equivariant block
+-- witness the whole recursion (the trainer's obligation). Tested on the
+-- reference ('sbRefine = id', exact); the @tol@ argument mirrors
+-- 'SixFour.Spec.PairTree.lawReconstructAnalyzeRoundTrip' for the trained case,
+-- where FP reassociation compounds across the @n@ steps.
+lawRecursionSigmaEquivariance :: Double -> HiddenContext -> Bool
+lawRecursionSigmaEquivariance tol x =
+  all equivAt [0 .. coreDepth]
+  where
+    g        = sbRefine sharedReferenceBlock
+    applyN n = foldr (.) id (replicate n g)
+    equivAt n =
+      let HiddenContext (Tensor1 a) = applyN n (sigmaCoreContext x)
+          HiddenContext (Tensor1 b) = sigmaCoreContext (applyN n x)
+      in U.length a == U.length b
+         && U.and (U.zipWith (\p q -> abs (p - q) <= tol) a b)
+
+-- | The halting head is σ-INVARIANT, EXACTLY: 'sigmaInvariantFeatures' is
+-- unchanged under σ (squares kill the chromatic sign flip), and hence so is any
+-- 'haltingFromFeatures'-built head — including the reference. Asserted with
+-- @==@ (no tolerance): a strictly stronger guarantee than the equivariance laws.
+lawHaltingSigmaInvariance :: HiddenContext -> Bool
+lawHaltingSigmaInvariance x =
+     sigmaInvariantFeatures (sigmaCoreContext x) == sigmaInvariantFeatures x
+  && sbHalt sharedReferenceBlock (sigmaCoreContext x)
+     == sbHalt sharedReferenceBlock x
+
+-- | The block-diagonal mask respects σ: @mask[i,j] = 1 ⇔ sigma64Mask[i] == sigma64Mask[j]@.
 lawBlockDiagonalMaskRespectsSigma :: Bool
 lawBlockDiagonalMaskRespectsSigma =
   let s = sigma64Mask
@@ -231,9 +295,7 @@ lawBlockDiagonalMaskRespectsSigma =
         in (m == 1) == sameClass
   in all check [0 .. 64 * 64 - 1]
 
--- | The pruning ratio is exactly @(22² + 42²) / 64² = 2248/4096@. This is a
--- snapshot of the parameter-count arithmetic — if any of the structural
--- constants drift, this law catches it.
+-- | The pruning ratio is exactly @(22² + 42²) / 64² = 2248/4096@.
 lawSymmetryPruningRatio :: Bool
 lawSymmetryPruningRatio =
      freeParameterCount  == 22 * 22 + 42 * 42
@@ -241,3 +303,12 @@ lawSymmetryPruningRatio =
   && freeParameterCount  == 2248
   && naiveParameterCount == 4096
   && abs (symmetryPruningRatio - 2248 / 4096) < 1e-12
+
+-- | The Mixture-of-Recursions invariant: exactly ONE shared block, reused
+-- 'coreDepth' = 8 times. 'runRecursion' produces @coreDepth + 1@ contexts (the
+-- initial context plus one per reuse).
+lawSharedBlockReuse :: HiddenContext -> Bool
+lawSharedBlockReuse x =
+     sharedBlockCount == 1
+  && coreDepth == 8
+  && length (runRecursion sharedReferenceBlock x) == coreDepth + 1

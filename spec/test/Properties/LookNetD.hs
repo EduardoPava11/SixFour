@@ -11,6 +11,8 @@ import Test.QuickCheck
 import qualified Data.Vector.Unboxed as U
 
 import SixFour.Spec.Tensor   (Tensor1(..))
+import SixFour.Spec.Color    (OKLab(..))
+import SixFour.Spec.PairTree (HaarPalette(..), paletteDepth)
 import SixFour.Spec.LookNetE (HiddenContext(..))
 import SixFour.Spec.LookNetD
 
@@ -18,6 +20,16 @@ genHiddenContext :: Gen HiddenContext
 genHiddenContext = do
   xs <- vectorOf 64 (choose (-1, 1) :: Gen Double)
   pure (HiddenContext (Tensor1 (U.fromList xs)))
+
+genOKLab :: Gen OKLab
+genOKLab = OKLab <$> choose (0, 1) <*> choose (-0.4, 0.4) <*> choose (-0.4, 0.4)
+
+-- A well-formed depth-'paletteDepth' Haar palette: level ℓ has 2^ℓ offsets.
+genHaarPalette :: Gen HaarPalette
+genHaarPalette = do
+  rt   <- genOKLab
+  lvls <- mapM (\l -> vectorOf (2 ^ l) genOKLab) [0 .. paletteDepth - 1]
+  pure (HaarPalette rt lvls)
 
 genDecoderOutput :: Gen DecoderOutput
 genDecoderOutput = do
@@ -50,4 +62,10 @@ tests = testGroup "LookNetD (L5 tree decoder — per-level heads, σ₇₆₈ ou
 
   , testProperty "decoder pruning arithmetic: 27136 free / 49152 naive ≈ 0.552 (45% σ-pruned)" $
       once lawDecoderPruningArithmetic
+
+  , testProperty "flattenHaar ∘ toHaarPalette round-trips well-formed palettes (EXACT)" $
+      forAll genHaarPalette lawHaarFlattenRoundTrip
+
+  , testProperty "recursion-driven decoder with reference block ≡ zero decoder" $
+      forAll genHiddenContext lawDecoderFromRecursionMatchesZero
   ]

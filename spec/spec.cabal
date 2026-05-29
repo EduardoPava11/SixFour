@@ -53,12 +53,15 @@ library
         SixFour.Spec.LookNetR
         SixFour.Spec.LookNetD
         SixFour.Spec.LookNetCompose
+        SixFour.Spec.LookNetEval
         SixFour.Spec.Loss
         SixFour.Spec.STBN3D
         SixFour.Codegen.Swift
         SixFour.Codegen.Shapes
         SixFour.Codegen.Burn
         SixFour.Codegen.CoreML
+        SixFour.Codegen.MLX
+        SixFour.Codegen.Golden
     build-depends:
         base       >=4.16 && <5
       , vector     >=0.13 && <0.14
@@ -212,6 +215,8 @@ test-suite spec-tests
         Properties.LookNetD
         Properties.LookNetCompose
         Properties.CoreMLContract
+        Properties.MLXContract
+        Properties.GoldenForward
         Properties.Loss
     build-depends:
         base

@@ -100,9 +100,12 @@ import SixFour.Spec.LookNetD
 -- Stage tags for L4 and L5 (L3 already exists in LookNetE)
 -- =============================================================================
 
--- | The L4 recursive core as a single Stage. The unrolled 8 residual blocks
--- compose internally; at the pipeline level, the core is one
--- @HiddenContext -> HiddenContext@ map.
+-- | The L4 recursive core as a single Stage. ONE weight-shared block is reused
+-- across 8 Haar-level recursion steps (Mixture-of-Recursions) internally; at the
+-- pipeline level the core is one @HiddenContext -> HiddenContext@ map. Its
+-- σ-equivariance is witnessed by
+-- "SixFour.Spec.LookNetR".'SixFour.Spec.LookNetR.lawRecursionSigmaEquivariance'
+-- (σ-equivariant shared block ⇒ N-fold recursion σ-equivariant).
 data L4Core
 
 -- | The L5 tree decoder as a single Stage.

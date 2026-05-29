@@ -69,17 +69,35 @@ tests = testGroup "CoreMLContract (Codegen.CoreML emits constants identical to t
       once (contains ("SIGMA768_MASK = " <> pyBoolList sigma768Mask)
                      emitLookNetTorch)
 
-  , testProperty "PyTorch module defines all three layer classes (L3Encoder, L4Block, L5Decoder)" $
-      once (contains "class L3Encoder(nn.Module)" emitLookNetTorch
-         && contains "class L4Block(nn.Module)"  emitLookNetTorch
-         && contains "class L5Decoder(nn.Module)" emitLookNetTorch
-         && contains "class LookNet(nn.Module)"   emitLookNetTorch)
+  , testProperty "PyTorch module defines the layer classes (L3Encoder, SharedBlock, L4Recursion, L5Decoder)" $
+      once (contains "class L3Encoder(nn.Module)"   emitLookNetTorch
+         && contains "class SharedBlock(nn.Module)" emitLookNetTorch
+         && contains "class L4Recursion(nn.Module)" emitLookNetTorch
+         && contains "class L5Decoder(nn.Module)"   emitLookNetTorch
+         && contains "class LookNet(nn.Module)"     emitLookNetTorch)
 
-  , testProperty "PyTorch module applies σ-mask in L4Block forward (.sigma_mask)" $
+  , testProperty "Mixture-of-Recursions: ONE shared block reused CORE_DEPTH times" $
+      once (contains "SHARED_BLOCK_COUNT    = 1" emitLookNetTorch
+         && contains "RECURSION_STEPS       = " emitLookNetTorch
+         && contains "self.g = SharedBlock()"   emitLookNetTorch
+         && contains "for _ in range(RECURSION_STEPS)" emitLookNetTorch)
+
+  , testProperty "PyTorch module applies σ-mask in SharedBlock refine (.sigma_mask)" $
       once (contains "self.w1.weight * self.sigma_mask" emitLookNetTorch
          && contains "self.w2.weight * self.sigma_mask" emitLookNetTorch)
 
-  , testProperty "L4Block uses tanh (odd activation) — required for σ-equivariance under sign-flips" $
+  , testProperty "halting head is σ-INVARIANT: reads only (‖achroma‖², ‖chroma‖²)" $
+      once (contains "HALT_FEATURE_DIM      = 2" emitLookNetTorch
+         && contains "(achroma ** 2).sum(dim=-1)" emitLookNetTorch
+         && contains "(chroma ** 2).sum(dim=-1)"  emitLookNetTorch
+         && contains "torch.stack"                emitLookNetTorch
+         && contains "self.halt_mlp"              emitLookNetTorch)
+
+  , testProperty "L5Decoder reads per-step contexts (head i ← contexts[i])" $
+      once (contains "def forward(self, contexts: list)" emitLookNetTorch
+         && contains "F.linear(contexts[i], w)" emitLookNetTorch)
+
+  , testProperty "SharedBlock refine uses tanh (odd activation) — required for σ-equivariance" $
       once (contains "torch.tanh"     emitLookNetTorch
          && not (contains "F.gelu"    emitLookNetTorch)
          && not (contains "F.relu"    emitLookNetTorch)

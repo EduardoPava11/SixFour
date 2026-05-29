@@ -1,9 +1,11 @@
 {- |
-spec-codegen driver. Writes 8 files + 1 binary resource:
+spec-codegen driver. Writes 10 files + 1 binary resource:
 
   * @SixFour/Generated/{StageContract,NetContract,STBN3DContract,SignificanceContract}.swift@
   * @SixFour/Resources/stbn3d-8.bin@ — 8³ STBN3D scalar mask
   * @trainer/generated/{stages,net_shape}.py@ — NumPy shape/significance constants
+  * @trainer/generated/look_net_mlx.py@ — the PRIMARY (M1) mlx.nn trainer model
+  * @trainer/generated/look_net_golden.json@ — hex-float forward golden vectors (bit-exact gate)
   * @trainer/generated/{look_net_torch,build_mlpackage}.py@ — dormant CoreML/ANE fallback
   * @studio/look-nn-baseline/src/generated/contract.rs@ — Rust @burn@ contract + golden vectors
 
@@ -31,6 +33,8 @@ import SixFour.Codegen.Swift
 import SixFour.Codegen.Shapes (emitStagesPy,      emitNetShapePy)
 import SixFour.Codegen.Burn   (emitBurnContract)
 import SixFour.Codegen.CoreML (emitLookNetTorch,  emitBuildMlpackage)
+import SixFour.Codegen.MLX    (emitLookNetMLX)
+import SixFour.Codegen.Golden (emitLookNetGolden)
 import SixFour.Spec.STBN3D    (Mask3D(..), generateSTBN3D)
 
 main :: IO ()
@@ -48,6 +52,8 @@ main = do
   writeUtf8 (swiftOutDir   </> "SignificanceContract.swift") emitSignificanceContract
   writeUtf8 (mlxOutDir     </> "stages.py")            emitStagesPy
   writeUtf8 (mlxOutDir     </> "net_shape.py")         emitNetShapePy
+  writeUtf8 (mlxOutDir     </> "look_net_mlx.py")      emitLookNetMLX
+  writeUtf8 (mlxOutDir     </> "look_net_golden.json") emitLookNetGolden
   writeUtf8 (mlxOutDir     </> "look_net_torch.py")    emitLookNetTorch
   writeUtf8 (mlxOutDir     </> "build_mlpackage.py")   emitBuildMlpackage
   writeUtf8 (burnOutDir    </> "contract.rs")          emitBurnContract
@@ -66,7 +72,7 @@ main = do
   let Mask3D maskBytes = generateSTBN3D @8 @8 @8
   writeBinary (resourceOutDir </> "stbn3d-8.bin") maskBytes
 
-  putStrLn "spec-codegen: wrote 8 files + 1 resource."
+  putStrLn "spec-codegen: wrote 10 files + 1 resource."
   putStrLn $ "  swift   : " <> swiftOutDir
   putStrLn $ "  mlx     : " <> mlxOutDir
   putStrLn $ "  burn    : " <> burnOutDir

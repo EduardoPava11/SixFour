@@ -120,7 +120,7 @@ coreIO :: NetIO
 coreIO = NetIO
   { netInputDim    = modelDim
   , netOutputDim   = modelDim
-  , netDescription = "L4 recursive core R: dM -> dM context, depth-recurrent (amortized W2/Bures barycenter, ponder <= N)"
+  , netDescription = "L4 core R: dM -> dM context; ONE weight-shared block reused over 8 Haar levels (Mixture-of-Recursions), σ-invariant per-level halting (ponder <= N)"
   }
 
 -- | L5 tree decoder shape contract: context → the 768 Haar coefficients

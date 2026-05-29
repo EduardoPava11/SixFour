@@ -37,6 +37,8 @@ module SixFour.Spec.PairTree
     -- * φ self-similar coefficient decay (the golden falloff)
   , phi
   , goldenDecay
+  , lawGoldenDecayRatio
+  , lawGoldenDecayHaltPriorMonotone
     -- * The chroma reflection σ (the exact, continuous OKLab complement)
   , sigmaReflect
     -- * Laws (predicates; QuickCheck'd in Properties.PairTree)
@@ -158,6 +160,29 @@ phi = (1 + sqrt 5) / 2
 -- per level (level 0 = base). Measured against free per-level scale (open Q).
 goldenDecay :: Double -> Int -> Double
 goldenDecay base level = base * (1 / phi) ^^ level
+
+-- | The decay is self-similar: the ratio between consecutive levels is exactly
+-- @1/φ@, for every level @0..paletteDepth-2@. Pure arithmetic; this pins the
+-- /shape/ of the signal→noise falloff (not its empirical fit — that is a
+-- trainer-side metric). @base@ must be non-zero.
+lawGoldenDecayRatio :: Double -> Double -> Bool
+lawGoldenDecayRatio tol base =
+  base /= 0 &&
+  all (\l -> abs (goldenDecay base (l + 1) / goldenDecay base l - (1 / phi)) <= tol)
+      [0 .. paletteDepth - 2]
+
+-- | goldenDecay as a halting prior: detail energy is strictly DECREASING per
+-- level (coarse = signal, fine = noise), so the natural per-level "ponder budget"
+-- @b_ℓ = goldenDecay base ℓ@ is strictly decreasing in @ℓ@ — equivalently, the
+-- implied halt probability is monotone NON-DECREASING (more likely to halt as we
+-- descend into the noise levels). For @base > 0@ over the @paletteDepth@ levels.
+-- This pins the prior's monotone shape (Mixture-of-Recursions over Haar levels);
+-- it is what makes "the math gives us signal to noise" a testable statement.
+lawGoldenDecayHaltPriorMonotone :: Double -> Bool
+lawGoldenDecayHaltPriorMonotone base =
+  base <= 0 ||
+  let budgets = [ goldenDecay base l | l <- [0 .. paletteDepth - 1] ]
+  in and (zipWith (>) budgets (drop 1 budgets))   -- strictly decreasing
 
 -- | A colour is in the working OKLab gamut (matches the Look contract bounds).
 inGamut :: OKLab -> Bool
