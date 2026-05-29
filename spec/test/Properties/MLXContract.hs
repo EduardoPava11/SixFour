@@ -10,7 +10,7 @@ import           Data.Text             (Text)
 import SixFour.Codegen.MLX     (emitLookNetMLX)
 import SixFour.Codegen.CoreML  (emitLookNetTorch, emitLookNetConstants, pyBoolList)
 import SixFour.Spec.Tensor     (sigma64Mask, gmmTokenSigmaMask)
-import SixFour.Spec.LookNetD   (sigma768Mask, decoderOutputDim)
+import SixFour.Spec.LookNetD   (sigmaDecoderMask, decoderOutputDim)
 import SixFour.Spec.LookNet    (modelDim)
 import SixFour.Spec.LookNetR   (coreDepth)
 
@@ -31,13 +31,20 @@ tests = testGroup "MLXContract (Codegen.MLX emits an mlx.nn module in sync with 
   , testProperty "MLX module emits CORE_DEPTH = 8" $
       once (contains ("CORE_DEPTH            = " <> T.pack (show coreDepth)) emitLookNetMLX)
 
-  , testProperty "MLX module emits DECODER_OUT_DIM = 768" $
-      once (contains ("DECODER_OUT_DIM       = " <> T.pack (show decoderOutputDim)) emitLookNetMLX)
+  , testProperty "MLX module emits DECODER_OUT_DIM = 384" $
+      once (contains ("DECODER_OUT_DIM       = " <> T.pack (show decoderOutputDim)) emitLookNetMLX
+         && decoderOutputDim == 384)
+
+  , testProperty "MLX module emits SIGMA_PAIR_* pins + L6 reconstruct_sigma_pair" $
+      once (contains "SIGMA_PAIR_DOF        = 384" emitLookNetMLX
+         && contains "SIGMA_PAIR_DEPTH      = 7"   emitLookNetMLX
+         && contains "SIGMA_PAIR_LEAVES     = 256" emitLookNetMLX
+         && contains "def reconstruct_sigma_pair(coeffs)" emitLookNetMLX)
 
   , testProperty "MLX module emits all three σ-masks bit-identical to the spec" $
       once (contains ("SIGMA64_MASK = " <> pyBoolList sigma64Mask) emitLookNetMLX
          && contains ("GMM_TOKEN_SIGMA_MASK = " <> pyBoolList gmmTokenSigmaMask) emitLookNetMLX
-         && contains ("SIGMA768_MASK = " <> pyBoolList sigma768Mask) emitLookNetMLX)
+         && contains ("SIGMA_DECODER_MASK = " <> pyBoolList sigmaDecoderMask) emitLookNetMLX)
 
   , testProperty "MLX module defines the layer classes (L3Encoder, SharedBlock, L4Recursion, L5Decoder, LookNet)" $
       once (contains "class L3Encoder(nn.Module)"   emitLookNetMLX

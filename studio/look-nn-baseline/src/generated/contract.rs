@@ -13,8 +13,16 @@ pub const W: usize = 64;
 pub const K: usize = 256;
 pub const PIXELS_PER_FRAME: usize = 4096;
 pub const PIXELS_PER_GIF: usize = 262144;
-pub const DOF: usize = 768;        // 3·256 Haar coeffs
+pub const DOF: usize = 768;        // 3·256 reconstructed palette reals
 pub const LEVEL_DOF: [usize; 8] = [3, 6, 12, 24, 48, 96, 192, 384];
+
+// ---- SigmaPairHead decoder genome (NOTES 2026-05-28 pivot) ----
+// The L5 decoder emits a depth-7 generator pyramid (128 c_i); L6
+// σ-pair-interleaves into the 256-leaf palette [c0, σc0, c1, σc1, …].
+// SIGMA_PAIR_DOF (384) is exactly the σ-symmetric palette subspace dim.
+pub const SIGMA_PAIR_DOF: usize = 384;   // 3·128 generator coeffs
+pub const SIGMA_PAIR_DEPTH: usize = 7;    // depth-7 binary Haar generator pyramid
+pub const SIGMA_PAIR_LEAVES: usize = 256;  // reconstructed σ-pair leaves (= K)
 
 // ---- Free structural dimensions (the only knobs) ----
 pub const GMM_TOKEN_DIM: usize = 10;   // μ3 + Σ6 + w1
@@ -25,7 +33,7 @@ pub const MAX_PONDER_DEPTH: usize = 8;  // = Haar levels
 pub struct LayerIo { pub in_dim: usize, pub out_dim: usize, pub desc: &'static str }
 pub const ENCODER_IO: LayerIo = LayerIo { in_dim: 10, out_dim: 64, desc: "L3 set encoder E: per-component (mu,Sigma,w)=10 -> dM context (perm-invariant, set-pooled)" };
 pub const CORE_IO: LayerIo = LayerIo { in_dim: 64, out_dim: 64, desc: "L4 core R: dM -> dM context; ONE weight-shared block reused over 8 Haar levels (Mixture-of-Recursions), σ-invariant per-level halting (ponder <= N)" };
-pub const DECODER_IO: LayerIo = LayerIo { in_dim: 64, out_dim: 768, desc: "L5 tree decoder D: dM -> 768 Haar coefficients (root + 255 sigma-balanced offsets)" };
+pub const DECODER_IO: LayerIo = LayerIo { in_dim: 64, out_dim: 384, desc: "L5 sigma-pair tree decoder D: dM -> 384 SigmaPairTree coefficients (root + 127 sigma-balanced generator offsets)" };
 
 /// Golden cross-check vectors — computed by the Haskell reference (Spec.GMM /
 /// Spec.Bures). The Rust gmm.rs / bures.rs ports MUST reproduce these to 1e-6.

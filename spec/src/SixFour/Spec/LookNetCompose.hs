@@ -93,7 +93,7 @@ import SixFour.Spec.LookNetR
 import SixFour.Spec.LookNetD
   ( DecoderOutput(..)
   , decoderReference
-  , sigma768
+  , sigmaDecoder
   )
 
 -- =============================================================================
@@ -150,7 +150,7 @@ instance SigmaEquivariant L4Core where
 
 instance SigmaEquivariant L5Decoder where
   sigmaIn  = sigmaHiddenContext
-  sigmaOut = sigma768
+  sigmaOut = sigmaDecoder
 
 -- =============================================================================
 -- The pipeline + the theorem
@@ -211,4 +211,4 @@ lawPipelineComposes = case lookNetSigmaTheorem (Proxy :: Proxy LookNetPipeline) 
 lawLookNetReferenceIsZero :: GmmTokenSet -> Bool
 lawLookNetReferenceIsZero s =
   let DecoderOutput (Tensor1 v) = lookNetReference s
-  in U.length v == 768 && U.all (== 0.0) v
+  in U.length v == 384 && U.all (== 0.0) v

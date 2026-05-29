@@ -44,13 +44,13 @@ def load_golden() -> dict:
         "w2": tensor(W["w2"]),                   # (64,64)
         "halt_w": tensor(W["halt_w"]),           # (1,2)
         "halt_b": tensor(W["halt_b"]),           # (1,)
-        "heads": [tensor(h) for h in W["heads"]],  # 9 × (d,64)
+        "heads": [tensor(h) for h in W["heads"]],  # 8 × (d,64)
     }
     cases = [
         {
             "name": c["name"],
             "tokens": tensor(c["tokens"]),                       # (n,10)
-            "output": np.array([h2d(s) for s in c["output"]]),   # (768,)
+            "output": np.array([h2d(s) for s in c["output"]]),   # (384,)
         }
         for c in g["cases"]
     ]

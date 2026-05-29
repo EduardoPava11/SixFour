@@ -28,6 +28,7 @@ import SixFour.Spec.Shape
 import SixFour.Spec.Net      (NetIO(..))
 import SixFour.Spec.LookNet  (gmmTokenDim, modelDim, maxPonderDepth, encoderIO, coreIO, decoderIO)
 import SixFour.Spec.PairTree (degreesOfFreedom, levelDof, paletteDepth)
+import SixFour.Spec.SigmaPairHead (sigmaPairDegreesOfFreedom, sigmaPairDepth, sigmaPairLeaves)
 import SixFour.Spec.GMM      (Gaussian(..), GMM, pointMassGMM, mixtureMean, mixtureCovariance)
 import SixFour.Spec.Bures    (buresDistanceSq, buresBarycenterCov)
 
@@ -48,8 +49,16 @@ emitBurnContract = T.unlines $
   , "pub const K: usize = " <> tshow kVal <> ";"
   , "pub const PIXELS_PER_FRAME: usize = " <> tshow pixelsPerFrame <> ";"
   , "pub const PIXELS_PER_GIF: usize = "   <> tshow pixelsPerGIF <> ";"
-  , "pub const DOF: usize = " <> tshow degreesOfFreedom <> ";        // 3·256 Haar coeffs"
+  , "pub const DOF: usize = " <> tshow degreesOfFreedom <> ";        // 3·256 reconstructed palette reals"
   , "pub const LEVEL_DOF: [usize; " <> tshow paletteDepth <> "] = " <> usizeArray levelDof <> ";"
+  , ""
+  , "// ---- SigmaPairHead decoder genome (NOTES 2026-05-28 pivot) ----"
+  , "// The L5 decoder emits a depth-7 generator pyramid (128 c_i); L6"
+  , "// σ-pair-interleaves into the 256-leaf palette [c0, σc0, c1, σc1, …]."
+  , "// SIGMA_PAIR_DOF (384) is exactly the σ-symmetric palette subspace dim."
+  , "pub const SIGMA_PAIR_DOF: usize = "    <> tshow sigmaPairDegreesOfFreedom <> ";   // 3·128 generator coeffs"
+  , "pub const SIGMA_PAIR_DEPTH: usize = "  <> tshow sigmaPairDepth <> ";    // depth-7 binary Haar generator pyramid"
+  , "pub const SIGMA_PAIR_LEAVES: usize = " <> tshow sigmaPairLeaves <> ";  // reconstructed σ-pair leaves (= K)"
   , ""
   , "// ---- Free structural dimensions (the only knobs) ----"
   , "pub const GMM_TOKEN_DIM: usize = " <> tshow gmmTokenDim <> ";   // μ3 + Σ6 + w1"

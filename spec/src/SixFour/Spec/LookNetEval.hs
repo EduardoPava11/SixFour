@@ -43,7 +43,7 @@ import SixFour.Spec.LookNetE (HiddenContext(..))
 import SixFour.Spec.LookNetR
   ( SharedBlock(..), runRecursion, sigmaInvariantFeatures
   , sigmaBlockDiagonalMask, coreDepth )
-import SixFour.Spec.LookNetD (sigma768Mask, decoderLevelDims)
+import SixFour.Spec.LookNetD (sigmaDecoderMask, decoderLevelDims)
 
 -- =============================================================================
 -- Weight container (RAW, pre-mask; row-major (out × in), matching nn.Linear)
@@ -57,7 +57,7 @@ data LookNetWeights = LookNetWeights
   , wW2     :: !(U.Vector Double)   -- ^ L4 shared refine W2: 64×64
   , wHaltW  :: !(U.Vector Double)   -- ^ halt MLP weight: 1×2
   , wHaltB  :: !Double              -- ^ halt MLP bias: 1
-  , wHeads  :: ![U.Vector Double]   -- ^ L5 heads: 9 of (decoderLevelDims!!k)×64
+  , wHeads  :: ![U.Vector Double]   -- ^ L5 heads: 8 of (decoderLevelDims!!k)×64
   } deriving (Eq, Show)
 
 phiShape :: (Int, Int)
@@ -69,7 +69,7 @@ w64Shape = (64, 64)
 haltWShape :: (Int, Int)
 haltWShape = (1, 2)
 
--- | @(out, 64)@ per L5 head, one per 'decoderLevelDims' entry (9 heads).
+-- | @(out, 64)@ per L5 head, one per 'decoderLevelDims' entry (8 heads).
 headShapes :: [(Int, Int)]
 headShapes = [ (d, 64) | d <- decoderLevelDims ]
 
@@ -88,14 +88,14 @@ sigma64MaskD :: U.Vector Double
 sigma64MaskD = U.map fromIntegral sigmaBlockDiagonalMask
 
 -- | L5 head @k@ mask (@d_k × 64@): free iff the output triple's σ-class
--- ('sigma768Mask' at the head's global slice) matches @sigma64Mask[i]@.
+-- ('sigmaDecoderMask' at the head's global slice) matches @sigma64Mask[i]@.
 headMask :: Int -> U.Vector Double
 headMask k =
   let (dk, _) = headShapes !! k
-      off     = sum (take k decoderLevelDims)   -- global offset into the 768 vector
+      off     = sum (take k decoderLevelDims)   -- global offset into the 384 vector
   in U.generate (dk * 64) $ \idx ->
        let r = idx `div` 64; i = idx `mod` 64
-       in if (sigma768Mask !! (off + r)) == (sigma64Mask !! i) then 1 else 0
+       in if (sigmaDecoderMask !! (off + r)) == (sigma64Mask !! i) then 1 else 0
 
 -- =============================================================================
 -- Deterministic test weights (bounded, reproducible)
@@ -132,11 +132,11 @@ sigmoid :: Double -> Double
 sigmoid z = 1 / (1 + exp (negate z))
 
 -- | The full forward trace: the pooled context, the per-step halt λ's, and the
--- 768-D Haar output (concatenated per-level head outputs).
+-- 384-D SigmaPairTree output (concatenated per-level head outputs).
 data ForwardTrace = ForwardTrace
   { ftContext :: ![Double]   -- ^ 64
   , ftHalts   :: ![Double]   -- ^ coreDepth (8)
-  , ftOutput  :: ![Double]   -- ^ 768
+  , ftOutput  :: ![Double]   -- ^ 384
   } deriving (Eq, Show)
 
 forward :: LookNetWeights -> [Tensor1 10 Double] -> ForwardTrace

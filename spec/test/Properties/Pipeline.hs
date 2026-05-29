@@ -14,6 +14,9 @@ import SixFour.Spec.Color        (OKLab(..))
 import SixFour.Spec.PairTree     (sigmaReflect)
 import SixFour.Spec.Pipeline
 import SixFour.Spec.Quad4        (Quad4Palette(..), quad4Depth)
+import SixFour.Spec.PairTree     (HaarPalette(..))
+import SixFour.Spec.SigmaPairHead
+  ( SigmaPairTree(..), reconstructPaired, sigmaPairDepth, sigmaPairLeaves )
 
 -- =============================================================================
 -- Generators
@@ -122,7 +125,62 @@ tests = testGroup "Pipeline (type-class framework for the look-NN)"
         let _proof :: SigmaEquivariantDict (Pipeline4 IdentityMiddle)
             _proof = option4Theorem (Proxy :: Proxy (Pipeline4 IdentityMiddle))
         in True
+
+    -- ---------------------------------------------------------------------
+    -- SigmaPairRecon — the ADOPTED L6 stage (SigmaPairHead pivot).
+    -- ---------------------------------------------------------------------
+  , testProperty "Stage SigmaPairRecon: output has 256 σ-pair leaves" $
+      forAll genSigmaPairTree $ \t ->
+        length (step @SigmaPairRecon t) == sigmaPairLeaves
+
+  , testProperty "SigmaSymmetricRange SigmaPairRecon: σ_out ∘ step ≡ step (image is σ-fixed)" $
+      forAll genSigmaPairTree (lawSigmaSymmetricRange @SigmaPairRecon)
+
+  , testProperty "SigmaEquivariant SigmaPairRecon: step ∘ σ_in ≡ σ_out ∘ step" $
+      forAll genSigmaPairTree (lawSigmaEquivariant @SigmaPairRecon)
+
+    -- sigmaPairHeadTheorem re-instantiates option4Theorem at SigmaPairRecon:
+    -- the composition is BOTH SigmaEquivariant AND SigmaSymmetricRange (the
+    -- guarantee Quad4ReconAchroma could not give). THIS TEST COMPILING is the
+    -- proof — NOTES 2026-05-28 open Q#2.
+  , testProperty "sigmaPairHeadTheorem: Pipeline4SigmaPair is σ-equivariant AND σ-symmetric-range" $
+      once $
+        let (_eq, _sym) = sigmaPairHeadTheorem (Proxy :: Proxy (Pipeline4SigmaPair SigmaPairMiddle))
+            _eqProof  :: SigmaEquivariantDict   (Pipeline4SigmaPair SigmaPairMiddle)
+            _eqProof  = _eq
+            _symProof :: SigmaSymmetricRangeDict (Pipeline4SigmaPair SigmaPairMiddle)
+            _symProof = _sym
+        in True
   ]
+
+-- A well-formed depth-'sigmaPairDepth' (= 7) generator Haar palette wrapped as a
+-- SigmaPairTree. Small offsets so leaves stay in gamut.
+genSigmaPairTree :: Gen SigmaPairTree
+genSigmaPairTree = do
+  rt   <- genOKLab
+  lvls <- mapM (\l -> vectorOf (2 ^ l) genOff) [0 .. sigmaPairDepth - 1]
+  pure (SigmaPairTree (HaarPalette rt lvls))
+  where
+    genOff = OKLab <$> choose (-0.02, 0.02) <*> choose (-0.02, 0.02) <*> choose (-0.02, 0.02)
+
+-- | A learned middle Histogram4096 → SigmaPairTree satisfying sigmaPairHeadTheorem's
+-- hypotheses (σ-equivariant on the boundary types). Maps to the canonical
+-- zero-offset generator tree; σ on the input acts via the bin permutation, σ on
+-- the SigmaPairTree output reflects each generator coefficient.
+data SigmaPairMiddle
+
+instance Stage SigmaPairMiddle where
+  type In  SigmaPairMiddle = Histogram4096
+  type Out SigmaPairMiddle = SigmaPairTree
+  step _ = SigmaPairTree
+    (HaarPalette (OKLab 0.5 0 0)
+       [ replicate (2 ^ l) (OKLab 0 0 0) | l <- [0 .. sigmaPairDepth - 1] ])
+
+instance SigmaEquivariant SigmaPairMiddle where
+  sigmaIn (Histogram4096 v) = Histogram4096 (sigmaApplyVec v)
+  sigmaOut (SigmaPairTree (HaarPalette rt lvls)) =
+    SigmaPairTree (HaarPalette (sigmaReflect rt)
+      [ map sigmaReflect lvl | lvl <- lvls ])
 
 -- | A trivial "identity-shaped" learned middle: takes a Histogram4096 to a
 -- canonical 'AchromaticQuad4' (an achromatic-root tree with zero offsets). It

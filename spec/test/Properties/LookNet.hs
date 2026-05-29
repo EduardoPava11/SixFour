@@ -57,13 +57,14 @@ tests = testGroup "LookNet (typed layer dataflow input → palette → GIF)"
   , testProperty "index path L8–L9 composes" $
       once (chainComposes indexChain)
 
-  , testProperty "dimensional facts: 10 GMM token, dM context, 768 decoder = tree DOF, depth 8" $
+  , testProperty "dimensional facts: 10 GMM token, dM context, 384 σ-pair decoder genome, full palette DOF 768" $
       once $
            gmmTokenDim == 10
         && netInputDim encoderIO == gmmTokenDim
         && netOutputDim encoderIO == modelDim
-        && netOutputDim decoderIO == 768
-        && netOutputDim decoderIO == degreesOfFreedom
+        && netOutputDim decoderIO == 384
+        && degreesOfFreedom == 768
+        && 2 * netOutputDim decoderIO == degreesOfFreedom   -- 384 generators → 768 palette reals
         && netInputDim coreIO == netOutputDim encoderIO
         && netInputDim decoderIO == netOutputDim coreIO
         && modelDim > 0

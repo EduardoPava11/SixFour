@@ -12,8 +12,8 @@ import SixFour.Codegen.CoreML
   , maxTokens, pyBoolList, pyIntList
   )
 import SixFour.Spec.Tensor    (sigma64Mask, gmmTokenSigmaMask, hiddenDim)
-import SixFour.Spec.LookNetD  (sigma768Mask, decoderLevelDims, decoderOutputDim)
-import SixFour.Spec.PairTree  (degreesOfFreedom)
+import SixFour.Spec.LookNetD  (sigmaDecoderMask, decoderLevelDims, decoderOutputDim)
+import SixFour.Spec.SigmaPairHead (sigmaPairDegreesOfFreedom, sigmaPairDepth, sigmaPairLeaves)
 import SixFour.Spec.LookNet   (modelDim)
 import SixFour.Spec.GMM       (gmmTokenDim)
 import SixFour.Spec.LookNetR  (coreDepth)
@@ -44,10 +44,21 @@ tests = testGroup "CoreMLContract (Codegen.CoreML emits constants identical to t
       once (contains ("CORE_DEPTH            = " <> T.pack (show coreDepth))
                      emitLookNetTorch)
 
-  , testProperty "PyTorch module emits DECODER_OUT_DIM = 768" $
+  , testProperty "PyTorch module emits DECODER_OUT_DIM = 384 (= SIGMA_PAIR_DOF)" $
       once (contains ("DECODER_OUT_DIM       = " <> T.pack (show decoderOutputDim))
                      emitLookNetTorch
-            && degreesOfFreedom == 768)
+            && decoderOutputDim == sigmaPairDegreesOfFreedom
+            && decoderOutputDim == 384)
+
+  , testProperty "PyTorch module emits SIGMA_PAIR_* pins (DOF 384, DEPTH 7, LEAVES 256)" $
+      once (contains ("SIGMA_PAIR_DOF        = " <> T.pack (show sigmaPairDegreesOfFreedom)) emitLookNetTorch
+         && contains ("SIGMA_PAIR_DEPTH      = " <> T.pack (show sigmaPairDepth))            emitLookNetTorch
+         && contains ("SIGMA_PAIR_LEAVES     = " <> T.pack (show sigmaPairLeaves))           emitLookNetTorch
+         && sigmaPairDegreesOfFreedom == 384 && sigmaPairDepth == 7 && sigmaPairLeaves == 256)
+
+  , testProperty "PyTorch module emits L6 reconstruct_sigma_pair (256-leaf σ-pair palette)" $
+      once (contains "def reconstruct_sigma_pair(coeffs" emitLookNetTorch
+         && contains "def _haar_reconstruct(coeffs" emitLookNetTorch)
 
   , testProperty "PyTorch module emits DECODER_LEVEL_DIMS matching the Haskell list" $
       once (contains ("DECODER_LEVEL_DIMS    = " <> pyIntList decoderLevelDims)
@@ -65,8 +76,8 @@ tests = testGroup "CoreMLContract (Codegen.CoreML emits constants identical to t
       once (contains ("GMM_TOKEN_SIGMA_MASK = " <> pyBoolList gmmTokenSigmaMask)
                      emitLookNetTorch)
 
-  , testProperty "PyTorch module emits SIGMA768_MASK bit-identical to Haskell" $
-      once (contains ("SIGMA768_MASK = " <> pyBoolList sigma768Mask)
+  , testProperty "PyTorch module emits SIGMA_DECODER_MASK bit-identical to Haskell" $
+      once (contains ("SIGMA_DECODER_MASK = " <> pyBoolList sigmaDecoderMask)
                      emitLookNetTorch)
 
   , testProperty "PyTorch module defines the layer classes (L3Encoder, SharedBlock, L4Recursion, L5Decoder)" $
