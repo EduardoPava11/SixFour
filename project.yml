@@ -86,6 +86,14 @@ targets:
             exit 1
           fi
         basedOnDependencyAnalysis: false
+      - name: compile native Zig kernels
+        script: |
+          # Build libsixfour_native.a (the owned byte-exact core) for the slice
+          # Xcode is currently building (device vs simulator, keyed off
+          # $PLATFORM_NAME). Linked via OTHER_LDFLAGS=-lsixfour_native +
+          # LIBRARY_SEARCH_PATHS=$(SRCROOT)/Native/lib/$(PLATFORM_NAME) below.
+          "$SRCROOT/Native/build-ios.sh"
+        basedOnDependencyAnalysis: false
     sources:
       # `path: SixFour, type: group` recursively picks up everything in
       # SixFour/, including SixFour/Resources/stbn3d-8.bin (auto-added as
@@ -121,6 +129,19 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sixfour.SixFour
         DEVELOPMENT_TEAM: ""
+        # Owned native Zig core (Native/). The bridging header surfaces the C
+        # ABI (sixfour_native.h) to Swift; the static lib is produced per-slice
+        # by the "compile native Zig kernels" preBuildScript above.
+        SWIFT_OBJC_BRIDGING_HEADER: $(SRCROOT)/Native/SixFour-Bridging-Header.h
+        HEADER_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/Native
+        LIBRARY_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/Native/lib/$(PLATFORM_NAME)
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lsixfour_native
 
   SixFourTests:
     type: bundle.unit-test

@@ -154,6 +154,31 @@ def main() -> None:
     nbytes = write_blob(weights, out_path)
     print(f"\nwrote {nbytes} bytes -> {out_path}")
 
+    # Emit a tiny sidecar of float32 spot-values so the cross-language Zig test
+    # (Native/src/root.zig) can assert byte-exact agreement with the Python
+    # decode. Values are the first float32 of each tensor, plus phi[5] / w1[63];
+    # written as the exact uint32 bit pattern AND the decoded float so the Zig
+    # side can compare without any decimal-parse drift.
+    spot_path = out_path.with_suffix(".spot.json")
+    spot: dict = {"nbytes": nbytes, "tensor_count": len(TENSOR_ORDER), "values": {}}
+    for name in TENSOR_ORDER:
+        flat = np.ascontiguousarray(weights[name], dtype="<f4").reshape(-1)
+        entry = {
+            "shape": list(np.asarray(weights[name]).shape),
+            "f0_bits": int(flat[:1].view("<u4")[0]),
+            "f0": float(flat[0]),
+        }
+        spot["values"][name] = entry
+    # extra interior spot-checks (offset reads, not just element 0)
+    phi_flat = np.ascontiguousarray(weights["phi"], dtype="<f4").reshape(-1)
+    w1_flat = np.ascontiguousarray(weights["w1"], dtype="<f4").reshape(-1)
+    spot["values"]["phi"]["f5_bits"] = int(phi_flat[5:6].view("<u4")[0])
+    spot["values"]["phi"]["f5"] = float(phi_flat[5])
+    spot["values"]["w1"]["f63_bits"] = int(w1_flat[63:64].view("<u4")[0])
+    spot["values"]["w1"]["f63"] = float(w1_flat[63])
+    spot_path.write_text(json.dumps(spot, indent=2))
+    print(f"wrote spot-values -> {spot_path}")
+
     back = read_blob(out_path)
 
     ok = True
