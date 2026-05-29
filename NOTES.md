@@ -5,6 +5,93 @@ newest first.
 
 ---
 
+## 2026-05-29 — Haskell→MLX alignment audit: open gaps (flags only)
+
+Audit of the **MLX training** and **NN-design** seams. No code changed — this is a
+flag log (the repo keeps deferred work as prose here, not as inline markers). Each item
+is phrased to double as a **work-list for a follow-on dynamic workflow**: locus
+(`file:line`), acceptance criterion, and dependency edges. Verified firsthand 2026-05-29.
+
+**Healthy baseline (not gaps).** The *forward* path is bit-exact: `Codegen.MLX`
+(`spec/src/SixFour/Codegen/MLX.hs`) is the real, primary 194-line `mlx.nn` emitter (NOT a
+numpy stub); the golden gate (`trainer/check_golden.py`) matches MLX & PyTorch to the
+Haskell oracle at 1e-6; σ-equivariance is proven in Haskell and verified bit-exact. Every
+gap below is on the **training** and **design-pivot-wiring** side, never the forward math.
+
+### A. Training pipeline — the core hole
+1. **No look-NN trainer exists.** `trainer/` has only `train_metric.py` (Stage-A PSD
+   metric); there is no `train_look_net_mlx.py`. The "MLX is the primary trainer"
+   contract (`CLAUDE.md:23`) is currently true only for the metric organ, not the look-NN.
+   *Accept:* an MLX training loop produces look-NN weights. *Dep:* needs B (decoder dims) + #2.
+2. **`Spec.Loss` not ported to MLX/Python.** `spec/src/SixFour/Spec/Loss.hs` defines
+   fidelity (Bures-W) + coverage + Ou-Luo beauty; no fidelity/coverage/beauty/bures/
+   `lookNetLoss` anywhere in `trainer/*.py` (outside `generated/`). *Accept:* MLX loss fn
+   matches `Spec.Loss` within tol on a golden case. *Dep:* needs loss golden vectors (#3).
+3. **No loss/gradient golden vectors.** `trainer/generated/look_net_golden.json` +
+   `check_golden.py` cover the **forward pass only** (`check_golden.py:77` is
+   `torch.no_grad()`; no loss/backward/grad). Training numerics are unverifiable against
+   Haskell. *Accept:* `Codegen.Golden` emits loss (and ideally grad) reference cases.
+4. **Training data empty.** `trainer/data/captured_frames/` and `…/reference_gifs/` are
+   both 0 files; the metric trainer `SystemExit`s with no GIFs. *Accept:* a documented
+   data-acquisition path (real captures from the on-device session dir, or synthetic).
+
+### B. SigmaPairHead design pivot — spec is ahead of codegen (the long pole)
+5. **Decoder still emits 768-DOF Haar, not the committed 384-DOF SigmaPairTree.**
+   `trainer/generated/look_net_mlx.py:32` `DECODER_OUT_DIM=768`; heads sum to 768
+   (`:153,:160,:177`); identical in `look_net_torch.py`. The 2026-05-28 pivot
+   (`Spec.SigmaPairHead`, 384 DOF, see entry below) is wired into no generated model.
+   *Accept:* generated decoders emit 384 and reconstruct the 256-leaf σ-pair palette.
+   *Dep:* change `spec/src/SixFour/Codegen/{MLX,CoreML}.hs`, regenerate (never hand-edit).
+6. **`option4Theorem` dead-ends at `Quad4ReconAchroma`.** The `Spec.Pipeline` composition
+   theorem is not re-instantiated at `SigmaPairHead` (see NOTES 2026-05-28 open Q#2 +
+   "Risks"). *Accept:* a `SigmaPairHead` instance proves conditional σ-equivariance.
+7. **No `SIGMA_PAIR_*` codegen pins emitted anywhere.** Zero hits for `SIGMA_PAIR` across
+   `trainer/generated`, `studio/look-nn-baseline/src/generated`, `SixFour/Generated`.
+   `SIGMA_PAIR_DOF=384 / DEPTH=7 / LEAVES=256` (2026-05-28 open Q#4) never reach
+   `contract.rs` or the Python/Swift constants. *Accept:* `Codegen.{Burn,Shapes}` emit them.
+
+### C. MLX-specific verification gaps
+8. **MLX is never exercised in `smoke_test.py`** — it imports only torch + coremltools (no
+   `import mlx` / `mx.`). σ-equivariance and the .mlpackage round-trip are PyTorch-only.
+   *Accept:* an MLX arm asserts σ-equivariance bit-exact like the torch arm.
+9. **No direct MLX-vs-PyTorch forward comparison** — both are checked only *through* the
+   Haskell oracle in `check_golden.py`, never against each other. *Accept:* a same-weights
+   MLX↔torch allclose check.
+10. **No NaN / non-finite guard in `check_golden.py`** — an all-NaN forward could slip the
+    `≤1e-6` gate. *Accept:* gate fails fast on non-finite output.
+11. **PonderNet halting λ_ℓ is computed but never trained** — no halting loss in spec or
+    Python (the halt head exists in `LookNetR` + the generated models, unsupervised).
+    *Accept:* a PonderNet-style halting loss term in `Spec.Loss` + the MLX trainer.
+
+### D. GRAM stochastic core — design-only, research-gated (defer)
+12. **Stochastic L4 core deferred** (`spec/GRAM_MAPPING.md`); VI target `y` unresolved
+    (2026-05-28 open Q#5). Current `LookNetR` core is deterministic Mixture-of-Recursions.
+13. **`spec-measure` on real captures still pending** (2026-05-28 open Q#1) —
+    `sigmaSymFraction` measured only on synthetic palettes, so the SigmaPairHead decision
+    (and B above) lacks on-device evidence. *This gates B and D; do it first if data exists.*
+
+### E. Extra missing threads (beyond the four categories)
+14. **The look-NN is not a first-class `NetSlot`.** `trainer/generated/net_shape.py` /
+    `Spec.Net.hs` register only `NetSlot.METRIC`; look-NN dims (`MODEL_DIM`, `CORE_DEPTH`,
+    `DECODER_OUT_DIM`, `MAX_TOKENS`) live only inside the model files via
+    `CoreML.emitLookNetConstants`, not in the shape-contract registry. *Accept:* a
+    `NetSlot.LOOK` (or similar) with a `NetIOSpec`, pinned like the metric.
+15. **No deploy-blob serializer.** `MLX.hs:13` intentionally omits a `build_mlpackage`
+    analog (MLX weights → plain binary blob for the hand-written Swift forward pass), but
+    nothing yet *writes* that blob. It is the unwritten second half of the missing
+    `train_look_net_mlx.py` (#1). *Accept:* a documented MLX-weights→blob format + writer.
+
+### Dependency order for the closure (Phase 2 dynamic workflow)
+```
+B (SigmaPairHead 384-DOF) ─► regen golden (Codegen.Golden) ─► A (trainer + Spec.Loss port)
+                                                                      │
+C (MLX verify arm, NaN guard) ── mostly independent ──────────────────┘
+D (GRAM core) ── research-gated on #13 ── defer
+```
+Plan with full Phase-2 workflow sketch: `~/.claude/plans/snug-zooming-dewdrop.md`.
+
+---
+
 ## 2026-05-28 — σ-pair decoder pivot (Quad4 rejected → SigmaPairHead adopted)
 
 **Session goal.** Unify three new spec primitives — the 16³ OKLab histogram
