@@ -19,3 +19,7 @@ trainer/data/reference_gifs/*.gif
 trainer/checkpoints/
 *.mlpackage/
 *.mlmodel
+
+# Native Zig kernel build artifacts
+Native/lib/
+Native/.zig-cache/
