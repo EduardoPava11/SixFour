@@ -82,4 +82,11 @@ tests = testGroup "Loss (math-first training loss: fidelity + coverage + Ou-Luo 
       forAll genOKLabInGamut $ \c ->
         pairChromaticSimilarity c c == 1.0
         && pairLightnessAsymmetry c c == 0.0
+
+  , testProperty "leaf-list fidelity core agrees exactly with the Haar-tree fidelity loss" $
+      forAll genBoundedHaar $ \hp ->
+        forAll genTinyStack (lawFidelityLeavesAgreesWithHaar hp)
+
+  , testProperty "leaf-list beauty core = negated sum over adjacent leaf pairs" $
+      forAll (vectorOf 8 genOKLabInGamut) lawBeautyLeavesAgreesWithPairs
   ]

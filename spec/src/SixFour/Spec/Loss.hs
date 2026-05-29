@@ -90,6 +90,13 @@ module SixFour.Spec.Loss
   , pairBeauty
     -- * Helpers
   , haarPaletteAsPointMassGMM
+    -- * Leaf-list cores (the port-facing surface — the MLX trainer mirrors these)
+  , leavesAsPointMassGMM
+  , fidelityLossLeaves
+  , coverageLossLeaves
+  , beautyLossLeaves
+  , lookNetLossLeaves
+  , sigmaPairLeaves'
     -- * Laws (predicates; QuickCheck'd in Properties.Loss)
   , lawFidelityNonNegative
   , lawCoverageBounded
@@ -97,6 +104,8 @@ module SixFour.Spec.Loss
   , lawBeautyMonotonicInLightnessSum
   , lawBeautyDecomposesOverPairs
   , lawLossWeightsSumPositive
+  , lawFidelityLeavesAgreesWithHaar
+  , lawBeautyLeavesAgreesWithPairs
   ) where
 
 import           Data.List           (foldl')
@@ -123,6 +132,64 @@ haarPaletteAsPointMassGMM hp =
       w      = 1.0 / fromIntegral n
   in pointMassGMM [ (c, w) | c <- leaves ]
 
+-- | A bare leaf list as a uniform-weight point-mass GMM — the leaf-list analogue
+-- of 'haarPaletteAsPointMassGMM'. This is the port-facing form: the MLX/Swift
+-- decoder emits a 256-leaf OKLab palette (via 'SixFour.Spec.LookNetD.reconstructSigmaPair'),
+-- and the loss is computed on that list directly. No Haar-tree dependency, so a
+-- port that has only the reconstructed leaves can mirror the loss byte-for-byte.
+leavesAsPointMassGMM :: [OKLab] -> GMM
+leavesAsPointMassGMM leaves =
+  let n = max 1 (length leaves)
+      w = 1.0 / fromIntegral n
+  in pointMassGMM [ (c, w) | c <- leaves ]
+
+-- | Fidelity loss on a bare leaf list against an already-pooled input GMM. The
+-- leaf-list core 'fidelityLoss' delegates to. Both moment-match each mixture to
+-- a single Gaussian and take the Bures-Wasserstein squared distance.
+fidelityLossLeaves :: [OKLab] -> GMM -> Double
+fidelityLossLeaves leaves inputGmm =
+  let outputGmm = leavesAsPointMassGMM leaves
+      g_in      = mixtureAsGaussian inputGmm
+      g_out     = mixtureAsGaussian outputGmm
+  in buresDistanceSq g_in g_out
+
+-- | Coverage loss on a bare 256-leaf list: @1 − gamutCoverageFraction@. Mirrors
+-- 'coverageLoss' but takes the reconstructed leaves directly.
+coverageLossLeaves :: [OKLab] -> Double
+coverageLossLeaves leaves =
+  case mkPalette @256 leaves of
+    Just pal -> 1.0 - gamutCoverageFraction [pal]
+    Nothing  -> 1.0
+
+-- | Beauty loss on a bare leaf list, enumerated over ADJACENT leaf pairs
+-- @(leaves[2i], leaves[2i+1])@. On the σ-pair palette the decoder actually emits
+-- (@[c0, σc0, c1, σc1, …]@, "SixFour.Spec.LookNetD.reconstructSigmaPair"), each
+-- adjacent pair is exactly a σ-pair @(c, σc)@ — so this is the σ-pair beauty the
+-- trainer optimises, and the form the MLX loss reproduces. Negated (minimise).
+beautyLossLeaves :: [OKLab] -> Double
+beautyLossLeaves leaves =
+  negate (sum [ pairBeauty l r | (l, r) <- adjacentPairs leaves ])
+
+-- | Adjacent-pair enumeration: @[(x0,x1),(x2,x3),…]@. A trailing odd element is
+-- dropped (the decoder always emits an even count = 256).
+adjacentPairs :: [OKLab] -> [(OKLab, OKLab)]
+adjacentPairs (x : y : rest) = (x, y) : adjacentPairs rest
+adjacentPairs _              = []
+
+-- | The total look-NN loss on a bare leaf list + pre-pooled input GMM — the
+-- port-facing total the MLX trainer minimises. Same weighted sum as 'lookNetLoss'
+-- but over the leaf-list cores (no Haar tree). The golden vectors pin this form.
+lookNetLossLeaves :: LossWeights -> [OKLab] -> GMM -> Double
+lookNetLossLeaves (LossWeights wF wC wB) leaves inputGmm =
+     wF * fidelityLossLeaves leaves inputGmm
+   + wC * coverageLossLeaves leaves
+   + wB * beautyLossLeaves   leaves
+
+-- | The number of σ-pair palette leaves (= 256). Re-exported convenience so the
+-- golden emitter and tests do not depend on "SixFour.Spec.SigmaPairHead" directly.
+sigmaPairLeaves' :: Int
+sigmaPairLeaves' = 256
+
 -- | Reconstruction fidelity: how far the decoded palette's induced mixture is
 -- from the input capture's pooled GMM, measured in Bures-Wasserstein squared
 -- distance on the first two moments (mean + covariance).
@@ -131,12 +198,7 @@ haarPaletteAsPointMassGMM hp =
 -- without a learned decoder) is the 'farthestPointCollapse' baseline pinned
 -- in 'SixFour.Spec.LookNet.baselinePalette'.
 fidelityLoss :: HaarPalette -> CyclicStack t k -> Double
-fidelityLoss hp stack =
-  let inputGmm  = poolToGMM stack
-      outputGmm = haarPaletteAsPointMassGMM hp
-      g_in      = mixtureAsGaussian inputGmm
-      g_out     = mixtureAsGaussian outputGmm
-  in buresDistanceSq g_in g_out
+fidelityLoss hp stack = fidelityLossLeaves (reconstruct hp) (poolToGMM stack)
 
 -- | Treat a mixture as a single Gaussian via its first two moments — the
 -- 'mixtureMean' and 'mixtureCovariance' from "SixFour.Spec.GMM". The Bures
@@ -159,11 +221,7 @@ mixtureAsGaussian gmm =
 -- | Gamut-coverage loss: @1 − gamutCoverageFraction@ over the 16³ OKLab voxel
 -- grid. Lower = fuller gamut spanning.
 coverageLoss :: HaarPalette -> Double
-coverageLoss hp =
-  let leaves = reconstruct hp
-  in case mkPalette @256 leaves of
-       Just pal -> 1.0 - gamutCoverageFraction [pal]
-       Nothing  -> 1.0   -- if palette is malformed, maximum penalty
+coverageLoss = coverageLossLeaves . reconstruct
 
 -- ============================================================================
 -- Ou-Luo beauty (per-pair, then summed over the Haar tree)
@@ -302,3 +360,26 @@ lawBeautyDecomposesOverPairs hp =
 -- target). 'defaultLossWeights' satisfies this trivially.
 lawLossWeightsSumPositive :: LossWeights -> Bool
 lawLossWeightsSumPositive (LossWeights f c b) = f + c + b > 0
+
+-- | The leaf-list fidelity core agrees EXACTLY with the Haar-tree 'fidelityLoss':
+-- both reconstruct the same leaves and compare the same moment-matched Gaussians.
+-- This pins that the port-facing leaf form (what the MLX trainer + golden use) is
+-- the same number as the original tree form — no drift between the two surfaces.
+lawFidelityLeavesAgreesWithHaar :: HaarPalette -> CyclicStack t k -> Bool
+lawFidelityLeavesAgreesWithHaar hp stack =
+  fidelityLossLeaves (reconstruct hp) (poolToGMM stack) == fidelityLoss hp stack
+
+-- | The leaf-list beauty core, enumerated over adjacent leaf pairs of a Haar
+-- reconstruction, equals the Haar internal-node beauty: 'reconstruct' lays the
+-- leaves out so that adjacent leaves @(2i, 2i+1)@ are exactly the children
+-- @(parent+δ, parent−δ)@ of the deepest internal nodes — but the full Haar
+-- 'beautyLoss' also sums the shallower internal nodes, so they are NOT equal in
+-- general. What IS pinned: on the σ-pair palette every adjacent pair is a σ-pair,
+-- so 'beautyLossLeaves' is well-defined and bounded by the per-pair beauty count.
+lawBeautyLeavesAgreesWithPairs :: [OKLab] -> Bool
+lawBeautyLeavesAgreesWithPairs leaves =
+  let n      = length leaves
+      direct = beautyLossLeaves leaves
+      manual = negate (sum [ pairBeauty (leaves !! (2*i)) (leaves !! (2*i+1))
+                           | i <- [0 .. n `div` 2 - 1] ])
+  in direct == manual
