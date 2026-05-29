@@ -7,6 +7,20 @@ newest first.
 
 ## 2026-05-29 — Haskell→MLX alignment audit: open gaps (flags only)
 
+> **Closure status (2026-05-29, branch `feat/haskell-mlx-alignment`, 6 commits, 289 spec
+> tests green + golden/loss gates pass).** CLOSED: #2 Spec.Loss→MLX port, #3 loss golden
+> (float64-CPU gate @1e-6 — MLX is f32, Haskell f64; reduced in f64 to hold 1e-6),
+> #5 decoder→384 SigmaPairHead, #6 option4Theorem, #7 SIGMA_PAIR pins, #8 MLX smoke-test
+> arm, #9 MLX↔torch check, #10 non-finite guards, #11 PonderNet halting loss, #14
+> NetSlot.LOOK, #15 deploy-blob serializer (writer+format+round-trip; producer
+> `trainer/export_look_net_blob.py`). PARTIAL: #1 — loss *target* ported+gated, but the MLX
+> training *loop* script isn't written (also blocked by #4). BLOCKED: #4 training data empty
+> (`trainer/data/*` = 0 files → can't actually train). DEFERRED (research-gated): #12/#13
+> GRAM stochastic core + `spec-measure` on real captures. NEW FOLLOW-UP: the native loader
+> `s4_load_look_net` is a declared C ABI contract (`Native/include/sixfour_native.h` +
+> Swift seam) but NOT yet implemented in Zig nor wired into `project.yml` (bridging header +
+> link) — this is the "first real kernel" of the owned Zig core ([[sixfour-zig-quantized-core]]).
+
 Audit of the **MLX training** and **NN-design** seams. No code changed — this is a
 flag log (the repo keeps deferred work as prose here, not as inline markers). Each item
 is phrased to double as a **work-list for a follow-on dynamic workflow**: locus
