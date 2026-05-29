@@ -2,9 +2,18 @@
 Module      : SixFour.Codegen.CoreML
 Description : Emit the look-NN as a PyTorch nn.Module + a coremltools driver script.
 
-The /capstone/ of the math-first NN pipeline. Reads the typed spec
-(@SixFour.Spec.LookNetE/R/D@ + their σ-actions in @SixFour.Spec.Tensor@) and
-emits TWO files into @trainer/generated/@:
+The /dormant ANE-distillation fallback/ for the math-first NN pipeline. The
+PRIMARY training path is MLX on the M1 (a native @mlx.nn@ emitter under the
+reclaimed @Codegen.MLX@ name is planned but not yet built), and on-device
+inference on the iPhone is intended to be a HAND-WRITTEN Swift + Metal forward
+pass verified bit-for-bit against the Haskell golden vectors — never a CoreML
+black box (the shipped app carries zero third-party dependencies; see the
+repo-root @CLAUDE.md@ dependency contract). This module is kept as the
+PyTorch→CoreML→ANE escape hatch should an enumerated-shape ANE distillation ever
+be wanted; it is NOT on the shipped path.
+
+It reads the typed spec (@SixFour.Spec.LookNetE/R/D@ + their σ-actions in
+@SixFour.Spec.Tensor@) and emits TWO files into @trainer/generated/@:
 
   * @look_net_torch.py@ — a PyTorch @nn.Module@ implementing the L3 encoder,
     L4 recursive core (8 unrolled blocks), and L5 per-level decoder. Every
@@ -22,8 +31,8 @@ Both files are deterministic from the spec: same Haskell ⇒ same emitted Python
 The constants emitted (model dim, channel splits, σ-masks, level dims) are read
 back at test time by 'Properties.CoreMLContract' to guarantee no drift.
 
-The retired @Codegen.MLX@ module produced shape stubs for the 6-DOF metric
-trainer; this module produces the actual look-NN model + converter. Together
+@Codegen.Shapes@ emits the NumPy shape + significance constants the trainer
+imports; this module produces the (fallback) look-NN model + converter. Together
 with @Codegen.Swift@ (on-device contract), @Codegen.Burn@ (Rust baseline
 contract), and the on-device @STBN3DMaskLoader@, the spec generates the entire
 cross-language surface from one Haskell source of truth.

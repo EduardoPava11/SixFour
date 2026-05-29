@@ -1,5 +1,4 @@
 import Foundation
-import CoreML
 
 /// Pipeline insertion points. Only `.metric` ships today: the
 /// `trainer/train_metric.py` MLX trainer produces 6-float PSD organs
@@ -29,10 +28,9 @@ protocol Organ: Sendable {
     var descriptor: OrganDescriptor { get }
 }
 
-/// Errors during organ load / inference.
+/// Errors during organ load.
 enum OrganError: Error {
     case fileMissing(URL)
     case decodeFailed(underlying: Error?)
     case wrongSlot(expected: OrganSlot, got: OrganSlot)
-    case mlModelLoadFailed(underlying: Error)
 }

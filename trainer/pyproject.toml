@@ -3,6 +3,13 @@ name = "sixfour-trainer"
 version = "0.1.0"
 description = "Mac-side MLX trainer for SixFour aesthetic organs."
 requires-python = ">=3.11"
+# This is Mac-side TOOLING — never shipped. The shipped iOS app carries zero
+# third-party dependencies (see repo-root CLAUDE.md). Framework split:
+#   mlx        — PRIMARY trainer (Apple-Silicon-native; metric organ today, look-NN next).
+#   torch      \ DORMANT ANE-distillation fallback only: Codegen.CoreML emits a
+#   coremltools/ PyTorch module + .mlpackage converter. Not on the shipped path.
+#   numpy      — shape/significance constants from Codegen.Shapes.
+#   pillow,tqdm— reference-GIF I/O + progress bars.
 dependencies = [
     "mlx>=0.20",
     "torch>=2.4",

@@ -8,6 +8,7 @@ xcuserdata/
 .build/
 spec/dist-newstyle/
 spec/**/dist-newstyle/
+cabal.project.freeze
 *.hi
 *.o
 trainer/.venv/

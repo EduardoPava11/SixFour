@@ -68,19 +68,21 @@ targets:
           env -i HOME="$HOME" PATH="$HOME/.ghcup/bin:/opt/homebrew/bin:/usr/bin:/bin" \
             sh -c "cd '$SRC/spec' && '$CABAL' run -v0 spec-codegen -- \
               --swift-out '$SCRATCH/swift' --mlx-out '$SCRATCH/mlx' --res-out '$SCRATCH/res'"
-          if ! diff -q "$SCRATCH/swift/StageContract.swift"  "$SRC/SixFour/Generated/StageContract.swift" \
-             || ! diff -q "$SCRATCH/swift/NetContract.swift"   "$SRC/SixFour/Generated/NetContract.swift" \
-             || ! diff -q "$SCRATCH/swift/HybridContract.swift" "$SRC/SixFour/Generated/HybridContract.swift" \
-             || ! diff -q "$SCRATCH/res/stbn3d-8.bin"          "$SRC/SixFour/Resources/stbn3d-8.bin" \
-             || ! diff -q "$SCRATCH/mlx/stages.py"             "$SRC/trainer/generated/stages.py" \
-             || ! diff -q "$SCRATCH/mlx/net_shape.py"          "$SRC/trainer/generated/net_shape.py"; then
+          if ! diff -q "$SCRATCH/swift/StageContract.swift"        "$SRC/SixFour/Generated/StageContract.swift" \
+             || ! diff -q "$SCRATCH/swift/NetContract.swift"          "$SRC/SixFour/Generated/NetContract.swift" \
+             || ! diff -q "$SCRATCH/swift/STBN3DContract.swift"       "$SRC/SixFour/Generated/STBN3DContract.swift" \
+             || ! diff -q "$SCRATCH/swift/SignificanceContract.swift" "$SRC/SixFour/Generated/SignificanceContract.swift" \
+             || ! diff -q "$SCRATCH/res/stbn3d-8.bin"                 "$SRC/SixFour/Resources/stbn3d-8.bin" \
+             || ! diff -q "$SCRATCH/mlx/stages.py"                    "$SRC/trainer/generated/stages.py" \
+             || ! diff -q "$SCRATCH/mlx/net_shape.py"                 "$SRC/trainer/generated/net_shape.py"; then
             echo "error: SixFour/Generated/, SixFour/Resources/stbn3d-8.bin, or trainer/generated/ drifted from the spec."
             echo "Run 'cd spec && cabal run spec-codegen' and commit the result."
-            diff -u "$SCRATCH/swift/StageContract.swift"  "$SRC/SixFour/Generated/StageContract.swift"  || true
-            diff -u "$SCRATCH/swift/NetContract.swift"    "$SRC/SixFour/Generated/NetContract.swift"    || true
-            diff -u "$SCRATCH/swift/HybridContract.swift" "$SRC/SixFour/Generated/HybridContract.swift" || true
-            diff -u "$SCRATCH/mlx/stages.py"              "$SRC/trainer/generated/stages.py"           || true
-            diff -u "$SCRATCH/mlx/net_shape.py"           "$SRC/trainer/generated/net_shape.py"        || true
+            diff -u "$SCRATCH/swift/StageContract.swift"        "$SRC/SixFour/Generated/StageContract.swift"        || true
+            diff -u "$SCRATCH/swift/NetContract.swift"          "$SRC/SixFour/Generated/NetContract.swift"          || true
+            diff -u "$SCRATCH/swift/STBN3DContract.swift"       "$SRC/SixFour/Generated/STBN3DContract.swift"       || true
+            diff -u "$SCRATCH/swift/SignificanceContract.swift" "$SRC/SixFour/Generated/SignificanceContract.swift" || true
+            diff -u "$SCRATCH/mlx/stages.py"                    "$SRC/trainer/generated/stages.py"                  || true
+            diff -u "$SCRATCH/mlx/net_shape.py"                 "$SRC/trainer/generated/net_shape.py"               || true
             exit 1
           fi
         basedOnDependencyAnalysis: false

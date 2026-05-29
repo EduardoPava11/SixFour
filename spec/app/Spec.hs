@@ -1,15 +1,17 @@
 {- |
-spec-codegen driver. Writes the four target files:
+spec-codegen driver. Writes 8 files + 1 binary resource:
 
-  * @SixFour/Generated/StageContract.swift@
-  * @SixFour/Generated/NetContract.swift@
-  * @trainer/generated/stages.py@
-  * @trainer/generated/net_shape.py@
+  * @SixFour/Generated/{StageContract,NetContract,STBN3DContract,SignificanceContract}.swift@
+  * @SixFour/Resources/stbn3d-8.bin@ — 8³ STBN3D scalar mask
+  * @trainer/generated/{stages,net_shape}.py@ — NumPy shape/significance constants
+  * @trainer/generated/{look_net_torch,build_mlpackage}.py@ — dormant CoreML/ANE fallback
+  * @studio/look-nn-baseline/src/generated/contract.rs@ — Rust @burn@ contract + golden vectors
 
 Defaults to writing relative to the cabal CWD (@~/SixFour/spec@), so
 the Swift output lands at @../SixFour/Generated@ and the Python
-output at @../trainer/generated@. Override with @--swift-out DIR@ or
-@--mlx-out DIR@.
+output at @../trainer/generated@. Override with @--swift-out DIR@,
+@--mlx-out DIR@ (the @trainer/generated@ Python dir), @--res-out DIR@,
+or @--burn-out DIR@.
 -}
 module Main (main) where
 
@@ -26,7 +28,7 @@ import           Data.Maybe (fromMaybe)
 
 import SixFour.Codegen.Swift
   ( emitStageContract, emitNetContract, emitSTBN3DContract, emitSignificanceContract )
-import SixFour.Codegen.MLX    (emitStagesPy,      emitNetShapePy)
+import SixFour.Codegen.Shapes (emitStagesPy,      emitNetShapePy)
 import SixFour.Codegen.Burn   (emitBurnContract)
 import SixFour.Codegen.CoreML (emitLookNetTorch,  emitBuildMlpackage)
 import SixFour.Spec.STBN3D    (Mask3D(..), generateSTBN3D)

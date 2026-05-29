@@ -5,6 +5,11 @@ animated GIF**, with each frame quantised against a per-frame 256-colour OKLab
 palette engineered for maximum LAB diversity. Capture, palette generation,
 dithering, and GIF encoding all run on device.
 
+> **Engineering contract:** Haskell-verified, dependency-free, hand-written.
+> The shipped iOS app has **zero third-party dependencies**; MLX (M1) is a
+> Mac-side training tool only. See [`CLAUDE.md`](CLAUDE.md) for the full
+> three-tier dependency contract.
+
 A successor "look-network" (look-NN) is being designed in parallel: it
 collapses the 64 per-frame palettes into a single **global 256-colour palette
 organised as 128 σ-balanced complementary pairs**, plus per-frame index maps,

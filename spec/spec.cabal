@@ -56,7 +56,7 @@ library
         SixFour.Spec.Loss
         SixFour.Spec.STBN3D
         SixFour.Codegen.Swift
-        SixFour.Codegen.MLX
+        SixFour.Codegen.Shapes
         SixFour.Codegen.Burn
         SixFour.Codegen.CoreML
     build-depends:

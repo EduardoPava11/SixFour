@@ -2,9 +2,9 @@
 Module      : SixFour.Codegen.Burn
 Description : Emit the look-NN dimensional contract + golden vectors to the Rust burn crate.
 
-The Haskell→burn bridge. Mirrors 'SixFour.Codegen.MLX' / 'SixFour.Codegen.Swift':
+The Haskell→burn bridge. Mirrors 'SixFour.Codegen.Shapes' / 'SixFour.Codegen.Swift':
 a pure @Text@ built from the spec constants, written by @app/Spec.hs@ to
-@studio/look-nn/src/generated/contract.rs@. It emits two things:
+@studio/look-nn-baseline/src/generated/contract.rs@. It emits two things:
 
   * **The dimensional contract** — @T,H,W,K@, the Haar @DOF = 768@, the GMM token width,
     the free dims (@MODEL_DIM@, @MAX_PONDER_DEPTH@), and the encoder/core/decoder IO
