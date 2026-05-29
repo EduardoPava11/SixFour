@@ -42,6 +42,7 @@ module SixFour.Spec.LookNet
     -- * Free structural dimensions
   , modelDim
   , maxPonderDepth
+  , maxTokens
   , gmmTokenDim
     -- * Learnable-layer shape contracts (weights are Phase C)
   , encoderIO
@@ -102,6 +103,11 @@ modelDim = 64
 maxPonderDepth :: Int
 maxPonderDepth = paletteDepth
 
+-- | Maximum GMM token count per capture: @T · K = 64 · 256 = 16384@. The
+-- static input width the on-device forward pass (and the ANE compiler) require.
+maxTokens :: Int
+maxTokens = tVal * kVal
+
 -- @gmmTokenDim@ (the per-component substrate width @μ3+Σ6+w1 = 10@) is re-exported
 -- from "SixFour.Spec.GMM"; it replaces the old @categoryCodeDim = 88@.
 
@@ -112,6 +118,7 @@ encoderIO :: NetIO
 encoderIO = NetIO
   { netInputDim    = gmmTokenDim
   , netOutputDim   = modelDim
+  , netAuxDims     = []
   , netDescription = "L3 set encoder E: per-component (mu,Sigma,w)=10 -> dM context (perm-invariant, set-pooled)"
   }
 
@@ -121,6 +128,7 @@ coreIO :: NetIO
 coreIO = NetIO
   { netInputDim    = modelDim
   , netOutputDim   = modelDim
+  , netAuxDims     = []
   , netDescription = "L4 core R: dM -> dM context; ONE weight-shared block reused over 8 Haar levels (Mixture-of-Recursions), σ-invariant per-level halting (ponder <= N)"
   }
 
@@ -133,6 +141,7 @@ decoderIO :: NetIO
 decoderIO = NetIO
   { netInputDim    = modelDim
   , netOutputDim   = sigmaPairDegreesOfFreedom
+  , netAuxDims     = []
   , netDescription = "L5 sigma-pair tree decoder D: dM -> 384 SigmaPairTree coefficients (root + 127 sigma-balanced generator offsets)"
   }
 

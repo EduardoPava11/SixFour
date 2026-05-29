@@ -17,6 +17,7 @@ trainer/**/__pycache__/
 trainer/data/captured_frames/*.bin
 trainer/data/reference_gifs/*.gif
 trainer/checkpoints/
+trainer/out/
 *.mlpackage/
 *.mlmodel
 

@@ -67,13 +67,7 @@ import SixFour.Spec.LookNetR  (coreDepth, sharedBlockCount)
 import SixFour.Spec.LookNetD  (decoderLevelDims, sigmaDecoderMask, decoderOutputDim, decoderTreeDepth)
 import SixFour.Spec.SigmaPairHead (sigmaPairLeaves)
 import SixFour.Spec.GMM       (gmmTokenDim)
-import SixFour.Spec.LookNet   (modelDim)
-import SixFour.Spec.Shape     (tVal, kVal)
-
--- | Maximum GMM token count per capture: @T · K = 64 · 256 = 16384@.
--- The static shape the ANE compiler requires.
-maxTokens :: Int
-maxTokens = tVal * kVal
+import SixFour.Spec.LookNet   (modelDim, maxTokens)
 
 -- | The pinned-dimension + σ-mask constant block, shared VERBATIM by the torch
 -- ('emitLookNetTorch') and MLX ('SixFour.Codegen.MLX.emitLookNetMLX') emitters
