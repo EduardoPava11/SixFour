@@ -11,7 +11,7 @@ Requires: torch, coremltools (already in pyproject.toml deps).
 
 What it checks:
   1. The generated LookNet instantiates and forward-passes at the spec shape
-     (1, MAX_TOKENS=16384, GMM_TOKEN_DIM=10) → (1, DECODER_OUT_DIM=768).
+     (1, MAX_TOKENS=16384, GMM_TOKEN_DIM=10) → (1, DECODER_OUT_DIM=384).
   2. σ-equivariance: max|σ(E(x)) - E(σx)| is bit-exactly 0 under random
      weights. (This was 2950 before the GELU→tanh fix; the smoke test caught
      that regression. Keep the check at exact equality.)
@@ -30,10 +30,11 @@ from pathlib import Path
 GEN = Path(__file__).parent / "generated"
 sys.path.insert(0, str(GEN))
 
+import numpy as np
 import torch
 from look_net_torch import (
     LookNet, MAX_TOKENS, GMM_TOKEN_DIM, DECODER_OUT_DIM,
-    GMM_TOKEN_SIGMA_MASK, SIGMA768_MASK,
+    GMM_TOKEN_SIGMA_MASK, SIGMA_DECODER_MASK,
 )
 
 
@@ -58,7 +59,7 @@ def main() -> int:
 
     print("\n=== Step 3: σ-equivariance numerical check ===")
     flip_in = torch.tensor([-1.0 if b else 1.0 for b in GMM_TOKEN_SIGMA_MASK])
-    flip_out = torch.tensor([-1.0 if b else 1.0 for b in SIGMA768_MASK])
+    flip_out = torch.tensor([-1.0 if b else 1.0 for b in SIGMA_DECODER_MASK])
     with torch.no_grad():
         out_orig = model(tokens, token_mask=token_mask)
         out_sigma = model(tokens * flip_in, token_mask=token_mask)
@@ -68,6 +69,58 @@ def main() -> int:
         if delta != 0.0:
             print(f"  ✗ σ-EQUIVARIANCE BROKEN — investigate Codegen.CoreML")
             return 1
+
+    print("\n=== Step 3b: MLX σ-equivariance numerical check (bit-exact) ===")
+    # The MLX module is the PRIMARY trainer; assert σ-equivariance bit-exact on it
+    # too, exactly like the torch arm above. Same-weights transfer (the two modules
+    # are structurally 1:1) lets us load the torch state_dict into MLX.
+    try:
+        import mlx.core as mx
+        import look_net_mlx as mlxm
+    except Exception as e:  # noqa: BLE001
+        print(f"  ✗ MLX import failed: {e}")
+        return 1
+    mlx_net = mlxm.LookNet()
+    sd = model.state_dict()
+    mlx_net.encoder.phi.weight = mx.array(sd["encoder.phi.weight"].numpy())
+    mlx_net.recursion.g.w1.weight = mx.array(sd["recursion.g.w1.weight"].numpy())
+    mlx_net.recursion.g.w2.weight = mx.array(sd["recursion.g.w2.weight"].numpy())
+    mlx_net.recursion.g.halt_mlp.weight = mx.array(sd["recursion.g.halt_mlp.weight"].numpy())
+    mlx_net.recursion.g.halt_mlp.bias = mx.array(sd["recursion.g.halt_mlp.bias"].numpy())
+    for k in range(len(mlx_net.decoder.heads)):
+        mlx_net.decoder.heads[k].weight = mx.array(sd[f"decoder.heads.{k}.weight"].numpy())
+    mx.eval(mlx_net.parameters())
+
+    mlx_tokens = mx.array(tokens.numpy())
+    mlx_mask = mx.array(token_mask.numpy())
+    mlx_flip_in = mx.array(np.array([-1.0 if b else 1.0 for b in mlxm.GMM_TOKEN_SIGMA_MASK], dtype=np.float32))
+    mlx_flip_out = mx.array(np.array([-1.0 if b else 1.0 for b in mlxm.SIGMA_DECODER_MASK], dtype=np.float32))
+    mlx_out_orig = mlx_net(mlx_tokens, token_mask=mlx_mask)
+    mlx_out_sigma = mlx_net(mlx_tokens * mlx_flip_in, token_mask=mlx_mask)
+    mlx_expected = mlx_out_orig * mlx_flip_out
+    mx.eval(mlx_out_orig, mlx_out_sigma, mlx_expected)
+    mlx_delta = float(np.abs(np.array(mlx_out_sigma) - np.array(mlx_expected)).max())
+    print(f"  max|σ(E(x)) - E(σx)| = {mlx_delta:.2e}  (must be 0 by algebraic guarantee)")
+    if mlx_delta != 0.0:
+        print(f"  ✗ MLX σ-EQUIVARIANCE BROKEN — investigate Codegen.MLX")
+        return 1
+
+    print("\n=== Step 3c: same-weights MLX vs PyTorch forward agreement ===")
+    # Both backends load the IDENTICAL weights; outputs must agree to ~1e-6
+    # (cross-framework matmul summation order differs only at the ULP level).
+    torch_fwd = out_orig.numpy().astype(np.float64).reshape(-1)
+    mlx_fwd = np.array(mlx_out_orig).astype(np.float64).reshape(-1)
+    if not np.all(np.isfinite(mlx_fwd)):
+        print("  ✗ MLX forward produced non-finite values")
+        return 1
+    fwd_max_abs = float(np.abs(mlx_fwd - torch_fwd).max())
+    scale = max(float(np.abs(torch_fwd).max()), 1e-9)
+    FWD_RTOL = 1e-5
+    print(f"  max|mlx - torch| = {fwd_max_abs:.2e}  (relative {fwd_max_abs/scale:.2e} of |max|={scale:.4f})")
+    if fwd_max_abs / scale > FWD_RTOL:
+        print(f"  ✗ MLX↔PyTorch forward disagree beyond rtol={FWD_RTOL:.0e}")
+        return 1
+    print(f"  ✓ MLX and PyTorch agree within rtol={FWD_RTOL:.0e}")
 
     print("\n=== Step 4: save random weights to .pt ===")
     ckpt = Path(tempfile.mkdtemp()) / "random_lookNet.pt"
@@ -89,7 +142,6 @@ def main() -> int:
     print("=== Step 6: verify .mlpackage loads in CoreML ===")
     assert mlpackage.exists(), f"mlpackage not produced at {mlpackage}"
     import coremltools as ct
-    import numpy as np
     mlmodel = ct.models.MLModel(str(mlpackage))
     spec = mlmodel.get_spec()
     print(f"  loaded:  {mlpackage}")

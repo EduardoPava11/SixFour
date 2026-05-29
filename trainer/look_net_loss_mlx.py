@@ -164,6 +164,51 @@ def beauty_loss(leaves):
 
 
 # ===========================================================================
+# PonderNet halting loss (mirror Spec.Loss.haltingLoss)
+# ===========================================================================
+
+DEFAULT_HALT_LAMBDA_P = 0.5  # Spec.Loss.defaultHaltLambdaP
+
+
+def halting_distribution(halts):
+    """PonderNet halting distribution p_n = λ_n · ∏_{i<n}(1-λ_i) over the static
+    unroll, with the LAST step forced to absorb the remaining mass so Σ p_n = 1.
+    Mirrors Spec.Loss.haltingDistribution. `halts`: list of per-level λ floats."""
+    halts = list(halts)
+    if not halts:
+        return []
+    p = []
+    remaining = 1.0
+    for i, l in enumerate(halts):
+        if i == len(halts) - 1:
+            p.append(remaining)            # tail absorbs the rest
+        else:
+            p.append(remaining * l)
+            remaining = remaining * (1.0 - l)
+    return p
+
+
+def geometric_prior(lambda_p, n):
+    """Renormalised geometric prior g_n ∝ λ_p·(1-λ_p)^n over n=0..N-1.
+    Mirrors Spec.Loss.geometricPrior."""
+    raw = [lambda_p * (1.0 - lambda_p) ** k for k in range(n)]
+    z = sum(raw)
+    if z <= 0:
+        return [1.0 / max(1, n)] * n
+    return [r / z for r in raw]
+
+
+def halting_loss(halts, lambda_p=DEFAULT_HALT_LAMBDA_P):
+    """PonderNet halting regulariser KL(halting-dist ‖ geometric-prior). Trains
+    the per-level halt λ's the static unroll otherwise leaves unsupervised.
+    Mirrors Spec.Loss.haltingLoss (0·log0 = 0 convention)."""
+    import math
+    p = halting_distribution(halts)
+    g = geometric_prior(lambda_p, len(halts))
+    return sum(0.0 if pn <= 0 else pn * math.log(pn / gn) for pn, gn in zip(p, g))
+
+
+# ===========================================================================
 # Total (mirror Spec.Loss.lookNetLossLeaves)
 # ===========================================================================
 

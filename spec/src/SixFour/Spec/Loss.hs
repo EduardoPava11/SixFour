@@ -88,6 +88,11 @@ module SixFour.Spec.Loss
   , pairLightnessAsymmetry
   , pairLightnessSum
   , pairBeauty
+    -- * PonderNet halting loss (the λ_ℓ regulariser the trainer optimises)
+  , haltingDistribution
+  , geometricPrior
+  , defaultHaltLambdaP
+  , haltingLoss
     -- * Helpers
   , haarPaletteAsPointMassGMM
     -- * Leaf-list cores (the port-facing surface — the MLX trainer mirrors these)
@@ -106,6 +111,9 @@ module SixFour.Spec.Loss
   , lawLossWeightsSumPositive
   , lawFidelityLeavesAgreesWithHaar
   , lawBeautyLeavesAgreesWithPairs
+  , lawHaltingDistributionSumsToOne
+  , lawHaltingLossNonNegative
+  , lawHaltingLossZeroAtPrior
   ) where
 
 import           Data.List           (foldl')
@@ -285,6 +293,60 @@ addOK (OKLab l a b) (OKLab l' a' b') = OKLab (l + l') (a + a') (b + b')
 subOK (OKLab l a b) (OKLab l' a' b') = OKLab (l - l') (a - a') (b - b')
 
 -- ============================================================================
+-- PonderNet halting loss
+-- ============================================================================
+
+-- The L4 core ('SixFour.Spec.LookNetR') produces a per-recursion-step σ-INVARIANT
+-- halting scalar @λ_ℓ ∈ [0,1]@, one per Haar level. The forward pass computes
+-- these (golden field @"halts"@) but nothing /trains/ them — the static unroll
+-- runs all 'coreDepth' steps regardless. PonderNet (Banino et al., 2021) supplies
+-- the missing training signal: turn the @λ_ℓ@ into a halting distribution and
+-- regularise it towards a geometric prior, so the trainer learns to concentrate
+-- compute on the coarse (signal) Haar levels and halt early on the fine (noise)
+-- ones (the wavelet-truncation argument in "SixFour.Spec.LookNetR").
+
+-- | The PonderNet halting distribution @p_n@ from the per-step halting scalars
+-- @[λ_0, …, λ_{N-1}]@: @p_n = λ_n · ∏_{i<n}(1 − λ_i)@, with the LAST step forced
+-- to absorb all remaining probability mass (@p_{N-1} = ∏_{i<N-1}(1 − λ_i)@) so
+-- the distribution sums to exactly 1 over the static unroll's @N = coreDepth@
+-- steps ('lawHaltingDistributionSumsToOne'). This is the standard PonderNet
+-- "halt-or-continue" product, truncated at the hard-unroll depth.
+haltingDistribution :: [Double] -> [Double]
+haltingDistribution [] = []
+haltingDistribution ls = go 1.0 ls
+  where
+    go remaining [_lastLambda]   = [remaining]          -- force the tail to absorb the rest
+    go remaining (l : rest)      = (remaining * l) : go (remaining * (1 - l)) rest
+    go _         []              = []
+
+-- | The PonderNet geometric prior over @N@ steps with parameter @λ_p ∈ (0,1)@:
+-- @g_n ∝ λ_p · (1 − λ_p)^n@, renormalised to sum to 1 over @n = 0..N-1@. A small
+-- @λ_p@ favours pondering longer; a large @λ_p@ favours halting early.
+geometricPrior :: Double -> Int -> [Double]
+geometricPrior lambdaP n =
+  let raw = [ lambdaP * (1 - lambdaP) ** fromIntegral k | k <- [0 .. n - 1] ]
+      z   = sum raw
+  in if z <= 0 then replicate n (1 / fromIntegral (max 1 n))
+               else map (/ z) raw
+
+-- | The spec-default geometric-prior parameter. @λ_p = 0.5@ centres the prior
+-- mid-unroll (expected halt ≈ step 1 on the renormalised 8-step support) — a
+-- neutral snapshot; the trainer tunes it. NOT meant for production training.
+defaultHaltLambdaP :: Double
+defaultHaltLambdaP = 0.5
+
+-- | The PonderNet halting loss: the KL divergence @KL(p ‖ g)@ from the halting
+-- distribution @p@ (from the @λ_ℓ@) to the geometric prior @g@ (parameter
+-- 'defaultHaltLambdaP'). Non-negative ('lawHaltingLossNonNegative'); zero iff the
+-- network halts exactly on the prior ('lawHaltingLossZeroAtPrior'). Terms with
+-- @p_n = 0@ contribute 0 (the @0·log 0 = 0@ convention).
+haltingLoss :: Double -> [Double] -> Double
+haltingLoss lambdaP halts =
+  let p = haltingDistribution halts
+      g = geometricPrior lambdaP (length halts)
+  in sum [ if pn <= 0 then 0 else pn * log (pn / gn) | (pn, gn) <- zip p g ]
+
+-- ============================================================================
 -- Total loss
 -- ============================================================================
 
@@ -383,3 +445,35 @@ lawBeautyLeavesAgreesWithPairs leaves =
       manual = negate (sum [ pairBeauty (leaves !! (2*i)) (leaves !! (2*i+1))
                            | i <- [0 .. n `div` 2 - 1] ])
   in direct == manual
+
+-- | The halting distribution is a probability distribution: its terms sum to
+-- exactly 1 over the static unroll (the tail step absorbs the remaining mass).
+lawHaltingDistributionSumsToOne :: [Double] -> Bool
+lawHaltingDistributionSumsToOne halts =
+  let clamped = [ min 1 (max 0 l) | l <- halts ]
+      p       = haltingDistribution clamped
+  in null clamped || abs (sum p - 1) < 1e-9
+
+-- | The KL halting loss is non-negative (Gibbs' inequality), for any clamped
+-- @λ_ℓ@ list and any prior parameter @λ_p ∈ (0,1)@.
+lawHaltingLossNonNegative :: Double -> [Double] -> Bool
+lawHaltingLossNonNegative lambdaPRaw halts =
+  let lambdaP = min 0.99 (max 0.01 lambdaPRaw)
+      clamped = [ min 1 (max 0 l) | l <- halts ]
+  in null clamped || haltingLoss lambdaP clamped >= -1e-9
+
+-- | The KL halting loss is (numerically) zero when the network's halting
+-- distribution IS the geometric prior. Constructs the @λ_ℓ@ that induce exactly
+-- the prior (@λ_n = g_n / ∏_{i<n}(1 − λ_i)@) and checks @KL ≈ 0@.
+lawHaltingLossZeroAtPrior :: Bool
+lawHaltingLossZeroAtPrior =
+  let n       = coreDepthLocal
+      lambdaP = defaultHaltLambdaP
+      g       = geometricPrior lambdaP n
+      -- invert the product form: λ_n = g_n / remaining, remaining_{n+1} = remaining_n − g_n
+      lambdas = inv 1.0 g
+      inv _   []        = []
+      inv rem' [_]      = [1.0]                     -- tail forced; value irrelevant
+      inv rem' (gn:gs)  = (gn / rem') : inv (rem' - gn) gs
+  in abs (haltingLoss lambdaP lambdas) < 1e-9
+  where coreDepthLocal = 8

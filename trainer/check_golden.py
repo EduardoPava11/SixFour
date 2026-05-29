@@ -56,6 +56,7 @@ def load_golden() -> dict:
                               if "input_gmm_mean" in c else None,
             "input_gmm_cov": np.array([h2d(s) for s in c["input_gmm_cov"]])
                              if "input_gmm_cov" in c else None,
+            "halts": [h2d(s) for s in c["halts"]] if "halts" in c else None,
             "loss": {k: h2d(v) for k, v in c["loss"].items()}
                     if "loss" in c else None,
         }
@@ -94,6 +95,12 @@ def run_torch(weights: dict, cases: list) -> list:
         for c in cases:
             tok, mask = pad_tokens(c["tokens"], m.MAX_TOKENS)
             out = net(torch.tensor(tok), token_mask=torch.tensor(mask)).numpy().reshape(-1)
+            # non-finite guard: an all-NaN/Inf forward must FAIL, not slip the gate
+            # (np.max of a NaN array yields NaN, and `NaN <= tol` is False, so the
+            # gate would silently pass — surface it explicitly as +inf instead).
+            if not np.all(np.isfinite(out)):
+                diffs.append((c["name"] + ":nonfinite", float("inf")))
+                continue
             diffs.append((c["name"], float(np.max(np.abs(out - c["output"])))))
     return diffs
 
@@ -121,6 +128,10 @@ def run_mlx(weights: dict, cases: list) -> list:
         out = net(mx.array(tok), token_mask=mx.array(mask))
         mx.eval(out)
         out = np.array(out).reshape(-1)
+        # non-finite guard (see run_torch): all-NaN/Inf forward must FAIL fast.
+        if not np.all(np.isfinite(out)):
+            diffs.append((c["name"] + ":nonfinite", float("inf")))
+            continue
         diffs.append((c["name"], float(np.max(np.abs(out - c["output"])))))
     return diffs
 
@@ -154,6 +165,15 @@ def run_mlx_loss(cases: list) -> list:
             diffs.append((c["name"] + ":nonfinite", float("inf")))
             continue
         worst = max(abs(vals[k] - c["loss"][k]) for k in ("fidelity", "coverage", "beauty", "total"))
+        # PonderNet halting loss — mirrors Spec.Loss.haltingLoss over the per-level
+        # halt λ's (the "halts" field), KL to the geometric prior. Verified here
+        # so the trained-λ_ℓ regulariser stays bit-faithful to the spec.
+        if c.get("halts") is not None and "halting" in c["loss"]:
+            h_mlx = loss.halting_loss(c["halts"])
+            if not np.isfinite(h_mlx):
+                diffs.append((c["name"] + ":halting-nonfinite", float("inf")))
+                continue
+            worst = max(worst, abs(h_mlx - c["loss"]["halting"]))
         diffs.append((c["name"], worst))
     return diffs
 

@@ -40,7 +40,8 @@ import SixFour.Spec.LookNetR  (coreDepth)
 import SixFour.Spec.LookNetD  (decoderLevelDims, decoderOutputDim, DecoderOutput(..), reconstructSigmaPair)
 import SixFour.Spec.Loss
   ( defaultLossWeights, fidelityLossLeaves, coverageLossLeaves
-  , beautyLossLeaves, lookNetLossLeaves )
+  , beautyLossLeaves, lookNetLossLeaves
+  , defaultHaltLambdaP, haltingLoss )
 import SixFour.Spec.LookNetEval
 
 -- =============================================================================
@@ -93,7 +94,7 @@ emitLookNetGolden = T.unlines $
   , "    \"decoder_out_dim\": " <> tshow decoderOutputDim <> ","
   , "    \"decoder_level_dims\": " <> intArr decoderLevelDims <> ","
   , "    \"loss_weights\": { \"fidelity\": 1.0, \"coverage\": 1.0, \"beauty\": 1.0 },"
-  , "    \"loss_note\": \"per-case loss = lookNetLossLeaves defaultLossWeights (reconstructSigmaPair output) inputGmm; fidelity = Bures-W^2 to input_gmm moments, coverage = 1 - gamut fraction, beauty = -sum Ou-Luo over adjacent sigma-pairs. Reproduce within meta.tolerance.\","
+  , "    \"loss_note\": \"per-case loss = lookNetLossLeaves defaultLossWeights (reconstructSigmaPair output) inputGmm; fidelity = Bures-W^2 to input_gmm moments, coverage = 1 - gamut fraction, beauty = -sum Ou-Luo over adjacent sigma-pairs. The 'halting' term is the PonderNet KL(halting-dist || geometric-prior, lambda_p=0.5) over the per-level halt lambdas (the 'halts' field) — NOT included in 'total' (it is a separate regulariser the trainer weights). Reproduce within meta.tolerance.\","
   , "    \"weight_layout\": \"row-major (out, in) — the PyTorch/MLX nn.Linear.weight layout; weights are RAW (pre-σ-mask), each port applies the mask in its forward.\""
   , "  },"
   , "  \"weights\": {"
@@ -129,6 +130,10 @@ emitLookNetGolden = T.unlines $
           lCov    = coverageLossLeaves leaves
           lBeauty = beautyLossLeaves   leaves
           lTotal  = lookNetLossLeaves  defaultLossWeights leaves inGmm
+          -- PonderNet halting loss: KL(halting dist ‖ geometric prior λ_p=0.5)
+          -- over the per-level halt λ's (the "halts" field). Trains the λ_ℓ that
+          -- the static unroll otherwise leaves unsupervised (Spec.Loss.haltingLoss).
+          lHalt   = haltingLoss defaultHaltLambdaP (ftHalts tr)
           -- The moment-matched input Gaussian (mean + 6 upper-tri cov), so the
           -- port computes Bures fidelity without reimplementing the pooling/total-
           -- covariance math (it can verify against these moments directly).
@@ -145,6 +150,7 @@ emitLookNetGolden = T.unlines $
          , ", \"loss\": { \"fidelity\": ", quote (hexDouble lFid)
          , ", \"coverage\": ", quote (hexDouble lCov)
          , ", \"beauty\": ",   quote (hexDouble lBeauty)
+         , ", \"halting\": ",  quote (hexDouble lHalt)
          , ", \"total\": ",    quote (hexDouble lTotal), " }"
          , " }" ]
 
