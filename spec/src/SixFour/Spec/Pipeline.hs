@@ -66,6 +66,7 @@ module SixFour.Spec.Pipeline
   , PairTreeRecon
   , Quad4Recon
   , Quad4ReconAchroma
+  , SigmaPairRecon
     -- * The σ action on histogram vectors (exported for friend modules)
   , sigmaApplyVec
     -- * The achromatic-root subtype
@@ -78,8 +79,10 @@ module SixFour.Spec.Pipeline
   , Pipeline3
   , Pipeline4
   , Pipeline4Boundary
+  , Pipeline4SigmaPair
     -- * Mechanical proofs
   , option4Theorem
+  , sigmaPairHeadTheorem
   , SigmaEquivariantDict(..)
   , SigmaSymmetricRangeDict(..)
     -- * Law predicates (run by QuickCheck in Properties.Pipeline)
@@ -100,6 +103,7 @@ import qualified SixFour.Spec.PairTree as PT
 import qualified SixFour.Spec.Quad4    as Q4
 import SixFour.Spec.Quad4         (Quad4Palette(..))
 import SixFour.Spec.SigmaDecomp   (sigmaBinPerm, symPart)
+import SixFour.Spec.SigmaPairHead ( SigmaPairTree, reconstructPaired, sigmaSwapAndReflect )
 
 -- =============================================================================
 -- The classes
@@ -271,6 +275,38 @@ instance SigmaEquivariant Quad4ReconAchroma where
   sigmaOut = map sigmaReflect
 
 -- =============================================================================
+-- SigmaPairRecon — the σ-pair decoder reconstruction (the adopted L6 stage)
+-- =============================================================================
+
+-- | The committed L6 reconstruction: a depth-7 'SigmaPairTree' (the 384-DOF
+-- decoder genome) expands into the 256-leaf σ-pair palette
+-- @[c_0, σ(c_0), c_1, σ(c_1), …]@ ('SixFour.Spec.SigmaPairHead.reconstructPaired').
+-- Unlike 'Quad4ReconAchroma' — whose 511-dim image was shown (Quad4Fit) to fit
+-- σ-symmetric palettes no better than random — this stage's image is EXACTLY
+-- the σ-symmetric eigenspace under the lifted action 'sigmaSwapAndReflect'
+-- (pointwise σ then swap adjacent pairs), so it is 'SigmaSymmetricRange' by
+-- construction, for ANY genome. This is the structural inhabitant the headline
+-- demanded (NOTES 2026-05-28).
+data SigmaPairRecon
+
+instance Stage SigmaPairRecon where
+  type In  SigmaPairRecon = SigmaPairTree
+  type Out SigmaPairRecon = [OKLab]
+  step = reconstructPaired
+
+-- σ on the input is the identity action (any input action is equivariant here,
+-- because the output is σ-fixed regardless of input); σ on the output is the
+-- lifted action 'sigmaSwapAndReflect' that fixes σ-pair-interleaved palettes.
+-- Hence @step (sigmaIn x) = step x = sigmaOut (step x)@ — equivariant — and
+-- @sigmaOut (step x) = step x@ — σ-symmetric-range (see @Properties.Pipeline@).
+instance SigmaEquivariant SigmaPairRecon where
+  sigmaIn  = id
+  sigmaOut = sigmaSwapAndReflect
+
+-- The whole point of 'SigmaPairRecon': its image is fixed by the lifted σ.
+instance SigmaSymmetricRange SigmaPairRecon
+
+-- =============================================================================
 -- Per-option pipeline type aliases (the 5 unification options from §A.2)
 -- =============================================================================
 --
@@ -315,6 +351,16 @@ type Pipeline4 m = Quad4ReconAchroma :> m :> SymSelect :> Bin16
 -- middle 'm' is what glues them.)
 type Pipeline4Boundary = SymSelect :> Bin16
 
+-- | The ADOPTED Option-4 pipeline: the same σ-symmetric boundary
+-- (@SymSelect :> Bin16@), the learned middle @m@, but the L6 reconstruction is
+-- 'SigmaPairRecon' (the SigmaPairHead pivot) instead of 'Quad4ReconAchroma'. If
+-- @m@ is 'SigmaEquivariant' on the boundary types (@In m ~ Histogram4096@,
+-- @Out m ~ SigmaPairTree@) the WHOLE composition derives 'SigmaEquivariant';
+-- and because 'SigmaPairRecon' is 'SigmaSymmetricRange', the composition also
+-- derives 'SigmaSymmetricRange' (its output palette lies in the σ-symmetric
+-- eigenspace under 'sigmaSwapAndReflect') — the guarantee Quad4 could not give.
+type Pipeline4SigmaPair m = SigmaPairRecon :> m :> SymSelect :> Bin16
+
 -- =============================================================================
 -- The Option 4 composition theorem — a type-level proof
 -- =============================================================================
@@ -352,6 +398,32 @@ option4Theorem
   => Proxy (Pipeline4 m)
   -> SigmaEquivariantDict (Pipeline4 m)
 option4Theorem _ = SigmaEquivariantDict
+
+-- | The SigmaPairHead composition theorem — the re-instantiation of
+-- 'option4Theorem' at the ADOPTED L6 stage ('SigmaPairRecon').
+--
+-- @
+-- Given a learned middle @m@ that is 'SigmaEquivariant' on the boundary types —
+-- @In m ~ Histogram4096@, @Out m ~ SigmaPairTree@ — the full SigmaPairHead
+-- pipeline is BOTH 'SigmaEquivariant' AND 'SigmaSymmetricRange'.
+-- @
+--
+-- The proof is the two type signatures: if GHC accepts them, the instances
+-- compose. This is what NOTES 2026-05-28 open Q#2 asked for — the Pipeline
+-- composition theorem no longer dead-ends at 'Quad4ReconAchroma'. Unlike
+-- 'Pipeline4' (whose 'Quad4ReconAchroma' output is only 'SigmaEquivariant'),
+-- 'Pipeline4SigmaPair' carries 'SigmaSymmetricRange' through to the output
+-- because 'SigmaPairRecon' is 'SigmaSymmetricRange'.
+sigmaPairHeadTheorem
+  :: forall m
+   . ( SigmaEquivariant m
+     , In  m ~ Histogram4096
+     , Out m ~ SigmaPairTree
+     )
+  => Proxy (Pipeline4SigmaPair m)
+  -> ( SigmaEquivariantDict     (Pipeline4SigmaPair m)
+     , SigmaSymmetricRangeDict   (Pipeline4SigmaPair m) )
+sigmaPairHeadTheorem _ = (SigmaEquivariantDict, SigmaSymmetricRangeDict)
 
 -- | Zero-information runtime witness that 'SigmaEquivariant tag' holds.
 data SigmaEquivariantDict tag where

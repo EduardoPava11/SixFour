@@ -64,16 +64,10 @@ import SixFour.Spec.Tensor
   , sigma64Mask, gmmTokenSigmaMask
   )
 import SixFour.Spec.LookNetR  (coreDepth, sharedBlockCount)
-import SixFour.Spec.LookNetD  (decoderLevelDims, sigma768Mask, decoderOutputDim)
-import SixFour.Spec.PairTree  (degreesOfFreedom)
+import SixFour.Spec.LookNetD  (decoderLevelDims, sigmaDecoderMask, decoderOutputDim, decoderTreeDepth)
+import SixFour.Spec.SigmaPairHead (sigmaPairLeaves)
 import SixFour.Spec.GMM       (gmmTokenDim)
-import SixFour.Spec.LookNet   (modelDim)
-import SixFour.Spec.Shape     (tVal, kVal)
-
--- | Maximum GMM token count per capture: @T · K = 64 · 256 = 16384@.
--- The static shape the ANE compiler requires.
-maxTokens :: Int
-maxTokens = tVal * kVal
+import SixFour.Spec.LookNet   (modelDim, maxTokens)
 
 -- | The pinned-dimension + σ-mask constant block, shared VERBATIM by the torch
 -- ('emitLookNetTorch') and MLX ('SixFour.Codegen.MLX.emitLookNetMLX') emitters
@@ -92,9 +86,16 @@ emitLookNetConstants =
   , "SHARED_BLOCK_COUNT    = " <> tshow sharedBlockCount <> "   # ONE block reused CORE_DEPTH times (Mixture-of-Recursions)"
   , "RECURSION_STEPS       = " <> tshow coreDepth <> "   # = CORE_DEPTH, one per Haar level"
   , "HALT_FEATURE_DIM      = 2    # (‖achromatic‖², ‖chromatic‖²) — the σ-invariant halt features"
-  , "DECODER_OUT_DIM       = " <> tshow decoderOutputDim
+  , "DECODER_OUT_DIM       = " <> tshow decoderOutputDim <> "   # = SIGMA_PAIR_DOF"
   , "DECODER_LEVEL_DIMS    = " <> pyIntList decoderLevelDims
   , "MAX_TOKENS            = " <> tshow maxTokens <> "   # T·K"
+  , ""
+  , "# ── SigmaPairHead pivot (NOTES 2026-05-28): the decoder emits a depth-7 ──"
+  , "# generator pyramid (128 c_i), L6 σ-pair-interleaves into the 256-leaf"
+  , "# palette [c0, σc0, c1, σc1, …] — exactly the σ-symmetric subspace (384 DOF)."
+  , "SIGMA_PAIR_DOF        = " <> tshow decoderOutputDim <> "   # = 3·128 generators"
+  , "SIGMA_PAIR_DEPTH      = " <> tshow decoderTreeDepth <> "    # depth-7 binary Haar generator pyramid"
+  , "SIGMA_PAIR_LEAVES     = " <> tshow sigmaPairLeaves <> "  # reconstructed σ-pair palette leaves (= K)"
   , ""
   , "# ── σ-masks (derived from OKLab geometry; bit-identical to Haskell spec) ──"
   , "# 10-D GMM token: negate {μa, μb, ΣLa, ΣLb}; fix the rest."
@@ -104,8 +105,8 @@ emitLookNetConstants =
   , "# (21 red-green + 21 blue-yellow). Hurvich-Jameson 1:2 opponent ratio."
   , "SIGMA64_MASK = " <> pyBoolList sigma64Mask
   , ""
-  , "# 768-D decoder output: per OKLab triple (L,a,b), negate (a,b). Repeating."
-  , "SIGMA768_MASK = " <> pyBoolList sigma768Mask
+  , "# 384-D decoder output: per OKLab triple (L,a,b), negate (a,b). Repeating 128×."
+  , "SIGMA_DECODER_MASK = " <> pyBoolList sigmaDecoderMask
   ]
 
 -- ===========================================================================
@@ -124,7 +125,7 @@ emitLookNetTorch = T.unlines (
   , "\"\"\""
   , "look_net_torch — PyTorch implementation of the SixFour look-NN."
   , ""
-  , "Pipeline: GmmTokenSet → L3Encoder → L4Recursion (ONE shared block reused over 8 Haar levels) → L5Decoder → 768 Haar coefficients."
+  , "Pipeline: GmmTokenSet → L3Encoder → L4Recursion (ONE shared block reused over 8 Haar levels) → L5Decoder → 384 SigmaPairTree coefficients → reconstruct_sigma_pair → 256-leaf palette."
   , ""
   , "Every weight matrix marked as σ-mask-constrained is multiplied by its binary"
   , "block-diagonal mask at forward time. Cross-σ-class weights are forced to zero,"
@@ -155,8 +156,8 @@ emitLookNetTorch = T.unlines (
   , "    return _block_diagonal_mask(SIGMA64_MASK, SIGMA64_MASK)"
   , ""
   , "def _sigma_mask_for_head(out_slice: slice) -> torch.Tensor:"
-  , "    \"\"\"Mask for a decoder head whose output dims are SIGMA768_MASK[out_slice].\"\"\""
-  , "    return _block_diagonal_mask(SIGMA64_MASK, SIGMA768_MASK[out_slice])"
+  , "    \"\"\"Mask for a decoder head whose output dims are SIGMA_DECODER_MASK[out_slice].\"\"\""
+  , "    return _block_diagonal_mask(SIGMA64_MASK, SIGMA_DECODER_MASK[out_slice])"
   , ""
   , "# ── L3 encoder: σ-masked per-token linear (10 → 64), then sum-pool ───────"
   , ""
@@ -252,11 +253,12 @@ emitLookNetTorch = T.unlines (
   , "# ── L5 decoder: per-level Haar heads reading per-step contexts ─────────────"
   , ""
   , "class L5Decoder(nn.Module):"
-  , "    \"\"\"Nine σ-block-diagonal heads (root + 8 Haar levels), each reading a"
-  , "    DIFFERENT per-step context from L4Recursion: head i reads contexts[i], so"
-  , "    the root (i=0) reads the pooled summary and finer Haar levels read deeper"
-  , "    recursion outputs. Head i is masked against DECODER_LEVEL_DIMS[i]'s slice"
-  , "    of SIGMA768_MASK. Sum of head sizes = sum(DECODER_LEVEL_DIMS) = 768."
+  , "    \"\"\"Eight σ-block-diagonal heads (root + 7 generator Haar levels), each"
+  , "    reading a DIFFERENT per-step context from L4Recursion: head i reads"
+  , "    contexts[i], so the root (i=0) reads the pooled summary and finer Haar"
+  , "    levels read deeper recursion outputs. Head i is masked against"
+  , "    DECODER_LEVEL_DIMS[i]'s slice of SIGMA_DECODER_MASK. Sum of head sizes ="
+  , "    sum(DECODER_LEVEL_DIMS) = SIGMA_PAIR_DOF = 384 (the 128 c_i generators)."
   , "    Mirrors LookNetD.decoderFromRecursion.\"\"\""
   , ""
   , "    def __init__(self):"
@@ -282,13 +284,44 @@ emitLookNetTorch = T.unlines (
   , "            mask = getattr(self, f\"head_mask_{i}\")"
   , "            w = head.weight * mask"
   , "            outs.append(F.linear(contexts[i], w))  # head i ← context i"
-  , "        return torch.cat(outs, dim=-1)             # (B, 768)"
+  , "        return torch.cat(outs, dim=-1)             # (B, 384) — the 384 SigmaPairTree coeffs"
+  , ""
+  , "# ── L6 reconstruction: SigmaPairTree (384) → 256-leaf σ-pair palette ───────"
+  , ""
+  , "def _haar_reconstruct(coeffs: torch.Tensor) -> torch.Tensor:"
+  , "    \"\"\"Inverse Haar on the depth-7 generator pyramid. `coeffs` is (B, 384) ="
+  , "    root(3) + level offsets [3,6,12,24,48,96,192], each an OKLab triple. At"
+  , "    each level a node n with offset d yields [n+d, n-d]. Returns the 128"
+  , "    generators c_i as (B, 128, 3). Mirrors PairTree.reconstruct.\"\"\""
+  , "    b = coeffs.shape[0]"
+  , "    nodes = coeffs[:, 0:3].reshape(b, 1, 3)        # root (B, 1, 3)"
+  , "    cur = 3"
+  , "    for lvl in range(SIGMA_PAIR_DEPTH):"
+  , "        n = 1 << lvl                               # 2^lvl offsets this level"
+  , "        offs = coeffs[:, cur:cur + 3 * n].reshape(b, n, 3)"
+  , "        cur += 3 * n"
+  , "        children = torch.stack([nodes + offs, nodes - offs], dim=2)  # (B, n, 2, 3)"
+  , "        nodes = children.reshape(b, 2 * n, 3)      # interleaved [n+d, n-d]"
+  , "    return nodes                                   # (B, 128, 3)"
+  , ""
+  , "def reconstruct_sigma_pair(coeffs: torch.Tensor) -> torch.Tensor:"
+  , "    \"\"\"L6: the 128 generators c_i become the 256-leaf σ-pair palette"
+  , "    [c0, σc0, c1, σc1, …] where σ(L,a,b) = (L,-a,-b). σ-symmetric by"
+  , "    construction (every odd leaf is the σ-reflection of its even predecessor)."
+  , "    Mirrors LookNetD.reconstructSigmaPair / SigmaPairHead.reconstructPaired.\"\"\""
+  , "    gens = _haar_reconstruct(coeffs)               # (B, 128, 3)"
+  , "    sig = torch.tensor([1.0, -1.0, -1.0], dtype=gens.dtype, device=gens.device)"
+  , "    reflected = gens * sig                         # σ applied per generator"
+  , "    paired = torch.stack([gens, reflected], dim=2) # (B, 128, 2, 3)"
+  , "    return paired.reshape(coeffs.shape[0], SIGMA_PAIR_LEAVES, 3)  # (B, 256, 3)"
   , ""
   , "# ── The full pipeline ──────────────────────────────────────────────────────"
   , ""
   , "class LookNet(nn.Module):"
   , "    \"\"\"E :> R :> D, proven σ-equivariant end-to-end by"
-  , "    SixFour.Spec.LookNetCompose.lookNetSigmaTheorem.\"\"\""
+  , "    SixFour.Spec.LookNetCompose.lookNetSigmaTheorem. forward() returns the raw"
+  , "    384 SigmaPairTree coefficients (the trained genome + golden-vector"
+  , "    contract); call reconstruct_sigma_pair() for the 256-leaf palette (L6).\"\"\""
   , ""
   , "    def __init__(self):"
   , "        super().__init__()"
@@ -299,7 +332,7 @@ emitLookNetTorch = T.unlines (
   , "    def forward(self, tokens: torch.Tensor, token_mask: torch.Tensor = None) -> torch.Tensor:"
   , "        h = self.encoder(tokens, token_mask=token_mask)   # (B, 64)"
   , "        contexts = self.recursion(h)                      # [ (B,64) ] × (CORE_DEPTH+1)"
-  , "        return self.decoder(contexts)                     # (B, 768)"
+  , "        return self.decoder(contexts)                     # (B, 384)"
   ] )
 
 -- ===========================================================================

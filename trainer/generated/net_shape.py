@@ -3,17 +3,22 @@
 # Regenerate with: cabal run spec-codegen
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 class NetSlot(str, Enum):
     METRIC = "metric"
+    LOOK = "look"
 
 @dataclass(frozen=True)
 class NetIOSpec:
     input_dim: int
     output_dim: int
     description: str
+    # Extra named shape constants beyond (input, output) — e.g. the look-NN's
+    # MODEL_DIM / CORE_DEPTH / SIGMA_PAIR_LEAVES / MAX_TOKENS. Empty for the
+    # simple per-layer / metric signatures. Mirrors Net.netAuxDims (Haskell).
+    aux_dims: dict = field(default_factory=dict)
 
 METRIC_PSD_UPPER_TRIANGLE_COUNT = 6
 
@@ -21,14 +26,35 @@ METRIC = NetIOSpec(
     input_dim=6,
     output_dim=0,
     description="Stage-A learned PSD metric (3x3 M = L Lᵀ via Cholesky; 6 upper-triangle floats)",
+    aux_dims={},
+)
+
+
+LOOK = NetIOSpec(
+    input_dim=10,
+    output_dim=384,
+    description="look-NN E:>R:>D: GMM_TOKEN_DIM tokens -> SIGMA_PAIR_DOF SigmaPairTree coeffs (sigma-equivariant; reconstructs 256-leaf palette)",
+    aux_dims={"MODEL_DIM": 64, "CORE_DEPTH": 8, "SIGMA_PAIR_LEAVES": 256, "MAX_TOKENS": 16384},
 )
 
 
 ALL_SLOTS = {
     NetSlot.METRIC: METRIC,
+    NetSlot.LOOK: LOOK,
 }
 
 def assert_constants_match() -> None:
     # The metric file is a vector of 6 floats — the upper triangle
     # of the 3x3 PSD matrix M = L Lᵀ produced by train_metric.py.
     assert METRIC.input_dim == METRIC_PSD_UPPER_TRIANGLE_COUNT, METRIC.input_dim
+    # The look-NN: GMM_TOKEN_DIM=10 tokens -> SIGMA_PAIR_DOF=384 coeffs; the
+    # aux dims pin the rest of the model shape the MLX trainer emits and the
+    # hand-written on-device forward pass (export_look_net_blob.py) loads.
+    assert LOOK.input_dim == 10, LOOK.input_dim
+    assert LOOK.output_dim == 384, LOOK.output_dim
+    assert LOOK.aux_dims["MODEL_DIM"] == 64, LOOK.aux_dims
+    assert LOOK.aux_dims["CORE_DEPTH"] == 8, LOOK.aux_dims
+    assert LOOK.aux_dims["SIGMA_PAIR_LEAVES"] == 256, LOOK.aux_dims
+    assert LOOK.aux_dims["MAX_TOKENS"] == 16384, LOOK.aux_dims
+    # SIGMA_PAIR_LEAVES is the K-colour palette; 2*output/3 generators -> K leaves.
+    assert LOOK.aux_dims["SIGMA_PAIR_LEAVES"] == 2 * (LOOK.output_dim // 3), LOOK.aux_dims

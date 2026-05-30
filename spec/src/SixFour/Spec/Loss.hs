@@ -88,8 +88,20 @@ module SixFour.Spec.Loss
   , pairLightnessAsymmetry
   , pairLightnessSum
   , pairBeauty
+    -- * PonderNet halting loss (the λ_ℓ regulariser the trainer optimises)
+  , haltingDistribution
+  , geometricPrior
+  , defaultHaltLambdaP
+  , haltingLoss
     -- * Helpers
   , haarPaletteAsPointMassGMM
+    -- * Leaf-list cores (the port-facing surface — the MLX trainer mirrors these)
+  , leavesAsPointMassGMM
+  , fidelityLossLeaves
+  , coverageLossLeaves
+  , beautyLossLeaves
+  , lookNetLossLeaves
+  , sigmaPairLeaves'
     -- * Laws (predicates; QuickCheck'd in Properties.Loss)
   , lawFidelityNonNegative
   , lawCoverageBounded
@@ -97,6 +109,11 @@ module SixFour.Spec.Loss
   , lawBeautyMonotonicInLightnessSum
   , lawBeautyDecomposesOverPairs
   , lawLossWeightsSumPositive
+  , lawFidelityLeavesAgreesWithHaar
+  , lawBeautyLeavesAgreesWithPairs
+  , lawHaltingDistributionSumsToOne
+  , lawHaltingLossNonNegative
+  , lawHaltingLossZeroAtPrior
   ) where
 
 import           Data.List           (foldl')
@@ -123,6 +140,64 @@ haarPaletteAsPointMassGMM hp =
       w      = 1.0 / fromIntegral n
   in pointMassGMM [ (c, w) | c <- leaves ]
 
+-- | A bare leaf list as a uniform-weight point-mass GMM — the leaf-list analogue
+-- of 'haarPaletteAsPointMassGMM'. This is the port-facing form: the MLX/Swift
+-- decoder emits a 256-leaf OKLab palette (via 'SixFour.Spec.LookNetD.reconstructSigmaPair'),
+-- and the loss is computed on that list directly. No Haar-tree dependency, so a
+-- port that has only the reconstructed leaves can mirror the loss byte-for-byte.
+leavesAsPointMassGMM :: [OKLab] -> GMM
+leavesAsPointMassGMM leaves =
+  let n = max 1 (length leaves)
+      w = 1.0 / fromIntegral n
+  in pointMassGMM [ (c, w) | c <- leaves ]
+
+-- | Fidelity loss on a bare leaf list against an already-pooled input GMM. The
+-- leaf-list core 'fidelityLoss' delegates to. Both moment-match each mixture to
+-- a single Gaussian and take the Bures-Wasserstein squared distance.
+fidelityLossLeaves :: [OKLab] -> GMM -> Double
+fidelityLossLeaves leaves inputGmm =
+  let outputGmm = leavesAsPointMassGMM leaves
+      g_in      = mixtureAsGaussian inputGmm
+      g_out     = mixtureAsGaussian outputGmm
+  in buresDistanceSq g_in g_out
+
+-- | Coverage loss on a bare 256-leaf list: @1 − gamutCoverageFraction@. Mirrors
+-- 'coverageLoss' but takes the reconstructed leaves directly.
+coverageLossLeaves :: [OKLab] -> Double
+coverageLossLeaves leaves =
+  case mkPalette @256 leaves of
+    Just pal -> 1.0 - gamutCoverageFraction [pal]
+    Nothing  -> 1.0
+
+-- | Beauty loss on a bare leaf list, enumerated over ADJACENT leaf pairs
+-- @(leaves[2i], leaves[2i+1])@. On the σ-pair palette the decoder actually emits
+-- (@[c0, σc0, c1, σc1, …]@, "SixFour.Spec.LookNetD.reconstructSigmaPair"), each
+-- adjacent pair is exactly a σ-pair @(c, σc)@ — so this is the σ-pair beauty the
+-- trainer optimises, and the form the MLX loss reproduces. Negated (minimise).
+beautyLossLeaves :: [OKLab] -> Double
+beautyLossLeaves leaves =
+  negate (sum [ pairBeauty l r | (l, r) <- adjacentPairs leaves ])
+
+-- | Adjacent-pair enumeration: @[(x0,x1),(x2,x3),…]@. A trailing odd element is
+-- dropped (the decoder always emits an even count = 256).
+adjacentPairs :: [OKLab] -> [(OKLab, OKLab)]
+adjacentPairs (x : y : rest) = (x, y) : adjacentPairs rest
+adjacentPairs _              = []
+
+-- | The total look-NN loss on a bare leaf list + pre-pooled input GMM — the
+-- port-facing total the MLX trainer minimises. Same weighted sum as 'lookNetLoss'
+-- but over the leaf-list cores (no Haar tree). The golden vectors pin this form.
+lookNetLossLeaves :: LossWeights -> [OKLab] -> GMM -> Double
+lookNetLossLeaves (LossWeights wF wC wB) leaves inputGmm =
+     wF * fidelityLossLeaves leaves inputGmm
+   + wC * coverageLossLeaves leaves
+   + wB * beautyLossLeaves   leaves
+
+-- | The number of σ-pair palette leaves (= 256). Re-exported convenience so the
+-- golden emitter and tests do not depend on "SixFour.Spec.SigmaPairHead" directly.
+sigmaPairLeaves' :: Int
+sigmaPairLeaves' = 256
+
 -- | Reconstruction fidelity: how far the decoded palette's induced mixture is
 -- from the input capture's pooled GMM, measured in Bures-Wasserstein squared
 -- distance on the first two moments (mean + covariance).
@@ -131,12 +206,7 @@ haarPaletteAsPointMassGMM hp =
 -- without a learned decoder) is the 'farthestPointCollapse' baseline pinned
 -- in 'SixFour.Spec.LookNet.baselinePalette'.
 fidelityLoss :: HaarPalette -> CyclicStack t k -> Double
-fidelityLoss hp stack =
-  let inputGmm  = poolToGMM stack
-      outputGmm = haarPaletteAsPointMassGMM hp
-      g_in      = mixtureAsGaussian inputGmm
-      g_out     = mixtureAsGaussian outputGmm
-  in buresDistanceSq g_in g_out
+fidelityLoss hp stack = fidelityLossLeaves (reconstruct hp) (poolToGMM stack)
 
 -- | Treat a mixture as a single Gaussian via its first two moments — the
 -- 'mixtureMean' and 'mixtureCovariance' from "SixFour.Spec.GMM". The Bures
@@ -159,11 +229,7 @@ mixtureAsGaussian gmm =
 -- | Gamut-coverage loss: @1 − gamutCoverageFraction@ over the 16³ OKLab voxel
 -- grid. Lower = fuller gamut spanning.
 coverageLoss :: HaarPalette -> Double
-coverageLoss hp =
-  let leaves = reconstruct hp
-  in case mkPalette @256 leaves of
-       Just pal -> 1.0 - gamutCoverageFraction [pal]
-       Nothing  -> 1.0   -- if palette is malformed, maximum penalty
+coverageLoss = coverageLossLeaves . reconstruct
 
 -- ============================================================================
 -- Ou-Luo beauty (per-pair, then summed over the Haar tree)
@@ -225,6 +291,60 @@ haarPairs (HaarPalette rt lvls) =
 addOK, subOK :: OKLab -> OKLab -> OKLab
 addOK (OKLab l a b) (OKLab l' a' b') = OKLab (l + l') (a + a') (b + b')
 subOK (OKLab l a b) (OKLab l' a' b') = OKLab (l - l') (a - a') (b - b')
+
+-- ============================================================================
+-- PonderNet halting loss
+-- ============================================================================
+
+-- The L4 core ('SixFour.Spec.LookNetR') produces a per-recursion-step σ-INVARIANT
+-- halting scalar @λ_ℓ ∈ [0,1]@, one per Haar level. The forward pass computes
+-- these (golden field @"halts"@) but nothing /trains/ them — the static unroll
+-- runs all 'coreDepth' steps regardless. PonderNet (Banino et al., 2021) supplies
+-- the missing training signal: turn the @λ_ℓ@ into a halting distribution and
+-- regularise it towards a geometric prior, so the trainer learns to concentrate
+-- compute on the coarse (signal) Haar levels and halt early on the fine (noise)
+-- ones (the wavelet-truncation argument in "SixFour.Spec.LookNetR").
+
+-- | The PonderNet halting distribution @p_n@ from the per-step halting scalars
+-- @[λ_0, …, λ_{N-1}]@: @p_n = λ_n · ∏_{i<n}(1 − λ_i)@, with the LAST step forced
+-- to absorb all remaining probability mass (@p_{N-1} = ∏_{i<N-1}(1 − λ_i)@) so
+-- the distribution sums to exactly 1 over the static unroll's @N = coreDepth@
+-- steps ('lawHaltingDistributionSumsToOne'). This is the standard PonderNet
+-- "halt-or-continue" product, truncated at the hard-unroll depth.
+haltingDistribution :: [Double] -> [Double]
+haltingDistribution [] = []
+haltingDistribution ls = go 1.0 ls
+  where
+    go remaining [_lastLambda]   = [remaining]          -- force the tail to absorb the rest
+    go remaining (l : rest)      = (remaining * l) : go (remaining * (1 - l)) rest
+    go _         []              = []
+
+-- | The PonderNet geometric prior over @N@ steps with parameter @λ_p ∈ (0,1)@:
+-- @g_n ∝ λ_p · (1 − λ_p)^n@, renormalised to sum to 1 over @n = 0..N-1@. A small
+-- @λ_p@ favours pondering longer; a large @λ_p@ favours halting early.
+geometricPrior :: Double -> Int -> [Double]
+geometricPrior lambdaP n =
+  let raw = [ lambdaP * (1 - lambdaP) ** fromIntegral k | k <- [0 .. n - 1] ]
+      z   = sum raw
+  in if z <= 0 then replicate n (1 / fromIntegral (max 1 n))
+               else map (/ z) raw
+
+-- | The spec-default geometric-prior parameter. @λ_p = 0.5@ centres the prior
+-- mid-unroll (expected halt ≈ step 1 on the renormalised 8-step support) — a
+-- neutral snapshot; the trainer tunes it. NOT meant for production training.
+defaultHaltLambdaP :: Double
+defaultHaltLambdaP = 0.5
+
+-- | The PonderNet halting loss: the KL divergence @KL(p ‖ g)@ from the halting
+-- distribution @p@ (from the @λ_ℓ@) to the geometric prior @g@ (parameter
+-- 'defaultHaltLambdaP'). Non-negative ('lawHaltingLossNonNegative'); zero iff the
+-- network halts exactly on the prior ('lawHaltingLossZeroAtPrior'). Terms with
+-- @p_n = 0@ contribute 0 (the @0·log 0 = 0@ convention).
+haltingLoss :: Double -> [Double] -> Double
+haltingLoss lambdaP halts =
+  let p = haltingDistribution halts
+      g = geometricPrior lambdaP (length halts)
+  in sum [ if pn <= 0 then 0 else pn * log (pn / gn) | (pn, gn) <- zip p g ]
 
 -- ============================================================================
 -- Total loss
@@ -302,3 +422,58 @@ lawBeautyDecomposesOverPairs hp =
 -- target). 'defaultLossWeights' satisfies this trivially.
 lawLossWeightsSumPositive :: LossWeights -> Bool
 lawLossWeightsSumPositive (LossWeights f c b) = f + c + b > 0
+
+-- | The leaf-list fidelity core agrees EXACTLY with the Haar-tree 'fidelityLoss':
+-- both reconstruct the same leaves and compare the same moment-matched Gaussians.
+-- This pins that the port-facing leaf form (what the MLX trainer + golden use) is
+-- the same number as the original tree form — no drift between the two surfaces.
+lawFidelityLeavesAgreesWithHaar :: HaarPalette -> CyclicStack t k -> Bool
+lawFidelityLeavesAgreesWithHaar hp stack =
+  fidelityLossLeaves (reconstruct hp) (poolToGMM stack) == fidelityLoss hp stack
+
+-- | The leaf-list beauty core, enumerated over adjacent leaf pairs of a Haar
+-- reconstruction, equals the Haar internal-node beauty: 'reconstruct' lays the
+-- leaves out so that adjacent leaves @(2i, 2i+1)@ are exactly the children
+-- @(parent+δ, parent−δ)@ of the deepest internal nodes — but the full Haar
+-- 'beautyLoss' also sums the shallower internal nodes, so they are NOT equal in
+-- general. What IS pinned: on the σ-pair palette every adjacent pair is a σ-pair,
+-- so 'beautyLossLeaves' is well-defined and bounded by the per-pair beauty count.
+lawBeautyLeavesAgreesWithPairs :: [OKLab] -> Bool
+lawBeautyLeavesAgreesWithPairs leaves =
+  let n      = length leaves
+      direct = beautyLossLeaves leaves
+      manual = negate (sum [ pairBeauty (leaves !! (2*i)) (leaves !! (2*i+1))
+                           | i <- [0 .. n `div` 2 - 1] ])
+  in direct == manual
+
+-- | The halting distribution is a probability distribution: its terms sum to
+-- exactly 1 over the static unroll (the tail step absorbs the remaining mass).
+lawHaltingDistributionSumsToOne :: [Double] -> Bool
+lawHaltingDistributionSumsToOne halts =
+  let clamped = [ min 1 (max 0 l) | l <- halts ]
+      p       = haltingDistribution clamped
+  in null clamped || abs (sum p - 1) < 1e-9
+
+-- | The KL halting loss is non-negative (Gibbs' inequality), for any clamped
+-- @λ_ℓ@ list and any prior parameter @λ_p ∈ (0,1)@.
+lawHaltingLossNonNegative :: Double -> [Double] -> Bool
+lawHaltingLossNonNegative lambdaPRaw halts =
+  let lambdaP = min 0.99 (max 0.01 lambdaPRaw)
+      clamped = [ min 1 (max 0 l) | l <- halts ]
+  in null clamped || haltingLoss lambdaP clamped >= -1e-9
+
+-- | The KL halting loss is (numerically) zero when the network's halting
+-- distribution IS the geometric prior. Constructs the @λ_ℓ@ that induce exactly
+-- the prior (@λ_n = g_n / ∏_{i<n}(1 − λ_i)@) and checks @KL ≈ 0@.
+lawHaltingLossZeroAtPrior :: Bool
+lawHaltingLossZeroAtPrior =
+  let n       = coreDepthLocal
+      lambdaP = defaultHaltLambdaP
+      g       = geometricPrior lambdaP n
+      -- invert the product form: λ_n = g_n / remaining, remaining_{n+1} = remaining_n − g_n
+      lambdas = inv 1.0 g
+      inv _   []        = []
+      inv rem' [_]      = [1.0]                     -- tail forced; value irrelevant
+      inv rem' (gn:gs)  = (gn / rem') : inv (rem' - gn) gs
+  in abs (haltingLoss lambdaP lambdas) < 1e-9
+  where coreDepthLocal = 8

@@ -44,13 +44,21 @@ def load_golden() -> dict:
         "w2": tensor(W["w2"]),                   # (64,64)
         "halt_w": tensor(W["halt_w"]),           # (1,2)
         "halt_b": tensor(W["halt_b"]),           # (1,)
-        "heads": [tensor(h) for h in W["heads"]],  # 9 × (d,64)
+        "heads": [tensor(h) for h in W["heads"]],  # 8 × (d,64)
     }
     cases = [
         {
             "name": c["name"],
             "tokens": tensor(c["tokens"]),                       # (n,10)
-            "output": np.array([h2d(s) for s in c["output"]]),   # (768,)
+            "output": np.array([h2d(s) for s in c["output"]]),   # (384,)
+            # loss reference (emitted by Codegen.Golden); absent in older goldens.
+            "input_gmm_mean": np.array([h2d(s) for s in c["input_gmm_mean"]])
+                              if "input_gmm_mean" in c else None,
+            "input_gmm_cov": np.array([h2d(s) for s in c["input_gmm_cov"]])
+                             if "input_gmm_cov" in c else None,
+            "halts": [h2d(s) for s in c["halts"]] if "halts" in c else None,
+            "loss": {k: h2d(v) for k, v in c["loss"].items()}
+                    if "loss" in c else None,
         }
         for c in g["cases"]
     ]
@@ -87,6 +95,12 @@ def run_torch(weights: dict, cases: list) -> list:
         for c in cases:
             tok, mask = pad_tokens(c["tokens"], m.MAX_TOKENS)
             out = net(torch.tensor(tok), token_mask=torch.tensor(mask)).numpy().reshape(-1)
+            # non-finite guard: an all-NaN/Inf forward must FAIL, not slip the gate
+            # (np.max of a NaN array yields NaN, and `NaN <= tol` is False, so the
+            # gate would silently pass — surface it explicitly as +inf instead).
+            if not np.all(np.isfinite(out)):
+                diffs.append((c["name"] + ":nonfinite", float("inf")))
+                continue
             diffs.append((c["name"], float(np.max(np.abs(out - c["output"])))))
     return diffs
 
@@ -114,7 +128,53 @@ def run_mlx(weights: dict, cases: list) -> list:
         out = net(mx.array(tok), token_mask=mx.array(mask))
         mx.eval(out)
         out = np.array(out).reshape(-1)
+        # non-finite guard (see run_torch): all-NaN/Inf forward must FAIL fast.
+        if not np.all(np.isfinite(out)):
+            diffs.append((c["name"] + ":nonfinite", float("inf")))
+            continue
         diffs.append((c["name"], float(np.max(np.abs(out - c["output"])))))
+    return diffs
+
+
+# ---------------------------------------------------------------------------
+# mlx loss gate — verifies look_net_loss_mlx (the Spec.Loss port) against the
+# loss reference cases emitted by Codegen.Golden. Each case's forward OUTPUT
+# (the 384 SigmaPairTree coeffs) is fed to the MLX loss with the case's input
+# GMM moments; the three component losses + total must match the Haskell oracle.
+# ---------------------------------------------------------------------------
+def run_mlx_loss(cases: list) -> list:
+    import mlx.core as mx
+    import look_net_loss_mlx as loss
+
+    diffs = []
+    for c in cases:
+        if c.get("loss") is None:
+            continue
+        # high_precision: float64-CPU reduction so the loss gate holds the same
+        # 1e-6 contract as the forward gate. The beauty sum reaches magnitude ~127,
+        # where float32 ULP (~7.6e-6) alone exceeds 1e-6; float64 matches the
+        # Haskell Spec.Loss oracle to ~1e-14. (Training uses float32-GPU.)
+        coeffs = mx.array(c["output"])            # float64 (decoded from hex)
+        mean = mx.array(c["input_gmm_mean"])
+        cov = mx.array(c["input_gmm_cov"])
+        total, parts = loss.look_net_loss(coeffs, mean, cov, high_precision=True)
+        mx.eval(total, *parts.values())
+        # non-finite guard: an all-NaN loss must NOT silently pass the gate.
+        vals = {k: float(np.array(v)) for k, v in parts.items()}
+        if not all(np.isfinite(list(vals.values()))):
+            diffs.append((c["name"] + ":nonfinite", float("inf")))
+            continue
+        worst = max(abs(vals[k] - c["loss"][k]) for k in ("fidelity", "coverage", "beauty", "total"))
+        # PonderNet halting loss — mirrors Spec.Loss.haltingLoss over the per-level
+        # halt λ's (the "halts" field), KL to the geometric prior. Verified here
+        # so the trained-λ_ℓ regulariser stays bit-faithful to the spec.
+        if c.get("halts") is not None and "halting" in c["loss"]:
+            h_mlx = loss.halting_loss(c["halts"])
+            if not np.isfinite(h_mlx):
+                diffs.append((c["name"] + ":halting-nonfinite", float("inf")))
+                continue
+            worst = max(worst, abs(h_mlx - c["loss"]["halting"]))
+        diffs.append((c["name"], worst))
     return diffs
 
 
@@ -140,6 +200,15 @@ def main() -> None:
             ok &= report(label, runner(g["weights"], g["cases"]), tol)
         except Exception as e:  # noqa: BLE001
             print(f"  [{label}] SKIPPED/ERROR: {e}")
+            ok = False
+
+    # loss gate: the MLX Spec.Loss port reproduces the loss reference cases.
+    if any(c.get("loss") is not None for c in g["cases"]):
+        print(f"\nlook-NN LOSS gate — Spec.Loss (fidelity Bures-W + coverage + Ou-Luo beauty), tol {tol:.0e}")
+        try:
+            ok &= report("mlx-loss", run_mlx_loss(g["cases"]), tol)
+        except Exception as e:  # noqa: BLE001
+            print(f"  [mlx-loss] SKIPPED/ERROR: {e}")
             ok = False
 
     # Sanity: corrupting one weight must make the gate FAIL (prove it bites).

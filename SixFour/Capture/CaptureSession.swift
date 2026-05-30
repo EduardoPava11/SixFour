@@ -33,6 +33,13 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     private var collected: [OKLabTile] = []
     private var ptsSeconds: [Double] = []
     private var submittedCount = 0
+    /// Frames dropped kernel-side during the active burst. The cadence is
+    /// hardware-pinned (`activeVideoMin == MaxFrameDuration = 1/fps`), so the
+    /// only thing that can break "truly 20 fps apart" is a dropped frame —
+    /// which `alwaysDiscardsLateVideoFrames` would otherwise hide behind a
+    /// silent ~2× interval. Counted here so the burst timing can report it.
+    /// Only mutated on `delegateQueue`.
+    private var droppedFrameCount = 0
     private var pipelineRef: MetalPipeline?
     private var continuation: CheckedContinuation<BurstResult, Error>?
     /// Per-burst latch — the first delivered sample buffer's
@@ -73,6 +80,11 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     }
 
     /// Aggregate statistics over the 63 inter-frame intervals (in ms).
+    ///
+    /// Policy is **measure & warn only**: the 50 ms cadence is hardware-pinned,
+    /// so these stats are surfaced for visibility — no burst is rejected and the
+    /// GIF frame delay stays a uniform 5 cs. `worstAbsDeviationMs` and
+    /// `droppedFrameCount` are the two numbers that reveal a real cadence break.
     struct BurstTiming: Sendable, Codable {
         let frameCount: Int
         let durationMs: Double
@@ -81,12 +93,17 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         let minIntervalMs: Double
         let maxIntervalMs: Double
         let targetIntervalMs: Double
+        /// Largest |interval − target| over the burst (ms). 0 when < 2 frames.
+        let worstAbsDeviationMs: Double
+        /// Frames dropped kernel-side during the burst (0 == clean cadence).
+        let droppedFrameCount: Int
         var summary: String {
             String(
-                format: "%d frames in %.1f ms — interval mean %.2f ms (target %.2f), σ %.2f, min %.2f, max %.2f",
+                format: "%d frames in %.1f ms — interval mean %.2f ms (target %.2f), σ %.2f, min %.2f, max %.2f, worst Δ %.2f, dropped %d",
                 frameCount, durationMs,
                 meanIntervalMs, targetIntervalMs,
-                stdIntervalMs, minIntervalMs, maxIntervalMs
+                stdIntervalMs, minIntervalMs, maxIntervalMs,
+                worstAbsDeviationMs, droppedFrameCount
             )
         }
     }
@@ -509,6 +526,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 self.ptsSeconds.removeAll(keepingCapacity: true)
                 self.ptsSeconds.reserveCapacity(self.targetFrameCount)
                 self.submittedCount = 0
+                self.droppedFrameCount = 0
                 self.pipelineRef = pipeline
                 self.continuation = cont
                 self.firstFrameVerified = false
@@ -606,20 +624,33 @@ final class CaptureSession: NSObject, @unchecked Sendable {
 
     private func finishBurst() {
         precondition(collected.count == targetFrameCount)
-        let timing = computeTiming(ptsSeconds: ptsSeconds, targetFps: targetFps)
+        let timing = Self.computeTiming(
+            ptsSeconds: ptsSeconds,
+            targetFps: targetFps,
+            droppedFrameCount: droppedFrameCount
+        )
         Self.log.info("Burst complete: \(timing.summary)")
         let snapshot = collected
         let cont = continuation
         collected.removeAll(keepingCapacity: true)
         ptsSeconds.removeAll(keepingCapacity: true)
         submittedCount = 0
+        droppedFrameCount = 0
         pipelineRef = nil
         continuation = nil
         collecting = false
         cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing))
     }
 
-    private func computeTiming(ptsSeconds: [Double], targetFps: Int) -> BurstTiming {
+    /// Pure aggregation of inter-frame timing — `static` and side-effect-free so
+    /// it can be unit-tested with synthetic PTS arrays (see `BurstTimingTests`).
+    /// Intervals come from the camera's own presentation clock (the real-time
+    /// ground truth), so they reflect what actually happened, not the nominal fps.
+    static func computeTiming(
+        ptsSeconds: [Double],
+        targetFps: Int,
+        droppedFrameCount: Int
+    ) -> BurstTiming {
         let target = 1000.0 / Double(targetFps)
         guard let first = ptsSeconds.first,
               let last = ptsSeconds.last,
@@ -628,7 +659,9 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 frameCount: ptsSeconds.count, durationMs: 0,
                 meanIntervalMs: 0, stdIntervalMs: 0,
                 minIntervalMs: 0, maxIntervalMs: 0,
-                targetIntervalMs: target
+                targetIntervalMs: target,
+                worstAbsDeviationMs: 0,
+                droppedFrameCount: droppedFrameCount
             )
         }
         let intervals: [Double] = zip(ptsSeconds.dropFirst(), ptsSeconds).map { ($0 - $1) * 1000.0 }
@@ -636,6 +669,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         let variance = intervals.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(intervals.count)
         let std = variance.squareRoot()
         let durationMs = (last - first) * 1000.0
+        let worstAbsDeviation = intervals.map { abs($0 - target) }.max() ?? 0
         return BurstTiming(
             frameCount: ptsSeconds.count,
             durationMs: durationMs,
@@ -643,7 +677,9 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             stdIntervalMs: std,
             minIntervalMs: intervals.min() ?? 0,
             maxIntervalMs: intervals.max() ?? 0,
-            targetIntervalMs: target
+            targetIntervalMs: target,
+            worstAbsDeviationMs: worstAbsDeviation,
+            droppedFrameCount: droppedFrameCount
         )
     }
 }
@@ -735,7 +771,14 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
         didDrop sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        Self.log.warning("Camera DROPPED a frame (kernel-side)")
+        // The delegate callbacks are serialized on `delegateQueue`, so this read
+        // and bump of `droppedFrameCount` is consistent with the burst state.
+        // Count only drops that fall inside an active burst — those are the ones
+        // that punch a ~2× gap into the captured cadence.
+        if collecting {
+            droppedFrameCount += 1
+        }
+        Self.log.warning("Camera DROPPED a frame (kernel-side); dropped this burst = \(self.droppedFrameCount)")
     }
 
     /// Submit `pixelBuffer` through the same Metal pipeline used for

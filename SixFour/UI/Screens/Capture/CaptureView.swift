@@ -264,15 +264,23 @@ struct CaptureView: View {
         // .unauthorized, .failed, and .configuring route to dedicated
         // full-screen views above; phaseBanner only handles overlays on
         // top of the live capture scene.
-        switch vm.phase {
-        case .locking:
-            bannerText("Locking exposure, focus, white balance…")
-        case .renderingStageA:
-            bannerText("Building per-frame palettes…")
-        case .renderingEncode:
-            bannerText("Encoding GIF…")
-        default:
-            EmptyView()
+        //
+        // The deterministic core surfaces its CURRENT stage (quantize → dither →
+        // significance → palette → encode) — that granular banner takes priority
+        // so the user watches the verified Zig pipeline run, stage by stage.
+        if let stage = vm.deterministicStage {
+            bannerText(stage)
+        } else {
+            switch vm.phase {
+            case .locking:
+                bannerText("Locking exposure, focus, white balance…")
+            case .renderingStageA:
+                bannerText("Building per-frame palettes…")
+            case .renderingEncode:
+                bannerText("Encoding GIF…")
+            default:
+                EmptyView()
+            }
         }
     }
 

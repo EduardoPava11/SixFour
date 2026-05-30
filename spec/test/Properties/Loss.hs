@@ -82,4 +82,21 @@ tests = testGroup "Loss (math-first training loss: fidelity + coverage + Ou-Luo 
       forAll genOKLabInGamut $ \c ->
         pairChromaticSimilarity c c == 1.0
         && pairLightnessAsymmetry c c == 0.0
+
+  , testProperty "leaf-list fidelity core agrees exactly with the Haar-tree fidelity loss" $
+      forAll genBoundedHaar $ \hp ->
+        forAll genTinyStack (lawFidelityLeavesAgreesWithHaar hp)
+
+  , testProperty "leaf-list beauty core = negated sum over adjacent leaf pairs" $
+      forAll (vectorOf 8 genOKLabInGamut) lawBeautyLeavesAgreesWithPairs
+
+  , testProperty "PonderNet halting distribution sums to 1 over the static unroll" $
+      forAll (vectorOf 8 (choose (0, 1))) lawHaltingDistributionSumsToOne
+
+  , testProperty "PonderNet halting loss (KL to geometric prior) is non-negative" $
+      forAll (choose (0.05, 0.95)) $ \lp ->
+        forAll (vectorOf 8 (choose (0, 1))) (lawHaltingLossNonNegative lp)
+
+  , testProperty "PonderNet halting loss is zero when the halting dist IS the prior" $
+      once lawHaltingLossZeroAtPrior
   ]

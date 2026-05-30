@@ -40,6 +40,10 @@ struct GIFReviewView: View {
                         )
 
                     perFrameStatus(primary)
+
+                    if primary.deterministic, let sha = primary.sha256 {
+                        determinismBadge(sha: sha)
+                    }
                 }
                 .padding(.horizontal)
                 .padding(.top)
@@ -82,6 +86,37 @@ struct GIFReviewView: View {
         .font(SFTheme.captionMono)
         .monospacedDigit()
         .accessibilityLabel("\(sig) of 256 colours significant, frame \(i + 1) of \(n)")
+    }
+
+    /// The reproducibility proof: this GIF came out of the deterministic
+    /// fixed-point Zig core, so its bytes are a pure function of the capture —
+    /// the same scene + settings always yields this exact SHA-256. The five
+    /// stage tags name the verified kernels the bytes flowed through.
+    private func determinismBadge(sha: String) -> some View {
+        let pipeline = DeterministicRenderer.Stage.allCases.map(\.tag).joined(separator: " → ")
+        let shaShort = sha.count > 16 ? "\(sha.prefix(10))…\(sha.suffix(4))" : sha
+        return VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.seal.fill").foregroundStyle(Color.green)
+                Text("Deterministic core").foregroundStyle(.white.opacity(0.9))
+                Text("· byte-reproducible").foregroundStyle(SFTheme.dimText)
+            }
+            .font(SFTheme.captionMono)
+            Text(pipeline)
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(SFTheme.dimText.opacity(0.85))
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text("sha256 \(shaShort)")
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(SFTheme.dimText)
+                .textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: SFTheme.cardCorner))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Deterministic core, byte reproducible, SHA-256 \(shaShort)")
     }
 
     private func actionRow(primary: CaptureOutput) -> some View {

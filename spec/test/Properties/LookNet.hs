@@ -14,7 +14,9 @@ import SixFour.Spec.Palette  (mkPalette)
 import SixFour.Spec.Cyclic   (CyclicStack(..), Weights)
 import SixFour.Spec.Indices
 import SixFour.Spec.PairTree (HaarPalette(..), reconstruct, degreesOfFreedom)
-import SixFour.Spec.Net      (NetIO(..))
+import SixFour.Spec.Net      (NetIO(..), NetSlot(..), slotMetricDims, slotLookDims)
+import SixFour.Spec.SigmaPairHead (sigmaPairLeaves)
+import Data.List             (lookup)
 import SixFour.Spec.GMM      (gaussianToken)
 import SixFour.Spec.LookNet
 
@@ -57,13 +59,14 @@ tests = testGroup "LookNet (typed layer dataflow input → palette → GIF)"
   , testProperty "index path L8–L9 composes" $
       once (chainComposes indexChain)
 
-  , testProperty "dimensional facts: 10 GMM token, dM context, 768 decoder = tree DOF, depth 8" $
+  , testProperty "dimensional facts: 10 GMM token, dM context, 384 σ-pair decoder genome, full palette DOF 768" $
       once $
            gmmTokenDim == 10
         && netInputDim encoderIO == gmmTokenDim
         && netOutputDim encoderIO == modelDim
-        && netOutputDim decoderIO == 768
-        && netOutputDim decoderIO == degreesOfFreedom
+        && netOutputDim decoderIO == 384
+        && degreesOfFreedom == 768
+        && 2 * netOutputDim decoderIO == degreesOfFreedom   -- 384 generators → 768 palette reals
         && netInputDim coreIO == netOutputDim encoderIO
         && netInputDim decoderIO == netOutputDim coreIO
         && modelDim > 0
@@ -91,6 +94,26 @@ tests = testGroup "LookNet (typed layer dataflow input → palette → GIF)"
         forAll (vectorOf ng genOKLab) $ \global ->
           forAll (listOf genOKLab) $ \loc ->
             all (\i -> i >= 0 && i < ng) (remapFrame global loc)
+
+  , -- The NetSlot.LOOK registry entry (gap #14): the look-NN is a first-class
+    -- slot whose NetIOSpec is pinned exactly like the metric, and codegen-emitted
+    -- to trainer/generated/net_shape.py. The aux dims must match the model file.
+    testProperty "NetSlot.LOOK registry: I/O + aux dims match the look-NN model shape" $
+      once $
+           -- two slots exist, distinct
+           [minBound .. maxBound] == [NetSlotMetric, NetSlotLook]
+        && netInputDim slotMetricDims == 6
+           -- look-NN I/O = (GMM token, σ-pair DOF), tied to the spec dims
+        && netInputDim slotLookDims == gmmTokenDim                 -- 10
+        && netOutputDim slotLookDims == netOutputDim decoderIO     -- 384 = SIGMA_PAIR_DOF
+        && lookup "MODEL_DIM"         (netAuxDims slotLookDims) == Just modelDim          -- 64
+        && lookup "CORE_DEPTH"        (netAuxDims slotLookDims) == Just maxPonderDepth     -- 8
+        && lookup "SIGMA_PAIR_LEAVES" (netAuxDims slotLookDims) == Just sigmaPairLeaves    -- 256
+        && lookup "MAX_TOKENS"        (netAuxDims slotLookDims) == Just maxTokens          -- 16384
+           -- the metric slot carries no aux dims (simple vector contract)
+        && null (netAuxDims slotMetricDims)
+           -- K leaves = 2·(DOF/3) generators paired
+        && sigmaPairLeaves == 2 * (netOutputDim slotLookDims `div` 3)
 
   , -- The dimensional table, surfaced as the knowledge artifact.
     testProperty "look-net layer table snapshot" $

@@ -31,10 +31,17 @@ import           Data.Word           (Word64)
 import           GHC.Float           (castDoubleToWord64)
 import           Numeric             (showHex)
 
+import SixFour.Spec.Color    (OKLab(..))
+import SixFour.Spec.GMM
+  ( GMM, Gaussian(..), normalizeGMM, mixtureMean, mixtureCovariance )
 import SixFour.Spec.Tensor   (Tensor1(..))
 import SixFour.Spec.LookNet   (modelDim, gmmTokenDim)
 import SixFour.Spec.LookNetR  (coreDepth)
-import SixFour.Spec.LookNetD  (decoderLevelDims, decoderOutputDim)
+import SixFour.Spec.LookNetD  (decoderLevelDims, decoderOutputDim, DecoderOutput(..), reconstructSigmaPair)
+import SixFour.Spec.Loss
+  ( defaultLossWeights, fidelityLossLeaves, coverageLossLeaves
+  , beautyLossLeaves, lookNetLossLeaves
+  , defaultHaltLambdaP, haltingLoss )
 import SixFour.Spec.LookNetEval
 
 -- =============================================================================
@@ -86,6 +93,8 @@ emitLookNetGolden = T.unlines $
   , "    \"gmm_token_dim\": " <> tshow gmmTokenDim <> ","
   , "    \"decoder_out_dim\": " <> tshow decoderOutputDim <> ","
   , "    \"decoder_level_dims\": " <> intArr decoderLevelDims <> ","
+  , "    \"loss_weights\": { \"fidelity\": 1.0, \"coverage\": 1.0, \"beauty\": 1.0 },"
+  , "    \"loss_note\": \"per-case loss = lookNetLossLeaves defaultLossWeights (reconstructSigmaPair output) inputGmm; fidelity = Bures-W^2 to input_gmm moments, coverage = 1 - gamut fraction, beauty = -sum Ou-Luo over adjacent sigma-pairs. The 'halting' term is the PonderNet KL(halting-dist || geometric-prior, lambda_p=0.5) over the per-level halt lambdas (the 'halts' field) — NOT included in 'total' (it is a separate regulariser the trainer weights). Reproduce within meta.tolerance.\","
   , "    \"weight_layout\": \"row-major (out, in) — the PyTorch/MLX nn.Linear.weight layout; weights are RAW (pre-σ-mask), each port applies the mask in its forward.\""
   , "  },"
   , "  \"weights\": {"
@@ -108,16 +117,54 @@ emitLookNetGolden = T.unlines $
 
     caseObjs = map caseObj testCases
     caseObj (name, toks) =
-      let tr     = forward w toks
-          n      = length toks
+      let tr      = forward w toks
+          n       = length toks
           tokFlat = concat [ U.toList t | Tensor1 t <- toks ]
+          -- The loss reference: the forward output (384 SigmaPairTree coeffs) →
+          -- 256-leaf σ-pair palette → the three component losses + total, against
+          -- the case's input GMM (the tokens, moment-matched). Computed with the
+          -- SAME spec functions the MLX port mirrors (Spec.Loss leaf cores).
+          inGmm   = gmmFromTokens toks
+          leaves  = reconstructSigmaPair (DecoderOutput (Tensor1 (U.fromList (ftOutput tr))))
+          lFid    = fidelityLossLeaves leaves inGmm
+          lCov    = coverageLossLeaves leaves
+          lBeauty = beautyLossLeaves   leaves
+          lTotal  = lookNetLossLeaves  defaultLossWeights leaves inGmm
+          -- PonderNet halting loss: KL(halting dist ‖ geometric prior λ_p=0.5)
+          -- over the per-level halt λ's (the "halts" field). Trains the λ_ℓ that
+          -- the static unroll otherwise leaves unsupervised (Spec.Loss.haltingLoss).
+          lHalt   = haltingLoss defaultHaltLambdaP (ftHalts tr)
+          -- The moment-matched input Gaussian (mean + 6 upper-tri cov), so the
+          -- port computes Bures fidelity without reimplementing the pooling/total-
+          -- covariance math (it can verify against these moments directly).
+          OKLab gmL gmA gmB = mixtureMean inGmm
+          (cLL,cLa,cLb,cAA,cAB,cBB) = mixtureCovariance inGmm
       in T.concat
          [ "{ \"name\": ", quote (T.pack name)
          , ", \"tokens\": ", tensorObj [n, 10] tokFlat
          , ", \"context\": ", hexArr (ftContext tr)
          , ", \"halts\": ",   hexArr (ftHalts tr)
          , ", \"output\": ",  hexArr (ftOutput tr)
+         , ", \"input_gmm_mean\": ", hexArr [gmL, gmA, gmB]
+         , ", \"input_gmm_cov\": ",  hexArr [cLL, cLa, cLb, cAA, cAB, cBB]
+         , ", \"loss\": { \"fidelity\": ", quote (hexDouble lFid)
+         , ", \"coverage\": ", quote (hexDouble lCov)
+         , ", \"beauty\": ",   quote (hexDouble lBeauty)
+         , ", \"halting\": ",  quote (hexDouble lHalt)
+         , ", \"total\": ",    quote (hexDouble lTotal), " }"
          , " }" ]
+
+-- | Build the input GMM for a golden case from its 10-D tokens. Each token
+-- @[μL,μa,μb, ΣLL,ΣLa,ΣLb,Σaa,Σab,Σbb, w]@ is one mixture component; the mixture
+-- is renormalised (matching 'SixFour.Spec.LookNet.poolToGMM' on a single-frame
+-- stack, sans the per-frame split). This is the loss's fidelity target.
+gmmFromTokens :: [Tensor1 10 Double] -> GMM
+gmmFromTokens toks =
+  normalizeGMM
+    [ Gaussian (OKLab (v U.! 0) (v U.! 1) (v U.! 2))
+               (v U.! 3, v U.! 4, v U.! 5, v U.! 6, v U.! 7, v U.! 8)
+               (v U.! 9)
+    | Tensor1 v <- toks ]
 
 tshow :: Show a => a -> Text
 tshow = T.pack . show

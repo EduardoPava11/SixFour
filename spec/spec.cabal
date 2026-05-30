@@ -20,13 +20,16 @@ library
     exposed-modules:
         SixFour.Spec.Shape
         SixFour.Spec.Color
+        SixFour.Spec.ColorFixed
         SixFour.Spec.Palette
         SixFour.Spec.Indices
         SixFour.Spec.Gauge
         SixFour.Spec.StageA
+        SixFour.Spec.QuantFixed
         SixFour.Spec.Coverage
         SixFour.Spec.Collapse
         SixFour.Spec.Diversity
+        SixFour.Spec.SpatialDither
         SixFour.Spec.GMM
         SixFour.Spec.Bures
         SixFour.Spec.PairTree
@@ -44,6 +47,7 @@ library
         SixFour.Spec.SigmaPairHead
         SixFour.Spec.Pipeline
         SixFour.Spec.Significance
+        SixFour.Spec.SignificanceFixed
         SixFour.Spec.Net
         SixFour.Spec.Cyclic
         SixFour.Spec.Look
@@ -105,6 +109,33 @@ executable spec-codegen
     default-extensions:
         DataKinds
       , TypeApplications
+
+-- Emits the cross-language GOLDEN fixtures the Zig native core verifies against
+-- (Native/src/*_fixture_test.zig). Kept SEPARATE from spec-codegen so the iOS
+-- drift gate (which runs spec-codegen into scratch dirs) never writes fixtures
+-- into the real tree. Run manually: `cabal run spec-fixtures` → ../trainer/out.
+executable spec-fixtures
+    import:           warnings
+    main-is:          Fixtures.hs
+    other-modules:
+        SixFour.Gen.GifWire
+    build-depends:
+        base
+      , sixfour-spec
+      , text
+      , vector
+      , containers
+      , bytestring >=0.11 && <0.13
+      , directory  >=1.3 && <1.4
+      , filepath   >=1.4 && <1.6
+    hs-source-dirs:   app gen
+    default-language: Haskell2010
+    default-extensions:
+        DataKinds
+      , TypeApplications
+      , ScopedTypeVariables
+      , KindSignatures
+      , TypeOperators
 
 executable spec-tui
     import:           warnings
@@ -184,9 +215,11 @@ test-suite spec-tests
     main-is:          Spec.hs
     other-modules:
         Properties.Color
+        Properties.ColorFixed
         Properties.Gauge
         Properties.Surjectivity
         Properties.Wu
+        Properties.QuantFixed
         Properties.Coverage
         Properties.Collapse
         Properties.Diversity
@@ -194,6 +227,7 @@ test-suite spec-tests
         Properties.Bures
         Properties.PairTree
         Properties.Dither
+        Properties.SpatialDither
         Properties.LookNet
         Properties.LookCore
         Properties.Layer
@@ -206,6 +240,7 @@ test-suite spec-tests
         Properties.SigmaPairHead
         Properties.Pipeline
         Properties.Significance
+        Properties.SignificanceFixed
         Properties.STBN3D
         Properties.Cyclic
         Properties.Look

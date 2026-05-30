@@ -43,6 +43,13 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     /// Extraction MSE per frame (OKLab units²).
     let perFrameMSE: [Float]
 
+    /// True when produced by the deterministic fixed-point Zig core (vs the GPU
+    /// float path). Drives the Review reproducibility badge.
+    var deterministic: Bool = false
+    /// Lowercase hex SHA-256 of the GIF bytes — the reproducible fingerprint,
+    /// non-nil only on the deterministic path. Same scene+settings ⇒ same hash.
+    var sha256: String? = nil
+
     var id: URL { gifURL }
 
     // Identity is the GIF URL; the per-frame arrays aren't Hashable and don't
@@ -73,6 +80,11 @@ final class CaptureViewModel {
     var phase: Phase = .configuring
     var lastTimingSummary: String? = nil
 
+    /// The current deterministic-core stage banner (quantize → dither →
+    /// significance → palette → encode), or nil when not rendering deterministically.
+    /// Surfaces the verified Zig pipeline as the thing the user watches run.
+    var deterministicStage: String? = nil
+
     /// Persisted user preferences (default extractor today, plus
     /// Settings-screen seams). A future SettingsView binds to this; the
     /// capture screen reads it on `bootstrap` and writes back on change.
@@ -86,6 +98,11 @@ final class CaptureViewModel {
     /// the top bar switches between the full-res AVCaptureVideoPreview
     /// and this downsampled view. Nil until the first frame arrives.
     var previewTile: UIImage?
+
+    /// Snapshot of `settings.useDeterministicCore` read off the delegate queue
+    /// by the preview callback, so the live 64×64 canvas shows the deterministic
+    /// quantized look (vs the raw downsample). Updated on bootstrap and capture.
+    @ObservationIgnored nonisolated(unsafe) private var previewQuantized = true
 
     /// Live scene readout from the preview — the diversity gauge + dominant
     /// hue the capture screen reflects. EMA-smoothed (see `ingestSceneReadout`)
@@ -115,6 +132,9 @@ final class CaptureViewModel {
     private(set) var store: GeneStore?
 
     func bootstrap() async {
+        // Route the Zig core's pushed log lines into Console (category native.zig)
+        // so every deterministic kernel call leaves visible evidence it ran.
+        SixFourNative.installLogging()
         do {
             let authorized = await CaptureSession.requestAuthorization()
             guard authorized else {
@@ -139,10 +159,20 @@ final class CaptureViewModel {
             // conversion + assignment to the MainActor here so the
             // SwiftUI binding fires cleanly.
             session.previewPipeline = pipeline
+            previewQuantized = settings.useDeterministicCore
             session.previewCallback = { [weak self] tile in
-                guard let image = Self.makePreviewImage(from: tile) else { return }
+                guard let self else { return }
+                // The "well done" 64×64: show the deterministic quantized look
+                // live (the actual GIF aesthetic), or the raw downsample if the
+                // deterministic engine is off.
+                let image = self.previewQuantized
+                    ? Self.makeQuantizedPreviewImage(from: tile)
+                    : Self.makePreviewImage(from: tile)
+                guard let image else { return }
                 // Analyse on the Metal completion queue (cheap, ~0.1 ms) so we
-                // don't hop to the main actor twice; publish both together.
+                // don't hop to the main actor twice; publish both together. The
+                // diversity gauge reads the RAW tile (true scene colour), not the
+                // quantized preview.
                 let readout = LivePreviewAnalysis.analyze(tile)
                 Task { @MainActor [weak self] in
                     guard let self else { return }
@@ -202,6 +232,7 @@ final class CaptureViewModel {
 
     func capture() async {
         guard let session, let pipeline, let engines else { return }
+        previewQuantized = settings.useDeterministicCore  // keep the live look in sync with the engine
         Haptics.impact(.medium)
         phase = .locking
         let lockResult = await session.lockExposureAndWhiteBalance(timeoutMs: 400)
@@ -272,6 +303,20 @@ final class CaptureViewModel {
         let baseURL = makeOutputURL(extension: "gif")
         let sheetURL = baseURL.deletingPathExtension().appendingPathExtension("contact.png")
 
+        // The deterministic fixed-point Zig core is the default render path: it
+        // surfaces each stage as it runs and yields a byte-reproducible GIF. The
+        // GPU float path below is a silent fallback only if a kernel ever fails.
+        if settings.useDeterministicCore {
+            do {
+                return try await renderDeterministic(
+                    tiles: tiles, dither: dither, baseURL: baseURL, sheetURL: sheetURL, summary: summary
+                )
+            } catch {
+                deterministicStage = nil
+                Self.logger.error("[viewmodel] deterministic core failed; falling back to GPU path: \(String(describing: error), privacy: .public)")
+            }
+        }
+
         let onPhase: @Sendable (GIFRenderer.RenderPhase) -> Void = { stage in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -325,6 +370,80 @@ final class CaptureViewModel {
             perFrameMSE: report.perFrameMSE
         )
         return RenderResult(output: output, perFrameStatistics: report.perFrameStatistics)
+    }
+
+    /// Render via the deterministic fixed-point Zig core, surfacing each stage as
+    /// a banner and producing a byte-reproducible GIF (with its SHA-256). The
+    /// same Complete/Significant voxel brands gate the bytes; per-frame numbers
+    /// are computed in the same integer domain so Review stays honest.
+    private func renderDeterministic(
+        tiles: [OKLabTile],
+        dither: DitherConfig,
+        baseURL: URL,
+        sheetURL: URL,
+        summary: String
+    ) async throws -> RenderResult {
+        let start = ContinuousClock().now
+        phase = .renderingStageA   // busy + spinner; the granular stage rides on `deterministicStage`
+        let comment = "SixFour deterministic core · \(tiles.count)×\(tiles.first?.side ?? 64)² · K=\(SixFourShape.K)"
+        let renderer = DeterministicRenderer(dither: dither)
+
+        let result = try await Task.detached(priority: .userInitiated) {
+            try renderer.render(tiles: tiles, comment: comment) { stage in
+                Task { @MainActor [weak self] in self?.deterministicStage = stage.rawValue }
+            }
+        }.value
+        deterministicStage = nil
+
+        // Same unforgeable gates as the GPU path — the deterministic bytes must
+        // still be a complete, all-significant voxel volume.
+        guard let volume = CompleteVoxelVolume(checkingFrames: result.frameIndices) else {
+            throw GIFEncoderError.incompleteVoxelVolume
+        }
+        guard SignificantVoxelVolume(complete: volume, cells: result.cells) != nil else {
+            throw GIFEncoderError.insignificantVoxelVolume
+        }
+
+        try result.gifData.write(to: baseURL)
+
+        // Contact sheet is best-effort (same as the GPU path).
+        do {
+            try await Task.detached(priority: .utility) {
+                try ContactSheet.writePNG(tiles: tiles, to: sheetURL)
+            }.value
+        } catch {
+            Self.logger.error("Contact sheet failed: \(String(describing: error))")
+        }
+        let contact: URL? = FileManager.default.fileExists(atPath: sheetURL.path) ? sheetURL : nil
+
+        let totalMs = PaletteGenerator.milliseconds(ContinuousClock().now - start)
+        let perFrameSignificant = result.cells.map {
+            $0.filter { $0.count >= SixFourSignificance.minPopulation }.count
+        }
+
+        let output = CaptureOutput(
+            gifURL: baseURL,
+            contactURL: contact,
+            renderMillis: totalMs,
+            stageAMillis: totalMs,
+            encodeMillis: 0,
+            fileSize: result.gifData.count,
+            timingSummary: summary,
+            palettesForDisplay: result.srgbPalettes,
+            ditherMethod: dither.method,
+            meanExtractMSE: result.meanExtractMSE,
+            meanCentroidConditionNumber: .nan,   // GPU-path diagnostic; N/A here
+            meanAdmissionRateAt05: 0,            // GPU-path diagnostic; N/A here
+            perFrameCells: result.cells,
+            perFrameSignificant: perFrameSignificant,
+            perFrameCoverage: result.perFrameCoverage,
+            perFrameMSE: result.perFrameMSE,
+            deterministic: true,
+            sha256: result.sha256Hex
+        )
+        // No per-frame ClusterStatistics on this path (editing tools are future);
+        // the CaptureBundle records an empty stats array.
+        return RenderResult(output: output, perFrameStatistics: [])
     }
 
     /// Compute the two extractor-quality summary metrics across all
@@ -423,7 +542,44 @@ final class CaptureViewModel {
             bytes[base + 2] = rgb.z
             // bytes[base + 3] = 255 already from repeating:
         }
+        return image(fromRGBA: bytes, side: side)
+    }
 
+    /// The "well done" 64×64: the live tile pushed through the deterministic Zig
+    /// spine (maximin quantize → dither → palette), so the canvas shows the
+    /// ACTUAL 256-colour output look while you compose — not a smooth downsample.
+    /// ~3–4 ms/frame at the 10 fps preview rate; falls back to the raw image if a
+    /// kernel ever declines. Runs on the session's delegate queue (nonisolated).
+    nonisolated private static func makeQuantizedPreviewImage(from tile: OKLabTile) -> UIImage? {
+        let side = tile.side
+        let pixelCount = side * side
+        guard tile.pixels.count == pixelCount else { return nil }
+        let k = SixFourShape.K
+
+        let q16 = SixFourNative.oklabToQ16(tile.pixels)
+        guard let quant = SixFourNative.quantizeFrame(oklabQ16: q16, k: k, lloydIters: 0),
+              let indices = SixFourNative.ditherFrame(
+                  oklabQ16: q16, centroids: quant.centroids, k: k,
+                  mode: 0, serpentine: false, stbnSlice: nil),  // FS raster — fast, stable
+              let palette = SixFourNative.paletteToSRGB8(centroidsQ16: quant.centroids, k: k)
+        else {
+            return makePreviewImage(from: tile)  // graceful fallback to the raw look
+        }
+
+        var bytes = [UInt8](repeating: 255, count: pixelCount * 4)
+        for i in 0..<pixelCount {
+            let c = Int(indices[i]) * 3
+            let base = i * 4
+            bytes[base + 0] = palette[c + 0]
+            bytes[base + 1] = palette[c + 1]
+            bytes[base + 2] = palette[c + 2]
+        }
+        return image(fromRGBA: bytes, side: side)
+    }
+
+    /// Build an opaque sRGB `UIImage` from a `side×side` RGBA8 buffer, with
+    /// interpolation off (the 64×64 pixels stay hard under upscale).
+    nonisolated private static func image(fromRGBA bytes: [UInt8], side: Int) -> UIImage? {
         let bytesPerRow = side * 4
         guard let provider = CGDataProvider(data: Data(bytes) as CFData) else {
             return nil

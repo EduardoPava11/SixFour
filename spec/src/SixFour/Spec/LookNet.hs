@@ -42,6 +42,7 @@ module SixFour.Spec.LookNet
     -- * Free structural dimensions
   , modelDim
   , maxPonderDepth
+  , maxTokens
   , gmmTokenDim
     -- * Learnable-layer shape contracts (weights are Phase C)
   , encoderIO
@@ -74,6 +75,7 @@ import SixFour.Spec.Collapse  (farthestPointCollapse)
 import SixFour.Spec.Indices   (IndexTensor(..), GlobalSurjective, mkGlobalSurjective)
 import SixFour.Spec.GMM       (GMM, Gaussian, gmmTokenDim, pointMassGMM, poolGMM)
 import SixFour.Spec.PairTree  (HaarPalette, reconstruct, analyze, degreesOfFreedom, paletteDepth)
+import SixFour.Spec.SigmaPairHead (sigmaPairDegreesOfFreedom)
 import SixFour.Spec.Net       (NetIO(..))
 import SixFour.Spec.Shape     (tVal, hVal, wVal, kVal, pixelsPerGIF)
 
@@ -101,6 +103,11 @@ modelDim = 64
 maxPonderDepth :: Int
 maxPonderDepth = paletteDepth
 
+-- | Maximum GMM token count per capture: @T · K = 64 · 256 = 16384@. The
+-- static input width the on-device forward pass (and the ANE compiler) require.
+maxTokens :: Int
+maxTokens = tVal * kVal
+
 -- @gmmTokenDim@ (the per-component substrate width @μ3+Σ6+w1 = 10@) is re-exported
 -- from "SixFour.Spec.GMM"; it replaces the old @categoryCodeDim = 88@.
 
@@ -111,6 +118,7 @@ encoderIO :: NetIO
 encoderIO = NetIO
   { netInputDim    = gmmTokenDim
   , netOutputDim   = modelDim
+  , netAuxDims     = []
   , netDescription = "L3 set encoder E: per-component (mu,Sigma,w)=10 -> dM context (perm-invariant, set-pooled)"
   }
 
@@ -120,16 +128,21 @@ coreIO :: NetIO
 coreIO = NetIO
   { netInputDim    = modelDim
   , netOutputDim   = modelDim
+  , netAuxDims     = []
   , netDescription = "L4 core R: dM -> dM context; ONE weight-shared block reused over 8 Haar levels (Mixture-of-Recursions), σ-invariant per-level halting (ponder <= N)"
   }
 
--- | L5 tree decoder shape contract: context → the 768 Haar coefficients
--- (root + 255 offsets); per-level heads correspond to @PairTree.levelDof@.
+-- | L5 σ-pair tree decoder shape contract: context → the 384 SigmaPairTree
+-- coefficients (root + 127 offsets, a depth-7 generator pyramid); per-level
+-- heads correspond to @SixFour.Spec.LookNetD.decoderLevelDims@. The 384 DOF is
+-- exactly the σ-symmetric palette subspace dimension; L6 σ-pair-interleaves the
+-- 128 generators into the 256-leaf palette (SigmaPairHead pivot, NOTES 2026-05-28).
 decoderIO :: NetIO
 decoderIO = NetIO
   { netInputDim    = modelDim
-  , netOutputDim   = degreesOfFreedom
-  , netDescription = "L5 tree decoder D: dM -> 768 Haar coefficients (root + 255 sigma-balanced offsets)"
+  , netOutputDim   = sigmaPairDegreesOfFreedom
+  , netAuxDims     = []
+  , netDescription = "L5 sigma-pair tree decoder D: dM -> 384 SigmaPairTree coefficients (root + 127 sigma-balanced generator offsets)"
   }
 
 -- | The full nine-layer dimensional table (for display / inspection).
@@ -145,7 +158,7 @@ paletteChain =
   , LayerSpec "L3 Encoder E"   (netInputDim encoderIO) (netOutputDim encoderIO) Learnable
   , LayerSpec "L4 Core R"      (netInputDim coreIO)    (netOutputDim coreIO)    Learnable
   , LayerSpec "L5 Decoder D"   (netInputDim decoderIO) (netOutputDim decoderIO) Learnable
-  , LayerSpec "L6 Reconstruct" degreesOfFreedom (kVal * 3) Deterministic
+  , LayerSpec "L6 Reconstruct" (netOutputDim decoderIO) (kVal * 3) Deterministic
   ]
 
 -- | The index path L8–L9 (a linear chain over the @T·H·W@ voxel tensor).

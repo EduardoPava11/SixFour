@@ -23,6 +23,7 @@ struct SettingsView: View {
                 } else {
                     blueNoiseSection
                 }
+                engineSection
                 captureSection
                 formSection
             }
@@ -79,6 +80,21 @@ struct SettingsView: View {
             Text("Blue noise")
         } footer: {
             Text(settings.blueNoiseTemporal.blurb)
+        }
+    }
+
+    /// The render engine: the deterministic fixed-point core (the verified Zig
+    /// pipeline, byte-reproducible) vs the GPU float path. Surfaces the work as a
+    /// product choice the user can see and toggle.
+    private var engineSection: some View {
+        Section {
+            Toggle("Deterministic core", isOn: $settings.useDeterministicCore)
+        } header: {
+            Text("Engine")
+        } footer: {
+            Text(settings.useDeterministicCore
+                ? "Renders through the fixed-point integer pipeline (quantize → dither → significance → palette → encode). Every stage is verified against a proof, so the GIF bytes are reproducible — Review shows the SHA-256."
+                : "Renders on the GPU (float). Faster, but the bytes are not bit-reproducible across runs/devices.")
         }
     }
 
