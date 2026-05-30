@@ -943,6 +943,297 @@ pub export fn s4_gif_assemble(
     return RC_OK;
 }
 
+// ── sRGB8 → OKLab Q16 (the decode-side inverse of s4_palette_oklab_to_srgb8) ──
+// Embedded sRGB→linear LUT: 256 little-endian i32 of round(srgbToLinear(b/255)·2^16),
+// emitted by spec/app/Fixtures.hs from the SAME SixFour.Spec.Color.srgbToLinear, so
+// Zig and Haskell agree byte-for-byte. Inverse of the forward gamma path.
+const SRGB_LIN_LUT: []const u8 = @embedFile("srgb_linear_lut.bin");
+comptime {
+    if (SRGB_LIN_LUT.len != 1024) @compileError("srgb_linear_lut.bin must be 1024 bytes (256·i32); run `cd spec && cabal run spec-fixtures`");
+}
+inline fn srgbLinLut(b: u8) i32 {
+    return std.mem.readInt(i32, SRGB_LIN_LUT[@as(usize, b) * 4 ..][0..4], .little);
+}
+
+/// k sRGB8 triples → k OKLab Q16 triples. Decodes a GIF colour table back into the
+/// OKLab the quantiser/token builder consume. Lossy inverse (OKLab→sRGB8 already
+/// rounded): exact at the byte level only. `out` may alias `rgb`-derived storage.
+pub export fn s4_srgb8_to_oklab_q16(rgb: [*c]const u8, k: i32, out_oklab_q16: [*c]i32) i32 {
+    if (rgb == null or out_oklab_q16 == null) return RC_NULL_PTR;
+    if (k <= 0) return RC_BAD_SHAPE;
+    const n: usize = @intCast(k);
+    var i: usize = 0;
+    while (i < n) : (i += 1) {
+        out_oklab_q16[i * 3 + 0] = srgbLinLut(rgb[i * 3 + 0]);
+        out_oklab_q16[i * 3 + 1] = srgbLinLut(rgb[i * 3 + 1]);
+        out_oklab_q16[i * 3 + 2] = srgbLinLut(rgb[i * 3 + 2]);
+    }
+    // In-place linear→OKLab: s4_linear_to_oklab_q16 reads each triple before writing it.
+    return s4_linear_to_oklab_q16(out_oklab_q16, k, out_oklab_q16);
+}
+
+// ── GIF89a decoder — byte-faithful port of SixFour.Gen.GifDecode (the inverse of
+// s4_gif_assemble). Parses the app dialect (no GCT, per-frame LCT, NETSCAPE loop,
+// optional Comment ext, disposal-1 frames) + the standard variable-width LZW. ──
+
+/// Working bytes s4_gif_decode needs: one frame's de-framed payload (≤ gif_len) +
+/// the 4096-entry LZW dictionary (prefix i32 + suffix u8 + first u8) + a 4096-byte
+/// reconstruction stack + slack. 0 on gif_len == 0.
+pub export fn s4_gif_decode_scratch_bytes(gif_len: usize) usize {
+    if (gif_len == 0) return 0;
+    return gif_len + 4096 * @sizeOf(i32) + 4096 + 4096 + 4096 + 1024;
+}
+
+const GifReader = struct {
+    g: []const u8,
+    pos: usize = 0,
+    fn byte(self: *GifReader) ?u8 {
+        if (self.pos >= self.g.len) return null;
+        const b = self.g[self.pos];
+        self.pos += 1;
+        return b;
+    }
+    fn u16le(self: *GifReader) ?u16 {
+        if (self.pos + 2 > self.g.len) return null;
+        const v = @as(u16, self.g[self.pos]) | (@as(u16, self.g[self.pos + 1]) << 8);
+        self.pos += 2;
+        return v;
+    }
+    fn skip(self: *GifReader, n: usize) bool {
+        if (self.pos + n > self.g.len) return false;
+        self.pos += n;
+        return true;
+    }
+};
+
+// De-frame length-prefixed sub-blocks into `payload`; returns payload length or null.
+fn gifReadSubBlocks(r: *GifReader, payload: []u8) ?usize {
+    var n: usize = 0;
+    while (true) {
+        const len = r.byte() orelse return null;
+        if (len == 0) return n;
+        const l: usize = len;
+        if (r.pos + l > r.g.len or n + l > payload.len) return null;
+        @memcpy(payload[n .. n + l], r.g[r.pos .. r.pos + l]);
+        n += l;
+        r.pos += l;
+    }
+}
+
+// Read one `size`-bit code, LSB-first (bit j of the code = stream bit pos+j).
+fn gifReadCode(payload: []const u8, total_bits: usize, bitpos: *usize, size: u5) ?i32 {
+    if (bitpos.* + size > total_bits) return null;
+    var code: i32 = 0;
+    var j: usize = 0;
+    while (j < size) : (j += 1) {
+        const i = bitpos.* + j;
+        const bit: i32 = (payload[i >> 3] >> @as(u3, @intCast(i & 7))) & 1;
+        code |= bit << @as(u5, @intCast(j));
+    }
+    bitpos.* += size;
+    return code;
+}
+
+// Emit code's byte sequence (walk prefix chain into `emit`, output reversed). false on overflow.
+fn gifEmit(code: i32, prefix: []const i32, suffix: []const u8, emit: []u8, out: []u8, out_n: *usize) bool {
+    var n: usize = 0;
+    var k: i32 = code;
+    while (prefix[@intCast(k)] != -1) {
+        if (n >= emit.len) return false;
+        emit[n] = suffix[@intCast(k)];
+        n += 1;
+        k = prefix[@intCast(k)];
+    }
+    if (n >= emit.len or out_n.* + n + 1 > out.len) return false;
+    emit[n] = suffix[@intCast(k)]; // root literal
+    n += 1;
+    var t: usize = 0;
+    while (t < n) : (t += 1) out[out_n.* + t] = emit[n - 1 - t];
+    out_n.* += n;
+    return true;
+}
+
+// Decode one frame's LZW payload into `out`; returns pixel count or null on malformed.
+fn gifLzwDecode(payload: []const u8, mcs: u5, prefix: []i32, suffix: []u8, first: []u8, emit: []u8, out: []u8) ?usize {
+    const clear_code: i32 = @as(i32, 1) << mcs;
+    const end_code: i32 = clear_code + 1;
+    const total_bits = payload.len * 8;
+    var bitpos: usize = 0;
+    var out_n: usize = 0;
+
+    // base table: literals 0..clear_code-1
+    var c: i32 = 0;
+    while (c < clear_code) : (c += 1) {
+        prefix[@intCast(c)] = -1;
+        suffix[@intCast(c)] = @intCast(c);
+        first[@intCast(c)] = @intCast(c);
+    }
+
+    var size: u5 = mcs + 1;
+    var code = gifReadCode(payload, total_bits, &bitpos, size) orelse return out_n;
+    if (code == clear_code)
+        code = gifReadCode(payload, total_bits, &bitpos, size) orelse return out_n;
+    if (code == end_code) return out_n;
+    if (!gifEmit(code, prefix, suffix, emit, out, &out_n)) return null;
+    var prev_code: i32 = code;
+    var next: i32 = end_code + 1;
+
+    while (true) {
+        const cd = gifReadCode(payload, total_bits, &bitpos, size) orelse break;
+        if (cd == end_code) break;
+        if (cd == clear_code) {
+            size = mcs + 1;
+            const lit = gifReadCode(payload, total_bits, &bitpos, size) orelse break;
+            if (lit == end_code) break;
+            if (!gifEmit(lit, prefix, suffix, emit, out, &out_n)) return null;
+            prev_code = lit;
+            next = end_code + 1;
+            continue;
+        }
+        var head: u8 = undefined;
+        if (cd < next) {
+            if (!gifEmit(cd, prefix, suffix, emit, out, &out_n)) return null;
+            head = first[@intCast(cd)];
+        } else { // KwKwK: cd == next, entry = prevEntry ++ [head prevEntry]
+            head = first[@intCast(prev_code)];
+            if (!gifEmit(prev_code, prefix, suffix, emit, out, &out_n)) return null;
+            if (out_n >= out.len) return null;
+            out[out_n] = head;
+            out_n += 1;
+        }
+        if (next < 4096) {
+            prefix[@intCast(next)] = prev_code;
+            suffix[@intCast(next)] = head;
+            first[@intCast(next)] = first[@intCast(prev_code)];
+        }
+        next += 1;
+        if (next == (@as(i32, 1) << size) and size < 12) size += 1;
+        prev_code = cd;
+    }
+    return out_n;
+}
+
+/// Decode a GIF89a (the app dialect) into per-frame indices + sRGB8 palettes.
+/// Pass null `out_indices`/`out_palettes_rgb` to SHAPE-PROBE: fills only
+/// out_frame_count/out_side/out_k and returns RC_OK without writing pixels (so the
+/// caller can size the buffers). Otherwise `out_indices` is frame_count·side·side u8
+/// and `out_palettes_rgb` is frame_count·k·3 u8. `scratch` ≥ s4_gif_decode_scratch_bytes.
+pub export fn s4_gif_decode(
+    gif: [*c]const u8,
+    gif_len: usize,
+    out_indices: [*c]u8,
+    out_palettes_rgb: [*c]u8,
+    out_frame_count: [*c]i32,
+    out_side: [*c]i32,
+    out_k: [*c]i32,
+    scratch: ?*anyopaque,
+    scratch_cap: usize,
+) i32 {
+    if (gif == null or out_frame_count == null or out_side == null or out_k == null) return RC_NULL_PTR;
+    if (gif_len < 14) return RC_BAD_SHAPE;
+    const probe = (out_indices == null or out_palettes_rgb == null);
+
+    var r = GifReader{ .g = gif[0..gif_len] };
+    // header "GIF89a"
+    if (!std.mem.eql(u8, r.g[0..6], &[_]u8{ 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 })) return RC_BAD_SHAPE;
+    r.pos = 6;
+    _ = r.u16le() orelse return RC_BAD_SHAPE; // canvas w
+    _ = r.u16le() orelse return RC_BAD_SHAPE; // canvas h
+    const lsd_packed = r.byte() orelse return RC_BAD_SHAPE;
+    _ = r.byte() orelse return RC_BAD_SHAPE; // bg
+    _ = r.byte() orelse return RC_BAD_SHAPE; // aspect
+    if ((lsd_packed & 0x80) != 0) { // skip a Global Colour Table (app never writes one)
+        const gct = 3 * (@as(usize, 1) << @as(u6, @intCast((lsd_packed & 0x07) + 1)));
+        if (!r.skip(gct)) return RC_BAD_SHAPE;
+    }
+
+    // scratch layout (full decode only)
+    var payload: []u8 = &.{};
+    var prefix: []i32 = &.{};
+    var suffix: []u8 = &.{};
+    var first: []u8 = &.{};
+    var emit: []u8 = &.{};
+    if (!probe) {
+        const need = s4_gif_decode_scratch_bytes(gif_len);
+        if (scratch == null or scratch_cap < need) return RC_SCRATCH_TOO_SMALL;
+        const base: [*]u8 = @ptrCast(scratch.?);
+        var off: usize = 0;
+        prefix = @as([*]i32, @ptrCast(@alignCast(base + off)))[0..4096];
+        off += 4096 * @sizeOf(i32);
+        suffix = base[off .. off + 4096];
+        off += 4096;
+        first = base[off .. off + 4096];
+        off += 4096;
+        emit = base[off .. off + 4096];
+        off += 4096;
+        payload = base[off .. off + gif_len];
+    }
+
+    var frame_count: i32 = 0;
+    var side: i32 = 0;
+    var k: i32 = 0;
+
+    while (true) {
+        const tag = r.byte() orelse return RC_BAD_SHAPE;
+        if (tag == 0x3B) break; // trailer
+        if (tag == 0x21) { // extension: label + sub-blocks (we skip the payload)
+            _ = r.byte() orelse return RC_BAD_SHAPE; // label
+            while (true) {
+                const len = r.byte() orelse return RC_BAD_SHAPE;
+                if (len == 0) break;
+                if (!r.skip(len)) return RC_BAD_SHAPE;
+            }
+            continue;
+        }
+        if (tag != 0x2C) return RC_BAD_SHAPE; // unknown block
+        // image descriptor: left,top,iw,ih (u16) + packed
+        _ = r.u16le() orelse return RC_BAD_SHAPE;
+        _ = r.u16le() orelse return RC_BAD_SHAPE;
+        const iw = r.u16le() orelse return RC_BAD_SHAPE;
+        const ih = r.u16le() orelse return RC_BAD_SHAPE;
+        const img_packed = r.byte() orelse return RC_BAD_SHAPE;
+        if ((img_packed & 0x80) == 0) return RC_BAD_SHAPE; // app always writes an LCT
+        const lct_size: usize = @as(usize, 1) << @as(u6, @intCast((img_packed & 0x07) + 1));
+
+        if (frame_count == 0) {
+            side = @intCast(iw);
+            k = @intCast(lct_size);
+        } else if (iw != side or ih != iw or @as(usize, @intCast(k)) != lct_size) {
+            return RC_BAD_SHAPE; // non-uniform frames break the (T,side,k) contract
+        }
+        if (iw != ih) return RC_BAD_SHAPE; // square frames only
+
+        const f: usize = @intCast(frame_count);
+        if (probe) {
+            if (!r.skip(lct_size * 3)) return RC_BAD_SHAPE; // skip LCT
+            _ = r.byte() orelse return RC_BAD_SHAPE; // minCodeSize
+            while (true) { // skip image sub-blocks
+                const len = r.byte() orelse return RC_BAD_SHAPE;
+                if (len == 0) break;
+                if (!r.skip(len)) return RC_BAD_SHAPE;
+            }
+        } else {
+            // copy LCT → out_palettes_rgb[f]
+            if (r.pos + lct_size * 3 > r.g.len) return RC_BAD_SHAPE;
+            @memcpy(out_palettes_rgb[f * lct_size * 3 .. f * lct_size * 3 + lct_size * 3], r.g[r.pos .. r.pos + lct_size * 3]);
+            r.pos += lct_size * 3;
+            const mcs_byte = r.byte() orelse return RC_BAD_SHAPE;
+            const payload_len = gifReadSubBlocks(&r, payload) orelse return RC_BAD_SHAPE;
+            const p: usize = @as(usize, @intCast(iw)) * @as(usize, @intCast(ih));
+            const out_frame = out_indices[f * p .. f * p + p];
+            const got = gifLzwDecode(payload[0..payload_len], @intCast(mcs_byte), prefix, suffix, first, emit, out_frame) orelse return RC_OUTPUT_TOO_SMALL;
+            if (got != p) return RC_BAD_SHAPE; // pixel count must match iw·ih
+        }
+        frame_count += 1;
+    }
+
+    out_frame_count[0] = frame_count;
+    out_side[0] = side;
+    out_k[0] = k;
+    s4log("gif_decode frames={d} side={d} k={d} (probe={d})", .{ frame_count, side, k, @intFromBool(probe) });
+    return RC_OK;
+}
+
 // ── unit tests: prove the ABI links + the size helpers are sane ───────────────
 test "size helpers return sane bounds for the canonical 64×64×256 shape" {
     const bound = s4_gif_encode_burst_bound(FRAME_COUNT, SIDE, K);

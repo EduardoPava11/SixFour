@@ -28,6 +28,22 @@ pub fn build(b: *std.Build) void {
     const opts = b.addOptions();
     opts.addOption([]const u8, "fixture_dir", fixture_dir);
 
+    // Host shared library for the Python trainer (ctypes can't dlopen a static
+    // .a). `zig build` installs zig-out/lib/libsixfour_native.dylib; the trainer's
+    // trainer/zig_native.py loads it to call s4_synth_burst + the GIF kernels —
+    // the SAME code the iOS build-ios.sh static lib compiles, so training-data
+    // generation runs through the production kernels byte-for-byte.
+    const lib = b.addLibrary(.{
+        .name = "sixfour_native",
+        .linkage = .dynamic,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    b.installArtifact(lib);
+
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/test_root.zig"),

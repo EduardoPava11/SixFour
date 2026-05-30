@@ -150,4 +150,24 @@ int32_t s4_gif_assemble(const uint8_t *indices, const uint8_t *palettes_rgb,
                         const uint8_t *comment, int32_t comment_len,
                         uint8_t *out_gif, size_t out_cap, size_t *out_len);
 
+// ─────────────────────────────────────────────────────────────────────────
+// Synthetic-burst generator — TRAINING data engine (Native/src/synth.zig).
+//
+// Mac-side training tooling, NOT shipped to device: procedurally generates an
+// OKLab Q16 burst (deterministic in `seed`, integer value-noise) that the
+// trainer feeds through s4_quantize_frame → s4_palette_oklab_to_srgb8 →
+// s4_gif_assemble — the SAME kernels the device runs, so per-frame palettes are
+// byte-identical to production. Used to bootstrap the look-NN trainer while
+// trainer/data/ is empty; the loader swaps to real captures later.
+//
+// `out_oklab_q16` is caller-owned, frame_count·side·side·3 int32 (interleaved
+// L,a,b row-major). side ≥ 2. Returns S4_RC_OK / S4_RC_NULL_PTR / S4_RC_BAD_SHAPE.
+// ─────────────────────────────────────────────────────────────────────────
+#define S4_SYNTH_COLOR      0   /* full OKLab burst (L,a,b vary) */
+#define S4_SYNTH_GRAYSCALE  1   /* a=b=0 exactly — Milestone L training data */
+
+int32_t s4_synth_burst(uint64_t seed, int32_t mode,
+                       int32_t frame_count, int32_t side,
+                       int32_t *out_oklab_q16);
+
 #endif // SIXFOUR_NATIVE_H

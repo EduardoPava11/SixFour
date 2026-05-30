@@ -27,6 +27,7 @@ import qualified Properties.Quad4        as Quad4
 import qualified Properties.Quad4Fit     as Quad4Fit
 import qualified Properties.SigmaPairHead as SigmaPairHead
 import qualified Properties.Pipeline     as Pipeline
+import qualified Properties.AxisNet      as AxisNet
 import qualified Properties.Significance as Significance
 import qualified Properties.SignificanceFixed as SignificanceFixed
 import qualified Properties.STBN3D       as STBN3D
@@ -68,6 +69,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Quad4Fit.tests
   , SigmaPairHead.tests
   , Pipeline.tests
+  , AxisNet.tests
   , Significance.tests
   , SignificanceFixed.tests
   , STBN3D.tests

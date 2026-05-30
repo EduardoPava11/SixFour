@@ -31,10 +31,13 @@ import SixFour.Gen.Realize  (Realized (..), realize, quantizeWeights, proveSigni
 import SixFour.Gen.Stats    (populationsForEntropySixFour)
 import SixFour.Gen.GifWire  (encodeVolume, defaultFps)
 import SixFour.Gen.GifDecode (decodeGif, decodedIndices, dgFrames, dfIndices)
+import SixFour.Gen.AxisInput (frameToGMM, decodedGifToTokenSet)
+import SixFour.Spec.GMM      (poolGMM, totalWeight)
+import SixFour.Spec.LookNetE (gmmTokenSetSize)
 
 main :: IO ()
 main = defaultMain $ testGroup "spec-gen / stats"
-  [ goldenTests, realizerTests, targetingTests, roundTripTests ]
+  [ goldenTests, realizerTests, targetingTests, roundTripTests, axisInputTests ]
 
 -- ---------------------------------------------------------------------------
 -- Golden cross-check vs the Rust §8 oracle (studio/analysis-core, cyclic.rs)
@@ -123,3 +126,26 @@ roundTripTests = testGroup "lossless round-trip"
   ]
   where
     hist idx = V.accum (+) (V.replicate kVal 0) [ (i, 1 :: Double) | i <- idx ]
+
+-- ---------------------------------------------------------------------------
+-- GIF → GMM-token bridge (AxisInput): a decoded GIF IS the look-NN input
+-- ---------------------------------------------------------------------------
+
+axisInputTests :: TestTree
+axisInputTests = testGroup "GIF → GMM-token bridge (AxisInput)"
+  [ QC.testProperty "decoded GIF → pooled GmmTokenSet: |frames|·K tokens, Σw = 1" $ once $
+      let stk      = synthStack @T @K defaultSynthParams { seed = 9 }
+          rz       = fromJust (realize @T @H @W @K stk)
+          palettes = map fst (V.toList (unStack (rzStack rz)))
+          bytes    = either (error "encode") id
+                       (encodeVolume defaultFps Nothing (rzVolume rz) palettes)
+          dg       = either (error "decode") id (decodeGif bytes)
+          gmm      = poolGMM (map frameToGMM (dgFrames dg))
+          mts      = decodedGifToTokenSet dg
+          expected = length (dgFrames dg) * kVal
+      in isJust mts
+         .&&. (gmmTokenSetSize (fromJust mts) === expected)
+         .&&. (length gmm === expected)
+         .&&. counterexample ("Σw = " ++ show (totalWeight gmm))
+                (abs (totalWeight gmm - 1) < 1e-9)
+  ]

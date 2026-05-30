@@ -34,7 +34,7 @@ import SixFour.Codegen.Shapes (emitStagesPy,      emitNetShapePy)
 import SixFour.Codegen.Burn   (emitBurnContract)
 import SixFour.Codegen.CoreML (emitLookNetTorch,  emitBuildMlpackage)
 import SixFour.Codegen.MLX    (emitLookNetMLX)
-import SixFour.Codegen.Golden (emitLookNetGolden)
+import SixFour.Codegen.Golden (emitLookNetGolden, emitAxisNetGolden)
 import SixFour.Spec.STBN3D    (Mask3D(..), generateSTBN3D)
 
 main :: IO ()
@@ -54,6 +54,7 @@ main = do
   writeUtf8 (mlxOutDir     </> "net_shape.py")         emitNetShapePy
   writeUtf8 (mlxOutDir     </> "look_net_mlx.py")      emitLookNetMLX
   writeUtf8 (mlxOutDir     </> "look_net_golden.json") emitLookNetGolden
+  writeUtf8 (mlxOutDir     </> "axisnet_golden.json")  emitAxisNetGolden
   writeUtf8 (mlxOutDir     </> "look_net_torch.py")    emitLookNetTorch
   writeUtf8 (mlxOutDir     </> "build_mlpackage.py")   emitBuildMlpackage
   writeUtf8 (burnOutDir    </> "contract.rs")          emitBurnContract

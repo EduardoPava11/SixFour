@@ -46,6 +46,7 @@ library
         SixFour.Spec.Quad4Fit
         SixFour.Spec.SigmaPairHead
         SixFour.Spec.Pipeline
+        SixFour.Spec.AxisNet
         SixFour.Spec.Significance
         SixFour.Spec.SignificanceFixed
         SixFour.Spec.Net
@@ -186,6 +187,7 @@ executable spec-gen
     other-modules:
         SixFour.Gen.GifWire
         SixFour.Gen.GifDecode
+        SixFour.Gen.AxisInput
         SixFour.Gen.Battery
         SixFour.Gen.Synth
         SixFour.Gen.Realize
@@ -239,6 +241,7 @@ test-suite spec-tests
         Properties.Quad4Fit
         Properties.SigmaPairHead
         Properties.Pipeline
+        Properties.AxisNet
         Properties.Significance
         Properties.SignificanceFixed
         Properties.STBN3D
@@ -284,6 +287,7 @@ test-suite gen-tests
     other-modules:
         SixFour.Gen.GifWire
         SixFour.Gen.GifDecode
+        SixFour.Gen.AxisInput
         SixFour.Gen.Synth
         SixFour.Gen.Realize
         SixFour.Gen.Stats
