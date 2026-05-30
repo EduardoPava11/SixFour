@@ -9,6 +9,7 @@
 test {
     _ = @import("root.zig"); // the parser's own unit tests
     _ = @import("kernels.zig"); // quantized-core ABI: size helpers + color kernel + stubs
+    _ = @import("synth.zig"); // synthetic-burst training-data generator + end-to-end chain
     _ = @import("color_fixture_test.zig"); // cross-language color golden (skip-if-absent)
     _ = @import("gif_assemble_fixture_test.zig"); // cross-language GIF-assembler golden
     _ = @import("significance_fixture_test.zig"); // cross-language significance golden

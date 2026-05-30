@@ -19,6 +19,7 @@ pub const panic = std.debug.no_panic;
 // the file here is what forces its `export fn`s into libsixfour_native.a.
 comptime {
     _ = @import("kernels.zig");
+    _ = @import("synth.zig"); // synthetic-burst training-data generator (s4_synth_burst)
 }
 
 // ── toolchain/link smoke test ───────────────────────────────────────────────

@@ -17,6 +17,7 @@ module Main (main) where
 
 import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as BL
+import           Data.Bits            (shiftR, (.&.))
 import           Data.List            (intercalate)
 import           Data.Maybe           (fromMaybe)
 import qualified Data.Text            as T
@@ -26,6 +27,7 @@ import           System.Directory     (createDirectoryIfMissing)
 import           System.Environment   (getArgs)
 import           System.FilePath      ((</>))
 
+import SixFour.Spec.Color           (srgbToLinear)
 import SixFour.Spec.ColorFixed
   ( linearToOklabQ16, oklabToSrgb8Q16, gammaLut, q16One, goldenLinearInputsQ16 )
 import SixFour.Spec.Significance      (minPopulation)
@@ -45,6 +47,9 @@ main = do
 
   writeFile (outDir </> "color_golden.json") emitColorGolden
   BS.writeFile (nativeDir </> "gamma_lut.bin") (BS.pack (U.toList gammaLut))
+  -- sRGB8→linear Q16 LUT (the INVERSE-decode table s4_srgb8_to_oklab_q16 embeds):
+  -- byte-identical to this Haskell, computed from the SAME srgbToLinear.
+  BS.writeFile (nativeDir </> "srgb_linear_lut.bin") srgbLinearLutBin
 
   -- GIF89a/LZW golden for s4_gif_assemble.
   writeFile  (outDir </> "gif_golden.json")          gifMeta
@@ -65,8 +70,21 @@ main = do
   putStrLn $ "  linear_to_oklab cases: " <> show (length goldenLinearInputsQ16)
   putStrLn $ "  oklab_to_srgb8 cases:  " <> show (length goldenLinearInputsQ16)
   putStrLn $ "spec-fixtures: wrote gamma_lut.bin (" <> show (U.length gammaLut) <> " bytes) to " <> nativeDir
+  putStrLn $ "spec-fixtures: wrote srgb_linear_lut.bin (" <> show (BS.length srgbLinearLutBin) <> " bytes) to " <> nativeDir
   putStrLn $ "spec-fixtures: wrote gif_golden.gif (" <> show (BL.length gifBytes) <> " bytes), "
              <> show gifFrameCount <> " frames @ " <> show gifSide <> "²×" <> show gifK <> " to " <> outDir
+
+-- | sRGB8→linear Q16 decode LUT: 256 little-endian int32 of
+-- @round(srgbToLinear(i/255) · 65536)@, clamped ≥ 0. The inverse-direction
+-- companion to gamma_lut.bin; s4_srgb8_to_oklab_q16 @\@embedFile@s it. Computed
+-- from the SAME 'SixFour.Spec.Color.srgbToLinear' so Zig and Haskell agree byte-for-byte.
+srgbLinearLutBin :: BS.ByteString
+srgbLinearLutBin = BS.pack (concatMap (le32 . entry) [0 .. 255])
+  where
+    entry :: Int -> Int
+    entry i = max 0 (round (srgbToLinear (fromIntegral i / 255) * fromIntegral q16One))
+    le32 :: Int -> [Word8]
+    le32 v = [ fromIntegral (v `shiftR` s) .&. 0xFF | s <- [0, 8, 16, 24] ]
 
 -- | { q16_one, linear_to_oklab: [...], oklab_to_srgb8: [...] }
 emitColorGolden :: String
