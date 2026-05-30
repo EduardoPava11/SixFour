@@ -33,6 +33,7 @@ library
         SixFour.Spec.GMM
         SixFour.Spec.Bures
         SixFour.Spec.PairTree
+        SixFour.Spec.SplitTree
         SixFour.Spec.Dither
         SixFour.Spec.LookNet
         SixFour.Spec.LookCore
@@ -47,6 +48,8 @@ library
         SixFour.Spec.SigmaPairHead
         SixFour.Spec.Pipeline
         SixFour.Spec.AxisNet
+        SixFour.Spec.Obfuscation
+        SixFour.Spec.Loom
         SixFour.Spec.Significance
         SixFour.Spec.SignificanceFixed
         SixFour.Spec.Net
@@ -228,6 +231,7 @@ test-suite spec-tests
         Properties.GMM
         Properties.Bures
         Properties.PairTree
+        Properties.SplitTree
         Properties.Dither
         Properties.SpatialDither
         Properties.LookNet
@@ -242,6 +246,8 @@ test-suite spec-tests
         Properties.SigmaPairHead
         Properties.Pipeline
         Properties.AxisNet
+        Properties.Obfuscation
+        Properties.Loom
         Properties.Significance
         Properties.SignificanceFixed
         Properties.STBN3D
