@@ -49,9 +49,25 @@ esac
 OUT_DIR="$SRC/Native/lib/$PLATFORM"
 mkdir -p "$OUT_DIR"
 
-echo "native: zig build-lib root.zig -target $ZIG_TARGET -O$OPT -> $OUT_DIR"
-"$ZIG" build-lib "$SRC/Native/src/root.zig" \
+# Emit a single relocatable object, then archive it with Apple's libtool.
+#
+# `zig build-lib` writes its own static archive, but the archive member offsets
+# are not padded to 8 bytes; once enough exported symbols grow the leading
+# symbol-table member, the `.o` member lands at a non-8-aligned offset and
+# Apple's ld rejects it ("64-bit mach-o member ... not 8-byte aligned"). Going
+# through `zig build-obj` + `libtool -static` produces a properly-aligned
+# archive regardless of object size, while keeping the -lsixfour_native link
+# interface (LIBRARY_SEARCH_PATHS + OTHER_LDFLAGS) unchanged.
+OBJ="$OUT_DIR/sixfour_native.o"
+LIB="$OUT_DIR/libsixfour_native.a"
+
+echo "native: zig build-obj root.zig -target $ZIG_TARGET -O$OPT -> $OBJ"
+"$ZIG" build-obj "$SRC/Native/src/root.zig" \
   -target "$ZIG_TARGET" \
   -O"$OPT" \
   --cache-dir "$SRC/Native/.zig-cache" \
-  -femit-bin="$OUT_DIR/libsixfour_native.a"
+  -femit-bin="$OBJ"
+
+echo "native: libtool -static -> $LIB"
+rm -f "$LIB"
+libtool -static -o "$LIB" "$OBJ"

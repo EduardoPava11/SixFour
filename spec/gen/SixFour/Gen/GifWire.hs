@@ -30,6 +30,7 @@ Cross-reference: @SixFour/Encoder/GIFEncoder.swift@ (the source of truth).
 module SixFour.Gen.GifWire
   ( -- * Encoding
     encodeVolume
+  , assembleGifRGB8
   , defaultFps
   , delayCentiseconds
     -- * Palette → bytes (exposed for the decoder's round-trip test)
@@ -111,6 +112,40 @@ encodeVolume fps comment vol palettes =
   where
     nat :: KnownNat n => Proxy n -> Int
     nat = fromIntegral . natVal
+
+-- | Assemble GIF89a bytes directly from RAW per-frame indices + sRGB8 palettes
+-- (no OKLab conversion) — the exact contract of the Zig @s4_gif_assemble@ kernel,
+-- which operates downstream of the palette colour conversion. Reuses the SAME
+-- LZW + block builders as 'encodeVolume', so this is the byte-exact golden for
+-- the Zig GIF assembler. Each frame is @(indices, palette)@ where @indices@ has
+-- @w*h@ entries in @[0,255]@ and @palette@ has @k@ RGB8 triples.
+assembleGifRGB8
+  :: Int                                   -- ^ width  (= height)
+  -> Int                                   -- ^ height
+  -> Int                                   -- ^ fps (delay derived)
+  -> Maybe T.Text                          -- ^ optional comment
+  -> [(U.Vector Int, [(Word8, Word8, Word8)])]
+  -> BL.ByteString
+assembleGifRGB8 w h fps comment frames =
+  let delay = delayCentiseconds fps
+      body  = mconcat
+        [ graphicsControl delay
+          <> imageDescriptorWithLCT w h
+          <> localColorTableRGB pal
+          <> lzwEncode 8 idx
+        | (idx, pal) <- frames ]
+      doc =
+           byteString (BS.pack [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]) -- "GIF89a"
+        <> logicalScreenDescriptor w h
+        <> netscapeLoop 0
+        <> maybe mempty commentExtension
+             (comment >>= \c -> if T.null c then Nothing else Just c)
+        <> body
+        <> word8 0x3B
+  in toLazyByteString doc
+  where
+    localColorTableRGB pal =
+      mconcat [ word8 r <> word8 g <> word8 b | (r, g, b) <- pal ]
 
 -- ---------------------------------------------------------------------------
 -- Block builders (mirror GIFEncoder.swift's private helpers)

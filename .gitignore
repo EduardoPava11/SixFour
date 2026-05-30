@@ -24,3 +24,6 @@ trainer/out/
 # Native Zig kernel build artifacts
 Native/lib/
 Native/.zig-cache/
+
+# Device build output (xcodebuild -derivedDataPath)
+build-device/

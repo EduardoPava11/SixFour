@@ -58,7 +58,9 @@ struct CaptureBundleCodableTests {
                 stdIntervalMs: 0.31,
                 minIntervalMs: 49.5,
                 maxIntervalMs: 50.5,
-                targetIntervalMs: 50.0
+                targetIntervalMs: 50.0,
+                worstAbsDeviationMs: 0.5,
+                droppedFrameCount: 0
             ),
             colorSpaceTag: .hlgBT2020,
             tiles: [tile, tile],

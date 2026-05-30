@@ -14,6 +14,13 @@ const std = @import("std");
 // checks (a failed check still traps) but drops the stack-trace machinery.
 pub const panic = std.debug.no_panic;
 
+// Pull the deterministic quantized-core kernels (kernels.zig) into this build.
+// build-ios.sh compiles root.zig directly with `zig build-lib`, so referencing
+// the file here is what forces its `export fn`s into libsixfour_native.a.
+comptime {
+    _ = @import("kernels.zig");
+}
+
 // ── toolchain/link smoke test ───────────────────────────────────────────────
 export fn s4_probe(x: u32) u32 {
     return x +% 1;

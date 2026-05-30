@@ -27,6 +27,7 @@ final class AppSettings {
         // New seams (no UI yet; default to today's behavior).
         static let openInPixelatedPreview = "sixfour.openInPixelatedPreview.v1"
         static let autoSaveToPhotos       = "sixfour.autoSaveToPhotos.v1"
+        static let useDeterministicCore   = "sixfour.useDeterministicCore.v1"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -79,6 +80,14 @@ final class AppSettings {
         didSet { defaults.set(autoSaveToPhotos, forKey: Key.autoSaveToPhotos) }
     }
 
+    /// Whether to render through the deterministic fixed-point Zig core (the
+    /// per-stage pipeline whose bytes are reproducible, surfaced as a SHA-256 in
+    /// Review) rather than the GPU float path. Defaults ON — determinism is the
+    /// product; the GPU path stays as a silent fallback if a kernel ever fails.
+    var useDeterministicCore: Bool {
+        didSet { defaults.set(useDeterministicCore, forKey: Key.useDeterministicCore) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // `didSet` does not fire during init, so these reads don't write back.
@@ -95,5 +104,7 @@ final class AppSettings {
         ) ?? .spatiotemporal
         self.openInPixelatedPreview = defaults.bool(forKey: Key.openInPixelatedPreview)
         self.autoSaveToPhotos = defaults.bool(forKey: Key.autoSaveToPhotos)
+        // Absent key → deterministic core ON (the default product behaviour).
+        self.useDeterministicCore = defaults.object(forKey: Key.useDeterministicCore) as? Bool ?? true
     }
 }
