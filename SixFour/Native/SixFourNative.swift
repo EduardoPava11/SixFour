@@ -5,6 +5,10 @@ import os
 /// the `@convention(c)` callback can reference it without capturing.
 private let zigLogger = Logger(subsystem: "com.sixfour.SixFour", category: "native.zig")
 
+/// Thread-dictionary key that suppresses Zig log forwarding on the current thread
+/// (set by the live preview). File-scope so the non-capturing C callback can read it.
+private let zigLogSuppressKey = "com.sixfour.suppressZigLog"
+
 /// Swift surface over the native Zig kernels.
 ///
 /// The implementations live in `Native/src/*.zig` (C ABI declared in
@@ -29,9 +33,24 @@ enum SixFourNative {
     static func installLogging() {
         s4_set_log_callback { (msg: UnsafePointer<UInt8>?, len: Int) in
             guard let msg, len > 0 else { return }
+            // The callback fires synchronously on the calling kernel's thread, so
+            // a thread-local set by the live preview suppresses ONLY the preview's
+            // lines (it calls the kernels ~10×/s); the capture render, on another
+            // thread, still logs every stage.
+            if Thread.current.threadDictionary[zigLogSuppressKey] != nil { return }
             let text = String(decoding: UnsafeBufferPointer(start: msg, count: len), as: UTF8.self)
             zigLogger.debug("zig: \(text, privacy: .public)")
         }
+    }
+
+    /// Run `body` with this thread's Zig log lines suppressed. Used by the live
+    /// 64×64 preview so its per-frame kernel logs don't flood the log stream;
+    /// the deterministic capture render (a different thread) is unaffected.
+    static func withZigLogsSuppressed<R>(_ body: () -> R) -> R {
+        let td = Thread.current.threadDictionary
+        td[zigLogSuppressKey] = true
+        defer { td.removeObject(forKey: zigLogSuppressKey) }
+        return body()
     }
 
     // MARK: - Look-NN deploy blob

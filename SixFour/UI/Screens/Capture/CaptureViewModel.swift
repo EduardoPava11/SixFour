@@ -557,24 +557,28 @@ final class CaptureViewModel {
         let k = SixFourShape.K
 
         let q16 = SixFourNative.oklabToQ16(tile.pixels)
-        guard let quant = SixFourNative.quantizeFrame(oklabQ16: q16, k: k, lloydIters: 0),
-              let indices = SixFourNative.ditherFrame(
-                  oklabQ16: q16, centroids: quant.centroids, k: k,
-                  mode: 0, serpentine: false, stbnSlice: nil),  // FS raster — fast, stable
-              let palette = SixFourNative.paletteToSRGB8(centroidsQ16: quant.centroids, k: k)
-        else {
-            return makePreviewImage(from: tile)  // graceful fallback to the raw look
-        }
+        // Suppress the per-kernel Zig logs for this ~10 fps preview frame so they
+        // don't flood the log stream; the capture render (other thread) still logs.
+        return SixFourNative.withZigLogsSuppressed {
+            guard let quant = SixFourNative.quantizeFrame(oklabQ16: q16, k: k, lloydIters: 0),
+                  let indices = SixFourNative.ditherFrame(
+                      oklabQ16: q16, centroids: quant.centroids, k: k,
+                      mode: 0, serpentine: false, stbnSlice: nil),  // FS raster — fast, stable
+                  let palette = SixFourNative.paletteToSRGB8(centroidsQ16: quant.centroids, k: k)
+            else {
+                return makePreviewImage(from: tile)  // graceful fallback to the raw look
+            }
 
-        var bytes = [UInt8](repeating: 255, count: pixelCount * 4)
-        for i in 0..<pixelCount {
-            let c = Int(indices[i]) * 3
-            let base = i * 4
-            bytes[base + 0] = palette[c + 0]
-            bytes[base + 1] = palette[c + 1]
-            bytes[base + 2] = palette[c + 2]
+            var bytes = [UInt8](repeating: 255, count: pixelCount * 4)
+            for i in 0..<pixelCount {
+                let c = Int(indices[i]) * 3
+                let base = i * 4
+                bytes[base + 0] = palette[c + 0]
+                bytes[base + 1] = palette[c + 1]
+                bytes[base + 2] = palette[c + 2]
+            }
+            return image(fromRGBA: bytes, side: side)
         }
-        return image(fromRGBA: bytes, side: side)
     }
 
     /// Build an opaque sRGB `UIImage` from a `side×side` RGBA8 buffer, with

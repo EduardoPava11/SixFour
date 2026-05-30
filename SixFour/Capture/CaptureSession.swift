@@ -106,6 +106,44 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 worstAbsDeviationMs, droppedFrameCount
             )
         }
+
+        enum CodingKeys: String, CodingKey {
+            case frameCount, durationMs, meanIntervalMs, stdIntervalMs
+            case minIntervalMs, maxIntervalMs, targetIntervalMs
+            case worstAbsDeviationMs, droppedFrameCount
+        }
+
+        init(
+            frameCount: Int, durationMs: Double, meanIntervalMs: Double,
+            stdIntervalMs: Double, minIntervalMs: Double, maxIntervalMs: Double,
+            targetIntervalMs: Double, worstAbsDeviationMs: Double, droppedFrameCount: Int
+        ) {
+            self.frameCount = frameCount
+            self.durationMs = durationMs
+            self.meanIntervalMs = meanIntervalMs
+            self.stdIntervalMs = stdIntervalMs
+            self.minIntervalMs = minIntervalMs
+            self.maxIntervalMs = maxIntervalMs
+            self.targetIntervalMs = targetIntervalMs
+            self.worstAbsDeviationMs = worstAbsDeviationMs
+            self.droppedFrameCount = droppedFrameCount
+        }
+
+        // Tolerant decode: capture bundles saved before worstAbsDeviationMs /
+        // droppedFrameCount existed still restore (those fields default to 0
+        // instead of throwing keyNotFound). encode(to:) stays synthesized.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            frameCount = try c.decode(Int.self, forKey: .frameCount)
+            durationMs = try c.decode(Double.self, forKey: .durationMs)
+            meanIntervalMs = try c.decode(Double.self, forKey: .meanIntervalMs)
+            stdIntervalMs = try c.decode(Double.self, forKey: .stdIntervalMs)
+            minIntervalMs = try c.decode(Double.self, forKey: .minIntervalMs)
+            maxIntervalMs = try c.decode(Double.self, forKey: .maxIntervalMs)
+            targetIntervalMs = try c.decode(Double.self, forKey: .targetIntervalMs)
+            worstAbsDeviationMs = try c.decodeIfPresent(Double.self, forKey: .worstAbsDeviationMs) ?? 0
+            droppedFrameCount = try c.decodeIfPresent(Int.self, forKey: .droppedFrameCount) ?? 0
+        }
     }
 
     init(targetFps: Int = 20, targetFrameCount: Int = 64) throws {

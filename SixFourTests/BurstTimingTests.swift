@@ -83,6 +83,19 @@ struct BurstTimingTests {
         #expect(none.droppedFrameCount == 2) // still reported in the degenerate path
     }
 
+    @Test("Pre-existing bundles (missing the new fields) still decode, defaulting to 0")
+    func backCompatDecode() throws {
+        // A BurstTiming JSON saved before worstAbsDeviationMs/droppedFrameCount existed.
+        let json = """
+        {"frameCount":64,"durationMs":3150.0,"meanIntervalMs":50.0,"stdIntervalMs":0.3,\
+        "minIntervalMs":49.5,"maxIntervalMs":50.5,"targetIntervalMs":50.0}
+        """.data(using: .utf8)!
+        let t = try JSONDecoder().decode(CaptureSession.BurstTiming.self, from: json)
+        #expect(t.frameCount == 64)
+        #expect(t.worstAbsDeviationMs == 0)   // defaulted, not keyNotFound
+        #expect(t.droppedFrameCount == 0)
+    }
+
     @Test("Summary string includes worst-deviation and dropped-frame fields")
     func summaryMentionsNewFields() {
         let pts = evenPTS(count: 64, intervalMs: 50.0)
