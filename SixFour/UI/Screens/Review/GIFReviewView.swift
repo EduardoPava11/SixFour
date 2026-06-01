@@ -83,6 +83,13 @@ struct GIFReviewView: View {
                 case .perFrame:
                     PaletteTreeView(palettes: o.palettesForDisplay, branching: vm.settings.paletteBranching)
                     BranchingSelector(selection: branching)
+                    // Operable address for the SAME tree: N wheels = the 16²/4⁴/2⁸
+                    // digits, each labelled with its real axis@pos split; turning one
+                    // brushes that subtree across the views (shared brushedIndex).
+                    AddressPickerView(
+                        splitTree: PaletteTreeView.tree(for: o.palettesForDisplay.first ?? []),
+                        branching: vm.settings.paletteBranching,
+                        brushedIndex: $brushedIndex)
                 case .global:
                     GlobalPaletteEditorView(palettes: o.palettesForDisplay, branching: branching)
                 }

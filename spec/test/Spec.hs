@@ -17,6 +17,7 @@ import qualified Properties.PairTree     as PairTree
 import qualified Properties.SplitTree    as SplitTree
 import qualified Properties.GridAxis     as GridAxis
 import qualified Properties.CloudProjection as CloudProjection
+import qualified Properties.AddressPicker as AddressPicker
 import qualified Properties.Dither       as Dither
 import qualified Properties.SpatialDither as SpatialDither
 import qualified Properties.LookNet      as LookNet
@@ -65,6 +66,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SplitTree.tests
   , GridAxis.tests
   , CloudProjection.tests
+  , AddressPicker.tests
   , Dither.tests
   , SpatialDither.tests
   , LookNet.tests
