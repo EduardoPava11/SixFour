@@ -105,9 +105,10 @@ New files: `UI/Components/VoxelCubeView.swift` (representable + Coordinator, the
 > alpha (0 degenerate→air, 1 extracted, 2 split→one dark step) with an
 > all / extracted / split filter. The kernel lives in `Shaders.metal` (loaded via
 > the default library, GPUContext pattern) so it is **compile-time validated** and
-> has no first-launch compile hitch. **Still deferred:** time-explode (§4), the
-> separate `Metal/VoxelCubePipeline.swift` split, and persisting the controls in
-> `AppSettings`. The luma threshold is computed CPU-friendly per-ray (Rec.709 on
+> has no first-launch compile hitch. The provenance filter / luma floor /
+> auto-rotate persist in `AppSettings` (seeded into the view, written back on
+> change). **Still deferred:** time-explode (§4) and the separate
+> `Metal/VoxelCubePipeline.swift` split. The luma threshold is computed CPU-friendly per-ray (Rec.709 on
 > the sRGB bytes) rather than the §3 precomputed-LUT-into-airMask form — a later
 > optimisation, same result.
 

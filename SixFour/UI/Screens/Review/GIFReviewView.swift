@@ -99,7 +99,7 @@ struct GIFReviewView: View {
                 // The 64³ voxel cube: face-on it IS the 2D GIF; orbit reveals
                 // depth = time. Content (no glass on voxels); its own controls.
                 if let voxelData {
-                    VoxelCubeView(data: voxelData)
+                    VoxelCubeView(data: voxelData, settings: vm.settings)
                 } else {
                     Text("The voxel cube needs a fresh capture.")
                         .font(.caption)

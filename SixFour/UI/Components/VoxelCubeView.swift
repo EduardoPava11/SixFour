@@ -116,19 +116,39 @@ struct VoxelCubeView: View {
     /// Edge of the square render surface, in points. Default = gifCanvasPt so a
     /// voxel is gifCellPt (6 pt) face-on — identical to the 2D GIF hero.
     var edge: CGFloat = 384
+    /// Optional store: when present, the provenance filter / luma floor /
+    /// auto-rotate are seeded from it and persisted back across captures.
+    var settings: AppSettings?
 
-    @State private var cube = VoxelCubeState()
+    @State private var cube: VoxelCubeState
     @State private var tick = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // The single 60 Hz driver for playback (20 fps cursor) + auto-rotate.
     private let clock = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
+    init(data: VoxelCubeData, edge: CGFloat = 384, settings: AppSettings? = nil) {
+        self.data = data
+        self.edge = edge
+        self.settings = settings
+        var initial = VoxelCubeState()
+        if let s = settings {
+            initial.provMode = s.voxelProvenanceMode
+            initial.lumaFloor = s.voxelLumaFloor
+            initial.autoRotate = s.voxelAutoRotate
+        }
+        _cube = State(initialValue: initial)
+    }
+
     var body: some View {
         Group {
             if data.isWellFormed { cubeBody } else { placeholder }
         }
         .onReceive(clock) { _ in advance() }
+        // Persist the durable knobs (orbit + frame stay session-transient).
+        .onChange(of: cube.provMode) { _, v in settings?.voxelProvenanceMode = v }
+        .onChange(of: cube.lumaFloor) { _, v in settings?.voxelLumaFloor = v }
+        .onChange(of: cube.autoRotate) { _, v in settings?.voxelAutoRotate = v }
     }
 
     private var cubeBody: some View {
