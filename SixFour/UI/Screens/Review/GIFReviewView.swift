@@ -97,7 +97,8 @@ struct GIFReviewView: View {
                 // The coordinate view: 256 colours on two user-assigned axes.
                 PaletteGridView(palettes: o.palettesForDisplay,
                                 xAxis: vm.settings.gridAxisX,
-                                yAxis: vm.settings.gridAxisY)
+                                yAxis: vm.settings.gridAxisY,
+                                brushedIndex: brushedIndex)
                 GridAxisSelector(
                     xAxis: Binding(get: { vm.settings.gridAxisX }, set: { vm.settings.gridAxisX = $0 }),
                     yAxis: Binding(get: { vm.settings.gridAxisY }, set: { vm.settings.gridAxisY = $0 })
