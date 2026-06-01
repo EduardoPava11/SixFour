@@ -111,3 +111,11 @@ An independent critic attacked every proposal with "is it really nD, or 2D-with-
 - **P6 — must be SPLIT.** **P6a** (prosection slider + the two grid ship-gate fixes: per-cell `accessibilityValue` + fixed-canonical-range binning) is **mandatory truth — promote it.** **Morton/Hilbert is REJECTED as specified**: it would interleave bits of `IndexedColor.index` (the arbitrary input-order tie-break key, `SplitTree.swift:29-31`), **not** the SplitTree lo/hi address whose 16²/4⁴/2⁸ factorization it claims to reveal. Reject unless **rekeyed to the actual SplitTree leaf-order/address**.
 
 **Load-bearing disciplines (non-negotiable):** (1) the address-view's perception lives in geometry, not text; (2) any "distance" claim is valid ONLY under orthographic, which must be the sticky default; (3) no embedding (t-SNE/SOM/PCA), ever; (4) Phase 0 doc/label truth is the highest truth-per-line work and lands first.
+
+---
+
+## 8. P4 as-built (2026-06-01) — salvaged from a stalled workflow
+
+P4 was built ahead of plan: `SixFour/UI/Components/PaletteCloudView.swift` (SwiftUI Canvas, 256 OKLab dots, orthographic-sticky + orbit + scrub + trails + brush, `#Preview` with synthetic data), wired as the `.cloud` `RepresentationSelector` mode, backed by a golden-pinned Haskell spec `SixFour.Spec.CloudProjection` (+ `Properties.CloudProjection`). Verified: Swift `BUILD SUCCEEDED`; **all 382 spec tests pass**, including the honesty laws (`worldDist = scale·oklabDist` isometry, orbit-preserves-distance, orthographic 1-Lipschitz, perspective-distorts, hull-contains-all, Quad4-ghost-zero-on-subspace).
+
+An adversarial review confirmed it is **a genuine 3D+time projection, not 2D-with-labels**, and flagged fixes that have been applied: **(1)** trails were faded with alpha (a GRID Law #2 breach) → now **opaque** (age shown by darker index-step + smaller radius); **(2)** the "ported scalar-for-scalar / verified bit-for-bit" claim was retracted — `rotateYawPitch`/`oklabToWorld` match, but there is no codegen emitter/parity test yet. **Remaining debt (not shipped):** a `Codegen.CloudProjection` emitter + golden-vector parity test (closing the perspective-`eye` and population→radius-range divergences, which are explore/renderer concerns carrying no distance claim); and the **4⁴/Quad4 lossy AABB hull is spec'd but NOT drawn** — a future step, not a present feature.

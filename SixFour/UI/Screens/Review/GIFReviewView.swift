@@ -12,6 +12,9 @@ import ImageIO
 struct GIFReviewView: View {
     let vm: CaptureViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Shared brushed palette slot (IndexedColor.index) — links the cloud's pick
+    /// to the other palette views (P1 brushing-and-linking, keyed by index).
+    @State private var brushedIndex: Int? = nil
 
     var body: some View {
         ZStack {
@@ -92,6 +95,15 @@ struct GIFReviewView: View {
                     xAxis: Binding(get: { vm.settings.gridAxisX }, set: { vm.settings.gridAxisX = $0 }),
                     yAxis: Binding(get: { vm.settings.gridAxisY }, set: { vm.settings.gridAxisY = $0 })
                 )
+            case .cloud:
+                // P4 — the OKLab Temporal Cloud: 256 colours at true OKLab coords,
+                // orbited (3-D projection) + scrubbed (time projection). The cloud
+                // owns its own chrome (projection / plane / transport selectors).
+                PaletteCloudView(palettes: o.palettesForDisplay,
+                                 perFrameCells: o.perFrameCells,
+                                 splitTree: nil,
+                                 branching: vm.settings.paletteBranching,
+                                 brushedIndex: $brushedIndex)
             }
         }
     }
