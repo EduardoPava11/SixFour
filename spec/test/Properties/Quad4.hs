@@ -56,6 +56,9 @@ tests = testGroup "Quad4 (depth-4 4-ary opponent-quadrant palette tree)"
   , testProperty "reconstructFromVector ∘ toVector = reconstruct" $
       forAll genQuad4 (lawReconstructRoundTrip 1e-12)
 
+  , testProperty "quad4Analyze inverts reconstruct on the Quad4 subspace" $
+      forAll genQuad4 (lawQuad4AnalyzeRoundTrip 1e-9)
+
   , testProperty "toVector has length quad4DegreesOfFreedom (513)" $
       forAll genQuad4 $ \qp ->
         U.length (toVector qp) == quad4DegreesOfFreedom

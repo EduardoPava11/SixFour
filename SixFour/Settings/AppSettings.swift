@@ -28,6 +28,13 @@ final class AppSettings {
         static let openInPixelatedPreview = "sixfour.openInPixelatedPreview.v1"
         static let autoSaveToPhotos       = "sixfour.autoSaveToPhotos.v1"
         static let useDeterministicCore   = "sixfour.useDeterministicCore.v1"
+        // Palette-structure visualisation (Review screen).
+        static let showPaletteTree        = "sixfour.showPaletteTree.v1"
+        static let paletteBranching       = "sixfour.paletteBranching.v1"
+        static let paletteScope           = "sixfour.paletteScope.v1"
+        static let paletteRepresentation  = "sixfour.paletteRepresentation.v1"
+        static let gridAxisX              = "sixfour.gridAxisX.v1"
+        static let gridAxisY              = "sixfour.gridAxisY.v1"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -88,6 +95,41 @@ final class AppSettings {
         didSet { defaults.set(useDeterministicCore, forKey: Key.useDeterministicCore) }
     }
 
+    /// Whether the Review screen shows the palette explorer (structure treemap /
+    /// coordinate grid) beneath the GIF. Defaults **ON** — seeing the 256 colours
+    /// is the point; the user can hide it in Settings.
+    var showPaletteTree: Bool {
+        didSet { defaults.set(showPaletteTree, forKey: Key.showPaletteTree) }
+    }
+
+    /// Which branching the palette-structure view uses: `16² / 4⁴ / 2⁸` — all
+    /// views of the one median-cut tree. Defaults to the flat `16²` grid.
+    var paletteBranching: PaletteBranching {
+        didSet { defaults.set(paletteBranching.rawValue, forKey: Key.paletteBranching) }
+    }
+
+    /// Whether the Review structure view shows the per-frame palettes (NN input) or the
+    /// collapsed global palette (NN output, editable). Defaults to per-frame.
+    var paletteScope: PaletteScope {
+        didSet { defaults.set(paletteScope.rawValue, forKey: Key.paletteScope) }
+    }
+
+    /// Which dimensional view the palette tool shows: the median-cut `.structure`
+    /// treemap, or the user-assignable `.grid` (16×16 coordinate grid). Defaults to structure.
+    var paletteRepresentation: PaletteRepresentation {
+        didSet { defaults.set(paletteRepresentation.rawValue, forKey: Key.paletteRepresentation) }
+    }
+
+    /// The dimension the grid's x axis encodes (defaults to OKLab `a`, green→red).
+    var gridAxisX: GridAxis {
+        didSet { defaults.set(gridAxisX.rawValue, forKey: Key.gridAxisX) }
+    }
+
+    /// The dimension the grid's y axis encodes (defaults to OKLab `L`, lightness).
+    var gridAxisY: GridAxis {
+        didSet { defaults.set(gridAxisY.rawValue, forKey: Key.gridAxisY) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // `didSet` does not fire during init, so these reads don't write back.
@@ -106,5 +148,18 @@ final class AppSettings {
         self.autoSaveToPhotos = defaults.bool(forKey: Key.autoSaveToPhotos)
         // Absent key → deterministic core ON (the default product behaviour).
         self.useDeterministicCore = defaults.object(forKey: Key.useDeterministicCore) as? Bool ?? true
+        // Absent key → explorer ON (so the palette views are visible by default).
+        self.showPaletteTree = defaults.object(forKey: Key.showPaletteTree) as? Bool ?? true
+        self.paletteBranching = PaletteBranching(
+            rawValue: defaults.string(forKey: Key.paletteBranching) ?? ""
+        ) ?? .b16
+        self.paletteScope = PaletteScope(
+            rawValue: defaults.string(forKey: Key.paletteScope) ?? ""
+        ) ?? .perFrame
+        self.paletteRepresentation = PaletteRepresentation(
+            rawValue: defaults.string(forKey: Key.paletteRepresentation) ?? ""
+        ) ?? .structure
+        self.gridAxisX = GridAxis(rawValue: defaults.string(forKey: Key.gridAxisX) ?? "") ?? .a
+        self.gridAxisY = GridAxis(rawValue: defaults.string(forKey: Key.gridAxisY) ?? "") ?? .L
     }
 }

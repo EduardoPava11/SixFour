@@ -15,6 +15,7 @@ import qualified Properties.GMM          as GMM
 import qualified Properties.Bures        as Bures
 import qualified Properties.PairTree     as PairTree
 import qualified Properties.SplitTree    as SplitTree
+import qualified Properties.GridAxis     as GridAxis
 import qualified Properties.Dither       as Dither
 import qualified Properties.SpatialDither as SpatialDither
 import qualified Properties.LookNet      as LookNet
@@ -61,6 +62,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Bures.tests
   , PairTree.tests
   , SplitTree.tests
+  , GridAxis.tests
   , Dither.tests
   , SpatialDither.tests
   , LookNet.tests

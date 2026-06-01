@@ -62,6 +62,7 @@ module SixFour.Spec.Quad4
   , quad4WellFormed
     -- * Forward / inverse
   , reconstruct
+  , quad4Analyze
   , reconstructFromVector
   , toVector
     -- * Laws
@@ -70,6 +71,7 @@ module SixFour.Spec.Quad4
   , lawBalancedMean
   , lawSigmaEquivariance
   , lawReconstructRoundTrip
+  , lawQuad4AnalyzeRoundTrip
   ) where
 
 import qualified Data.Vector.Unboxed as U
@@ -136,6 +138,33 @@ reconstruct (Quad4Palette rt lvls) = foldl step [rt] lvls
       | (parent, (d1, d2)) <- zip nodes offs
       ]
 
+-- | Forward 4-ary transform: analyse 256 leaves into a 'Quad4Palette' (the inverse of
+-- 'reconstruct' on the Quad4 subspace). Group the leaves in fours in
+-- @(+ +),(+ −),(− +),(− −)@ order; per quad recover @parent = mean@,
+-- @δ₁ = ((c₀+c₁) − (c₂+c₃))/4@, @δ₂ = ((c₀−c₁) + (c₂−c₃))/4@; recurse on the parents.
+--
+-- NOTE: Quad4 is a **513-DOF subspace** of the 768-DOF leaf space (Quad4's
+-- balanced-mean constraint @c₀ − c₁ − c₂ + c₃ = 0@ per node). So for leaves that are
+-- themselves a 'reconstruct' of some Quad4Palette this is an EXACT inverse
+-- ('lawQuad4AnalyzeRoundTrip'); for arbitrary leaves it is the mean-pyramid
+-- **projection** onto the opponent-quadrant subspace (the closest 4-ary genome — the
+-- lossy bias the @4⁴@ branching deliberately imposes on the global palette).
+quad4Analyze :: [OKLab] -> Quad4Palette
+quad4Analyze leaves0 = go leaves0 []
+  where
+    go cur acc
+      | length cur <= 1 = Quad4Palette (headOr0 cur) acc
+      | otherwise       = let reduced = quadReduce cur
+                          in go (map fst reduced) (map snd reduced : acc)
+    quadReduce (c0 : c1 : c2 : c3 : rest) =
+      let p  = scaleOK 0.25 (c0 `addOK` c1 `addOK` c2 `addOK` c3)
+          d1 = scaleOK 0.25 ((c0 `addOK` c1) `subOK` (c2 `addOK` c3))
+          d2 = scaleOK 0.25 ((c0 `subOK` c1) `addOK` (c2 `subOK` c3))
+      in (p, (d1, d2)) : quadReduce rest
+    quadReduce _ = []
+    headOr0 (x : _) = x
+    headOr0 []      = OKLab 0 0 0
+
 -- | Flatten a 'Quad4Palette' to its 513-coefficient genome vector. Order:
 -- root, then @(δ₁_L, δ₁_a, δ₁_b, δ₂_L, δ₂_a, δ₂_b)@ per non-leaf node in
 -- top-down level-major order.
@@ -201,6 +230,16 @@ lawSigmaEquivariance tol qp@(Quad4Palette rt lvls) =
       lhs = map sigmaReflect (reconstruct qp)
       rhs = reconstruct qpS
   in length lhs == length rhs && and (zipWith (okClose tol) lhs rhs)
+
+-- | On the Quad4 subspace, 'quad4Analyze' inverts 'reconstruct': analysing the leaves of
+-- a well-formed palette and reconstructing returns the same leaves. (For arbitrary leaves
+-- 'quad4Analyze' is the lossy opponent-quadrant projection — not covered by this law.)
+lawQuad4AnalyzeRoundTrip :: Double -> Quad4Palette -> Bool
+lawQuad4AnalyzeRoundTrip tol qp =
+  not (quad4WellFormed qp) ||
+  let leaves = reconstruct qp
+      back   = reconstruct (quad4Analyze leaves)
+  in length back == length leaves && and (zipWith (okClose tol) back leaves)
 
 -- | @reconstructFromVector ∘ toVector = reconstruct@.
 lawReconstructRoundTrip :: Double -> Quad4Palette -> Bool

@@ -14,7 +14,7 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     let encodeMillis: Int
     let fileSize: Int
     let timingSummary: String
-    /// sRGB UInt8 palettes for the PaletteStripView — 64 entries (one
+    /// sRGB UInt8 palettes for the Review palette views — 64 entries (one
     /// per frame) of 256 colours each (the per-frame voxel volume).
     let palettesForDisplay: [[SIMD3<UInt8>]]
     /// Which dither method produced this render (the one creative option).
@@ -115,6 +115,10 @@ final class CaptureViewModel {
     /// Dominant scene hue, softened for chrome legibility (the buttons + the
     /// gauge ring take this). Falls back to white at zero diversity.
     var sceneTint: Color { SFTheme.accent(scene.tint) }
+
+    /// Raw dominant scene tint (sRGB8) for the background cell field — darkened +
+    /// tiled by `CellField`, so the whole screen responds to the live camera.
+    var sceneGroundTint: SIMD3<UInt8> { scene.tint }
 
     /// In-memory CaptureBundle for the most-recent successful render.
     /// Holds the raw OKLab tiles + per-frame ClusterStatistics from

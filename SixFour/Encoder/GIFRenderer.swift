@@ -33,7 +33,7 @@ struct GIFRenderer {
         let encodeMillis: Int
         let totalMillis: Int
         let fileSize: Int
-        /// sRGB palette stack for the UI's PaletteStripView.
+        /// sRGB palette stack for the UI's Review palette views.
         let palettesForDisplay: [[SIMD3<UInt8>]]
         /// Per-frame extraction MSE in OKLab units² — the universal
         /// quality metric for comparing extractors on the same scene.
