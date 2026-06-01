@@ -81,7 +81,7 @@ struct GIFReviewView: View {
                     PaletteTreeView(palettes: o.palettesForDisplay, branching: vm.settings.paletteBranching)
                     BranchingSelector(selection: branching)
                 case .global:
-                    GlobalPaletteEditor(palettes: o.palettesForDisplay, branching: branching)
+                    GlobalPaletteEditorView(palettes: o.palettesForDisplay, branching: branching)
                 }
             case .grid:
                 // The coordinate view: 256 colours on two user-assigned axes.

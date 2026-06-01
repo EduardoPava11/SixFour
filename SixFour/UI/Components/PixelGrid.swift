@@ -125,7 +125,7 @@ extension View {
 }
 
 /// Tile a rect into `count` cells — the ONE implementation shared by the treemap
-/// draw AND `GlobalPaletteEditor`'s hit-test (so layout and tap targets can never
+/// draw AND `GlobalPaletteEditorView`'s hit-test (so layout and tap targets can never
 /// desync). Perfect squares (16, 4) tile as a grid; 2 splits the longer side
 /// (k-d-tree style) so cells stay roughly square.
 func paletteSubdivide(_ rect: CGRect, count: Int) -> [CGRect] {

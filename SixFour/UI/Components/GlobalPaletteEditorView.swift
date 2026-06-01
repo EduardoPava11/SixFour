@@ -14,7 +14,7 @@ import simd
 /// `PaletteCollapse` slot the trained NN will later fill (see
 /// `docs/global-palette-skeleton-design.md`). v1: edits the on-screen palette; GIF re-encode
 /// with the edited global table is a later phase.
-struct GlobalPaletteEditor: View {
+struct GlobalPaletteEditorView: View {
     let palettes: [[SIMD3<UInt8>]]
     @Binding var branching: PaletteBranching
 
