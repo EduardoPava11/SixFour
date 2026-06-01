@@ -17,6 +17,16 @@ The danger is honest: a fully-dense 64³ cube is 262,144 voxels but only its ~6�
 
 The cube is a **read-only explorer / verifier**, the 3D sibling of the treemap (`.structure`) and the coordinate grid (`.grid`). It does not edit the palette — that is `GlobalPaletteEditorView`'s job — and it never merges the 64 per-frame palettes into one (that would destroy the t-axis that is the whole point).
 
+### 0.1 The 2D↔3D identity (the surprise) — CORE INVARIANT
+
+At the rest pose (`yaw = pitch = 0`) the cube must be **byte-for-byte indistinguishable from the 2D GIF hero**, and orbiting must continuously bloom it into 3D. This is not decoration; it is the load-bearing idea and it dictates three renderer facts:
+
+1. **Orthographic projection, never perspective.** Perspective foreshortens, which would break the 2D match the instant the cube is on screen. Orthographic also *is* the MagicaVoxel / 8-bit-voxel look — constraint and aesthetic agree.
+2. **Depth = time, current frame frontmost.** Depth-slice `z` shows frame `f(z) = (cursor − 63 + z) mod 64`, so the near face (`z = 63`) is the current frame `cursor` and earlier frames recede behind it. Head-on you see only the near face = the playing 2D GIF; orbit reveals the GIF's recent history extruded into space. As the playback cursor advances, the whole stack flows front-to-back.
+3. **Exact-fit orthographic window.** The on-screen window half-extent (`halfSpan`) is the cube's projected silhouette for the current orientation — computed CPU-side by projecting the 8 cube corners onto the rotating view-plane axes. Face-on this is exactly **32**, so the 64-wide cube fills the square and one voxel = `edge/64` = **`gifCellPt` (6 pt)** = one GIF pixel. Corner-on it grows to fit, so the cube never clips. The handoff is seamless because at `θ→0` the side faces have zero projected width.
+
+**Verification (RULE-CUBE-2D-IDENTITY):** orbit head-on at any frame, screenshot, and compare to the 2D GIF hero at that frame — surface voxels must match the GIF pixels (modulo the sRGB-drawable parity note in the prototype assumptions).
+
 ---
 
 ## 1. Principles (ordered C1 > C2 > C3)

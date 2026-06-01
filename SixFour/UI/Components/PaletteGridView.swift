@@ -64,18 +64,28 @@ struct PaletteGridView: View {
 enum PaletteRepresentation: String, CaseIterable, Codable, Sendable {
     case structure   // the median-cut SplitTree treemap / global editor
     case grid        // the user-assignable 16×16 coordinate grid
+    case voxel3D     // the 64³ voxel cube (depth = time); 2D at rest, 3D on orbit
 
-    var label: String { self == .structure ? "structure" : "grid" }
+    var label: String {
+        switch self {
+        case .structure: return "structure"
+        case .grid: return "grid"
+        case .voxel3D: return "cube"
+        }
+    }
 }
 
 /// Glass chrome twin of `ScopeSelector` for the dimensional representation.
+/// `cases` lets the caller hide a mode that has no data (e.g. `.voxel3D` on a
+/// legacy output with no per-pixel index map).
 struct RepresentationSelector: View {
     @Binding var selection: PaletteRepresentation
+    var cases: [PaletteRepresentation] = PaletteRepresentation.allCases
 
     var body: some View {
         GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
             HStack(spacing: SFTheme.glassClusterSpacing) {
-                ForEach(PaletteRepresentation.allCases, id: \.self) { rep in
+                ForEach(cases, id: \.self) { rep in
                     let isSelected = selection == rep
                     Button { withAnimation(.snappy) { selection = rep } } label: {
                         Text(rep.label)

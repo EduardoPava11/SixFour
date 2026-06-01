@@ -43,6 +43,14 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     /// Extraction MSE per frame (OKLab units²).
     let perFrameMSE: [Float]
 
+    /// 64 × 4096 per-pixel palette indices (row-major `y*64 + x`, top-left
+    /// origin) — the source for the 3D voxel-cube Review mode. A voxel's colour
+    /// is `palettesForDisplay[t][frameIndicesForVoxels[t][y*64 + x]]`. Optional
+    /// (nil on legacy/synthetic outputs). Out of ==/hash (identity is gifURL).
+    /// `var` (not `let`) so it stays in the memberwise init while keeping a
+    /// default — matching `deterministic`/`sha256` below.
+    var frameIndicesForVoxels: [[UInt8]]? = nil
+
     /// True when produced by the deterministic fixed-point Zig core (vs the GPU
     /// float path). Drives the Review reproducibility badge.
     var deterministic: Bool = false
@@ -371,7 +379,8 @@ final class CaptureViewModel {
             perFrameCells: report.perFrameCells,
             perFrameSignificant: report.perFrameSignificant,
             perFrameCoverage: report.perFrameCoverage,
-            perFrameMSE: report.perFrameMSE
+            perFrameMSE: report.perFrameMSE,
+            frameIndicesForVoxels: report.frameIndices
         )
         return RenderResult(output: output, perFrameStatistics: report.perFrameStatistics)
     }
@@ -442,6 +451,7 @@ final class CaptureViewModel {
             perFrameSignificant: perFrameSignificant,
             perFrameCoverage: result.perFrameCoverage,
             perFrameMSE: result.perFrameMSE,
+            frameIndicesForVoxels: result.frameIndices,
             deterministic: true,
             sha256: result.sha256Hex
         )

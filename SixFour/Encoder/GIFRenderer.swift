@@ -55,6 +55,9 @@ struct GIFRenderer {
         let perFrameCoverage: [Int]
         /// Per-frame extraction MSE (OKLab units²). Length T.
         let perFrameMSE: [Float]
+        /// 64 × 4096 per-pixel palette indices (row-major) — the voxel-cube
+        /// source, threaded to `CaptureOutput.frameIndicesForVoxels`. Length T.
+        let frameIndices: [[UInt8]]
     }
 
     /// The residual-shaping sampler configuration (method · kernel · serpentine
@@ -227,7 +230,8 @@ struct GIFRenderer {
             perFrameCells: output.perFrameCells,
             perFrameSignificant: perFrameSignificant,
             perFrameCoverage: perFrameCoverage,
-            perFrameMSE: perFrameMSE
+            perFrameMSE: perFrameMSE,
+            frameIndices: output.frameIndices
         )
     }
 
