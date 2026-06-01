@@ -432,14 +432,6 @@ private final class Renderer: NSObject, MTKViewDelegate {
         super.init()
     }
 
-    /// Mirror the Metal `orbit()` so the CPU-side window fit matches the kernel.
-    private static func orbit(_ v: SIMD3<Float>, _ yaw: Float, _ pitch: Float) -> SIMD3<Float> {
-        let cy = cos(yaw), sy = sin(yaw)
-        let r = SIMD3<Float>(cy * v.x + sy * v.z, v.y, -sy * v.x + cy * v.z)
-        let cp = cos(pitch), sp = sin(pitch)
-        return SIMD3<Float>(r.x, cp * r.y - sp * r.z, sp * r.y + cp * r.z)
-    }
-
     func apply(_ s: VoxelCubeState) {
         uniforms.yaw = s.yaw
         uniforms.pitch = s.pitch
@@ -449,22 +441,13 @@ private final class Renderer: NSObject, MTKViewDelegate {
         uniforms.lumaFloor = Int32(max(0, min(255, s.lumaFloor)))
         uniforms.provMode = Int32(max(0, min(2, s.provMode)))
 
-        // Exact-fit orthographic window: project the 8 cube corners (centred
-        // ±32) onto the rotating view plane and take the max half-extent. Face-on
-        // this is 32 → one voxel = edge/64 = gifCellPt → PIXEL-IDENTICAL to 2D.
-        let xb = Self.orbit(SIMD3(1, 0, 0), s.yaw, s.pitch)
-        let yb = Self.orbit(SIMD3(0, 1, 0), s.yaw, s.pitch)
-        var m: Float = 0
-        for sx in [Float(-32), 32] {
-            for sy in [Float(-32), 32] {
-                for sz in [Float(-32), 32] {
-                    let c = SIMD3<Float>(sx, sy, sz)
-                    m = max(m, abs(simd_dot(c, xb)))
-                    m = max(m, abs(simd_dot(c, yb)))
-                }
-            }
-        }
-        uniforms.halfSpan = m
+        // FIXED orthographic scale — the cube NEVER changes size, only orients.
+        // halfSpan is the constant face-on half-extent (side/2), so one voxel is
+        // ALWAYS edge/64 = gifCellPt: a consistent pixelated look at every angle,
+        // PIXEL-IDENTICAL to the 2D GIF face-on. Rotated, the cube's silhouette
+        // extends past this window and is clipped to the frame (we orient to
+        // inspect; the visible portion stays at true cell scale). No zoom-to-fit.
+        uniforms.halfSpan = Float(VoxelCubeData.side) / 2   // 32
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}

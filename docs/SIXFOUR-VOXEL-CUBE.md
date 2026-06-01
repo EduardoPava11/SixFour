@@ -23,9 +23,23 @@ At the rest pose (`yaw = pitch = 0`) the cube must be **byte-for-byte indistingu
 
 1. **Orthographic projection, never perspective.** Perspective foreshortens, which would break the 2D match the instant the cube is on screen. Orthographic also *is* the MagicaVoxel / 8-bit-voxel look — constraint and aesthetic agree.
 2. **Depth = time, current frame frontmost.** Depth-slice `z` shows frame `f(z) = (cursor − 63 + z) mod 64`, so the near face (`z = 63`) is the current frame `cursor` and earlier frames recede behind it. Head-on you see only the near face = the playing 2D GIF; orbit reveals the GIF's recent history extruded into space. As the playback cursor advances, the whole stack flows front-to-back.
-3. **Exact-fit orthographic window.** The on-screen window half-extent (`halfSpan`) is the cube's projected silhouette for the current orientation — computed CPU-side by projecting the 8 cube corners onto the rotating view-plane axes. Face-on this is exactly **32**, so the 64-wide cube fills the square and one voxel = `edge/64` = **`gifCellPt` (6 pt)** = one GIF pixel. Corner-on it grows to fit, so the cube never clips. The handoff is seamless because at `θ→0` the side faces have zero projected width.
+3. **FIXED scale — the cube never changes size, only orients (RULE-CUBE-FIXED-SCALE).** The orthographic window half-extent (`halfSpan`) is a **constant** = `side/2` = **32**, so one voxel is **always** `edge/64` = **`gifCellPt` (6 pt)** = one GIF pixel, at *every* orientation. There is NO zoom-to-fit: rotating does not shrink the voxels. Face-on, the 64-wide cube fills the square (pixel-identical to 2D); rotated, the cube's silhouette extends past the window and is **clipped to the frame** — we orient to inspect, and the visible portion stays at true cell scale. (An earlier build grew `halfSpan` to fit the rotated diagonal; that shrank the voxels and is wrong — the consistent pixelated look requires a constant cell size.)
+
+**The look is consistent everywhere.** Flat indexed cells, nearest-neighbour, one `gifCellPt` per voxel — the same 8-bit pixelated surface as the 2D GIF hero, the capture preview, and the palette grid. The cube is a *3D view of the same pixels at the same scale*, not a re-rendering.
 
 **Verification (RULE-CUBE-2D-IDENTITY):** orbit head-on at any frame, screenshot, and compare to the 2D GIF hero at that frame — surface voxels must match the GIF pixels (modulo the sRGB-drawable parity note in the prototype assumptions).
+
+### 0.2 Part of the palette-explorer family — branchings ARE design-language law
+
+The cube is the **3D member of the Review palette-explorer family** (alongside the `.structure` treemap and the `.grid`), and shares their colour model. The 256 colours of each frame's palette organise by the SAME canonical branchings the rest of the family uses — `PaletteBranching` `.b16 / .b4 / .b2` = **16² / 4⁴ / 2⁸** (`SplitTree.swift`). All three reach `K = 256` as collapse-views of one median-cut `SplitTree` (`factor^depth = 256`: 16²=256, 4⁴=256, 2⁸=256).
+
+> **RULE-BRANCHING-CANONICAL (design-language law).** Every palette tool — treemap, grid, editor, and the cube — MUST express the 256 colours through these three branchings, never an ad-hoc grouping. They are the single, design-language-sanctioned way to factor K. When the cube gains slice analysis (§0.3), any colour grouping / level-of-detail it offers uses the active `PaletteBranching`, so it reads consistently with the treemap and grid.
+
+### 0.3 Planned — per-frame transparency for slice analysis (deferred)
+
+Later, each depth-slice (frame) gains an opacity so the user can **see through the stack and isolate individual slices for analysis** — e.g. fade all but slice `z`, or ramp opacity by depth to read the temporal structure. This is the cube's *analysis* mode (distinct from the playful 2D↔3D reveal), and it is what earns the cube its place beside the treemap and grid as an inspection lens on the palette.
+
+> **GRID tension to settle (GATE-DECISIONS).** Opacity on a data cell normally violates GRID Law #2. Per-slice transparency is an *inspection lens* on the Review surface (already `EXEMPT-REVIEW-PITCH` + glass-chrome), so it is plausibly an analysis-mode exception rather than a content shading — but it must be signed off as such before it ships, not drifted in. Deferred until the cube is un-shelved and testable (opacity ramps need device tuning).
 
 ---
 
