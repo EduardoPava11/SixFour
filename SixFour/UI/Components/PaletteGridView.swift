@@ -64,13 +64,13 @@ struct PaletteGridView: View {
 enum PaletteRepresentation: String, CaseIterable, Codable, Sendable {
     case structure   // the median-cut SplitTree treemap / global editor
     case grid        // the user-assignable 16×16 coordinate grid
-    case voxel3D     // the 64³ voxel cube (depth = time); 2D at rest, 3D on orbit
+    // NOTE: `.voxel3D` (the 64³ cube) is shelved until ready — see
+    // docs/SIXFOUR-VOXEL-CUBE.md and VoxelCubeView.swift (dormant, not wired).
 
     var label: String {
         switch self {
         case .structure: return "structure"
         case .grid: return "grid"
-        case .voxel3D: return "cube"
         }
     }
 }

@@ -64,14 +64,11 @@ struct GIFReviewView: View {
             get: { vm.settings.paletteBranching },
             set: { vm.settings.paletteBranching = $0 }
         )
-        let voxelData = VoxelCubeData(output: o)
-        // Offer the cube only when the per-pixel index map made it to Review.
-        let reps = PaletteRepresentation.allCases.filter { $0 != .voxel3D || voxelData != nil }
         VStack(spacing: 10) {
             RepresentationSelector(selection: Binding(
                 get: { vm.settings.paletteRepresentation },
                 set: { vm.settings.paletteRepresentation = $0 }
-            ), cases: reps)
+            ))
             switch vm.settings.paletteRepresentation {
             case .structure:
                 // The median-cut nesting view: scope (per-frame / global) + branching.
@@ -95,16 +92,6 @@ struct GIFReviewView: View {
                     xAxis: Binding(get: { vm.settings.gridAxisX }, set: { vm.settings.gridAxisX = $0 }),
                     yAxis: Binding(get: { vm.settings.gridAxisY }, set: { vm.settings.gridAxisY = $0 })
                 )
-            case .voxel3D:
-                // The 64³ voxel cube: face-on it IS the 2D GIF; orbit reveals
-                // depth = time. Content (no glass on voxels); its own controls.
-                if let voxelData {
-                    VoxelCubeView(data: voxelData, settings: vm.settings)
-                } else {
-                    Text("The voxel cube needs a fresh capture.")
-                        .font(.caption)
-                        .foregroundStyle(SFTheme.dimText)
-                }
             }
         }
     }
