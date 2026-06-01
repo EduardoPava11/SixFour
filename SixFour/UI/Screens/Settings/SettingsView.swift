@@ -24,6 +24,7 @@ struct SettingsView: View {
                     blueNoiseSection
                 }
                 engineSection
+                visualizationSection
                 captureSection
                 formSection
             }
@@ -95,6 +96,27 @@ struct SettingsView: View {
             Text(settings.useDeterministicCore
                 ? "Renders through the fixed-point integer pipeline (quantize → dither → significance → palette → encode). Every stage is verified against a proof, so the GIF bytes are reproducible — Review shows the SHA-256."
                 : "Renders on the GPU (float). Faster, but the bytes are not bit-reproducible across runs/devices.")
+        }
+    }
+
+    /// The palette-structure visualisation: show the median-cut `SplitTree`
+    /// treemap in Review, and pick the branching the user reads it at. All three
+    /// branchings are views of the one tree (`bᵈ = 256`).
+    private var visualizationSection: some View {
+        Section {
+            Toggle("Palette structure", isOn: $settings.showPaletteTree)
+            if settings.showPaletteTree {
+                Picker("Branching", selection: $settings.paletteBranching) {
+                    ForEach(PaletteBranching.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+        } header: {
+            Text("Visualization")
+        } footer: {
+            Text(settings.showPaletteTree
+                ? settings.paletteBranching.blurb
+                : "Show the 256-colour palette organised as a median-cut tree beneath the GIF, to inspect how the palette covers colour space.")
         }
     }
 

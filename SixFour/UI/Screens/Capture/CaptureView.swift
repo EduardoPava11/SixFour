@@ -42,10 +42,14 @@ struct CaptureView: View {
 
     private var mainCaptureScene: some View {
         GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
+            // Preview = 64 cells at the global lattice pitch = 128pt (the locked
+            // small hero; the fine cell makes room for high-res cell widgets).
+            let side = 64 * SFTheme.cellPt
             let previewYOffset = (proxy.size.height - side) / 2
             ZStack {
-                Color.black.ignoresSafeArea()
+                // The whole screen tiled with cells on the 201×437 @2pt lattice,
+                // tinted by the live camera (docs/cell-lattice-widget-spec.md).
+                CellFieldView(tint: vm.sceneGroundTint)
 
                 // The canvas: ALWAYS the live 64×64 tile (nearest-neighbour
                 // upscaled), never the raw camera feed — you live inside the
@@ -67,10 +71,7 @@ struct CaptureView: View {
                             .opacity(0)
                         }
                         if let img = vm.previewTile {
-                            Image(uiImage: img)
-                                .interpolation(.none)
-                                .resizable()
-                                .scaledToFill()
+                            PixelImage(image: img, edge: side)
                                 .allowsHitTesting(false)   // taps fall through to focus layer
                         } else {
                             // First-frame fallback — black until the preview
@@ -80,10 +81,8 @@ struct CaptureView: View {
                     }
                     .frame(width: side, height: side)
                     .clipped()
-                    .overlay(
-                        Rectangle()
-                            .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
-                    )
+                    // No hard frame — the 64×64 canvas dissolves into the
+                    // palette-washed background (the design-language blend).
                     Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -120,26 +119,17 @@ struct CaptureView: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            Text("SixFour")
-                .font(.system(.title2, design: .monospaced, weight: .bold))
-                .foregroundStyle(.white.opacity(0.9))
+            // Title as lattice cells — the SAME 2pt cell as the preview + field.
+            CellText("SixFour", rows: 24, ink: .white.opacity(0.9))
             Spacer()
-            // Floating glass control cluster. The two buttons share one
-            // GlassEffectContainer sampling region (no glass-on-glass
-            // artifacts). To add a future control — e.g. a Settings gear —
-            // append one more GlassIconButton here; no extra glass plumbing.
-            GlassToolbarCluster {
-                // Settings is the only chrome control: the canvas is always
-                // the 64×64 tile (no preview mode to toggle), and the sampler
-                // lives in Settings. The button tint reflects the live scene.
-                GlassIconButton(
-                    systemImage: "gearshape",
-                    accessibilityLabel: "Open settings",
-                    tint: vm.sceneTint
-                ) {
-                    showSettings = true
-                }
+            // Settings — a 24-cell gear (48pt). Glass is retired on the capture
+            // HUD per GRID; the gear is cells at the one 2pt pitch, like everything.
+            Button { showSettings = true } label: {
+                CellGear()
             }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityLabel("Open settings")
         }
     }
 
@@ -149,7 +139,7 @@ struct CaptureView: View {
         // instrument that shows how much colour the camera currently sees.
         VStack(spacing: 10) {
             ZStack {
-                DiversityRing(gauge: vm.sceneGauge, tint: vm.sceneTint, reduceMotion: reduceMotion)
+                CellDiversityRing(gauge: Double(vm.sceneGauge), tint: vm.sceneGroundTint)
                     .allowsHitTesting(false)
                 shutterButton
             }
@@ -163,16 +153,11 @@ struct CaptureView: View {
     /// the shutter's `accessibilityValue`, so it's hidden here.
     private var diversityReadout: some View {
         VStack(spacing: 2) {
-            Text("◇ \(vm.scene.occupiedBins) colors")
-                .font(SFTheme.captionMono)
-                .foregroundStyle(SFTheme.dimText)
-                .monospacedDigit()
-                .contentTransition(.numericText())
+            // Readout as lattice cells — same 2pt cell as everything else.
+            CellText("◇ \(vm.scene.occupiedBins) colors", rows: 14, ink: SFTheme.dimText)
             // The active sampler — updates the instant a Settings toggle flips
             // (the chrome shows the setting, never inert).
-            Text(samplerTag)
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(SFTheme.dimText.opacity(0.85))
+            CellText(samplerTag, rows: 11, ink: SFTheme.dimText.opacity(0.85))
         }
         .accessibilityHidden(true)
     }
@@ -196,51 +181,13 @@ struct CaptureView: View {
         Button {
             Task { await vm.capture() }
         } label: {
-            ZStack {
-                Circle()
-                    .stroke(.white, lineWidth: 4)
-                    .frame(width: 84, height: 84)
-                Circle()
-                    .fill(isBusy ? Color.red.opacity(0.7) : .white)
-                    .frame(width: 70, height: 70)
-                if vm.phase == .locking || isCurrentlyRendering {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(.white)
-                }
-            }
+            // The shutter as a 34-cell block (68pt) at the one 2pt pitch.
+            CellShutter(busy: isBusy)
         }
         .disabled(isBusy || vm.phase == .configuring || vm.phase == .unauthorized)
         .accessibilityLabel("Capture 64-frame burst")
         .accessibilityValue("Scene diversity \(Int((vm.sceneGauge * 100).rounded())) percent")
         .accessibilityHint("Holds focus and exposure, captures sixty-four frames at twenty fps")
-    }
-
-    /// The live diversity gauge that rings the shutter: 64 ticks (the form's
-    /// frame count), lit clockwise from the top in proportion to how much
-    /// distinct colour the camera currently sees, glowing the scene's dominant
-    /// hue. Decorative — never captures taps.
-    private struct DiversityRing: View {
-        let gauge: Float      // 0…1
-        let tint: Color
-        let reduceMotion: Bool
-
-        var body: some View {
-            let total = SFTheme.diversityTickCount
-            let lit = max(0, min(total, Int((gauge * Float(total)).rounded())))
-            let radius = SFTheme.diversityRingDiameter / 2 + SFTheme.diversityTickLength / 2 + 4
-            ZStack {
-                ForEach(0..<total, id: \.self) { i in
-                    Capsule()
-                        .fill(i < lit ? tint : SFTheme.hairline)
-                        .frame(width: SFTheme.diversityTickWidth, height: SFTheme.diversityTickLength)
-                        .offset(y: -radius)
-                        .rotationEffect(.degrees(Double(i) / Double(total) * 360))
-                }
-            }
-            .animation(reduceMotion ? nil : .snappy, value: lit)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: tint)
-        }
     }
 
     private var isCurrentlyBusy: Bool {
@@ -252,12 +199,6 @@ struct CaptureView: View {
         }
     }
 
-    private var isCurrentlyRendering: Bool {
-        switch vm.phase {
-        case .renderingStageA, .renderingEncode: return true
-        default: return false
-        }
-    }
 
     @ViewBuilder
     private var phaseBanner: some View {
@@ -285,13 +226,13 @@ struct CaptureView: View {
     }
 
     private func bannerText(_ s: String) -> some View {
-        Text(s)
-            .font(.system(.caption, design: .monospaced))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .glassEffect(.regular, in: Capsule())
-            .padding(.top, 8)
+        // Cells, not glass (glass retired on the HUD per GRID): flat dark cell
+        // strip behind the stage text at the one 2pt pitch.
+        CellText(s, rows: 11, ink: .white)
+            .padding(.horizontal, 5 * SFTheme.cellPt)
+            .padding(.vertical, 3 * SFTheme.cellPt)
+            .background(Color(srgb8: SFTheme.ledGhost))
+            .padding(.top, 4 * SFTheme.cellPt)
     }
 
     private struct ReticleHit: Equatable {

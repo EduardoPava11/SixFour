@@ -3,11 +3,12 @@ import UIKit
 import ImageIO
 
 /// Post-capture review — the output side of the I/O appliance. A clean vertical
-/// stack (no overlap): the looping GIF, then the palette globe (the 256 colours
-/// as rotatable circles — the verifier you can *see*), then a per-frame status
-/// line that proves `256/256 ✓` and surfaces the per-frame numbers, then the
-/// actions. The sampler is a Settings decision, so there is no re-render
-/// control — Retake re-shoots, Share exports.
+/// stack (no overlap): the looping GIF, then the palette tool (the 256 colours
+/// shown either as the median-cut `SplitTree` treemap or the user-assignable
+/// coordinate grid — the verifier you can *see*; chosen via `RepresentationSelector`),
+/// then a per-frame status line that proves `256/256 ✓` and surfaces the per-frame
+/// numbers, then the actions. The sampler is a Settings decision, so there is no
+/// re-render control — Retake re-shoots, Share exports.
 struct GIFReviewView: View {
     let vm: CaptureViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -24,7 +25,7 @@ struct GIFReviewView: View {
     }
 
     private func reviewLayout(primary: CaptureOutput) -> some View {
-        // Content scrolls (GIF + globe + status are together taller than a
+        // Content scrolls (GIF + palette tool + status are together taller than a
         // 17 Pro screen); actions pin to the bottom so they're always reachable.
         // A plain stack — nothing floats over the GIF, so no overlap.
         VStack(spacing: 0) {
@@ -32,12 +33,11 @@ struct GIFReviewView: View {
                 VStack(spacing: 14) {
                     // The looping GIF, square, same 64×64 look as the preview.
                     GIFCanvas(output: primary)
-                        .aspectRatio(1, contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: SFTheme.cardCorner))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: SFTheme.cardCorner)
-                                .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                        )
+                        .pixelFrame()
+
+                    if vm.settings.showPaletteTree {
+                        paletteStructure(primary)
+                    }
 
                     perFrameStatus(primary)
 
@@ -53,6 +53,49 @@ struct GIFReviewView: View {
         }
     }
 
+    /// The palette-structure tool, scope-driven:
+    /// - `.perFrame` — the 64 per-frame palettes as an animated median-cut treemap (NN input).
+    /// - `.global` — the collapsed global palette in the interactive multiresolution editor
+    ///   (NN output; you "be the look-NN" by hand).
+    /// The glass scope selector floats above; content (treemap/editor) sits beneath.
+    @ViewBuilder
+    private func paletteStructure(_ o: CaptureOutput) -> some View {
+        let branching = Binding(
+            get: { vm.settings.paletteBranching },
+            set: { vm.settings.paletteBranching = $0 }
+        )
+        VStack(spacing: 10) {
+            RepresentationSelector(selection: Binding(
+                get: { vm.settings.paletteRepresentation },
+                set: { vm.settings.paletteRepresentation = $0 }
+            ))
+            switch vm.settings.paletteRepresentation {
+            case .structure:
+                // The median-cut nesting view: scope (per-frame / global) + branching.
+                ScopeSelector(selection: Binding(
+                    get: { vm.settings.paletteScope },
+                    set: { vm.settings.paletteScope = $0 }
+                ))
+                switch vm.settings.paletteScope {
+                case .perFrame:
+                    PaletteTreeView(palettes: o.palettesForDisplay, branching: vm.settings.paletteBranching)
+                    BranchingSelector(selection: branching)
+                case .global:
+                    GlobalPaletteEditor(palettes: o.palettesForDisplay, branching: branching)
+                }
+            case .grid:
+                // The coordinate view: 256 colours on two user-assigned axes.
+                PaletteGridView(palettes: o.palettesForDisplay,
+                                xAxis: vm.settings.gridAxisX,
+                                yAxis: vm.settings.gridAxisY)
+                GridAxisSelector(
+                    xAxis: Binding(get: { vm.settings.gridAxisX }, set: { vm.settings.gridAxisX = $0 }),
+                    yAxis: Binding(get: { vm.settings.gridAxisY }, set: { vm.settings.gridAxisY = $0 })
+                )
+            }
+        }
+    }
+
     /// Proves the guarantee and surfaces the per-frame numbers, in the machine
     /// voice, cycling with the loop (frozen on frame 0 under reduce-motion).
     @ViewBuilder
@@ -62,7 +105,7 @@ struct GIFReviewView: View {
             statusLine(o, frame: 0, n: n)
         } else {
             TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { ctx in
-                let i = Int((ctx.date.timeIntervalSinceReferenceDate * 20).rounded(.down)) % n
+                let i = frameIndex(at: ctx.date.timeIntervalSinceReferenceDate, rate: 20, count: n)
                 statusLine(o, frame: i, n: n)
             }
         }
@@ -156,17 +199,18 @@ private struct GIFCanvas: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Group {
-            if let img = currentImage {
-                Image(uiImage: img)
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .accessibilityLabel("Rendered GIF, \(output.ditherMethod.label) dither, sixty-four frames at twenty fps")
-            } else {
-                Rectangle().fill(.white.opacity(0.04))
-                    .overlay(ProgressView().tint(.white))
+        GeometryReader { geo in
+            let edge = SFTheme.canvasEdge(forAvailable: min(geo.size.width, geo.size.height), cells: 64)
+            ZStack {
+                if let img = currentImage {
+                    PixelImage(image: img, edge: edge)
+                        .accessibilityLabel("Rendered GIF, \(output.ditherMethod.label) dither, sixty-four frames at twenty fps")
+                } else {
+                    Rectangle().fill(.white.opacity(0.04))
+                        .overlay(ProgressView().tint(.white))
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .task { loadFrames() }
         .onDisappear { timer?.invalidate(); timer = nil }

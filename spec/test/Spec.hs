@@ -14,6 +14,8 @@ import qualified Properties.Diversity    as Diversity
 import qualified Properties.GMM          as GMM
 import qualified Properties.Bures        as Bures
 import qualified Properties.PairTree     as PairTree
+import qualified Properties.SplitTree    as SplitTree
+import qualified Properties.GridAxis     as GridAxis
 import qualified Properties.Dither       as Dither
 import qualified Properties.SpatialDither as SpatialDither
 import qualified Properties.LookNet      as LookNet
@@ -28,6 +30,8 @@ import qualified Properties.Quad4Fit     as Quad4Fit
 import qualified Properties.SigmaPairHead as SigmaPairHead
 import qualified Properties.Pipeline     as Pipeline
 import qualified Properties.AxisNet      as AxisNet
+import qualified Properties.Obfuscation  as Obfuscation
+import qualified Properties.Loom         as Loom
 import qualified Properties.Significance as Significance
 import qualified Properties.SignificanceFixed as SignificanceFixed
 import qualified Properties.STBN3D       as STBN3D
@@ -57,6 +61,8 @@ main = defaultMain $ testGroup "sixfour-spec"
   , GMM.tests
   , Bures.tests
   , PairTree.tests
+  , SplitTree.tests
+  , GridAxis.tests
   , Dither.tests
   , SpatialDither.tests
   , LookNet.tests
@@ -70,6 +76,8 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SigmaPairHead.tests
   , Pipeline.tests
   , AxisNet.tests
+  , Obfuscation.tests
+  , Loom.tests
   , Significance.tests
   , SignificanceFixed.tests
   , STBN3D.tests
