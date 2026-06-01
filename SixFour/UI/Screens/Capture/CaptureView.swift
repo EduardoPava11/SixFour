@@ -79,7 +79,8 @@ struct CaptureView: View {
     /// The focus reticle is overlaid in the preview's OWN coordinate space, so it
     /// needs no global-offset math (which is what previously skewed the layout).
     private var previewBlock: some View {
-        let side = 64 * SFTheme.cellPt      // 128 pt — the locked small hero
+        // The GIF's cell count (spec-canonical) at the HUD's 2pt lattice pitch.
+        let side = CGFloat(SFTheme.gifSideCells) * SFTheme.cellPt   // 64 × 2 = 128 pt
         return ZStack {
             if let session = vm.session?.session {
                 CameraPreview(session: session) { devicePoint, localPoint in

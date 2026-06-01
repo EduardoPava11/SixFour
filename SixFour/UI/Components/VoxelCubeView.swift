@@ -44,10 +44,11 @@ struct VoxelCubeData: Sendable {
     /// 2 = split) — the §3 air-mask. nil ⇒ treat every slot as extracted.
     let provenance: [[UInt8]]?
 
-    static let frameCount = 64
-    static let side = 64           // x and y extent
-    static let pixelsPerFrame = 64 * 64
-    static let paletteCount = 256
+    // The GIF's canonical shape (spec → SixFourShape, shared with the Zig core).
+    static let frameCount = SixFourShape.T          // 64 frames (depth/time axis)
+    static let side = SixFourShape.W                // 64 — x and y extent
+    static let pixelsPerFrame = SixFourShape.pixelsPerFrame   // 4096
+    static let paletteCount = SixFourShape.K        // 256
 
     var isWellFormed: Bool {
         frameIndices.count == Self.frameCount
@@ -113,9 +114,10 @@ struct VoxelCubeState: Equatable {
 @MainActor
 struct VoxelCubeView: View {
     let data: VoxelCubeData
-    /// Edge of the square render surface, in points. Default = gifCanvasPt so a
-    /// voxel is gifCellPt (6 pt) face-on — identical to the 2D GIF hero.
-    var edge: CGFloat = 384
+    /// Edge of the square render surface, in points. Default = `gifCanvasPt` so a
+    /// voxel is `gifCellPt` (6 pt) face-on — identical to the 2D GIF hero (the
+    /// 2D↔3D consistency: both size from `SFTheme.gifCanvasPt`).
+    var edge: CGFloat = SFTheme.gifCanvasPt
     /// Optional store: when present, the provenance filter / luma floor /
     /// auto-rotate are seeded from it and persisted back across captures.
     var settings: AppSettings?
@@ -127,7 +129,7 @@ struct VoxelCubeView: View {
     // The single 60 Hz driver for playback (20 fps cursor) + auto-rotate.
     private let clock = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
-    init(data: VoxelCubeData, edge: CGFloat = 384, settings: AppSettings? = nil) {
+    init(data: VoxelCubeData, edge: CGFloat = SFTheme.gifCanvasPt, settings: AppSettings? = nil) {
         self.data = data
         self.edge = edge
         self.settings = settings
