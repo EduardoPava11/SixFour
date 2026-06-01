@@ -38,6 +38,7 @@ library
         SixFour.Spec.CloudProjection
         SixFour.Spec.AddressPicker
         SixFour.Spec.PaletteSearch
+        SixFour.Spec.PaletteOracle
         SixFour.Spec.Dither
         SixFour.Spec.LookNet
         SixFour.Spec.LookCore
@@ -240,6 +241,7 @@ test-suite spec-tests
         Properties.CloudProjection
         Properties.AddressPicker
         Properties.PaletteSearch
+        Properties.PaletteOracle
         Properties.Dither
         Properties.SpatialDither
         Properties.LookNet
