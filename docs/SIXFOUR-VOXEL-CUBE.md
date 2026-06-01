@@ -96,7 +96,20 @@ Hand-written **Metal compute DDA raymarcher** (Amanatides-Woo voxel traversal) o
 
 New files: `UI/Components/VoxelCubeView.swift` (representable + Coordinator, the `CameraPreview.swift` pattern), `Metal/VoxelCubePipeline.swift` (device/queue/PSO + texture upload, the `GPUContext.swift`/`KMeansPalettePipeline.swift` pattern), and a `voxelRaymarchKernel` added to `Metal/Shaders.metal`.
 
-> **Prototype note (as-built, 2026-06-01).** `UI/Components/VoxelCubeView.swift` ships the minimal slice: it is *self-contained* (kernel compiled at runtime via `makeLibrary(source:)`, no `Shaders.metal` edit yet), colours every solid voxel by the single playback-cursor frame (one-line change to per-z), and implements orbit + t-slice + luminance-air only. The provenance air-mask, time-explode, and the `Metal/VoxelCubePipeline.swift` split are the §3/§4 follow-ups. For production, move the kernel into `Shaders.metal` (GPUContext default-library pattern) to drop the first-launch compile hitch.
+> **As-built (2026-06-01).** `UI/Components/VoxelCubeView.swift` + the
+> `voxel_raymarch` kernel in `Metal/Shaders.metal` implement: the orthographic
+> temporal renderer with the 2D↔3D identity (§0.1, depth = time, current frame
+> frontmost, exact-fit window); orbit / play-pause / auto-rotate / reset-to-2D /
+> frame-scrub / trail-depth / luminance-air controls (Liquid Glass chrome); and
+> the **§3 provenance air-mask** — provenance is packed in the palette texture's
+> alpha (0 degenerate→air, 1 extracted, 2 split→one dark step) with an
+> all / extracted / split filter. The kernel lives in `Shaders.metal` (loaded via
+> the default library, GPUContext pattern) so it is **compile-time validated** and
+> has no first-launch compile hitch. **Still deferred:** time-explode (§4), the
+> separate `Metal/VoxelCubePipeline.swift` split, and persisting the controls in
+> `AppSettings`. The luma threshold is computed CPU-friendly per-ray (Rec.709 on
+> the sRGB bytes) rather than the §3 precomputed-LUT-into-airMask form — a later
+> optimisation, same result.
 
 ---
 

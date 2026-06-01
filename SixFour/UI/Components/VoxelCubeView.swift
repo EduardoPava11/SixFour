@@ -40,6 +40,9 @@ struct VoxelCubeData: Sendable {
     let frameIndices: [[UInt8]]
     /// 64 frames × 256 sRGB palettes.
     let srgbPalettes: [[SIMD3<UInt8>]]
+    /// 64 frames × 256 provenance codes (0 = degenerate/air, 1 = extracted,
+    /// 2 = split) — the §3 air-mask. nil ⇒ treat every slot as extracted.
+    let provenance: [[UInt8]]?
 
     static let frameCount = 64
     static let side = 64           // x and y extent
@@ -59,12 +62,27 @@ struct VoxelCubeData: Sendable {
         guard let idx = output.frameIndicesForVoxels else { return nil }
         self.frameIndices = idx
         self.srgbPalettes = output.palettesForDisplay
+        let cells = output.perFrameCells
+        if cells.count == Self.frameCount && cells.allSatisfy({ $0.count == Self.paletteCount }) {
+            self.provenance = cells.map { row in
+                row.map { c -> UInt8 in
+                    switch c.provenance {
+                    case .extracted:  return 1
+                    case .split:      return 2
+                    case .degenerate: return 0
+                    }
+                }
+            }
+        } else {
+            self.provenance = nil
+        }
         guard isWellFormed else { return nil }
     }
 
-    init(frameIndices: [[UInt8]], srgbPalettes: [[SIMD3<UInt8>]]) {
+    init(frameIndices: [[UInt8]], srgbPalettes: [[SIMD3<UInt8>]], provenance: [[UInt8]]? = nil) {
         self.frameIndices = frameIndices
         self.srgbPalettes = srgbPalettes
+        self.provenance = provenance
     }
 }
 
@@ -78,6 +96,8 @@ struct VoxelCubeState: Equatable {
     var tHi: Int = 63
     /// Luminance air floor 0…255: voxels darker than this become air.
     var lumaFloor: Int = 0
+    /// Provenance filter: 0 = all, 1 = extracted only, 2 = split only.
+    var provMode: Int = 0
     /// Playback cursor — the frame shown on the front face. 0…63.
     var frame: Int = 0
     var playing: Bool = true
@@ -155,19 +175,22 @@ struct VoxelCubeView: View {
                 }
             }
 
+            // Provenance filter — which slots count as solid (design §3).
+            provenanceFilter
+
             // Knobs — a read-only-style glass panel (the cube stays content).
             VStack(spacing: 8) {
                 slider("Frame \(cube.frame + 1)/64",
-                       get: { Double(cube.frame) },
-                       set: { cube.frame = Int($0.rounded()); cube.playing = false },
+                       value: Binding(get: { Double(cube.frame) },
+                                      set: { cube.frame = Int($0.rounded()); cube.playing = false }),
                        range: 0...63)
                 slider("Trail depth \(cube.tHi - cube.tLo + 1)",
-                       get: { Double(cube.tLo) },
-                       set: { cube.tLo = min(Int($0.rounded()), cube.tHi) },
+                       value: Binding(get: { Double(cube.tLo) },
+                                      set: { cube.tLo = min(Int($0.rounded()), cube.tHi) }),
                        range: 0...63)
                 slider("Air below luma \(cube.lumaFloor)",
-                       get: { Double(cube.lumaFloor) },
-                       set: { cube.lumaFloor = Int($0.rounded()) },
+                       value: Binding(get: { Double(cube.lumaFloor) },
+                                      set: { cube.lumaFloor = Int($0.rounded()) }),
                        range: 0...255)
             }
             .padding(12)
@@ -176,15 +199,39 @@ struct VoxelCubeView: View {
         }
     }
 
+    // Segmented glass selector for the air-mask filter (GLASS GlassSelector style).
+    private var provenanceFilter: some View {
+        let options = ["All", "Real", "Split"]   // all / extracted-only / split-only
+        return GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
+            HStack(spacing: SFTheme.glassClusterSpacing) {
+                ForEach(Array(options.enumerated()), id: \.offset) { idx, title in
+                    let isSelected = cube.provMode == idx
+                    Button { withAnimation(.snappy) { cube.provMode = idx } } label: {
+                        Text(title)
+                            .font(SFTheme.footnoteSelector)
+                            .foregroundStyle(isSelected ? Color.white : SFTheme.dimText)
+                            .padding(.horizontal, SFTheme.pillHorizontalPad)
+                            .padding(.vertical, SFTheme.pillVerticalPad)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(isSelected ? .regular.tint(.white.opacity(0.18)).interactive()
+                                            : .regular.interactive(),
+                                 in: RoundedRectangle(cornerRadius: SFTheme.controlCorner))
+                    .accessibilityLabel(Text("\(title) palette slots"))
+                    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+                }
+            }
+        }
+    }
+
     private func slider(_ title: String,
-                        get: @escaping () -> Double,
-                        set: @escaping (Double) -> Void,
+                        value: Binding<Double>,
                         range: ClosedRange<Double>) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.white.opacity(0.85))
-            Slider(value: Binding(get: get, set: set), in: range, step: 1)
+            Slider(value: value, in: range, step: 1)
         }
     }
 
@@ -263,6 +310,8 @@ private struct VoxelUniforms {
     var tHi: Int32 = 63
     var lumaFloor: Int32 = 0
     var halfSpan: Float = 32            // projected half-extent → exact-fit window
+    var provMode: Int32 = 0             // 0 all / 1 extracted / 2 split
+    var _pad: Float = 0
 }
 
 // MARK: - Renderer
@@ -281,9 +330,11 @@ private final class Renderer: NSObject, MTKViewDelegate {
         self.device = dev
         self.queue = dev?.makeCommandQueue()
 
+        // The kernel lives in Shaders.metal (compile-time validated); load it from
+        // the default library, the GPUContext pattern. No first-launch hitch.
         var builtPSO: (any MTLComputePipelineState)? = nil
         if let dev,
-           let lib = try? dev.makeLibrary(source: Renderer.kernelSource, options: nil),
+           let lib = dev.makeDefaultLibrary(),
            let fn = lib.makeFunction(name: "voxel_raymarch") {
             builtPSO = try? dev.makeComputePipelineState(function: fn)
         }
@@ -338,7 +389,10 @@ private final class Renderer: NSObject, MTKViewDelegate {
                     for k in 0..<VoxelCubeData.paletteCount {
                         let o = (t * VoxelCubeData.paletteCount + k) * 4
                         let c = pal[k]
-                        buf[o] = c.x; buf[o + 1] = c.y; buf[o + 2] = c.z; buf[o + 3] = 255
+                        // Alpha carries provenance (0 degenerate / 1 extracted /
+                        // 2 split); default 1 when no significance data.
+                        buf[o] = c.x; buf[o + 1] = c.y; buf[o + 2] = c.z
+                        buf[o + 3] = data.provenance?[t][k] ?? 1
                     }
                 }
                 buf.withUnsafeBytes { raw in
@@ -371,6 +425,7 @@ private final class Renderer: NSObject, MTKViewDelegate {
         uniforms.tLo = Int32(max(0, min(63, s.tLo)))
         uniforms.tHi = Int32(max(0, min(63, s.tHi)))
         uniforms.lumaFloor = Int32(max(0, min(255, s.lumaFloor)))
+        uniforms.provMode = Int32(max(0, min(2, s.provMode)))
 
         // Exact-fit orthographic window: project the 8 cube corners (centred
         // ±32) onto the rotating view plane and take the max half-extent. Face-on
@@ -417,126 +472,6 @@ private final class Renderer: NSObject, MTKViewDelegate {
         cmd.present(drawable)
         cmd.commit()
     }
-
-    // MARK: Kernel — orthographic DDA raymarch, depth = time, front = current frame
-    nonisolated static let kernelSource = """
-    #include <metal_stdlib>
-    using namespace metal;
-
-    struct Uniforms {
-        float yaw;
-        float pitch;
-        float2 resolution;
-        int frame;
-        int tLo;
-        int tHi;
-        int lumaFloor;
-        float halfSpan;
-    };
-
-    // Rotate a vector by yaw (about Y) then pitch (about X). Matches Renderer.orbit.
-    static inline float3 orbit(float3 v, float yaw, float pitch) {
-        float cy = cos(yaw), sy = sin(yaw);
-        float3 r = float3(cy * v.x + sy * v.z, v.y, -sy * v.x + cy * v.z);
-        float cp = cos(pitch), sp = sin(pitch);
-        return float3(r.x, cp * r.y - sp * r.z, sp * r.y + cp * r.z);
-    }
-
-    // Slab intersection with [0,64]^3. .x = t-enter (>=0), .y = t-exit; miss if y<x.
-    static inline float2 boxHit(float3 o, float3 d) {
-        float3 inv = 1.0 / d;
-        float3 t0 = (float3(0.0) - o) * inv;
-        float3 t1 = (float3(64.0) - o) * inv;
-        float3 tmin = min(t0, t1), tmax = max(t0, t1);
-        return float2(max(max(max(tmin.x, tmin.y), tmin.z), 0.0),
-                      min(min(tmax.x, tmax.y), tmax.z));
-    }
-
-    kernel void voxel_raymarch(
-        texture3d<uint,  access::read>   indexTex   [[texture(0)]],
-        texture2d<float, access::sample> paletteTex [[texture(1)]],
-        texture2d<float, access::write>  outTex     [[texture(2)]],
-        constant Uniforms& U                        [[buffer(0)]],
-        uint2 gid                                   [[thread_position_in_grid]])
-    {
-        if (gid.x >= (uint)U.resolution.x || gid.y >= (uint)U.resolution.y) return;
-
-        float4 bg = float4(0.0, 0.0, 0.0, 1.0);   // pure black: at rest the cube
-                                                  // fills the frame, so bg never shows
-
-        // Square-fit the drawable, top-left origin.
-        float side = min(U.resolution.x, U.resolution.y);
-        float2 off = (U.resolution - side) * 0.5;
-        float2 px = float2(gid) + 0.5 - off;
-        if (px.x < 0.0 || px.y < 0.0 || px.x >= side || px.y >= side) { outTex.write(bg, gid); return; }
-        float2 uv = px / side;                    // 0..1, top-left
-
-        // Orthographic camera. Plane axes rotate with the orbit; window is the
-        // exact projected silhouette (halfSpan). At rest halfSpan = 32 so the
-        // 64-wide cube fills the square 1:1 with the 2D GIF.
-        float2 plane = (uv - 0.5) * 2.0 * U.halfSpan;   // +x right, +y down
-        float3 Xb = orbit(float3(1, 0, 0), U.yaw, U.pitch);
-        float3 Yb = orbit(float3(0, 1, 0), U.yaw, U.pitch);
-        float3 Zb = orbit(float3(0, 0, 1), U.yaw, U.pitch);
-        float3 center = float3(32.0);
-        float3 o = center + plane.x * Xb + plane.y * Yb + 200.0 * Zb;  // camera plane
-        float3 d = -Zb;                                               // parallel rays
-
-        float2 hit = boxHit(o, d);
-        if (hit.y < hit.x) { outTex.write(bg, gid); return; }
-
-        float3 p = o + d * (hit.x + 1e-3);
-        int3 voxel = int3(floor(p));
-        int3 stp = int3(sign(d));
-        float3 inv = 1.0 / d;
-        float3 tMax = (float3(voxel) + max(float3(stp), float3(0.0)) - o) * inv;
-        float3 tDelta = abs(inv);
-
-        int tLo = clamp(U.tLo, 0, 63);
-        int tHi = clamp(U.tHi, 0, 63);
-        int cursor = clamp(U.frame, 0, 63);
-
-        float4 col = bg;
-        int axis = -1;
-
-        for (int i = 0; i < 220; ++i) {
-            bool inside = voxel.x >= 0 && voxel.x < 64 &&
-                          voxel.y >= 0 && voxel.y < 64 &&
-                          voxel.z >= 0 && voxel.z < 64;
-            if (!inside) break;
-
-            if (voxel.z >= tLo && voxel.z <= tHi) {
-                // Depth = time: slice z shows frame f(z); front (z=63) = cursor,
-                // earlier frames recede behind it. This is what makes the rest
-                // pose identical to the 2D GIF and the orbit reveal its history.
-                int fz = ((cursor - 63 + voxel.z) % 64 + 64) % 64;
-
-                uint k = indexTex.read(uint3(uint(voxel.x), uint(voxel.y), uint(fz))).r;
-                constexpr sampler s(coord::normalized, filter::nearest, address::clamp_to_edge);
-                float2 pc = float2(float(k) + 0.5, float(fz) + 0.5) / float2(256.0, 64.0);
-                float4 rgb = paletteTex.sample(s, pc);
-
-                float luma255 = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) * 255.0;
-                if (luma255 >= float(U.lumaFloor)) {
-                    // One discrete per-face multiply — the only depth cue.
-                    float mul = (axis == 0) ? 0.82 : (axis == 2 ? 0.90 : 1.0);
-                    col = float4(rgb.rgb * mul, 1.0);
-                    break;
-                }
-            }
-
-            if (tMax.x < tMax.y) {
-                if (tMax.x < tMax.z) { voxel.x += stp.x; tMax.x += tDelta.x; axis = 0; }
-                else                 { voxel.z += stp.z; tMax.z += tDelta.z; axis = 2; }
-            } else {
-                if (tMax.y < tMax.z) { voxel.y += stp.y; tMax.y += tDelta.y; axis = 1; }
-                else                 { voxel.z += stp.z; tMax.z += tDelta.z; axis = 2; }
-            }
-        }
-
-        outTex.write(col, gid);
-    }
-    """
 }
 
 // MARK: - Preview (synthetic 64³ data, no capture needed)
@@ -545,7 +480,11 @@ private final class Renderer: NSObject, MTKViewDelegate {
 private func makeSyntheticVoxelData() -> VoxelCubeData {
     let side = VoxelCubeData.side, frames = VoxelCubeData.frameCount, pal = VoxelCubeData.paletteCount
     var frameIndices: [[UInt8]] = [], palettes: [[SIMD3<UInt8>]] = []
+    var provenance: [[UInt8]] = []
     for t in 0..<frames {
+        // Synthetic provenance to exercise the filter: top quarter = split (2),
+        // a couple of slots degenerate/air (0), the rest extracted (1).
+        provenance.append((0..<pal).map { k in k >= pal * 3 / 4 ? 2 : (k % 97 == 0 ? 0 : 1) })
         var p = [SIMD3<UInt8>](repeating: .zero, count: pal)
         for k in 0..<pal {
             let hue = Float(k) / Float(pal) + Float(t) / Float(frames)
@@ -567,7 +506,7 @@ private func makeSyntheticVoxelData() -> VoxelCubeData {
         }
         frameIndices.append(idx)
     }
-    return VoxelCubeData(frameIndices: frameIndices, srgbPalettes: palettes)
+    return VoxelCubeData(frameIndices: frameIndices, srgbPalettes: palettes, provenance: provenance)
 }
 
 #Preview("Voxel Cube — synthetic") {
