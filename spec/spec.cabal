@@ -37,6 +37,7 @@ library
         SixFour.Spec.GridAxis
         SixFour.Spec.CloudProjection
         SixFour.Spec.AddressPicker
+        SixFour.Spec.PaletteSearch
         SixFour.Spec.Dither
         SixFour.Spec.LookNet
         SixFour.Spec.LookCore
@@ -238,6 +239,7 @@ test-suite spec-tests
         Properties.GridAxis
         Properties.CloudProjection
         Properties.AddressPicker
+        Properties.PaletteSearch
         Properties.Dither
         Properties.SpatialDither
         Properties.LookNet
