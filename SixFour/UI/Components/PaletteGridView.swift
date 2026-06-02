@@ -17,14 +17,27 @@ struct PaletteGridView: View {
     let xAxis: GridAxis
     let yAxis: GridAxis
     let frameRate: Int
+    /// Shared brushed slot (IndexedColor.index), set by the cloud / address picker.
+    /// When non-nil this cell stays full and the rest recede via an opaque darker
+    /// index step — so one colour lights the same across every palette view.
+    let brushedIndex: Int?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(palettes: [[SIMD3<UInt8>]], xAxis: GridAxis, yAxis: GridAxis, frameRate: Int = 20) {
+    init(palettes: [[SIMD3<UInt8>]], xAxis: GridAxis, yAxis: GridAxis,
+         frameRate: Int = 20, brushedIndex: Int? = nil) {
         self.palettes = palettes
         self.xAxis = xAxis
         self.yAxis = yAxis
         self.frameRate = frameRate
+        self.brushedIndex = brushedIndex
+    }
+
+    /// Opaque darker index step for de-emphasised cells — never alpha (GRID Law #2).
+    private static func darkenStep(_ c: SIMD3<UInt8>) -> SIMD3<UInt8> {
+        SIMD3<UInt8>(UInt8(Int(c.x) * 35 / 100),
+                     UInt8(Int(c.y) * 35 / 100),
+                     UInt8(Int(c.z) * 35 / 100))
     }
 
     var body: some View {
@@ -52,10 +65,15 @@ struct PaletteGridView: View {
             IndexedColor(index: i, oklab: ColorScience.srgb8ToOKLab(c.x, c.y, c.z).simd, srgb: c)
         }
         let layout = GridLayout.layout(x: xAxis, y: yAxis, colors: ics)
+        let brushed = brushedIndex
         return PixelGrid(cells: layout.count, origin: .bottomLeft) { r, c in
             guard layout.indices.contains(r), layout[r].indices.contains(c) else { return nil }
             let slot = layout[r][c]
-            return palette.indices.contains(slot) ? palette[slot] : nil
+            guard palette.indices.contains(slot) else { return nil }
+            let color = palette[slot]
+            // Shared brush: selected slot full; others recede (opaque step).
+            if let b = brushed, b != slot { return Self.darkenStep(color) }
+            return color
         }
     }
 }
@@ -64,18 +82,30 @@ struct PaletteGridView: View {
 enum PaletteRepresentation: String, CaseIterable, Codable, Sendable {
     case structure   // the median-cut SplitTree treemap / global editor
     case grid        // the user-assignable 16×16 coordinate grid
+    case cloud       // P4: the OKLab Temporal Cloud (3 OKLab axes + scrubbable time)
+    case voxel3D     // the 64³ (x,y,t) cube; REST POSE == the 2D GIF hero, orbit reveals time
 
-    var label: String { self == .structure ? "structure" : "grid" }
+    var label: String {
+        switch self {
+        case .structure: return "structure"
+        case .grid: return "grid"
+        case .cloud: return "cloud"
+        case .voxel3D: return "cube"
+        }
+    }
 }
 
 /// Glass chrome twin of `ScopeSelector` for the dimensional representation.
+/// `cases` lets the caller hide a mode that has no data (e.g. `.voxel3D` on a
+/// legacy output with no per-pixel index map).
 struct RepresentationSelector: View {
     @Binding var selection: PaletteRepresentation
+    var cases: [PaletteRepresentation] = PaletteRepresentation.allCases
 
     var body: some View {
         GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
             HStack(spacing: SFTheme.glassClusterSpacing) {
-                ForEach(PaletteRepresentation.allCases, id: \.self) { rep in
+                ForEach(cases, id: \.self) { rep in
                     let isSelected = selection == rep
                     Button { withAnimation(.snappy) { selection = rep } } label: {
                         Text(rep.label)

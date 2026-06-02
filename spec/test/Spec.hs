@@ -14,8 +14,16 @@ import qualified Properties.Diversity    as Diversity
 import qualified Properties.GMM          as GMM
 import qualified Properties.Bures        as Bures
 import qualified Properties.PairTree     as PairTree
+import qualified Properties.PairTreeFixed as PairTreeFixed
+import qualified Properties.SigmaPairFixed as SigmaPairFixed
+import qualified Properties.Quad4Fixed   as Quad4Fixed
+import qualified Properties.GlobalVolume as GlobalVolume
 import qualified Properties.SplitTree    as SplitTree
 import qualified Properties.GridAxis     as GridAxis
+import qualified Properties.CloudProjection as CloudProjection
+import qualified Properties.AddressPicker as AddressPicker
+import qualified Properties.PaletteSearch as PaletteSearch
+import qualified Properties.PaletteOracle as PaletteOracle
 import qualified Properties.Dither       as Dither
 import qualified Properties.SpatialDither as SpatialDither
 import qualified Properties.LookNet      as LookNet
@@ -61,8 +69,16 @@ main = defaultMain $ testGroup "sixfour-spec"
   , GMM.tests
   , Bures.tests
   , PairTree.tests
+  , PairTreeFixed.tests
+  , SigmaPairFixed.tests
+  , Quad4Fixed.tests
+  , GlobalVolume.tests
   , SplitTree.tests
   , GridAxis.tests
+  , CloudProjection.tests
+  , AddressPicker.tests
+  , PaletteSearch.tests
+  , PaletteOracle.tests
   , Dither.tests
   , SpatialDither.tests
   , LookNet.tests

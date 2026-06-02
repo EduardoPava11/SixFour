@@ -635,7 +635,7 @@ xcodebuild -scheme SixFour \
 | **EXEMPT-OS** | Dynamic Island, status bar, Share/Settings sheets | OS-owned; the lattice renders under them, places no chrome there. |
 | **EXEMPT-PREVIEW-CELLS** | the camera preview's pixels | coloured by the scene, not the palette — content, not chrome cells. |
 | **EXEMPT-AXTEXT** | the AX-size system-`Text` fallback | reflowing system text above the floor; not cell-art by design. |
-| **EXEMPT-GLASS-REVIEW** | glass MATERIAL on Review/Settings chrome | chrome-over-content (its documented use); retained on Review, RETIRED on capture HUD. |
+| **EXEMPT-GLASS-REVIEW** | glass MATERIAL on Review/Settings chrome | chrome-over-content (its documented use); retained on Review, RETIRED on capture HUD. **Defined in detail in `docs/SIXFOUR-GLASS-LANGUAGE.md` ("GLASS").** |
 | **EXEMPT-REVIEW-PITCH** | Review/palette use the 6 pt family | the inspection hero wants 384 pt; one surface = one pitch, the two never share a screen. |
 
 ### 9.8 Token migration debt (governance-tracked)

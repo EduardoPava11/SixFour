@@ -17,6 +17,7 @@ index (strict @<@), as everywhere in the core.
 module SixFour.Spec.QuantFixed
   ( quantizeFrameQ16
   , farthestPointSeedsQ16
+  , farthestPointSeedIndicesQ16
   , lloydStepQ16
   , nearestCentroidQ16
   , distSqQ16
@@ -40,14 +41,15 @@ nearestCentroidQ16 cs x =
     (0, maxBound :: Int)
     (V.indexed cs)
 
--- | @k@ maximin (farthest-first) seed colours over the pixel cloud, in Q16.
--- First seed = the pixel farthest from the (integer) cloud mean; each subsequent
--- pick maximises the minimum distance to the chosen set. Strict @>@ ⇒ lowest
--- index on ties. When @k@ exceeds the distinct-colour count the maximin distance
--- hits 0 and duplicates are returned (deterministically). Ports
--- 'SixFour.Spec.Significance.farthestPointSeeds' to exact integers.
-farthestPointSeedsQ16 :: Int -> [Px] -> [Px]
-farthestPointSeedsQ16 k pixels
+-- | The maximin (farthest-first) seed order as INDICES into @pixels@ — the exact
+-- chosen-index sequence. First index = the pixel farthest from the (integer) cloud
+-- mean; each subsequent pick maximises the minimum distance to the chosen set.
+-- Strict @>@ ⇒ lowest index on ties. When @k@ exceeds the distinct-colour count
+-- the maximin distance hits 0 and indices repeat (deterministically). Exposed so
+-- the global-collapse golden ('SixFour.Spec.Collapse') can pin the index sequence;
+-- 'farthestPointSeedsQ16' is exactly @map (pv !) . farthestPointSeedIndicesQ16@.
+farthestPointSeedIndicesQ16 :: Int -> [Px] -> [Int]
+farthestPointSeedIndicesQ16 k pixels
   | k <= 0 || null pixels = []
   | otherwise =
       let pv = V.fromList pixels
@@ -67,8 +69,14 @@ farthestPointSeedsQ16 k pixels
                 c     = pv V.! nextI
                 mind' = V.imap (\i d -> min d (distSqQ16 (pv V.! i) c)) mind
             in go (nextI : chosen) mind'
-          idxs = go [first] mind0
-      in map (pv V.!) idxs
+      in go [first] mind0
+
+-- | @k@ maximin (farthest-first) seed colours over the pixel cloud, in Q16
+-- (= the colours at 'farthestPointSeedIndicesQ16'). Ports
+-- 'SixFour.Spec.Significance.farthestPointSeeds' to exact integers.
+farthestPointSeedsQ16 :: Int -> [Px] -> [Px]
+farthestPointSeedsQ16 k pixels =
+  let pv = V.fromList pixels in map (pv V.!) (farthestPointSeedIndicesQ16 k pixels)
 
 -- | One Lloyd step (Q16): assign nearest, replace each centroid by the integer
 -- mean (@\@divTrunc@) of its members; an empty cluster keeps its old centroid.

@@ -21,13 +21,18 @@ enum SFTheme {
 
     // MARK: The grid render surface (8-bit graphics-engine LOOK)
 
+    /// The GIF's cell count per side — the spec-canonical 64 (`SixFourShape.W`,
+    /// generated from `Spec/Shape.hs` and shared byte-exact with the Zig core's
+    /// `kernels.SIDE`). The ONE definition every GIF-content surface sizes from,
+    /// so 2D (the `PixelImage` hero) and 3D (the voxel cube) render the same grid.
+    static let gifSideCells: Int = SixFourShape.W           // 64
     /// One GIF fat-pixel, in points. 64 × 6 = 384pt fits the iPhone 17 Pro
     /// portrait width (393–402pt) crisply. See `docs/grid-is-the-render-surface.md`.
     static let gifCellPt: CGFloat = 6
-    /// The shared content canvas edge: 64 × `gifCellPt`. The palette grid uses the
-    /// SAME 384pt edge (16 × 24), so a palette cell is exactly a 4×4 block of GIF
-    /// cells — one commensurate surface.
-    static let gifCanvasPt: CGFloat = gifCellPt * 64        // 384
+    /// The shared content canvas edge = `gifSideCells × gifCellPt` (the GIF's cell
+    /// count drives it, not a literal). The palette grid uses the SAME 384pt edge
+    /// (16 × 24), so a palette cell is exactly a 4×4 block of GIF cells.
+    static let gifCanvasPt: CGFloat = gifCellPt * CGFloat(gifSideCells)   // 384
     static let paletteCellPt: CGFloat = gifCellPt * 4       // 24 → 16×24 = 384
     /// The one grid-frame stroke (reconciles the old 0.5 / 0.18 inconsistency).
     static let gridFrameStroke = Color.white.opacity(0.5)

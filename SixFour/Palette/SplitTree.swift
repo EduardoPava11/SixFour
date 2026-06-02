@@ -48,9 +48,14 @@ enum PaletteBranching: String, CaseIterable, Codable, Sendable {
     var label: String { self == .b16 ? "16²" : self == .b4 ? "4⁴" : "2⁸" }
     var blurb: String {
         switch self {
-        case .b16: "Flat 16×16 grid — one wide level (16 groups of 16)."
-        case .b4:  "Quadtree — nested 4×4 of 4×4 (two OKLab axes per split)."
-        case .b2:  "Median-cut binary tree — nested halves (one axis per split). The only branching that reaches 256 cleanly in 3-D."
+        // Honesty note (docs/SIXFOUR-HIGHDIM-UIUX.md): these are radix
+        // factorizations of ONE median-cut tree (16²=4⁴=2⁸=256 leaves), NOT
+        // coordinate grids or independent feature axes. Each split cuts the
+        // WIDEST of L/a/b (data-dependent), so the exponent = tree depth, not
+        // data dimensionality.
+        case .b16: "16 groups of 16 — two collapsed binary levels, by in-order tree position (not a coordinate grid; that's the separate grid view)."
+        case .b4:  "Four collapsed binary levels — each median-cut split cuts the widest of L/a/b (data-dependent; greyscale splits L,L,L,L), not a fixed axis pairing."
+        case .b2:  "Median-cut binary tree — 8 nested half-set splits, one axis per split. The address is 8 bits over the 3-D OKLab space, not 8 features."
         }
     }
 }

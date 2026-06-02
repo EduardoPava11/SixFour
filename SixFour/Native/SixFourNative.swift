@@ -257,6 +257,87 @@ enum SixFourNative {
         return indices
     }
 
+    struct GlobalCollapseResult { let leaves: [SIMD3<Int32>]; let indices: [Int] }
+
+    /// GIFA → GIFB: collapse the per-frame Q16 OKLab palettes into ONE global palette
+    /// via the Zig `s4_global_collapse` (maximin `kOut` leaves + per-colour nearest-leaf
+    /// re-index). The byte-exact on-device home of the collapse; mirrors the pure-Swift
+    /// `FarthestPointCollapse` and the Haskell `globalCollapseQ16`, all gated to the same
+    /// spec golden. Requires uniform per-frame palette length. `indices` is the flattened
+    /// `t·kIn` index map (frame `f`, slot `s` → `indices[f·kIn + s]`).
+    static func globalCollapse(perFramePalettes: [[SIMD3<Int32>]], kOut: Int) -> GlobalCollapseResult? {
+        let t = perFramePalettes.count
+        guard t > 0, let kIn = perFramePalettes.first?.count, kIn > 0,
+              perFramePalettes.allSatisfy({ $0.count == kIn }) else { return nil }
+        var flat = [Int32](); flat.reserveCapacity(t * kIn * 3)
+        for frame in perFramePalettes { for c in frame { flat.append(c.x); flat.append(c.y); flat.append(c.z) } }
+        let p = t * kIn
+        var leaves = [Int32](repeating: 0, count: kOut * 3)
+        var indices = [UInt8](repeating: 0, count: p)
+        let scratchBytes = p * 8 + 3 * kOut * 8 + kOut * 4
+        let scratch = UnsafeMutableRawPointer.allocate(byteCount: scratchBytes, alignment: 16)
+        defer { scratch.deallocate() }
+        let rc = flat.withUnsafeBufferPointer { fp in
+            leaves.withUnsafeMutableBufferPointer { lp in
+                indices.withUnsafeMutableBufferPointer { ip in
+                    s4_global_collapse(fp.baseAddress, Int32(t), Int32(kIn), Int32(kOut),
+                                       lp.baseAddress, ip.baseAddress, scratch, scratchBytes)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_global_collapse rc=\(rc)"); return nil }
+        let leafVecs = (0 ..< kOut).map { SIMD3<Int32>(leaves[$0 * 3], leaves[$0 * 3 + 1], leaves[$0 * 3 + 2]) }
+        return GlobalCollapseResult(leaves: leafVecs, indices: indices.map { Int($0) })
+    }
+
+    // MARK: - Owned integer Haar (reversible lifting)
+
+    /// Forward integer Haar over Q16 OKLab leaves (`s4_haar_analyze`): the palette's
+    /// dimensional space as exact integer math. `leaves.count` must be a power of two.
+    /// Returns the root + `n-1` detail offsets (coarsest-first). Mirrors
+    /// `SixFour.Spec.PairTreeFixed.analyzeFixed`; `reconstruct∘analyze = id` exactly.
+    static func haarAnalyze(leaves: [SIMD3<Int32>]) -> (root: SIMD3<Int32>, offsets: [SIMD3<Int32>])? {
+        let n = leaves.count
+        guard n > 0, (n & (n - 1)) == 0 else { return nil }
+        var flat = [Int32](); flat.reserveCapacity(n * 3)
+        for c in leaves { flat.append(c.x); flat.append(c.y); flat.append(c.z) }
+        var root = [Int32](repeating: 0, count: 3)
+        var offs = [Int32](repeating: 0, count: (n - 1) * 3)
+        let scratch = UnsafeMutableRawPointer.allocate(byteCount: n * 3 * 4, alignment: 16)
+        defer { scratch.deallocate() }
+        let rc = flat.withUnsafeBufferPointer { lp in
+            root.withUnsafeMutableBufferPointer { rp in
+                offs.withUnsafeMutableBufferPointer { op in
+                    s4_haar_analyze(lp.baseAddress, Int32(n), rp.baseAddress, op.baseAddress, scratch, n * 3 * 4)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_haar_analyze rc=\(rc)"); return nil }
+        let rootVec = SIMD3<Int32>(root[0], root[1], root[2])
+        let offVecs = (0 ..< (n - 1)).map { SIMD3<Int32>(offs[$0 * 3], offs[$0 * 3 + 1], offs[$0 * 3 + 2]) }
+        return (rootVec, offVecs)
+    }
+
+    /// Inverse integer Haar (`s4_haar_reconstruct`): root + `n-1` offsets → `n` leaves.
+    /// Exact inverse of `haarAnalyze`.
+    static func haarReconstruct(root: SIMD3<Int32>, offsets: [SIMD3<Int32>]) -> [SIMD3<Int32>]? {
+        let n = offsets.count + 1
+        guard n > 0, (n & (n - 1)) == 0 else { return nil }
+        var rootFlat = [root.x, root.y, root.z]
+        var offFlat = [Int32](); offFlat.reserveCapacity(offsets.count * 3)
+        for o in offsets { offFlat.append(o.x); offFlat.append(o.y); offFlat.append(o.z) }
+        var leaves = [Int32](repeating: 0, count: n * 3)
+        let rc = rootFlat.withUnsafeBufferPointer { rp in
+            offFlat.withUnsafeBufferPointer { op in
+                leaves.withUnsafeMutableBufferPointer { lp in
+                    s4_haar_reconstruct(rp.baseAddress, op.baseAddress, Int32(n), lp.baseAddress)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_haar_reconstruct rc=\(rc)"); return nil }
+        return (0 ..< n).map { SIMD3<Int32>(leaves[$0 * 3], leaves[$0 * 3 + 1], leaves[$0 * 3 + 2]) }
+    }
+
     struct SignificanceResult { let indices: [UInt8]; let cellStats: [Int32] }  // cellStats: k×7
 
     /// Rebalance indices to ≥ minPopulation per slot; emit k×7 cell stats

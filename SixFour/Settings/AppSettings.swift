@@ -35,6 +35,10 @@ final class AppSettings {
         static let paletteRepresentation  = "sixfour.paletteRepresentation.v1"
         static let gridAxisX              = "sixfour.gridAxisX.v1"
         static let gridAxisY              = "sixfour.gridAxisY.v1"
+        // Voxel-cube explorer (Review .voxel3D mode).
+        static let voxelProvenanceMode    = "sixfour.voxelProvenanceMode.v1"
+        static let voxelLumaFloor         = "sixfour.voxelLumaFloor.v1"
+        static let voxelAutoRotate        = "sixfour.voxelAutoRotate.v1"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -130,6 +134,22 @@ final class AppSettings {
         didSet { defaults.set(gridAxisY.rawValue, forKey: Key.gridAxisY) }
     }
 
+    /// Voxel cube provenance filter: 0 = all, 1 = extracted only, 2 = split only.
+    /// Defaults to 0 (the honest all-solid verifier).
+    var voxelProvenanceMode: Int {
+        didSet { defaults.set(voxelProvenanceMode, forKey: Key.voxelProvenanceMode) }
+    }
+
+    /// Voxel cube luminance air floor (0…255). Defaults to 0 (fully solid cube).
+    var voxelLumaFloor: Int {
+        didSet { defaults.set(voxelLumaFloor, forKey: Key.voxelLumaFloor) }
+    }
+
+    /// Whether the voxel cube auto-rotates. Defaults off (rest = flat 2D view).
+    var voxelAutoRotate: Bool {
+        didSet { defaults.set(voxelAutoRotate, forKey: Key.voxelAutoRotate) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // `didSet` does not fire during init, so these reads don't write back.
@@ -161,5 +181,9 @@ final class AppSettings {
         ) ?? .structure
         self.gridAxisX = GridAxis(rawValue: defaults.string(forKey: Key.gridAxisX) ?? "") ?? .a
         self.gridAxisY = GridAxis(rawValue: defaults.string(forKey: Key.gridAxisY) ?? "") ?? .L
+        // Absent keys → 0 / 0 / false (all-solid, no air, no auto-rotate).
+        self.voxelProvenanceMode = defaults.integer(forKey: Key.voxelProvenanceMode)
+        self.voxelLumaFloor = defaults.integer(forKey: Key.voxelLumaFloor)
+        self.voxelAutoRotate = defaults.bool(forKey: Key.voxelAutoRotate)
     }
 }

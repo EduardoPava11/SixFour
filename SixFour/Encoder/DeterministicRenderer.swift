@@ -229,6 +229,169 @@ struct DeterministicRenderer {
         )
     }
 
+    /// The GIFB result: one global palette shared by every frame.
+    struct GlobalResult: Sendable {
+        let gifData: Data
+        /// 64 × 4096 indices into the ONE global palette.
+        let frameIndices: [[UInt8]]
+        /// 256 sRGB — the single global colour table (every frame uses it).
+        let globalPalette: [SIMD3<UInt8>]
+        /// 256 Q16 OKLab — the collapse leaves (the editable / NN-slot form).
+        let globalLeavesQ16: [SIMD3<Int32>]
+        /// Pooled pixel count per global slot (whole-GIF significance: each ≥ minPopulation).
+        let pooledCounts: [Int]
+        /// Per-frame quantization MSE (OKLab units²) vs the global palette.
+        let perFrameMSE: [Float]
+        /// Occupied 16³ OKLab bins among the 256 global leaves (one value; the palette
+        /// is shared, so every frame has the same gamut coverage).
+        let globalCoverage: Int
+        let sha256Hex: String
+    }
+
+    /// GIFA → GIFB: collapse the 64 per-frame palettes into ONE global 256-colour
+    /// palette via the owned Zig `s4_global_collapse`, then dither every frame
+    /// against it and assemble a single-palette GIF (the global table is fed to
+    /// every frame — semantically one palette; a true single-GCT is a later byte
+    /// optimization). The per-frame significance split-fill is intentionally NOT
+    /// run: a global palette need not be fully exercised by any single frame —
+    /// that is a WHOLE-GIF property (union-surjectivity), enforced by the caller,
+    /// not the incompatible per-frame `CompleteVoxelVolume` gate.
+    func renderGlobalPalette(
+        tiles: [OKLabTile],
+        comment: String?,
+        branching: PaletteBranching = .b16,
+        onStage: @Sendable (Stage) -> Void
+    ) throws -> GlobalResult {
+        precondition(!tiles.isEmpty)
+        let k = SixFourShape.K
+        let side = tiles[0].side
+        let perFrame = side * side
+
+        let q16Frames = tiles.map { SixFourNative.oklabToQ16($0.pixels) }
+        let (mode, needStbn): (Int, Bool) = {
+            switch dither.method {
+            case .errorDiffusion: return (dither.kernel == .floydSteinberg ? 0 : 1, false)
+            case .blueNoise:      return (dither.temporal == .frozen ? 3 : 2, true)
+            }
+        }()
+        var stbn: [UInt8]? = nil
+        if needStbn {
+            guard let m = STBN3DMaskLoader.loadTiled(), m.count == tiles.count * perFrame else {
+                throw DetError.maskUnavailable
+            }
+            stbn = m
+        }
+
+        // Stage 1: per-frame quantize → the 64 per-frame palettes (GIFA).
+        onStage(.quantize)
+        var centroidsPerFrame: [[Int32]] = []
+        centroidsPerFrame.reserveCapacity(tiles.count)
+        for q in q16Frames {
+            guard let r = SixFourNative.quantizeFrame(oklabQ16: q, k: k, lloydIters: lloydIters) else {
+                throw DetError.stageFailed("quantize")
+            }
+            centroidsPerFrame.append(r.centroids)
+        }
+
+        // Stage 1.5: COLLAPSE 64 palettes → ONE global palette (owned Zig kernel).
+        let perFramePalettes: [[SIMD3<Int32>]] = centroidsPerFrame.map { flat in
+            (0..<k).map { SIMD3<Int32>(flat[$0 * 3], flat[$0 * 3 + 1], flat[$0 * 3 + 2]) }
+        }
+        guard let collapse = SixFourNative.globalCollapse(perFramePalettes: perFramePalettes, kOut: k) else {
+            throw DetError.stageFailed("collapse")
+        }
+        // Apply the radix GENOME projection: 16² = identity; 4⁴/2⁸ = byte-exact
+        // integer projections that shift colours (the radix's inductive bias).
+        // This is where "set the control = set the NN genome" reaches the GIFB
+        // colour table — exact integer, so GIFB stays byte-exact for every radix.
+        let globalLeaves = BranchedPalette.projectQ16(collapse.leaves, branching: branching)
+        let globalFlat: [Int32] = globalLeaves.flatMap { [$0.x, $0.y, $0.z] }
+
+        // Stage 2: dither each frame's pixels against the GLOBAL palette.
+        onStage(.dither)
+        var indicesPerFrame: [[UInt8]] = []
+        indicesPerFrame.reserveCapacity(tiles.count)
+        for (f, q) in q16Frames.enumerated() {
+            let slice: [UInt8]? = needStbn ? Array(stbn![(f * perFrame)..<((f + 1) * perFrame)]) : nil
+            guard let idx = SixFourNative.ditherFrame(
+                oklabQ16: q, centroids: globalFlat, k: k,
+                mode: mode, serpentine: dither.serpentine, stbnSlice: slice
+            ) else { throw DetError.stageFailed("dither") }
+            indicesPerFrame.append(idx)
+        }
+
+        // Stage 3: WHOLE-GIF significance rescue. A global slot need not be the
+        // nearest to any pixel after dithering, so surjectivity is not free — run
+        // the owned significance kernel ONCE over the POOLED 262144 pixels (the
+        // GIF-scale analogue of the per-frame rescue, reusing s4_significance_fill)
+        // so every global slot is backed by ≥ minPopulation pooled pixels. This is
+        // what makes GIFB a complete, all-significant WHOLE-GIF volume.
+        onStage(.significance)
+        let minPop = SixFourSignificance.minPopulation
+        let pooledQ16 = q16Frames.flatMap { $0 }
+        let pooledIdx = indicesPerFrame.flatMap { $0 }
+        guard let sig = SixFourNative.significanceFill(
+            oklabQ16: pooledQ16, centroids: globalFlat, k: k, minPop: minPop, indices: pooledIdx
+        ) else { throw DetError.stageFailed("significance") }
+        // Split the rescued flat assignment back into per-frame index maps.
+        indicesPerFrame = (0..<tiles.count).map { f in
+            Array(sig.indices[(f * perFrame)..<((f + 1) * perFrame)])
+        }
+        let pooledCounts: [Int] = (0..<k).map { Int(sig.cellStats[$0 * 7 + 6]) }
+
+        // Per-frame quantization MSE vs the GLOBAL palette (same integer domain as
+        // the per-frame path's diagnostics) + the shared gamut coverage.
+        var perFrameMSE: [Float] = []
+        perFrameMSE.reserveCapacity(tiles.count)
+        for f in 0..<tiles.count {
+            let q = q16Frames[f]; let idx = indicesPerFrame[f]
+            var acc: Int64 = 0
+            for i in 0..<perFrame {
+                let c = Int(idx[i]) * 3
+                let dl = Int64(q[i * 3 + 0] - globalFlat[c + 0])
+                let da = Int64(q[i * 3 + 1] - globalFlat[c + 1])
+                let db = Int64(q[i * 3 + 2] - globalFlat[c + 2])
+                acc += dl * dl + da * da + db * db
+            }
+            perFrameMSE.append(Float(Double(acc) / Double(perFrame) / (65536.0 * 65536.0)))
+        }
+        var bins = Set<Int>()
+        for j in 0..<k {
+            let bL = min(15, max(0, (Int(globalFlat[j * 3 + 0]) * 16) >> 16))
+            let bA = min(15, max(0, ((Int(globalFlat[j * 3 + 1]) + 32768) * 16) >> 16))
+            let bB = min(15, max(0, ((Int(globalFlat[j * 3 + 2]) + 32768) * 16) >> 16))
+            bins.insert(bL * 256 + bA * 16 + bB)
+        }
+        let globalCoverage = bins.count
+
+        // Stage 4: palette → sRGB8 on the global leaves ONCE (the single table).
+        onStage(.palette)
+        guard let rgb = SixFourNative.paletteToSRGB8(centroidsQ16: globalFlat, k: k) else {
+            throw DetError.stageFailed("palette")
+        }
+        let globalPalette: [SIMD3<UInt8>] = (0..<k).map { SIMD3(rgb[$0 * 3], rgb[$0 * 3 + 1], rgb[$0 * 3 + 2]) }
+
+        // Stage 5: assemble — the global table is fed to every frame.
+        onStage(.encode)
+        let flatIndices = indicesPerFrame.flatMap { $0 }
+        var palettesRGBFlat: [UInt8] = []
+        palettesRGBFlat.reserveCapacity(tiles.count * k * 3)
+        for _ in 0..<tiles.count { palettesRGBFlat.append(contentsOf: rgb) }
+        guard let gif = SixFourNative.gifAssemble(
+            indices: flatIndices, palettesRGB: palettesRGBFlat,
+            frameCount: tiles.count, side: side, k: k, delayCs: 5, comment: comment
+        ) else { throw DetError.stageFailed("encode") }
+        let sha = SHA256.hash(data: gif).map { String(format: "%02x", $0) }.joined()
+
+        Self.logger.notice("[deterministic·global] \(tiles.count)f → \(gif.count)B · one 256-colour palette · sha256 \(sha.prefix(12), privacy: .public)…")
+        return GlobalResult(
+            gifData: gif, frameIndices: indicesPerFrame,
+            globalPalette: globalPalette, globalLeavesQ16: globalLeaves,
+            pooledCounts: pooledCounts, perFrameMSE: perFrameMSE,
+            globalCoverage: globalCoverage, sha256Hex: sha
+        )
+    }
+
     static func milliseconds(_ d: Duration) -> Int {
         let (s, attos) = d.components
         return Int(s) * 1_000 + Int(attos / 1_000_000_000_000_000)

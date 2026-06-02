@@ -40,81 +40,73 @@ struct CaptureView: View {
         }
     }
 
+    /// The capture HUD is ONE centered column built around the preview anchor:
+    /// wordmark (top) · the 64×64 live tile (centred) · shutter+ring · readout.
+    /// Every direct child of the VStack is horizontally centred, so the preview
+    /// sits dead-centre and the chrome bands above and below it.
     private var mainCaptureScene: some View {
-        GeometryReader { proxy in
-            // Preview = 64 cells at the global lattice pitch = 128pt (the locked
-            // small hero; the fine cell makes room for high-res cell widgets).
-            let side = 64 * SFTheme.cellPt
-            let previewYOffset = (proxy.size.height - side) / 2
-            ZStack {
-                // The whole screen tiled with cells on the 201×437 @2pt lattice,
-                // tinted by the live camera (docs/cell-lattice-widget-spec.md).
-                CellFieldView(tint: vm.sceneGroundTint)
+        ZStack {
+            // The whole screen tiled with cells on the 201×437 @2pt lattice,
+            // tinted by the live camera (docs/cell-lattice-widget-spec.md).
+            CellFieldView(tint: vm.sceneGroundTint)
+                .ignoresSafeArea()
 
-                // The canvas: ALWAYS the live 64×64 tile (nearest-neighbour
-                // upscaled), never the raw camera feed — you live inside the
-                // 64³ world. The AVCaptureVideoPreviewLayer is kept at
-                // opacity 0 purely as the tap-to-focus + session layer; the
-                // tile rides on top with hit-testing off so taps reach it.
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    ZStack {
-                        if let session = vm.session?.session {
-                            CameraPreview(session: session) { devicePoint, localPoint in
-                                vm.focus(at: devicePoint)
-                                let absolutePoint = CGPoint(
-                                    x: localPoint.x + (proxy.size.width - side) / 2,
-                                    y: localPoint.y + previewYOffset
-                                )
-                                reticle = ReticleHit(point: absolutePoint, id: UUID())
-                            }
-                            .opacity(0)
-                        }
-                        if let img = vm.previewTile {
-                            PixelImage(image: img, edge: side)
-                                .allowsHitTesting(false)   // taps fall through to focus layer
-                        } else {
-                            // First-frame fallback — black until the preview
-                            // path delivers its first tile (~100 ms).
-                            Color.black
-                        }
+            VStack(spacing: 0) {
+                topBar
+                Spacer(minLength: 6 * SFTheme.cellPt)
+                previewBlock                 // the centred anchor
+                Spacer(minLength: 6 * SFTheme.cellPt)
+                if let summary = vm.lastTimingSummary {
+                    GlassInfoChip(cornerRadius: SFTheme.cardCorner) {
+                        Text(summary)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.85))
                     }
-                    .frame(width: side, height: side)
-                    .clipped()
-                    // No hard frame — the 64×64 canvas dissolves into the
-                    // palette-washed background (the design-language blend).
-                    Spacer(minLength: 0)
+                    .padding(.bottom, 4 * SFTheme.cellPt)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                bottomBar
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .padding(.horizontal, 8 * SFTheme.cellPt)
+            .padding(.vertical, 6 * SFTheme.cellPt)
+        }
+    }
 
-                if let hit = reticle {
-                    FocusReticle(point: hit.point)
-                        .id(hit.id)
-                        .allowsHitTesting(false)
-                        .task(id: hit.id) {
-                            try? await Task.sleep(for: .milliseconds(1000))
-                            await MainActor.run {
-                                if reticle?.id == hit.id { reticle = nil }
-                            }
-                        }
+    /// The canvas: ALWAYS the live 64×64 tile (nearest-neighbour upscaled), never
+    /// the raw camera feed — you live inside the 64³ world. The
+    /// AVCaptureVideoPreviewLayer rides underneath at opacity 0 purely as the
+    /// tap-to-focus + session layer; the tile sits on top with hit-testing off.
+    /// The focus reticle is overlaid in the preview's OWN coordinate space, so it
+    /// needs no global-offset math (which is what previously skewed the layout).
+    private var previewBlock: some View {
+        // The GIF's cell count (spec-canonical) at the HUD's 2pt lattice pitch.
+        let side = CGFloat(SFTheme.gifSideCells) * SFTheme.cellPt   // 64 × 2 = 128 pt
+        return ZStack {
+            if let session = vm.session?.session {
+                CameraPreview(session: session) { devicePoint, localPoint in
+                    vm.focus(at: devicePoint)
+                    reticle = ReticleHit(point: localPoint, id: UUID())
                 }
-
-                VStack {
-                    topBar
-                    Spacer()
-                    if let summary = vm.lastTimingSummary {
-                        GlassInfoChip(cornerRadius: 6) {
-                            Text(summary)
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.85))
-                        }
-                        .padding(.horizontal)
+                .opacity(0)
+            }
+            if let img = vm.previewTile {
+                PixelImage(image: img, edge: side)
+                    .allowsHitTesting(false)   // taps fall through to the focus layer
+            } else {
+                Color.black                    // first-frame fallback (~100 ms)
+            }
+            if let hit = reticle {
+                FocusReticle(point: hit.point)
+                    .id(hit.id)
+                    .allowsHitTesting(false)
+                    .task(id: hit.id) {
+                        try? await Task.sleep(for: .milliseconds(1000))
+                        if reticle?.id == hit.id { reticle = nil }
                     }
-                    bottomBar
-                }
-                .padding()
             }
         }
+        .frame(width: side, height: side)
+        .clipped()
     }
 
     private var topBar: some View {
@@ -153,12 +145,14 @@ struct CaptureView: View {
     /// the shutter's `accessibilityValue`, so it's hidden here.
     private var diversityReadout: some View {
         VStack(spacing: 2) {
-            // Readout as lattice cells — same 2pt cell as everything else.
-            CellText("◇ \(vm.scene.occupiedBins) colors", rows: 14, ink: SFTheme.dimText)
+            // Readout as lattice cells — same 2pt cell as everything else. Sizes
+            // chosen so the longest sampler tag fits the screen width once centred.
+            CellText("◇ \(vm.scene.occupiedBins) colors", rows: 11, ink: SFTheme.dimText)
             // The active sampler — updates the instant a Settings toggle flips
             // (the chrome shows the setting, never inert).
-            CellText(samplerTag, rows: 11, ink: SFTheme.dimText.opacity(0.85))
+            CellText(samplerTag, rows: 8, ink: SFTheme.dimText.opacity(0.85))
         }
+        .frame(maxWidth: .infinity)
         .accessibilityHidden(true)
     }
 

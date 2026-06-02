@@ -53,10 +53,14 @@ module SixFour.Spec.SigmaPairHead
   , sigmaPairLeaves
   , sigmaPairDegreesOfFreedom
   , sigmaPairWellFormed
-    -- * Reconstruction
+    -- * Reconstruction + the forward analyser (the σ-pair genome's two directions)
   , reconstructPaired
+  , analyzePaired
     -- * The σ-action on the output that makes the image σ-fixed (pointwise on the list)
   , sigmaSwapAndReflect
+    -- * Laws (QuickCheck'd in Properties.SigmaPairHead)
+  , lawAnalyzeReconstructPairedRoundTrip
+  , lawAnalyzePairedProjectsToSigmaFixed
     -- * Linear-algebra form (tensor-level verification)
   , sigmaPairDesignMatrix
   , sigmaPairBasis
@@ -114,6 +118,24 @@ sigmaPairWellFormed (SigmaPairTree hp) =
 reconstructPaired :: SigmaPairTree -> [OKLab]
 reconstructPaired (SigmaPairTree hp) =
   concatMap (\c -> [c, sigmaReflect c]) (PT.reconstruct hp)
+
+-- | The FORWARD σ-pair analyser — the left inverse of 'reconstructPaired'. The
+-- 256-leaf palette is @[c_0, σ(c_0), c_1, σ(c_1), …]@, so the 128 @c_i@ generators
+-- are exactly the even-indexed leaves; Haar-analyse them into the depth-7 tree.
+--
+-- On a σ-pair-interleaved palette this is an EXACT inverse
+-- (@reconstructPaired ∘ analyzePaired = id@, ε in 'Double'). On an ARBITRARY
+-- 256-leaf palette it is the PROJECTION onto the σ-pair subspace: the odd leaves
+-- are discarded and regenerated as @σ(c_i)@, so the result is always σ-fixed
+-- ('lawAnalyzePairedProjectsToSigmaFixed'). This is the forward direction the
+-- branch-parameterized collapse needs for the @2⁸@ genome (the @4⁴@ genome's
+-- forward map is 'SixFour.Spec.Quad4.quad4Analyze').
+analyzePaired :: [OKLab] -> SigmaPairTree
+analyzePaired = SigmaPairTree . PT.analyze . evens
+  where
+    evens (x : _ : rest) = x : evens rest
+    evens [x]            = [x]
+    evens []             = []
 
 -- =============================================================================
 -- The σ-action on the output (pointwise σ + swap adjacent pairs)
@@ -183,3 +205,34 @@ sigmaPairImageRank = matCols sigmaPairBasis
 -- σ-asymmetric content (the irreducible loss the σ-pair architecture pays).
 sigmaPairResidual :: [OKLab] -> Double
 sigmaPairResidual leaves = residualFraction sigmaPairBasis (paletteToVec leaves)
+
+-- =============================================================================
+-- Laws for the forward analyser (QuickCheck'd in Properties.SigmaPairHead)
+-- =============================================================================
+
+-- | @analyzePaired ∘ reconstructPaired = id@ on the tree (within ε; the Haar
+-- transform is exact in ℝ, ε-close in 'Double'). Pins that the forward analyser
+-- recovers the genome the decoder emitted.
+lawAnalyzeReconstructPairedRoundTrip :: Double -> SigmaPairTree -> Bool
+lawAnalyzeReconstructPairedRoundTrip eps t =
+  not (sigmaPairWellFormed t) ||
+  haarClose eps (unSigmaPairTree (analyzePaired (reconstructPaired t))) (unSigmaPairTree t)
+
+-- | For ANY 256-leaf palette, @reconstructPaired (analyzePaired leaves)@ lies in
+-- the σ-symmetric subspace: @sigmaSwapAndReflect@ fixes it (within ε). This is the
+-- formal statement that the forward analyser PROJECTS onto the σ-pair genome.
+lawAnalyzePairedProjectsToSigmaFixed :: Double -> [OKLab] -> Bool
+lawAnalyzePairedProjectsToSigmaFixed eps leaves =
+  length leaves /= sigmaPairLeaves ||
+  let pal = reconstructPaired (analyzePaired leaves)
+  in and (zipWith (okClose eps) (sigmaSwapAndReflect pal) pal)
+
+-- internal closeness (PairTree does not export these)
+okClose :: Double -> OKLab -> OKLab -> Bool
+okClose eps (OKLab a b c) (OKLab a' b' c') =
+  abs (a - a') < eps && abs (b - b') < eps && abs (c - c') < eps
+
+haarClose :: Double -> HaarPalette -> HaarPalette -> Bool
+haarClose eps (HaarPalette r1 l1) (HaarPalette r2 l2) =
+  okClose eps r1 r2 && length l1 == length l2 && and (zipWith levelClose l1 l2)
+  where levelClose xs ys = length xs == length ys && and (zipWith (okClose eps) xs ys)

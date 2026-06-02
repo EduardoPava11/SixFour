@@ -12,6 +12,9 @@ import ImageIO
 struct GIFReviewView: View {
     let vm: CaptureViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Shared brushed palette slot (IndexedColor.index) — links the cloud's pick
+    /// to the other palette views (P1 brushing-and-linking, keyed by index).
+    @State private var brushedIndex: Int? = nil
 
     var body: some View {
         ZStack {
@@ -68,7 +71,9 @@ struct GIFReviewView: View {
             RepresentationSelector(selection: Binding(
                 get: { vm.settings.paletteRepresentation },
                 set: { vm.settings.paletteRepresentation = $0 }
-            ))
+            ), cases: o.frameIndicesForVoxels == nil
+                ? [.structure, .grid, .cloud]
+                : [.structure, .grid, .cloud, .voxel3D])
             switch vm.settings.paletteRepresentation {
             case .structure:
                 // The median-cut nesting view: scope (per-frame / global) + branching.
@@ -80,18 +85,49 @@ struct GIFReviewView: View {
                 case .perFrame:
                     PaletteTreeView(palettes: o.palettesForDisplay, branching: vm.settings.paletteBranching)
                     BranchingSelector(selection: branching)
+                    // Operable address for the SAME tree: N wheels = the 16²/4⁴/2⁸
+                    // digits, each labelled with its real axis@pos split; turning one
+                    // brushes that subtree across the views (shared brushedIndex).
+                    AddressPickerView(
+                        splitTree: PaletteTreeView.tree(for: o.palettesForDisplay.first ?? []),
+                        branching: vm.settings.paletteBranching,
+                        brushedIndex: $brushedIndex)
                 case .global:
-                    GlobalPaletteEditor(palettes: o.palettesForDisplay, branching: branching)
+                    // 4⁴ gets its honest opponent-quadrant drill; 16²/2⁸ use the editor.
+                    if vm.settings.paletteBranching == .b4 {
+                        Quad4DrillView(palette: o.palettesForDisplay.first ?? [],
+                                       brushedIndex: $brushedIndex)
+                    } else {
+                        GlobalPaletteEditorView(palettes: o.palettesForDisplay, branching: branching)
+                    }
                 }
             case .grid:
                 // The coordinate view: 256 colours on two user-assigned axes.
                 PaletteGridView(palettes: o.palettesForDisplay,
                                 xAxis: vm.settings.gridAxisX,
-                                yAxis: vm.settings.gridAxisY)
+                                yAxis: vm.settings.gridAxisY,
+                                brushedIndex: brushedIndex)
                 GridAxisSelector(
                     xAxis: Binding(get: { vm.settings.gridAxisX }, set: { vm.settings.gridAxisX = $0 }),
                     yAxis: Binding(get: { vm.settings.gridAxisY }, set: { vm.settings.gridAxisY = $0 })
                 )
+            case .cloud:
+                // P4 — the OKLab Temporal Cloud: 256 colours at true OKLab coords,
+                // orbited (3-D projection) + scrubbed (time projection). The cloud
+                // owns its own chrome (projection / plane / transport selectors).
+                PaletteCloudView(palettes: o.palettesForDisplay,
+                                 perFrameCells: o.perFrameCells,
+                                 splitTree: nil,
+                                 branching: vm.settings.paletteBranching,
+                                 brushedIndex: $brushedIndex)
+            case .voxel3D:
+                // The 64³ (x,y,t) cube the global palette colours. At rest it is
+                // pixel-identical to the GIF hero above (RULE-CUBE-2D-IDENTITY);
+                // orbit reveals time-as-depth, scrub moves the front frame.
+                if let data = VoxelCubeData(output: o) {
+                    VoxelCubeView(data: data, settings: vm.settings, brushedIndex: $brushedIndex,
+                                  brushMode: BrushSet.mode(vm.settings.paletteBranching))
+                }
             }
         }
     }

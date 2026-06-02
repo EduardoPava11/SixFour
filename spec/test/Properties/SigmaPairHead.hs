@@ -94,6 +94,13 @@ tests = testGroup "SigmaPairHead (σ-pair-symmetric decoder — structural σ-eq
         let leaves = reconstructPaired spt
         in sigmaSwapAndReflect leaves == leaves
 
+    -- ---------------- Forward analyser (the genome's two directions) ----------------
+  , testProperty "analyzePaired ∘ reconstructPaired = id on the tree (ε)" $
+      forAll genSigmaPairTree (lawAnalyzeReconstructPairedRoundTrip 1e-9)
+
+  , testProperty "analyzePaired projects ANY 256-leaf palette onto the σ-fixed subspace" $
+      forAll genRandomPalette (lawAnalyzePairedProjectsToSigmaFixed 1e-9)
+
     -- ---------------- EMPIRICAL: rank ----------------
   , testProperty "EMPIRICAL: SigmaPairHead image rank = 384" $
       once $

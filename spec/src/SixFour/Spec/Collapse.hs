@@ -22,6 +22,12 @@ that scores it.
 module SixFour.Spec.Collapse
   ( pooledCandidates
   , farthestPointCollapse
+    -- * The shipped Q16 collapse (byte-exact, device-reproducible)
+  , PxQ16
+  , pooledCandidatesQ16
+  , globalCollapseQ16
+  , globalCollapseIndicesQ16
+  , reindexFrameQ16
   ) where
 
 import qualified Data.Vector as V
@@ -31,6 +37,8 @@ import           Data.Proxy   (Proxy(..))
 
 import SixFour.Spec.Color   (OKLab(..), okLabDistanceSquared)
 import SixFour.Spec.Palette (Palette(..))
+import SixFour.Spec.QuantFixed
+  ( farthestPointSeedsQ16, farthestPointSeedIndicesQ16, nearestCentroidQ16 )
 
 -- | Union of every entry across the per-frame palettes — the candidate cloud a
 -- barycenter collapses. (Diversity collapse selects by spread, so weights are
@@ -68,3 +76,38 @@ farthestPointCollapse pals =
     d2 = okLabDistanceSquared
     addOK (OKLab l a b) (OKLab l' a' b') = OKLab (l + l') (a + a') (b + b')
     scaleOK s (OKLab l a b) = OKLab (s * l) (s * a) (s * b)
+
+-- ---------------------------------------------------------------------------
+-- The shipped Q16 collapse (GIFA → GIFB), byte-exact across devices
+-- ---------------------------------------------------------------------------
+
+-- | A Q16 OKLab triple (scale @2^16@) — the integer substrate of
+-- 'SixFour.Spec.ColorFixed' / the Zig core. The shipped collapse works here, not
+-- in 'Double', so its golden index sequence reproduces bit-for-bit on device (a
+-- greedy maximin argmax over near-tied 'Double's would diverge between platforms).
+type PxQ16 = (Int, Int, Int)
+
+-- | Pool every entry across the 64 per-frame Q16 palettes — the candidate cloud
+-- the collapse selects from (order-invariant multiset; @concat@).
+pooledCandidatesQ16 :: [[PxQ16]] -> [PxQ16]
+pooledCandidatesQ16 = concat
+
+-- | The per-frame → single-palette collapse in Q16: maximin (farthest-point)
+-- selection of @k@ representatives over the pooled cloud. This is the SAME
+-- operator 'SixFour.Spec.QuantFixed.farthestPointSeedsQ16' applies to one frame's
+-- pixels — here applied to the union of all frames — so it is already mirrored
+-- byte-for-byte by the Zig @s4_quantize_frame@ seed phase. Every chosen colour is
+-- an actual input colour (gamut-closed); ties resolve to the lowest index.
+globalCollapseQ16 :: Int -> [[PxQ16]] -> [PxQ16]
+globalCollapseQ16 k = farthestPointSeedsQ16 k . pooledCandidatesQ16
+
+-- | The collapse's chosen-index sequence into the pooled cloud (the golden pins
+-- this exact order). @globalCollapseQ16 k = map (pooled !!) . globalCollapseIndicesQ16 k@.
+globalCollapseIndicesQ16 :: Int -> [[PxQ16]] -> [Int]
+globalCollapseIndicesQ16 k = farthestPointSeedIndicesQ16 k . pooledCandidatesQ16
+
+-- | Re-index one frame's colours against the collapsed global leaves: each colour
+-- maps to its nearest leaf (squared Q16 distance, strict @<@ ⇒ lowest index on
+-- ties — the GIF GCT index map). Mirrors 'nearestCentroidQ16'.
+reindexFrameQ16 :: [PxQ16] -> [PxQ16] -> [Int]
+reindexFrameQ16 leaves = map (nearestCentroidQ16 (V.fromList leaves))

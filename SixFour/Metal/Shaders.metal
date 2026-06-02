@@ -521,3 +521,153 @@ kernel void kmeansFinalizeStatsKernel(
     covariances[base + 4u] = Eab - ma * mb;
     covariances[base + 5u] = Ebb - mb * mb;
 }
+
+// MARK: - Voxel cube raymarch (Review .voxel3D mode)
+//
+// Orthographic DDA (Amanatides–Woo) over a 64³ R8Uint index volume. Depth-slice
+// z shows frame f(z) = (cursor−63+z) mod 64, so the near face (z=63) is the
+// current frame and earlier frames recede — face-on the cube is byte-identical
+// to the 2D GIF, orbit blooms it. Per-(t,k) provenance is packed in the palette
+// texture's alpha (0=degenerate→air, 1=extracted, 2=split→one dark step).
+// See docs/SIXFOUR-VOXEL-CUBE.md. Mirrors Swift VoxelUniforms / Renderer.orbit.
+
+struct VoxelUniforms {
+    float yaw;
+    float pitch;
+    float2 resolution;
+    int frame;
+    int tLo;
+    int tHi;
+    int lumaFloor;
+    float halfSpan;
+    int provMode;     // 0 = all, 1 = extracted only, 2 = split only
+    int brushedIndex; // shared cross-view brush: palette index to highlight, -1 = none
+    int brushMode;    // brush set per radix: 0 single (16²) / 1 quad (4⁴) / 2 σ-pair (2⁸)
+};
+
+static inline float3 voxelOrbit(float3 v, float yaw, float pitch) {
+    float cy = cos(yaw), sy = sin(yaw);
+    float3 r = float3(cy * v.x + sy * v.z, v.y, -sy * v.x + cy * v.z);
+    float cp = cos(pitch), sp = sin(pitch);
+    return float3(r.x, cp * r.y - sp * r.z, sp * r.y + cp * r.z);
+}
+
+static inline float2 voxelBoxHit(float3 o, float3 d) {
+    float3 inv = 1.0 / d;
+    float3 t0 = (float3(0.0) - o) * inv;
+    float3 t1 = (float3(64.0) - o) * inv;
+    float3 tmin = min(t0, t1), tmax = max(t0, t1);
+    return float2(max(max(max(tmin.x, tmin.y), tmin.z), 0.0),
+                  min(min(tmax.x, tmax.y), tmax.z));
+}
+
+kernel void voxel_raymarch(
+    texture3d<uint,  access::read>   indexTex   [[texture(0)]],
+    texture2d<float, access::sample> paletteTex [[texture(1)]],
+    texture2d<float, access::write>  outTex     [[texture(2)]],
+    constant VoxelUniforms& U                   [[buffer(0)]],
+    uint2 gid                                   [[thread_position_in_grid]])
+{
+    if (gid.x >= (uint)U.resolution.x || gid.y >= (uint)U.resolution.y) return;
+
+    float4 bg = float4(0.0, 0.0, 0.0, 1.0);
+
+    float side = min(U.resolution.x, U.resolution.y);
+    float2 off = (U.resolution - side) * 0.5;
+    float2 px = float2(gid) + 0.5 - off;
+    if (px.x < 0.0 || px.y < 0.0 || px.x >= side || px.y >= side) { outTex.write(bg, gid); return; }
+    float2 uv = px / side;
+
+    float2 plane = (uv - 0.5) * 2.0 * U.halfSpan;
+    float3 Xb = voxelOrbit(float3(1, 0, 0), U.yaw, U.pitch);
+    float3 Yb = voxelOrbit(float3(0, 1, 0), U.yaw, U.pitch);
+    float3 Zb = voxelOrbit(float3(0, 0, 1), U.yaw, U.pitch);
+    float3 center = float3(32.0);
+    float3 o = center + plane.x * Xb + plane.y * Yb + 200.0 * Zb;
+    float3 d = -Zb;
+
+    float2 hit = voxelBoxHit(o, d);
+    if (hit.y < hit.x) { outTex.write(bg, gid); return; }
+
+    float3 p = o + d * (hit.x + 1e-3);
+    int3 voxel = int3(floor(p));
+    int3 stp = int3(sign(d));
+    float3 inv = 1.0 / d;
+    float3 tMax = (float3(voxel) + max(float3(stp), float3(0.0)) - o) * inv;
+    float3 tDelta = abs(inv);
+
+    int tLo = clamp(U.tLo, 0, 63);
+    int tHi = clamp(U.tHi, 0, 63);
+    int cursor = clamp(U.frame, 0, 63);
+
+    float4 col = bg;
+    int axis = -1;
+
+    // REST-POSE IDENTITY (RULE-CUBE-2D-IDENTITY): at the flat pose every depth cue
+    // and every cull becomes a pure no-op, so the near face (z=63) renders frame
+    // `cursor` with the EXACT palette colour — byte-1:1 with the 2D GIF hero. The
+    // cube may diverge only once orbited (flat == false). See VoxelRestPoseIdentityTests.
+    bool flat = (U.yaw * U.yaw + U.pitch * U.pitch) < 1e-6;
+
+    for (int i = 0; i < 220; ++i) {
+        bool inside = voxel.x >= 0 && voxel.x < 64 &&
+                      voxel.y >= 0 && voxel.y < 64 &&
+                      voxel.z >= 0 && voxel.z < 64;
+        if (!inside) break;
+
+        // Depth-band cull is flat-gated: at rest the near face (z=63) must always
+        // render, regardless of a seeded trail band, or the front face would show a
+        // different frame than the 2D GIF.
+        if (flat || (voxel.z >= tLo && voxel.z <= tHi)) {
+            int fz = ((cursor - 63 + voxel.z) % 64 + 64) % 64;
+            uint k = indexTex.read(uint3(uint(voxel.x), uint(voxel.y), uint(fz))).r;
+            constexpr sampler s(coord::normalized, filter::nearest, address::clamp_to_edge);
+            float2 pc = float2(float(k) + 0.5, float(fz) + 0.5) / float2(256.0, 64.0);
+            float4 rgba = paletteTex.sample(s, pc);
+
+            // Provenance (palette alpha): 0 degenerate / 1 extracted / 2 split.
+            int prov = int(round(rgba.a * 255.0));
+            // Air/provenance cull flat-gated: at rest every slot the 2D GIF shows
+            // must render (the GIF colour table is the same sRGB8 palette).
+            bool air = !flat && ( (prov == 0)
+                    || (U.provMode == 1 && prov != 1)
+                    || (U.provMode == 2 && prov != 2) );
+
+            if (!air) {
+                float luma255 = (0.2126 * rgba.r + 0.7152 * rgba.g + 0.0722 * rgba.b) * 255.0;
+                if (flat || luma255 >= float(U.lumaFloor)) {
+                    // At rest: no face shading, no split darkening (the 2D GIF has
+                    // neither). axis == -1 on the first hit already gives face=1.0;
+                    // the flat guard makes both cues provably inert.
+                    float face = flat ? 1.0 : ((axis == 0) ? 0.82 : (axis == 2 ? 0.90 : 1.0));
+                    float split = (flat || prov != 2) ? 1.0 : 0.6;   // split = one discrete dark step
+                    // Cross-view brush: when orbited (!flat), the brushed palette
+                    // index keeps full colour and every other voxel dims by ONE
+                    // discrete opaque step (GRID Law #2 — never alpha). Gated !flat so
+                    // the flat 2D rest pose is never disturbed (RULE-CUBE-2D-IDENTITY).
+                    // Cross-view brush set per radix (BrushSet.kernelHit): single
+                    // (16²), the opponent quad sharing k&~3 (4⁴), or the σ-pair k^1
+                    // (2⁸). The matched set keeps full colour; the rest dim by one
+                    // discrete opaque step. Gated !flat so the 2D rest pose is exact.
+                    int bk = U.brushedIndex;
+                    bool hit = (int(k) == bk);
+                    if (U.brushMode == 2)      hit = hit || (int(k) == (bk ^ 1));
+                    else if (U.brushMode == 1) hit = hit || ((int(k) & ~3) == (bk & ~3));
+                    float brush = (!flat && bk >= 0 && !hit) ? 0.28 : 1.0;
+                    col = float4(rgba.rgb * face * split * brush, 1.0);
+                    break;
+                }
+            }
+        }
+
+        if (tMax.x < tMax.y) {
+            if (tMax.x < tMax.z) { voxel.x += stp.x; tMax.x += tDelta.x; axis = 0; }
+            else                 { voxel.z += stp.z; tMax.z += tDelta.z; axis = 2; }
+        } else {
+            if (tMax.y < tMax.z) { voxel.y += stp.y; tMax.y += tDelta.y; axis = 1; }
+            else                 { voxel.z += stp.z; tMax.z += tDelta.z; axis = 2; }
+        }
+    }
+
+    outTex.write(col, gid);
+}
