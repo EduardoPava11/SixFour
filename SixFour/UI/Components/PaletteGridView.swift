@@ -83,14 +83,14 @@ enum PaletteRepresentation: String, CaseIterable, Codable, Sendable {
     case structure   // the median-cut SplitTree treemap / global editor
     case grid        // the user-assignable 16×16 coordinate grid
     case cloud       // P4: the OKLab Temporal Cloud (3 OKLab axes + scrubbable time)
-    // NOTE: `.voxel3D` (the 64³ cube) is shelved until ready — see
-    // docs/SIXFOUR-VOXEL-CUBE.md and VoxelCubeView.swift (dormant, not wired).
+    case voxel3D     // the 64³ (x,y,t) cube; REST POSE == the 2D GIF hero, orbit reveals time
 
     var label: String {
         switch self {
         case .structure: return "structure"
         case .grid: return "grid"
         case .cloud: return "cloud"
+        case .voxel3D: return "cube"
         }
     }
 }

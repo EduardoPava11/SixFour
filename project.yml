@@ -72,6 +72,12 @@ targets:
              || ! diff -q "$SCRATCH/swift/NetContract.swift"          "$SRC/SixFour/Generated/NetContract.swift" \
              || ! diff -q "$SCRATCH/swift/STBN3DContract.swift"       "$SRC/SixFour/Generated/STBN3DContract.swift" \
              || ! diff -q "$SCRATCH/swift/SignificanceContract.swift" "$SRC/SixFour/Generated/SignificanceContract.swift" \
+             || ! diff -q "$SCRATCH/swift/GlobalVolumeContract.swift" "$SRC/SixFour/Generated/GlobalVolumeContract.swift" \
+             || ! diff -q "$SCRATCH/swift/CollapseGolden.swift"       "$SRC/SixFour/Generated/CollapseGolden.swift" \
+             || ! diff -q "$SCRATCH/swift/PairTreeGolden.swift"       "$SRC/SixFour/Generated/PairTreeGolden.swift" \
+             || ! diff -q "$SCRATCH/swift/PaletteValueGolden.swift"   "$SRC/SixFour/Generated/PaletteValueGolden.swift" \
+             || ! diff -q "$SCRATCH/swift/GenomeGolden.swift"         "$SRC/SixFour/Generated/GenomeGolden.swift" \
+             || ! diff -q "$SCRATCH/swift/GenomeFixedGolden.swift"    "$SRC/SixFour/Generated/GenomeFixedGolden.swift" \
              || ! diff -q "$SCRATCH/res/stbn3d-8.bin"                 "$SRC/SixFour/Resources/stbn3d-8.bin" \
              || ! diff -q "$SCRATCH/mlx/stages.py"                    "$SRC/trainer/generated/stages.py" \
              || ! diff -q "$SCRATCH/mlx/net_shape.py"                 "$SRC/trainer/generated/net_shape.py"; then
@@ -81,6 +87,12 @@ targets:
             diff -u "$SCRATCH/swift/NetContract.swift"          "$SRC/SixFour/Generated/NetContract.swift"          || true
             diff -u "$SCRATCH/swift/STBN3DContract.swift"       "$SRC/SixFour/Generated/STBN3DContract.swift"       || true
             diff -u "$SCRATCH/swift/SignificanceContract.swift" "$SRC/SixFour/Generated/SignificanceContract.swift" || true
+            diff -u "$SCRATCH/swift/GlobalVolumeContract.swift" "$SRC/SixFour/Generated/GlobalVolumeContract.swift" || true
+            diff -u "$SCRATCH/swift/CollapseGolden.swift"       "$SRC/SixFour/Generated/CollapseGolden.swift"       || true
+            diff -u "$SCRATCH/swift/PairTreeGolden.swift"       "$SRC/SixFour/Generated/PairTreeGolden.swift"       || true
+            diff -u "$SCRATCH/swift/PaletteValueGolden.swift"   "$SRC/SixFour/Generated/PaletteValueGolden.swift"   || true
+            diff -u "$SCRATCH/swift/GenomeGolden.swift"         "$SRC/SixFour/Generated/GenomeGolden.swift"         || true
+            diff -u "$SCRATCH/swift/GenomeFixedGolden.swift"    "$SRC/SixFour/Generated/GenomeFixedGolden.swift"    || true
             diff -u "$SCRATCH/mlx/stages.py"                    "$SRC/trainer/generated/stages.py"                  || true
             diff -u "$SCRATCH/mlx/net_shape.py"                 "$SRC/trainer/generated/net_shape.py"               || true
             exit 1

@@ -130,6 +130,29 @@ int32_t s4_quantize_frame(const int32_t *oklab_q16, int32_t p, int32_t k,
                           int32_t *out_centroids_q16, uint8_t *out_indices,
                           void *scratch, size_t scratch_cap);
 
+// GIFA → GIFB: collapse `t` per-frame Q16 palettes (contiguous t*k_in*3 i32) into
+// ONE global palette: maximin selects k_out global leaves; every pooled colour is
+// assigned to its nearest leaf (the per-frame index map, flattened to t*k_in).
+// Shares s4_quantize_frame's byte-exact maximin path. Mirrors
+// SixFour.Spec.Collapse.globalCollapseQ16. k_out <= 256 and <= t*k_in.
+// scratch >= (t*k_in)*8 + 3*k_out*8 + k_out*4 bytes.
+int32_t s4_global_collapse(const int32_t *palettes_q16, int32_t t, int32_t k_in,
+                           int32_t k_out, int32_t *out_leaves_q16, uint8_t *out_indices,
+                           void *scratch, size_t scratch_cap);
+
+// Owned integer Haar (reversible lifting / S-transform) — the palette's
+// dimensional space as EXACT integer math. analyze: 2^D leaves → root (3 Q16) +
+// (2^D-1) detail offsets (Q16, interleaved L,a,b, coarsest-first). reconstruct is
+// its exact inverse (reconstruct∘analyze = id byte-exact; a coefficient move is
+// exactly reversible). Mirrors SixFour.Spec.PairTreeFixed. n must be a power of
+// two. analyze scratch >= n*3*4 bytes; reconstruct needs no scratch.
+int32_t s4_haar_analyze(const int32_t *leaves_q16, int32_t n,
+                        int32_t *out_root_q16, int32_t *out_offsets_q16,
+                        void *scratch, size_t scratch_cap);
+
+int32_t s4_haar_reconstruct(const int32_t *root_q16, const int32_t *offsets_q16,
+                            int32_t n, int32_t *out_leaves_q16);
+
 int32_t s4_dither_frame(const int32_t *oklab_q16, const int32_t *centroids_q16,
                         int32_t p, int32_t k, int32_t dither_mode, int32_t serpentine,
                         const uint8_t *stbn_slice, uint8_t *out_indices,

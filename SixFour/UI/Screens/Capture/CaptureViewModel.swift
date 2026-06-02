@@ -396,6 +396,13 @@ final class CaptureViewModel {
         sheetURL: URL,
         summary: String
     ) async throws -> RenderResult {
+        // GIFB: one global palette (collapse + whole-GIF rescue), gated by the
+        // whole-GIF brands. Routed by the user's paletteScope toggle.
+        if settings.paletteScope == .global {
+            return try await renderDeterministicGlobal(
+                tiles: tiles, dither: dither, baseURL: baseURL, sheetURL: sheetURL, summary: summary
+            )
+        }
         let start = ContinuousClock().now
         phase = .renderingStageA   // busy + spinner; the granular stage rides on `deterministicStage`
         let comment = "SixFour deterministic core · \(tiles.count)×\(tiles.first?.side ?? 64)² · K=\(SixFourShape.K)"
@@ -457,6 +464,94 @@ final class CaptureViewModel {
         )
         // No per-frame ClusterStatistics on this path (editing tools are future);
         // the CaptureBundle records an empty stats array.
+        return RenderResult(output: output, perFrameStatistics: [])
+    }
+
+    /// GIFB: collapse the 64 per-frame palettes into ONE global palette (owned Zig
+    /// `s4_global_collapse`) + whole-GIF significance rescue, then gate the bytes
+    /// with the WHOLE-GIF brands. A global palette cannot pass the per-frame
+    /// `CompleteVoxelVolume` (a frame need not use all K shared colours), so
+    /// `GlobalCompleteVolume` (union-surjective onto K) + `GlobalSignificantVolume`
+    /// (every slot ≥ minPopulation pooled) are the correct unforgeable gates.
+    private func renderDeterministicGlobal(
+        tiles: [OKLabTile],
+        dither: DitherConfig,
+        baseURL: URL,
+        sheetURL: URL,
+        summary: String
+    ) async throws -> RenderResult {
+        let start = ContinuousClock().now
+        phase = .renderingStageA
+        let comment = "SixFour deterministic core · GLOBAL palette · \(tiles.count)×\(tiles.first?.side ?? 64)² · K=\(SixFourShape.K)"
+        let renderer = DeterministicRenderer(dither: dither)
+
+        let branching = settings.paletteBranching   // the radix = the NN genome
+        let g = try await Task.detached(priority: .userInitiated) {
+            try renderer.renderGlobalPalette(tiles: tiles, comment: comment, branching: branching) { stage in
+                Task { @MainActor [weak self] in self?.deterministicStage = stage.rawValue }
+            }
+        }.value
+        deterministicStage = nil
+
+        // Whole-GIF brands (replace the per-frame CompleteVoxelVolume gate).
+        guard let complete = GlobalCompleteVolume(checkingFrames: g.frameIndices) else {
+            throw GIFEncoderError.incompleteVoxelVolume
+        }
+        guard GlobalSignificantVolume(complete: complete, pooledCounts: g.pooledCounts) != nil else {
+            throw GIFEncoderError.insignificantVoxelVolume
+        }
+
+        try g.gifData.write(to: baseURL)
+        do {
+            try await Task.detached(priority: .utility) {
+                try ContactSheet.writePNG(tiles: tiles, to: sheetURL)
+            }.value
+        } catch {
+            Self.logger.error("Contact sheet failed: \(String(describing: error))")
+        }
+        let contact: URL? = FileManager.default.fileExists(atPath: sheetURL.path) ? sheetURL : nil
+        let totalMs = PaletteGenerator.milliseconds(ContinuousClock().now - start)
+
+        // One global palette shared by every frame. The per-frame Review fields
+        // describe each frame's USE of that shared palette: cells are synthesised
+        // from the whole-GIF pooled populations (the palette is fully significant by
+        // the brand), and `perFrameSignificant` is each frame's distinct-colour count.
+        let k = SixFourShape.K
+        let minPop = SixFourSignificance.minPopulation
+        let globalCells: [SixFourSignificantCell] = (0..<k).map { j in
+            let lab = g.globalLeavesQ16[j]
+            let mean = SIMD3<Float>(Float(lab.x) / 65536, Float(lab.y) / 65536, Float(lab.z) / 65536)
+            let n = g.pooledCounts[j]
+            return SixFourSignificantCell(mean: mean, stdDev: .zero, count: n,
+                                          provenance: n >= minPop ? .extracted : .degenerate)
+        }
+        let palettesForDisplay = Array(repeating: g.globalPalette, count: tiles.count)
+        let cells = Array(repeating: globalCells, count: tiles.count)
+        let perFrameSignificant = g.frameIndices.map { Set($0).count }
+        let perFrameCoverage = Array(repeating: g.globalCoverage, count: tiles.count)
+        let meanMSE = g.perFrameMSE.isEmpty ? 0 : g.perFrameMSE.reduce(0, +) / Float(g.perFrameMSE.count)
+
+        let output = CaptureOutput(
+            gifURL: baseURL,
+            contactURL: contact,
+            renderMillis: totalMs,
+            stageAMillis: totalMs,
+            encodeMillis: 0,
+            fileSize: g.gifData.count,
+            timingSummary: summary,
+            palettesForDisplay: palettesForDisplay,
+            ditherMethod: dither.method,
+            meanExtractMSE: meanMSE,
+            meanCentroidConditionNumber: .nan,
+            meanAdmissionRateAt05: 0,
+            perFrameCells: cells,
+            perFrameSignificant: perFrameSignificant,
+            perFrameCoverage: perFrameCoverage,
+            perFrameMSE: g.perFrameMSE,
+            frameIndicesForVoxels: g.frameIndices,
+            deterministic: true,
+            sha256: g.sha256Hex
+        )
         return RenderResult(output: output, perFrameStatistics: [])
     }
 

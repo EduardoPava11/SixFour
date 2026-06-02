@@ -541,7 +541,8 @@ struct VoxelUniforms {
     int lumaFloor;
     float halfSpan;
     int provMode;     // 0 = all, 1 = extracted only, 2 = split only
-    float _pad;
+    int brushedIndex; // shared cross-view brush: palette index to highlight, -1 = none
+    int brushMode;    // brush set per radix: 0 single (16²) / 1 quad (4⁴) / 2 σ-pair (2⁸)
 };
 
 static inline float3 voxelOrbit(float3 v, float yaw, float pitch) {
@@ -602,13 +603,22 @@ kernel void voxel_raymarch(
     float4 col = bg;
     int axis = -1;
 
+    // REST-POSE IDENTITY (RULE-CUBE-2D-IDENTITY): at the flat pose every depth cue
+    // and every cull becomes a pure no-op, so the near face (z=63) renders frame
+    // `cursor` with the EXACT palette colour — byte-1:1 with the 2D GIF hero. The
+    // cube may diverge only once orbited (flat == false). See VoxelRestPoseIdentityTests.
+    bool flat = (U.yaw * U.yaw + U.pitch * U.pitch) < 1e-6;
+
     for (int i = 0; i < 220; ++i) {
         bool inside = voxel.x >= 0 && voxel.x < 64 &&
                       voxel.y >= 0 && voxel.y < 64 &&
                       voxel.z >= 0 && voxel.z < 64;
         if (!inside) break;
 
-        if (voxel.z >= tLo && voxel.z <= tHi) {
+        // Depth-band cull is flat-gated: at rest the near face (z=63) must always
+        // render, regardless of a seeded trail band, or the front face would show a
+        // different frame than the 2D GIF.
+        if (flat || (voxel.z >= tLo && voxel.z <= tHi)) {
             int fz = ((cursor - 63 + voxel.z) % 64 + 64) % 64;
             uint k = indexTex.read(uint3(uint(voxel.x), uint(voxel.y), uint(fz))).r;
             constexpr sampler s(coord::normalized, filter::nearest, address::clamp_to_edge);
@@ -617,16 +627,34 @@ kernel void voxel_raymarch(
 
             // Provenance (palette alpha): 0 degenerate / 1 extracted / 2 split.
             int prov = int(round(rgba.a * 255.0));
-            bool air = (prov == 0)
+            // Air/provenance cull flat-gated: at rest every slot the 2D GIF shows
+            // must render (the GIF colour table is the same sRGB8 palette).
+            bool air = !flat && ( (prov == 0)
                     || (U.provMode == 1 && prov != 1)
-                    || (U.provMode == 2 && prov != 2);
+                    || (U.provMode == 2 && prov != 2) );
 
             if (!air) {
                 float luma255 = (0.2126 * rgba.r + 0.7152 * rgba.g + 0.0722 * rgba.b) * 255.0;
-                if (luma255 >= float(U.lumaFloor)) {
-                    float face = (axis == 0) ? 0.82 : (axis == 2 ? 0.90 : 1.0);
-                    float split = (prov == 2) ? 0.6 : 1.0;   // split = one discrete dark step
-                    col = float4(rgba.rgb * face * split, 1.0);
+                if (flat || luma255 >= float(U.lumaFloor)) {
+                    // At rest: no face shading, no split darkening (the 2D GIF has
+                    // neither). axis == -1 on the first hit already gives face=1.0;
+                    // the flat guard makes both cues provably inert.
+                    float face = flat ? 1.0 : ((axis == 0) ? 0.82 : (axis == 2 ? 0.90 : 1.0));
+                    float split = (flat || prov != 2) ? 1.0 : 0.6;   // split = one discrete dark step
+                    // Cross-view brush: when orbited (!flat), the brushed palette
+                    // index keeps full colour and every other voxel dims by ONE
+                    // discrete opaque step (GRID Law #2 — never alpha). Gated !flat so
+                    // the flat 2D rest pose is never disturbed (RULE-CUBE-2D-IDENTITY).
+                    // Cross-view brush set per radix (BrushSet.kernelHit): single
+                    // (16²), the opponent quad sharing k&~3 (4⁴), or the σ-pair k^1
+                    // (2⁸). The matched set keeps full colour; the rest dim by one
+                    // discrete opaque step. Gated !flat so the 2D rest pose is exact.
+                    int bk = U.brushedIndex;
+                    bool hit = (int(k) == bk);
+                    if (U.brushMode == 2)      hit = hit || (int(k) == (bk ^ 1));
+                    else if (U.brushMode == 1) hit = hit || ((int(k) & ~3) == (bk & ~3));
+                    float brush = (!flat && bk >= 0 && !hit) ? 0.28 : 1.0;
+                    col = float4(rgba.rgb * face * split * brush, 1.0);
                     break;
                 }
             }

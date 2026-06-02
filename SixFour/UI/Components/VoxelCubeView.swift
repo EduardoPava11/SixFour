@@ -114,13 +114,20 @@ struct VoxelCubeState: Equatable {
 @MainActor
 struct VoxelCubeView: View {
     let data: VoxelCubeData
-    /// Edge of the square render surface, in points. Default = `gifCanvasPt` so a
-    /// voxel is `gifCellPt` (6 pt) face-on — identical to the 2D GIF hero (the
-    /// 2D↔3D consistency: both size from `SFTheme.gifCanvasPt`).
+    /// Nominal chrome/placeholder width cap, in points (the controls panel + the
+    /// not-well-formed placeholder). The RENDER SURFACE no longer uses this — it
+    /// self-sizes via `SFTheme.canvasEdge` in `cubeBody`, exactly like the 2D
+    /// `GIFCanvas`, so the two are 1:1 under the same Review column.
     var edge: CGFloat = SFTheme.gifCanvasPt
     /// Optional store: when present, the provenance filter / luma floor /
     /// auto-rotate are seeded from it and persisted back across captures.
     var settings: AppSettings?
+    /// Shared cross-view brush (the same `brushedIndex` the grid / cloud / picker
+    /// use): the cube highlights matching voxels when orbited, and tapping a voxel
+    /// at the flat rest pose sets it. Defaults to a no-op binding.
+    @Binding var brushedIndex: Int?
+    /// Brush set per radix (`BrushSet.mode`): 0 single / 1 quad (4⁴) / 2 σ-pair (2⁸).
+    var brushMode: Int32 = 0
 
     @State private var cube: VoxelCubeState
     @State private var tick = 0
@@ -129,10 +136,14 @@ struct VoxelCubeView: View {
     // The single 60 Hz driver for playback (20 fps cursor) + auto-rotate.
     private let clock = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
-    init(data: VoxelCubeData, edge: CGFloat = SFTheme.gifCanvasPt, settings: AppSettings? = nil) {
+    init(data: VoxelCubeData, edge: CGFloat = SFTheme.gifCanvasPt,
+         settings: AppSettings? = nil, brushedIndex: Binding<Int?> = .constant(nil),
+         brushMode: Int32 = 0) {
         self.data = data
         self.edge = edge
         self.settings = settings
+        self._brushedIndex = brushedIndex
+        self.brushMode = brushMode
         var initial = VoxelCubeState()
         if let s = settings {
             initial.provMode = s.voxelProvenanceMode
@@ -155,26 +166,47 @@ struct VoxelCubeView: View {
 
     private var cubeBody: some View {
         VStack(spacing: 12) {
-            ZStack(alignment: .topTrailing) {
-                VoxelMetalView(data: data, state: cube)
-                    .frame(width: edge, height: edge)
-                    .background(Color.black)
-                    .highPriorityGesture(orbitGesture)
-                    .accessibilityElement()
-                    .accessibilityLabel("64 by 64 by 64 voxel palette cube")
-                    .accessibilityValue(cube.isFlat
-                        ? "Flat view, frame \(cube.frame + 1) of 64. Drag to orbit into 3D."
-                        : "Orbited \(Int(cube.orbitMagnitude * 57)) degrees, frame \(cube.frame + 1) of 64.")
+            // The square render surface sizes EXACTLY like the 2D `GIFCanvas`
+            // (a `GeometryReader` + `SFTheme.canvasEdge` inside `.pixelFrame()`),
+            // so under the same Review column it gets the identical on-screen edge —
+            // the rest-pose indistinguishability invariant (RULE-CUBE-2D-IDENTITY).
+            GeometryReader { geo in
+                let e = SFTheme.canvasEdge(forAvailable: min(geo.size.width, geo.size.height),
+                                           cells: SFTheme.gifSideCells)
+                ZStack(alignment: .topTrailing) {
+                    VoxelMetalView(data: data, state: cube, brushedIndex: brushedIndex, brushMode: brushMode)
+                        .frame(width: e, height: e)
+                        .background(Color.black)
+                        .highPriorityGesture(orbitGesture)
+                        // Tap-to-pick on the FLAT rest pose: the front-face pixel's
+                        // palette index becomes the shared brush (tap again to clear).
+                        // Gated to flat so it reads the exact 2D frame the user sees.
+                        .simultaneousGesture(SpatialTapGesture().onEnded { v in
+                            guard cube.isFlat, e > 0 else { return }
+                            let side = VoxelCubeData.side
+                            let x = min(side - 1, max(0, Int(v.location.x / e * CGFloat(side))))
+                            let y = min(side - 1, max(0, Int(v.location.y / e * CGFloat(side))))
+                            let idx = Int(data.frameIndices[cube.frame][y * side + x])
+                            brushedIndex = (brushedIndex == idx) ? nil : idx
+                        })
+                        .accessibilityElement()
+                        .accessibilityLabel("64 by 64 by 64 voxel palette cube")
+                        .accessibilityValue(cube.isFlat
+                            ? "Flat view, frame \(cube.frame + 1) of 64. Drag to orbit into 3D."
+                            : "Orbited \(Int(cube.orbitMagnitude * 57)) degrees, frame \(cube.frame + 1) of 64.")
 
-                // Reset-to-2D — the "fold back flat" affordance (glass chrome).
-                GlassIconButton(systemImage: "cube.transparent",
-                                accessibilityLabel: "Reset to flat 2D view") {
-                    withAnimation(.easeInOut(duration: 0.45)) {
-                        cube.yaw = 0; cube.pitch = 0
+                    // Reset-to-2D — the "fold back flat" affordance (glass chrome).
+                    GlassIconButton(systemImage: "cube.transparent",
+                                    accessibilityLabel: "Reset to flat 2D view") {
+                        withAnimation(.easeInOut(duration: 0.45)) {
+                            cube.yaw = 0; cube.pitch = 0
+                        }
                     }
+                    .padding(8)
                 }
-                .padding(8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .pixelFrame()
 
             controls
         }
@@ -299,6 +331,10 @@ struct VoxelCubeView: View {
 private struct VoxelMetalView: UIViewRepresentable {
     let data: VoxelCubeData
     let state: VoxelCubeState
+    /// Shared cross-view brush: palette index to highlight, or nil.
+    var brushedIndex: Int?
+    /// Brush set per radix (BrushSet.mode): 0 single / 1 quad (4⁴) / 2 σ-pair (2⁸).
+    var brushMode: Int32 = 0
 
     func makeCoordinator() -> Renderer { Renderer(data: data) }
 
@@ -312,12 +348,12 @@ private struct VoxelMetalView: UIViewRepresentable {
         v.isPaused = false
         v.enableSetNeedsDisplay = false
         v.clearColor = MTLClearColorMake(0, 0, 0, 1)
-        context.coordinator.apply(state)
+        context.coordinator.apply(state, brushedIndex: brushedIndex, brushMode: brushMode)
         return v
     }
 
     func updateUIView(_ uiView: MTKView, context: Context) {
-        context.coordinator.apply(state)
+        context.coordinator.apply(state, brushedIndex: brushedIndex, brushMode: brushMode)
     }
 }
 
@@ -333,7 +369,8 @@ private struct VoxelUniforms {
     var lumaFloor: Int32 = 0
     var halfSpan: Float = 32            // projected half-extent → exact-fit window
     var provMode: Int32 = 0             // 0 all / 1 extracted / 2 split
-    var _pad: Float = 0
+    var brushedIndex: Int32 = -1        // shared cross-view brush; -1 = none
+    var brushMode: Int32 = 0            // brush set: 0 single (16²) / 1 quad (4⁴) / 2 σ-pair (2⁸)
 }
 
 // MARK: - Renderer
@@ -432,7 +469,7 @@ private final class Renderer: NSObject, MTKViewDelegate {
         super.init()
     }
 
-    func apply(_ s: VoxelCubeState) {
+    func apply(_ s: VoxelCubeState, brushedIndex: Int? = nil, brushMode: Int32 = 0) {
         uniforms.yaw = s.yaw
         uniforms.pitch = s.pitch
         uniforms.frame = Int32(max(0, min(63, s.frame)))
@@ -440,6 +477,8 @@ private final class Renderer: NSObject, MTKViewDelegate {
         uniforms.tHi = Int32(max(0, min(63, s.tHi)))
         uniforms.lumaFloor = Int32(max(0, min(255, s.lumaFloor)))
         uniforms.provMode = Int32(max(0, min(2, s.provMode)))
+        uniforms.brushedIndex = brushedIndex.map { Int32(max(0, min(255, $0))) } ?? -1
+        uniforms.brushMode = brushMode
 
         // FIXED orthographic scale — the cube NEVER changes size, only orients.
         // halfSpan is the constant face-on half-extent (side/2), so one voxel is

@@ -71,7 +71,9 @@ struct GIFReviewView: View {
             RepresentationSelector(selection: Binding(
                 get: { vm.settings.paletteRepresentation },
                 set: { vm.settings.paletteRepresentation = $0 }
-            ))
+            ), cases: o.frameIndicesForVoxels == nil
+                ? [.structure, .grid, .cloud]
+                : [.structure, .grid, .cloud, .voxel3D])
             switch vm.settings.paletteRepresentation {
             case .structure:
                 // The median-cut nesting view: scope (per-frame / global) + branching.
@@ -91,7 +93,13 @@ struct GIFReviewView: View {
                         branching: vm.settings.paletteBranching,
                         brushedIndex: $brushedIndex)
                 case .global:
-                    GlobalPaletteEditorView(palettes: o.palettesForDisplay, branching: branching)
+                    // 4⁴ gets its honest opponent-quadrant drill; 16²/2⁸ use the editor.
+                    if vm.settings.paletteBranching == .b4 {
+                        Quad4DrillView(palette: o.palettesForDisplay.first ?? [],
+                                       brushedIndex: $brushedIndex)
+                    } else {
+                        GlobalPaletteEditorView(palettes: o.palettesForDisplay, branching: branching)
+                    }
                 }
             case .grid:
                 // The coordinate view: 256 colours on two user-assigned axes.
@@ -112,6 +120,14 @@ struct GIFReviewView: View {
                                  splitTree: nil,
                                  branching: vm.settings.paletteBranching,
                                  brushedIndex: $brushedIndex)
+            case .voxel3D:
+                // The 64³ (x,y,t) cube the global palette colours. At rest it is
+                // pixel-identical to the GIF hero above (RULE-CUBE-2D-IDENTITY);
+                // orbit reveals time-as-depth, scrub moves the front frame.
+                if let data = VoxelCubeData(output: o) {
+                    VoxelCubeView(data: data, settings: vm.settings, brushedIndex: $brushedIndex,
+                                  brushMode: BrushSet.mode(vm.settings.paletteBranching))
+                }
             }
         }
     }

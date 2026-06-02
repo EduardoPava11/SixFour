@@ -33,6 +33,10 @@ library
         SixFour.Spec.GMM
         SixFour.Spec.Bures
         SixFour.Spec.PairTree
+        SixFour.Spec.PairTreeFixed
+        SixFour.Spec.SigmaPairFixed
+        SixFour.Spec.Quad4Fixed
+        SixFour.Spec.GlobalVolume
         SixFour.Spec.SplitTree
         SixFour.Spec.GridAxis
         SixFour.Spec.CloudProjection
@@ -75,6 +79,11 @@ library
         SixFour.Codegen.CoreML
         SixFour.Codegen.MLX
         SixFour.Codegen.Golden
+        SixFour.Codegen.Collapse
+        SixFour.Codegen.PairTree
+        SixFour.Codegen.PaletteValue
+        SixFour.Codegen.Genome
+        SixFour.Codegen.GenomeFixed
     build-depends:
         base       >=4.16 && <5
       , vector     >=0.13 && <0.14
@@ -236,6 +245,10 @@ test-suite spec-tests
         Properties.GMM
         Properties.Bures
         Properties.PairTree
+        Properties.PairTreeFixed
+        Properties.SigmaPairFixed
+        Properties.Quad4Fixed
+        Properties.GlobalVolume
         Properties.SplitTree
         Properties.GridAxis
         Properties.CloudProjection

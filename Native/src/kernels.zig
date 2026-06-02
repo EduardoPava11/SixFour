@@ -327,6 +327,131 @@ pub export fn s4_quantize_frame(
     return RC_OK;
 }
 
+/// GIFA → GIFB: collapse the `t` per-frame Q16 OKLab palettes into ONE global
+/// palette. The pooled candidate cloud is the contiguous `t·k_in` input
+/// (per-frame palettes laid out back-to-back); maximin (farthest-first, the
+/// `lloyd_iters = 0` path) selects `k_out` global leaves, then every pooled
+/// colour is assigned to its nearest leaf — the per-frame GIF index map,
+/// flattened to `t·k_in`. This is exactly the per-frame quantiser's maximin at
+/// burst scale, so it SHARES `s4_quantize_frame`'s byte-exact path (no duplicated
+/// argmin/tie-break). Mirrors `SixFour.Spec.Collapse.globalCollapseQ16` +
+/// `reindexFrameQ16`. `k_out` ≤ 256 (u8 indices) and ≤ `t·k_in`.
+/// `scratch` ≥ (t·k_in)·8 + 3·k_out·8 + k_out·4 bytes.
+pub export fn s4_global_collapse(
+    palettes_q16: [*c]const i32,
+    t: i32,
+    k_in: i32,
+    k_out: i32,
+    out_leaves_q16: [*c]i32,
+    out_indices: [*c]u8,
+    scratch: ?*anyopaque,
+    scratch_cap: usize,
+) i32 {
+    if (palettes_q16 == null or out_leaves_q16 == null or out_indices == null) return RC_NULL_PTR;
+    if (t <= 0 or k_in <= 0) return RC_BAD_SHAPE;
+    // Pooled candidate count = t·k_in. Guard the i32 product (ReleaseSafe traps).
+    const p64: i64 = @as(i64, t) * @as(i64, k_in);
+    if (p64 > 2147483647) return RC_BAD_SHAPE;
+    const p: i32 = @intCast(p64);
+    // The pooled cloud is already contiguous, so the maximin seed phase of the
+    // per-frame quantiser (lloyd_iters = 0) IS the collapse; its final assignment
+    // is the per-frame re-index (flattened). One byte-exact code path, two scales.
+    const rc = s4_quantize_frame(palettes_q16, p, k_out, 0, out_leaves_q16, out_indices, scratch, scratch_cap);
+    if (rc == RC_OK) s4log("collapse  t={d} k_in={d} k_out={d} (pooled maximin)", .{ t, k_in, k_out });
+    return rc;
+}
+
+// ── owned integer Haar (reversible lifting / S-transform) ─────────────────────
+// The palette's dimensional space as EXACT integer math: a node stores the full
+// detail d = x - y and a lifted floor-average parent = y + floor(d/2); the inverse
+// recovers (x, y) exactly for all integers. So reconstruct∘analyze = id BYTE-EXACT
+// (no tolerance) and a coefficient move (+δ then −δ) is exactly reversible. Mirrors
+// SixFour.Spec.PairTreeFixed. n must be a power of two; offsets are laid out
+// coarsest-first (level ℓ's 2^ℓ details at indices [2^ℓ−1 .. 2^(ℓ+1)−1)).
+
+fn isPow2(n: i32) bool {
+    return n > 0 and (n & (n - 1)) == 0;
+}
+
+/// Forward integer Haar: 2^D leaves → root + (2^D − 1) detail offsets (Q16,
+/// interleaved L,a,b). `scratch` ≥ n·3·4 bytes (a working copy of the leaves).
+pub export fn s4_haar_analyze(
+    leaves_q16: [*c]const i32,
+    n: i32,
+    out_root_q16: [*c]i32,
+    out_offsets_q16: [*c]i32,
+    scratch: ?*anyopaque,
+    scratch_cap: usize,
+) i32 {
+    if (leaves_q16 == null or out_root_q16 == null or out_offsets_q16 == null) return RC_NULL_PTR;
+    if (!isPow2(n)) return RC_BAD_SHAPE;
+    const nn: usize = @intCast(n);
+    const need = nn * 3 * @sizeOf(i32);
+    if (scratch == null or scratch_cap < need) return RC_SCRATCH_TOO_SMALL;
+    const work: [*]i32 = @ptrCast(@alignCast(scratch.?));
+    var i: usize = 0;
+    while (i < nn * 3) : (i += 1) work[i] = leaves_q16[i];
+
+    var cur: usize = nn;
+    while (cur > 1) {
+        const half = cur / 2;
+        const out_start = half - 1; // 2^ℓ − 1
+        i = 0;
+        while (i < half) : (i += 1) {
+            var c: usize = 0;
+            while (c < 3) : (c += 1) {
+                const x = work[(2 * i) * 3 + c];
+                const y = work[(2 * i + 1) * 3 + c];
+                const d = x - y;
+                work[i * 3 + c] = y + @divFloor(d, 2); // lifted parent
+                out_offsets_q16[(out_start + i) * 3 + c] = d; // detail
+            }
+        }
+        cur = half;
+    }
+    out_root_q16[0] = work[0];
+    out_root_q16[1] = work[1];
+    out_root_q16[2] = work[2];
+    s4log("haar_an   n={d} (reversible lifting)", .{n});
+    return RC_OK;
+}
+
+/// Inverse integer Haar: root + (2^D − 1) offsets → 2^D leaves. Exact inverse of
+/// `s4_haar_analyze`. In-place expansion (no scratch).
+pub export fn s4_haar_reconstruct(
+    root_q16: [*c]const i32,
+    offsets_q16: [*c]const i32,
+    n: i32,
+    out_leaves_q16: [*c]i32,
+) i32 {
+    if (root_q16 == null or offsets_q16 == null or out_leaves_q16 == null) return RC_NULL_PTR;
+    if (!isPow2(n)) return RC_BAD_SHAPE;
+    const nn: usize = @intCast(n);
+    out_leaves_q16[0] = root_q16[0];
+    out_leaves_q16[1] = root_q16[1];
+    out_leaves_q16[2] = root_q16[2];
+
+    var cur: usize = 1;
+    while (cur < nn) {
+        const out_start = cur - 1; // 2^ℓ − 1
+        var i: usize = cur;
+        while (i > 0) {
+            i -= 1;
+            var c: usize = 0;
+            while (c < 3) : (c += 1) {
+                const node = out_leaves_q16[i * 3 + c];
+                const d = offsets_q16[(out_start + i) * 3 + c];
+                const y = node - @divFloor(d, 2);
+                out_leaves_q16[(2 * i) * 3 + c] = y + d; // x
+                out_leaves_q16[(2 * i + 1) * 3 + c] = y; // y
+            }
+        }
+        cur *= 2;
+    }
+    s4log("haar_rec  n={d} (reversible lifting)", .{n});
+    return RC_OK;
+}
+
 // Error-diffusion taps: (dx, dy, num, den). FS = 7/3/5/1 ÷ 16; Atkinson = 6 × 1/8.
 const FS_TAPS = [4][4]i32{ .{ 1, 0, 7, 16 }, .{ -1, 1, 3, 16 }, .{ 0, 1, 5, 16 }, .{ 1, 1, 1, 16 } };
 const ATKINSON_TAPS = [6][4]i32{ .{ 1, 0, 1, 8 }, .{ 2, 0, 1, 8 }, .{ -1, 1, 1, 8 }, .{ 0, 1, 1, 8 }, .{ 1, 1, 1, 8 }, .{ 0, 2, 1, 8 } };

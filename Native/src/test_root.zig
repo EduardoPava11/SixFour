@@ -15,6 +15,8 @@ test {
     _ = @import("significance_fixture_test.zig"); // cross-language significance golden
     _ = @import("dither_fixture_test.zig"); // cross-language spatial-dither golden
     _ = @import("quant_fixture_test.zig"); // cross-language quantizer golden
+    _ = @import("collapse_fixture_test.zig"); // cross-language global-collapse golden (GIFA→GIFB)
+    _ = @import("haar_fixture_test.zig"); // cross-language integer-Haar golden (reversible lifting)
     _ = @import("gif_fixture_test.zig"); // cross-language full-burst GIF golden (Stage 6)
     _ = @import("fixture_test.zig"); // cross-language Python-fixture check
 }

@@ -3,7 +3,8 @@ import simd
 
 /// Interactive editor for the GLOBAL palette — "be the look-NN by hand."
 ///
-/// The per-frame palettes are collapsed (`GlobalPaletteCollapse.maximin`) into one global
+/// The per-frame palettes are collapsed (`FarthestPointCollapse`, the byte-exact Q16
+/// maximin gated against `CollapseGolden`) into one global
 /// palette, shown as the median-cut `SplitTree` treemap at the chosen branching. You edit
 /// it by **multiresolution nudge**: pick a grain, tap a region to select that subtree, and
 /// nudge it in OKLab — the whole subtree shifts. Coarse grain at the root tints everything;
@@ -60,7 +61,7 @@ struct GlobalPaletteEditorView: View {
 
     private func setupIfNeeded() {
         guard tree == nil, !palettes.isEmpty else { return }
-        let global = GlobalPaletteCollapse.maximin(perFramePalettes: palettes)
+        let global = FarthestPointCollapse.collapseForDisplay(srgb8Frames: palettes)
         guard !global.isEmpty else { return }
         baseline = global
         current = global
@@ -101,13 +102,26 @@ struct GlobalPaletteEditorView: View {
 
     private func applyDelta(_ dL: Float, _ da: Float, _ db: Float) {
         guard let node = tree?.view(branching).node(at: selectedPath) else { return }
-        for leaf in node.leaves {
-            let c = current[leaf.index]
-            current[leaf.index] = OKLab(
-                min(1, max(0, c.L + dL)),
-                min(0.4, max(-0.4, c.a + da)),
-                min(0.4, max(-0.4, c.b + db))
-            )
+        func nudge(_ idx: Int, _ d0: Float, _ d1: Float, _ d2: Float) {
+            guard current.indices.contains(idx) else { return }
+            let c = current[idx]
+            current[idx] = OKLab(min(1, max(0, c.L + d0)),
+                                 min(0.4, max(-0.4, c.a + d1)),
+                                 min(0.4, max(-0.4, c.b + d2)))
+        }
+        if branching == .b2 {
+            // 2⁸ σ-pair MIRROR-LOCK: a σ-pair palette has leaf[2i+1] = σ(leaf[2i]),
+            // σ(L,a,b)=(L,−a,−b). Nudge each pair's even leaf by Δ and its partner
+            // (k^1) by (ΔL, −Δa, −Δb), so editing stays inside the σ-symmetric
+            // eigenspace (the locked 2⁸ genome) — ΔL free, Δa/Δb mirrored.
+            var evens = Set<Int>()
+            for leaf in node.leaves { evens.insert(leaf.index & ~1) }
+            for e in evens {
+                nudge(e, dL, da, db)
+                nudge(e ^ 1, dL, -da, -db)
+            }
+        } else {
+            for leaf in node.leaves { nudge(leaf.index, dL, da, db) }
         }
     }
 

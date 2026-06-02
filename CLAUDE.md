@@ -51,8 +51,13 @@ take on a dependency.
 ## Palette: global vs per-frame
 `Spec/StageA.hs` extracts a **per-frame** 256-colour palette per frame — that is
 the NN *input*. The look-NN sum-pools all frames' tokens (permutation-invariant)
-and emits ONE **global** 768-DOF Haar palette for the whole 64³ GIF — that is
-the *output*. Both are true, at different layers.
+and emits ONE **global** **384-DOF σ-pair genome** (`SIGMA_PAIR_DOF` = 3·128
+generators; `Spec/SigmaPairHead.hs`, `Spec/LookNetD.hs`) for the whole 64³ GIF —
+reconstructed into the 256-leaf palette. The *output* is the genome; the palette
+it reconstructs lives in the **768-real flat leaf space** (256·3). Do not conflate
+the two: the NN emits 384, the leaf space is 768. The form is pinned canonically in
+`Spec/Net.hs slotLookDims` → `Generated/NetContract.swift` + `trainer/.../net_shape.py`.
+Both NN-input and NN-output are true, at different layers.
 
 ## Build / test
 ```bash
