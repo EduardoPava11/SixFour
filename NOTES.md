@@ -236,32 +236,27 @@ gap below is on the **training** and **design-pivot-wiring** side, never the for
    data-acquisition path (real captures from the on-device session dir, or synthetic).
 
 ### B. SigmaPairHead design pivot — spec is ahead of codegen (the long pole)
-5. **Decoder still emits 768-DOF Haar, not the committed 384-DOF SigmaPairTree.**
-   `trainer/generated/look_net_mlx.py:32` `DECODER_OUT_DIM=768`; heads sum to 768
-   (`:153,:160,:177`); identical in `look_net_torch.py`. The 2026-05-28 pivot
-   (`Spec.SigmaPairHead`, 384 DOF, see entry below) is wired into no generated model.
-   *Accept:* generated decoders emit 384 and reconstruct the 256-leaf σ-pair palette.
-   *Dep:* change `spec/src/SixFour/Codegen/{MLX,CoreML}.hs`, regenerate (never hand-edit).
+5. **Decoder emits the committed 384-DOF SigmaPairTree.** CLOSED: `look_net_mlx.py:33`
+   and `look_net_torch.py:33` read `DECODER_OUT_DIM = 384 # = SIGMA_PAIR_DOF` and reconstruct
+   the 256-leaf σ-pair palette. The spec derives it at LookNetD.hs:117/315 (== 384).
 6. **`option4Theorem` dead-ends at `Quad4ReconAchroma`.** The `Spec.Pipeline` composition
    theorem is not re-instantiated at `SigmaPairHead` (see NOTES 2026-05-28 open Q#2 +
    "Risks"). *Accept:* a `SigmaPairHead` instance proves conditional σ-equivariance.
-7. **No `SIGMA_PAIR_*` codegen pins emitted anywhere.** Zero hits for `SIGMA_PAIR` across
-   `trainer/generated`, `studio/look-nn-baseline/src/generated`, `SixFour/Generated`.
-   `SIGMA_PAIR_DOF=384 / DEPTH=7 / LEAVES=256` (2026-05-28 open Q#4) never reach
-   `contract.rs` or the Python/Swift constants. *Accept:* `Codegen.{Burn,Shapes}` emit them.
+7. **`SIGMA_PAIR_*` codegen pins emitted everywhere.** CLOSED: `SIGMA_PAIR_DOF=384 / DEPTH=7
+   / LEAVES=256` emitted at look_net_mlx.py:40-42, look_net_torch.py:40-42, net_shape.py:37,
+   NetContract.swift:48, contract.rs:23-25. Sources: Burn.hs:58-61, Shapes.hs, CoreML.hs:89-98,
+   MLX.hs, Swift.hs:319.
 
 ### C. MLX-specific verification gaps
-8. **MLX is never exercised in `smoke_test.py`** — it imports only torch + coremltools (no
-   `import mlx` / `mx.`). σ-equivariance and the .mlpackage round-trip are PyTorch-only.
-   *Accept:* an MLX arm asserts σ-equivariance bit-exact like the torch arm.
-9. **No direct MLX-vs-PyTorch forward comparison** — both are checked only *through* the
-   Haskell oracle in `check_golden.py`, never against each other. *Accept:* a same-weights
-   MLX↔torch allclose check.
-10. **No NaN / non-finite guard in `check_golden.py`** — an all-NaN forward could slip the
-    `≤1e-6` gate. *Accept:* gate fails fast on non-finite output.
-11. **PonderNet halting λ_ℓ is computed but never trained** — no halting loss in spec or
-    Python (the halt head exists in `LookNetR` + the generated models, unsupervised).
-    *Accept:* a PonderNet-style halting loss term in `Spec.Loss` + the MLX trainer.
+8. **MLX σ-equivariance is verified in `smoke_test.py` Step 3b** (smoke_test.py:73-106:
+   imports mlx.core + look_net_mlx, transfers torch state_dict, asserts mlx_delta == 0). CLOSED.
+9. **Direct MLX-vs-PyTorch forward comparison present** — smoke_test.py Step 3c (:108-123)
+   is a same-weights MLX↔torch allclose at rtol 1e-5. CLOSED.
+10. **NaN / non-finite guard implemented in `run_torch` and `run_mlx`** (check_golden.py:101-103
+    and :132-134 append (name+":nonfinite", inf) on non-finite output). CLOSED.
+11. **PonderNet halting loss trained via KL(halting-dist ‖ geometric-prior)** in
+    Spec.Loss.haltingLoss (Loss.hs:343), mirrored in look_net_loss_mlx.py and actively trained
+    in train_look_net_mlx.py:103 (total += lam_halt·halt). CLOSED.
 
 ### D. GRAM stochastic core — design-only, research-gated (defer)
 12. **Stochastic L4 core deferred** (`spec/GRAM_MAPPING.md`); VI target `y` unresolved
