@@ -1,3 +1,5 @@
+**[SUPERSEDED for sizing — see SIXFOUR-DESIGN-LANGUAGE.md §10.1]** This document's modular-scale (6pt quantum) and cube-sizing rules are obsolete. The 6pt family survives only for Review/palette (EXEMPT-REVIEW-PITCH); capture HUD uses 2pt (Cardinal Law). Its Rams §8 completeness rule is now LINT-SINGLE-PITCH in the design language. Kept for historical reference only.
+
 # SixFour — The Cube-Generated UI/UX System
 
 **Status:** spec (source of truth → Haskell golden → SwiftUI/Metal)

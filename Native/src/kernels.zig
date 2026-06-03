@@ -79,36 +79,86 @@ pub export fn s4_gif_encode_burst_bound(frame_count: i32, side: i32, k: i32) usi
     return file_overhead + comment_slack + fc * per_frame + 1;
 }
 
-/// Working-memory bytes the burst pipeline needs in `scratch`. Frames are
-/// processed one at a time, so this is one frame's working set plus the
-/// quantiser's 32³ moment histogram (the dominant term) plus the LZW dictionary.
+/// Working-memory bytes the burst pipeline needs in `scratch`. Two terms scale
+/// with `frame_count`: the cross-frame accumulation buffers (`all_indices` +
+/// `all_palettes`) that the single `s4_gif_assemble` call consumes at the end.
+/// Everything else is one frame's working set (reused each iteration) plus the
+/// quantiser's and dither's per-kernel scratch. This is sized EXACTLY for the
+/// `s4_gif_encode_burst` carving below — keep the two in lockstep.
 pub export fn s4_burst_scratch_bytes(frame_count: i32, side: i32, k: i32) usize {
-    _ = frame_count; // per-frame processing ⇒ independent of frame_count
-    if (side <= 0 or k <= 0) return 0;
+    if (frame_count <= 0 or side <= 0 or k <= 0) return 0;
+    const fc: usize = @intCast(frame_count);
     const p: usize = @as(usize, @intCast(side)) * @as(usize, @intCast(side));
     const kk: usize = @intCast(k);
 
-    const oklab_q16: usize = p * 3 * @sizeOf(i32); // one frame in OKLab Q16
-    const err_q16: usize = p * 3 * @sizeOf(i32); // dither error buffer
+    // Persistent across the frame loop (the assembler reads ALL frames at once).
+    const all_indices: usize = fc * p; // u8 index per pixel, every frame
+    const all_palettes: usize = fc * 3 * kk; // sRGB8 local colour table, every frame
+    // Per-frame working set (overwritten each iteration).
+    const lin_q16: usize = p * 3 * @sizeOf(i32); // widened linear Q16
+    const oklab_q16: usize = p * 3 * @sizeOf(i32); // linear→OKLab Q16
     const centroids: usize = kk * 3 * @sizeOf(i32);
-    const accum: usize = kk * 4 * @sizeOf(i64); // Lloyd: 3 channel sums + count
-    const indices: usize = p; // one frame of u8 indices
-    const palette_rgb: usize = kk * 3; // one frame of sRGB8
-    // Wu/variance-cut seed histogram: 32³ cells × 10 moments × i64.
-    const hist: usize = 32 * 32 * 32 * 10 * @sizeOf(i64);
-    // LZW dictionary: open-addressed (prefix:u16, byte:u8)→code:u16, ≤4096 codes.
-    const lzw_dict: usize = 8192 * @sizeOf(u32);
-    const slack: usize = 64 * 1024;
+    const idx_tmp: usize = p; // quantiser's throwaway nearest assignment
+    const q_scratch: usize = p * @sizeOf(i64) + 3 * kk * @sizeOf(i64) + kk * @sizeOf(i32);
+    const d_scratch: usize = p * 3 * @sizeOf(i32); // error-diffusion residual buffer
+    // Base 16-alignment + per-region alignForward padding (8 regions).
+    const align_slack: usize = 12 * 16;
 
-    return oklab_q16 + err_q16 + centroids + accum + indices + palette_rgb +
-        hist + lzw_dict + slack;
+    return all_indices + all_palettes + lin_q16 + oklab_q16 + centroids +
+        idx_tmp + q_scratch + d_scratch + align_slack;
 }
+
+/// A bump-carver over the caller's `scratch` buffer: hands out per-region typed
+/// sub-buffers, each aligned for its element type. `base` is force-aligned to 16
+/// at construction so every i64/i32 region is safely aligned regardless of how
+/// the caller allocated. On overflow it flips `ok` (the caller checks once).
+const Carver = struct {
+    base: [*]u8,
+    cap: usize,
+    off: usize = 0,
+    ok: bool = true,
+
+    fn init(raw: [*]u8, cap: usize) Carver {
+        const addr = @intFromPtr(raw);
+        const aligned = std.mem.alignForward(usize, addr, 16);
+        const skip = aligned - addr;
+        return .{ .base = @ptrFromInt(aligned), .cap = if (cap > skip) cap - skip else 0 };
+    }
+
+    fn take(self: *Carver, comptime T: type, count: usize) [*]T {
+        self.off = std.mem.alignForward(usize, self.off, @alignOf(T));
+        const bytes = count * @sizeOf(T);
+        if (self.off + bytes > self.cap) {
+            self.ok = false;
+            return @ptrCast(@alignCast(self.base)); // dummy; base is 16-aligned, no panic
+        }
+        const ptr: [*]T = @ptrCast(@alignCast(self.base + self.off));
+        self.off += bytes;
+        return ptr;
+    }
+};
 
 // ── kernel stubs (bodies land in their spec-first stages) ─────────────────────
 // Signatures are final; only the bodies change. Unused params are intentional
 // while these return NOT_IMPLEMENTED.
 
-/// Whole-burst entrypoint: linear-sRGB halfs → deterministic GIF89a bytes.
+/// Whole-burst entrypoint — the deterministic `state = fold(apply, …)` core as a
+/// SINGLE C-ABI call: linear-sRGB Float16 halfs → byte-exact GIF89a. It composes
+/// the already-golden-gated sub-kernels, per frame:
+///
+///   widen(half→Q16) → linear→OKLab → quantise(maximin+Lloyd) → dither → palette,
+///
+/// accumulating per-frame indices + local colour tables, then one `s4_gif_assemble`.
+/// Significance is intentionally NOT run here (the signature carries no
+/// `min_population`): this is the pure core fold; the per-frame significance rescue
+/// is a caller-side concern (see `DeterministicRenderer`). Output is a pure function
+/// of the input halfs + parameters, identical on every device — so any consumer can
+/// RECOMPUTE and verify it (the "apply" primitive a gene exchange needs).
+///
+/// `input_space` must be 0 (linear-sRGB primaries); other primaries are not yet
+/// pinned. `k` must be a power of two ≤ 256 and ≤ `side²`. Each sub-kernel's rc is
+/// propagated on failure (e.g. blue-noise `dither_mode` with a null `stbn_mask` →
+/// RC_BAD_DITHER_MODE). `scratch` must be ≥ `s4_burst_scratch_bytes`.
 pub export fn s4_gif_encode_burst(
     in_halfs: [*c]const u16,
     frame_count: i32,
@@ -128,19 +178,82 @@ pub export fn s4_gif_encode_burst(
     scratch: ?*anyopaque,
     scratch_cap: usize,
 ) i32 {
-    _ = .{
-        in_halfs,    frame_count, side,    k,          input_space,
-        lloyd_iters, dither_mode, serpentine, stbn_mask, frame_delay_cs,
-        comment,     comment_len, out_gif, out_cap,    out_len,
-        scratch,     scratch_cap,
-    };
-    return RC_NOT_IMPLEMENTED;
+    if (in_halfs == null or out_gif == null or out_len == null or scratch == null) return RC_NULL_PTR;
+    if (frame_count <= 0 or side <= 0 or k <= 0 or k > 256) return RC_BAD_SHAPE;
+    if ((k & (k - 1)) != 0) return RC_BAD_SHAPE; // GIF local colour table needs power-of-two k
+    if (input_space != 0) return RC_BAD_SHAPE; // only linear-sRGB primaries pinned (v1)
+
+    const fc: usize = @intCast(frame_count);
+    const sidez: usize = @intCast(side);
+    const p: usize = sidez * sidez;
+    const kk: usize = @intCast(k);
+    if (kk > p) return RC_BAD_SHAPE; // maximin would emit duplicate seeds
+
+    if (scratch_cap < s4_burst_scratch_bytes(frame_count, side, k)) return RC_SCRATCH_TOO_SMALL;
+
+    var carve = Carver.init(@ptrCast(scratch.?), scratch_cap);
+    const all_indices = carve.take(u8, fc * p); // cross-frame: assembled at the end
+    const all_palettes = carve.take(u8, fc * 3 * kk);
+    const lin_q16 = carve.take(i32, p * 3);
+    const oklab_q16 = carve.take(i32, p * 3);
+    const centroids = carve.take(i32, kk * 3);
+    const idx_tmp = carve.take(u8, p);
+    const q_words = p + 3 * kk + (kk + 1) / 2; // i64 sums + (rounded-up) i32 counts
+    const q_scratch = carve.take(i64, q_words);
+    const d_scratch = carve.take(i32, p * 3);
+    if (!carve.ok) return RC_SCRATCH_TOO_SMALL;
+
+    const q_scratch_bytes = q_words * @sizeOf(i64);
+    const d_scratch_bytes = p * 3 * @sizeOf(i32);
+    const pp: i32 = @intCast(p);
+
+    var f: usize = 0;
+    while (f < fc) : (f += 1) {
+        const halfs_f = in_halfs + f * p * 3;
+        var rc = s4_widen_half_to_q16(halfs_f, @intCast(p * 3), lin_q16);
+        if (rc != RC_OK) return rc;
+        rc = s4_linear_to_oklab_q16(lin_q16, pp, oklab_q16);
+        if (rc != RC_OK) return rc;
+        // quantise → centroids (+ a throwaway nearest assignment we discard;
+        // the dither pass produces the FINAL indices for this frame).
+        rc = s4_quantize_frame(oklab_q16, pp, k, lloyd_iters, centroids, idx_tmp, @ptrCast(q_scratch), q_scratch_bytes);
+        if (rc != RC_OK) return rc;
+        const stbn_f: [*c]const u8 = if (stbn_mask == null) null else stbn_mask + f * p;
+        rc = s4_dither_frame(oklab_q16, centroids, pp, k, dither_mode, serpentine, stbn_f, all_indices + f * p, @ptrCast(d_scratch), d_scratch_bytes);
+        if (rc != RC_OK) return rc;
+        rc = s4_palette_oklab_to_srgb8(centroids, k, all_palettes + f * 3 * kk, null, 0);
+        if (rc != RC_OK) return rc;
+    }
+
+    s4log("burst     {d}f {d}²×{d} → assemble (fold: widen→oklab→quant→dither→palette)", .{ frame_count, side, k });
+    return s4_gif_assemble(all_indices, all_palettes, frame_count, side, k, frame_delay_cs, comment, comment_len, out_gif, out_cap, out_len);
 }
 
-/// Widen IEEE-half bytes to Q16 i32 with the pinned rounding rule.
+/// Widen IEEE-754 binary16 (half) values to Q16 i32: `out = round(half · 2^16)`,
+/// round-half-away-from-zero, non-finite → 0, saturated to ±2^30 (so the result
+/// never overflows i32 and any absurd HDR half is clamped well below the linear
+/// range the colour kernel accepts). The half→f32 widening is EXACT (binary16 ⊂
+/// binary32) and ×2^16 is an exact power of two, so the ONLY rounding is the final
+/// `@round` — fully deterministic and reproducible across devices. This is the I/O
+/// edge that lifts Metal's linear-sRGB halfs into the integer fixed-point domain
+/// (Q16: 1.0 → 65536) the rest of the deterministic core operates in.
 pub export fn s4_widen_half_to_q16(halfs: [*c]const u16, n: i32, out_q16: [*c]i32) i32 {
-    _ = .{ halfs, n, out_q16 };
-    return RC_NOT_IMPLEMENTED;
+    if (halfs == null or out_q16 == null) return RC_NULL_PTR;
+    if (n <= 0) return RC_BAD_SHAPE;
+    const nn: usize = @intCast(n);
+    const lim: f32 = 1073741824.0; // 2^30, exactly representable, < i32 max
+    var i: usize = 0;
+    while (i < nn) : (i += 1) {
+        const h: f16 = @bitCast(halfs[i]);
+        const v: f32 = h; // exact float widening f16 → f32
+        const scaled: f32 = v * 65536.0; // exact ×2^16
+        if (!std.math.isFinite(scaled)) {
+            out_q16[i] = 0;
+            continue;
+        }
+        out_q16[i] = @intFromFloat(@round(std.math.clamp(scaled, -lim, lim)));
+    }
+    return RC_OK;
 }
 
 // Ottosson M1 (linear sRGB→LMS) and M2 (LMS'→OKLab), Q16, row-major. These are
@@ -210,6 +323,12 @@ pub export fn s4_linear_to_oklab_q16(lin_q16: [*c]const i32, p: i32, out_oklab_q
 /// empty cluster keeps its old centroid), then nearest-centroid assignment
 /// (strict-<, lowest index). Mirrors SixFour.Spec.QuantFixed byte-for-byte.
 /// k ≤ 256 (u8 indices). `scratch` ≥ p·8 + 3·k·8 + k·4 bytes.
+/// lloyd_iters: caller chooses; 0 = pure maximin (the diversity/coverage objective).
+/// The shipped deterministic capture path and s4_global_collapse pass 0; the
+/// GPU/full-pipeline Swift path and gif fixtures use 15. Standardizing the device
+/// count (15 GPU-parity vs 3 spec variance-cut) is an OPEN question (NOTES.md §4,
+/// §6 Q4). Byte-exactness requires the same count across Zig/Swift/Metal for a
+/// given path.
 pub export fn s4_quantize_frame(
     oklab_q16: [*c]const i32,
     p: i32,
@@ -516,6 +635,13 @@ fn nearest2CentroidQ16(c: [*c]const i32, k: usize, l: i64, a: i64, b: i64) [2]us
 /// dither_mode: 0=FloydSteinberg, 1=Atkinson, 2=blueNoise spatiotemporal, 3=frozen.
 /// (modes 2 and 3 are identical at the kernel level — the caller chooses which
 /// STBN3D slice to pass.) Error-diffusion modes need `scratch` ≥ 3·p·4 bytes.
+/// stbn_slice MUST be one frame (p bytes) of the canonical STBN3D mask: the 8³
+/// void-and-cluster scalar mask (stbn3d-8.bin, 512 bytes, toroidal Euclidean
+/// distance) tiled 8×8→64³ by the Swift caller (STBN3DMaskLoader.loadTiled).
+/// Pre-computed off-device, pinned by Spec/STBN3D.hs + Generated/STBN3DContract.swift;
+/// canonical bytes emitted by spec/app/Spec.hs (writeBinary stbn3d-8.bin). Never
+/// regenerate — Euclidean ≠ toroidal mask would break cross-device determinism
+/// (NOTES.md §STBN3D).
 pub export fn s4_dither_frame(
     oklab_q16: [*c]const i32,
     centroids_q16: [*c]const i32,
@@ -1368,8 +1494,12 @@ test "size helpers return sane bounds for the canonical 64×64×256 shape" {
     try std.testing.expect(bound > 49152);
 
     const scratch = s4_burst_scratch_bytes(FRAME_COUNT, SIDE, K);
-    // Histogram (32³·10·8 = 2.62 MB) dominates; sanity-floor it.
-    try std.testing.expect(scratch > 2_600_000);
+    // Now sized EXACTLY for the burst carving: the cross-frame accumulation
+    // buffers dominate (all_indices 64·4096 = 262144 + all_palettes 64·768 =
+    // 49152) plus one frame's working set + quant/dither scratch ≈ 0.5 MB total.
+    // Must at least cover the accumulation buffers; comfortably under 1 MB.
+    try std.testing.expect(scratch > 262144 + 49152);
+    try std.testing.expect(scratch < 1_000_000);
 
     // Degenerate shapes return 0 rather than trapping.
     try std.testing.expectEqual(@as(usize, 0), s4_gif_encode_burst_bound(0, 64, 256));
@@ -1448,8 +1578,117 @@ test "icbrtQ16 floor cube-root invariant on a sweep" {
     }
 }
 
-test "kernel stubs are exported and return NOT_IMPLEMENTED" {
+test "widen_half_to_q16 hits the Q16 anchors and guards bad args" {
+    // half bit patterns → exact Q16 (1.0→65536, round-half-away-from-zero).
+    var hin = [_]u16{
+        0x0000, // +0.0   → 0
+        0x3C00, // 1.0    → 65536
+        0x3800, // 0.5    → 32768
+        0x3400, // 0.25   → 16384
+        0x4000, // 2.0    → 131072
+        0xBC00, // -1.0   → -65536
+        0x7C00, // +inf   → 0 (non-finite guard)
+        0xFC00, // -inf   → 0
+        0x7E00, // NaN    → 0
+    };
+    var out: [9]i32 = undefined;
+    try std.testing.expectEqual(RC_OK, s4_widen_half_to_q16(&hin, hin.len, &out));
+    try std.testing.expectEqualSlices(i32, &[_]i32{ 0, 65536, 32768, 16384, 131072, -65536, 0, 0, 0 }, &out);
+
+    try std.testing.expectEqual(RC_NULL_PTR, s4_widen_half_to_q16(null, 3, &out));
+    try std.testing.expectEqual(RC_BAD_SHAPE, s4_widen_half_to_q16(&hin, 0, &out));
+}
+
+test "gif_encode_burst is the byte-exact composition of its gated sub-kernels" {
+    const alloc = std.testing.allocator;
+    const fc: i32 = 2;
+    const side: i32 = 8; // p = 64
+    const k: i32 = 16; // power of two, ≤ p
+    const fcz: usize = 2;
+    const p: usize = 64;
+    const kk: usize = 16;
+
+    // A deterministic linear-half burst that spans a range of colours so the
+    // quantiser/dither/palette stages all do real work.
+    const halfs = try alloc.alloc(u16, fcz * p * 3);
+    defer alloc.free(halfs);
+    for (halfs, 0..) |*h, i| {
+        const v: f32 = @as(f32, @floatFromInt(i % 91)) / 91.0; // [0,1)
+        h.* = @bitCast(@as(f16, @floatCast(v)));
+    }
+
+    const bound = s4_gif_encode_burst_bound(fc, side, k);
+    const out = try alloc.alloc(u8, bound);
+    defer alloc.free(out);
+    const scratch = try alloc.alloc(u8, s4_burst_scratch_bytes(fc, side, k));
+    defer alloc.free(scratch);
+
     var out_len: usize = 0;
-    try std.testing.expectEqual(RC_NOT_IMPLEMENTED, s4_widen_half_to_q16(null, 0, null));
-    try std.testing.expectEqual(RC_NOT_IMPLEMENTED, s4_gif_encode_burst(null, 0, 0, 0, 0, 0, 0, 0, null, 5, null, 0, null, 0, &out_len, null, 0));
+    try std.testing.expectEqual(RC_OK, s4_gif_encode_burst(halfs.ptr, fc, side, k, 0, 0, 0, 0, null, 5, null, 0, out.ptr, out.len, &out_len, scratch.ptr, scratch.len));
+    try std.testing.expect(out_len >= 6);
+    try std.testing.expectEqualSlices(u8, "GIF89a", out[0..6]);
+
+    // Reference: run the SAME gated sub-kernels by hand, then assemble once. The
+    // monolith must equal this byte-for-byte (each sub-kernel is itself pinned to
+    // a Haskell golden, so this transitively gates the burst against the spec).
+    const all_idx = try alloc.alloc(u8, fcz * p);
+    defer alloc.free(all_idx);
+    const all_pal = try alloc.alloc(u8, fcz * 3 * kk);
+    defer alloc.free(all_pal);
+    const lin = try alloc.alloc(i32, p * 3);
+    defer alloc.free(lin);
+    const okl = try alloc.alloc(i32, p * 3);
+    defer alloc.free(okl);
+    const cent = try alloc.alloc(i32, kk * 3);
+    defer alloc.free(cent);
+    const itmp = try alloc.alloc(u8, p);
+    defer alloc.free(itmp);
+    const qs = try alloc.alloc(u8, p * 8 + 3 * kk * 8 + kk * 4);
+    defer alloc.free(qs);
+    const ds = try alloc.alloc(u8, p * 3 * 4);
+    defer alloc.free(ds);
+    var f: usize = 0;
+    while (f < fcz) : (f += 1) {
+        try std.testing.expectEqual(RC_OK, s4_widen_half_to_q16(halfs.ptr + f * p * 3, @intCast(p * 3), lin.ptr));
+        try std.testing.expectEqual(RC_OK, s4_linear_to_oklab_q16(lin.ptr, @intCast(p), okl.ptr));
+        try std.testing.expectEqual(RC_OK, s4_quantize_frame(okl.ptr, @intCast(p), k, 0, cent.ptr, itmp.ptr, qs.ptr, qs.len));
+        try std.testing.expectEqual(RC_OK, s4_dither_frame(okl.ptr, cent.ptr, @intCast(p), k, 0, 0, null, all_idx.ptr + f * p, ds.ptr, ds.len));
+        try std.testing.expectEqual(RC_OK, s4_palette_oklab_to_srgb8(cent.ptr, k, all_pal.ptr + f * 3 * kk, null, 0));
+    }
+    const ref = try alloc.alloc(u8, bound);
+    defer alloc.free(ref);
+    var ref_len: usize = 0;
+    try std.testing.expectEqual(RC_OK, s4_gif_assemble(all_idx.ptr, all_pal.ptr, fc, side, k, 5, null, 0, ref.ptr, ref.len, &ref_len));
+    try std.testing.expectEqualSlices(u8, ref[0..ref_len], out[0..out_len]);
+
+    // Determinism: the same burst yields the same bytes (the reproducibility the
+    // recompute-to-verify exchange model rests on).
+    const out2 = try alloc.alloc(u8, bound);
+    defer alloc.free(out2);
+    var out2_len: usize = 0;
+    try std.testing.expectEqual(RC_OK, s4_gif_encode_burst(halfs.ptr, fc, side, k, 0, 0, 0, 0, null, 5, null, 0, out2.ptr, out2.len, &out2_len, scratch.ptr, scratch.len));
+    try std.testing.expectEqualSlices(u8, out[0..out_len], out2[0..out2_len]);
+}
+
+test "gif_encode_burst guards bad args and propagates sub-kernel rc" {
+    const alloc = std.testing.allocator;
+    const fc: i32 = 1;
+    const side: i32 = 4; // p = 16
+    const k: i32 = 4;
+    var halfs = [_]u16{0x3C00} ** (16 * 3);
+    const out = try alloc.alloc(u8, s4_gif_encode_burst_bound(fc, side, k));
+    defer alloc.free(out);
+    const scratch = try alloc.alloc(u8, s4_burst_scratch_bytes(fc, side, k));
+    defer alloc.free(scratch);
+    var out_len: usize = 0;
+
+    try std.testing.expectEqual(RC_NULL_PTR, s4_gif_encode_burst(null, fc, side, k, 0, 0, 0, 0, null, 5, null, 0, out.ptr, out.len, &out_len, scratch.ptr, scratch.len));
+    // k = 3 is not a power of two → bad shape (GIF local colour table).
+    try std.testing.expectEqual(RC_BAD_SHAPE, s4_gif_encode_burst(&halfs, fc, side, 3, 0, 0, 0, 0, null, 5, null, 0, out.ptr, out.len, &out_len, scratch.ptr, scratch.len));
+    // unsupported input space.
+    try std.testing.expectEqual(RC_BAD_SHAPE, s4_gif_encode_burst(&halfs, fc, side, k, 1, 0, 0, 0, null, 5, null, 0, out.ptr, out.len, &out_len, scratch.ptr, scratch.len));
+    // scratch too small.
+    try std.testing.expectEqual(RC_SCRATCH_TOO_SMALL, s4_gif_encode_burst(&halfs, fc, side, k, 0, 0, 0, 0, null, 5, null, 0, out.ptr, out.len, &out_len, scratch.ptr, 8));
+    // blue-noise dither (mode 2) with a null STBN mask → sub-kernel rc propagates.
+    try std.testing.expectEqual(RC_BAD_DITHER_MODE, s4_gif_encode_burst(&halfs, fc, side, k, 0, 0, 2, 0, null, 5, null, 0, out.ptr, out.len, &out_len, scratch.ptr, scratch.len));
 }
