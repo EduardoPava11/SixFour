@@ -56,6 +56,7 @@ module SixFour.Spec.SigmaPairHead
     -- * Reconstruction + the forward analyser (the σ-pair genome's two directions)
   , reconstructPaired
   , analyzePaired
+  , haarPaletteFromVec
     -- * The σ-action on the output that makes the image σ-fixed (pointwise on the list)
   , sigmaSwapAndReflect
     -- * Laws (QuickCheck'd in Properties.SigmaPairHead)

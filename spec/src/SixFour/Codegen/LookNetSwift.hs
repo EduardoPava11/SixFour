@@ -28,9 +28,12 @@ import           Data.Word (Word64)
 import           GHC.Float (castDoubleToWord64)
 
 import SixFour.Spec.Tensor    (Tensor1(..))
+import SixFour.Spec.Color     (OKLab(..))
 import SixFour.Spec.LookNet   (modelDim, gmmTokenDim)
 import SixFour.Spec.LookNetR  (coreDepth)
 import SixFour.Spec.LookNetD  (decoderLevelDims, decoderOutputDim)
+import SixFour.Spec.SigmaPairHead
+  ( SigmaPairTree(..), reconstructPaired, haarPaletteFromVec, sigmaPairLeaves )
 import SixFour.Spec.LookNetEval
   ( LookNetWeights(..), deterministicTestWeights
   , ForwardTrace(..), forward, testCases )
@@ -56,6 +59,7 @@ emitLookNetSwiftGolden = T.unlines (header ++ caseLines ++ footer)
       , "    static let gmmTokenDim = " <> tshow gmmTokenDim
       , "    static let coreDepth = " <> tshow coreDepth
       , "    static let decoderOutputDim = " <> tshow decoderOutputDim
+      , "    static let paletteLeaves = " <> tshow sigmaPairLeaves
       , "    static let tolerance = 1e-6"
       , "    static let decoderLevelDims: [Int] = " <> intArr decoderLevelDims
       , ""
@@ -75,6 +79,7 @@ emitLookNetSwiftGolden = T.unlines (header ++ caseLines ++ footer)
       , "        let contextHex: String  // modelDim doubles"
       , "        let haltsHex: String    // coreDepth doubles"
       , "        let outputHex: String   // decoderOutputDim doubles"
+      , "        let paletteHex: String  // paletteLeaves * 3 doubles (σ-pair OKLab reconstruction of output)"
       , "    }"
       , ""
       , "    static let cases: [Case] = ["
@@ -89,8 +94,12 @@ emitLookNetSwiftGolden = T.unlines (header ++ caseLines ++ footer)
 
 caseLit :: (String, [Tensor1 10 Double]) -> Text
 caseLit (name, tokens) =
-  let tr   = forward deterministicTestWeights tokens
-      toks = concat [ U.toList v | Tensor1 v <- tokens ]
+  let tr      = forward deterministicTestWeights tokens
+      toks    = concat [ U.toList v | Tensor1 v <- tokens ]
+      -- The canonical σ-pair OKLab palette: depth-7 inverse Haar on 128
+      -- generators, then [c, σ(c)] interleave (SixFour.Spec.SigmaPairHead).
+      palette = reconstructPaired (SigmaPairTree (haarPaletteFromVec (U.fromList (ftOutput tr))))
+      palFlat = concatMap (\(OKLab l a b) -> [l, a, b]) palette
   in T.concat
        [ "        Case(name: ", q (T.pack name)
        , ", tokenCount: ", tshow (length tokens)
@@ -98,6 +107,7 @@ caseLit (name, tokens) =
        , ", contextHex: ", q (hexCat (ftContext tr))
        , ", haltsHex: ", q (hexCat (ftHalts tr))
        , ", outputHex: ", q (hexCat (ftOutput tr))
+       , ", paletteHex: ", q (hexCat palFlat)
        , "),"
        ]
 

@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 /// Hand-written, **zero-dependency** look-NN forward pass (Tier-2 shipped code).
 ///
@@ -149,5 +150,59 @@ enum LookNetForward {
         }
 
         return Trace(context: context, halts: halts, output: output)
+    }
+}
+
+// MARK: - σ-pair palette reconstruction (the canonical "look" output)
+
+extension LookNetForward {
+    /// Depth of the generator Haar pyramid (128 = 2^7 generators).
+    static let paletteDepth = 7
+    /// Reconstructed palette size (128 generators × σ-pair = 256 OKLab colours).
+    static let paletteLeaves = 256
+
+    /// σ(L, a, b) = (L, −a, −b) — the OKLab chroma complement.
+    static func sigmaReflect(_ c: SIMD3<Double>) -> SIMD3<Double> {
+        SIMD3<Double>(c.x, -c.y, -c.z)
+    }
+
+    /// Reconstruct the **256-colour σ-pair OKLab palette** from the 384 decoder
+    /// coefficients — the canonical look output, mirroring
+    /// `SixFour.Spec.SigmaPairHead.reconstructPaired`:
+    ///
+    ///  - a depth-7 inverse Haar pyramid: each node splits into mirror children
+    ///    `node ± offset`, top-down, level `i` consuming `2^i` offsets → 128
+    ///    OKLab generators `c_i`;
+    ///  - then the σ-pair interleave `[c_0, σ(c_0), c_1, σ(c_1), …]`, so every
+    ///    odd leaf is the exact chroma complement of its even predecessor — the
+    ///    palette is σ-symmetric by construction, for any coefficients.
+    ///
+    /// Purely algebraic (no weights). Grayscale is the special case where the
+    /// chroma channels of every generator are 0.
+    static func reconstructPalette(_ coeffs: [Double]) -> [SIMD3<Double>] {
+        precondition(coeffs.count == decoderOutputDim, "expected \(decoderOutputDim) coefficients")
+        var nodes = [SIMD3<Double>(coeffs[0], coeffs[1], coeffs[2])]   // root (DC colour)
+        var idx = 3
+        for level in 0..<paletteDepth {
+            let n = 1 << level                                        // 2^level nodes / offsets
+            var next = [SIMD3<Double>]()
+            next.reserveCapacity(n * 2)
+            for k in 0..<n {
+                let off = SIMD3<Double>(coeffs[idx], coeffs[idx + 1], coeffs[idx + 2])
+                idx += 3
+                let p = nodes[k]
+                next.append(p + off)                                  // child 0 = parent + δ
+                next.append(p - off)                                  // child 1 = parent − δ
+            }
+            nodes = next
+        }
+        // 128 generators → interleave each with its σ-reflection → 256 leaves.
+        var palette = [SIMD3<Double>]()
+        palette.reserveCapacity(nodes.count * 2)
+        for c in nodes {
+            palette.append(c)
+            palette.append(sigmaReflect(c))
+        }
+        return palette
     }
 }

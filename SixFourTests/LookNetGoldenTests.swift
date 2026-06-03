@@ -27,6 +27,12 @@ struct LookNetGoldenTests {
         Double(bitPattern: UInt64(s, radix: 16)!)
     }
 
+    /// Decode a hex string of OKLab triples into SIMD3 colours.
+    private static func decodeOKLab(_ s: String) -> [SIMD3<Double>] {
+        let d = decode(s)
+        return stride(from: 0, to: d.count, by: 3).map { SIMD3<Double>(d[$0], d[$0 + 1], d[$0 + 2]) }
+    }
+
     private func goldenWeights() -> LookNetForward.Weights {
         LookNetForward.Weights(
             phi: Self.decode(LookNetGolden.phiHex),
@@ -66,6 +72,37 @@ struct LookNetGoldenTests {
             #expect(dCtx <= tol, "[\(c.name)] context drift \(dCtx)")
             #expect(dHalt <= tol, "[\(c.name)] halt drift \(dHalt)")
             #expect(dOut <= tol, "[\(c.name)] output drift \(dOut)")
+        }
+    }
+
+    /// The σ-pair palette reconstruction reproduces the spec
+    /// (`SigmaPairHead.reconstructPaired`) on every case, and the reconstructed
+    /// palette is σ-symmetric by construction (odd leaf == σ(even leaf), exactly).
+    @Test func reconstructionMatchesGolden() {
+        let w = goldenWeights()
+        let tol = LookNetGolden.tolerance
+        for c in LookNetGolden.cases {
+            let tr = LookNetForward.forward(w, tokens: tokens(c))
+            let palette = LookNetForward.reconstructPalette(tr.output)
+            let want = Self.decodeOKLab(c.paletteHex)
+
+            #expect(palette.count == LookNetGolden.paletteLeaves)
+            #expect(want.count == LookNetGolden.paletteLeaves)
+
+            var drift = 0.0
+            for (g, e) in zip(palette, want) {
+                drift = max(drift, abs(g.x - e.x))
+                drift = max(drift, abs(g.y - e.y))
+                drift = max(drift, abs(g.z - e.z))
+            }
+            #expect(drift <= tol, "[\(c.name)] palette drift \(drift)")
+
+            // Structural σ-pair law: each odd leaf is the exact σ-reflection of
+            // its even predecessor (holds for ANY coefficients, bit-exactly).
+            for i in stride(from: 0, to: palette.count, by: 2) {
+                let s = LookNetForward.sigmaReflect(palette[i])
+                #expect(palette[i + 1] == s, "[\(c.name)] σ-pair broken at leaf \(i)")
+            }
         }
     }
 
