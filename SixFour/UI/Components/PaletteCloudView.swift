@@ -209,8 +209,10 @@ struct PaletteCloudView: View {
     @State private var tick = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // One clock (mirrors VoxelCubeView): 60 Hz, 20 fps cursor = every 3rd tick.
-    private let clock = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
+    // One clock (mirrors VoxelCubeView): 60 Hz display; the cursor advances every
+    // `60 / SFTheme.gifFrameRate`th tick so it scrubs at the canonical GIF cadence.
+    private static let displayHz = 60
+    private let clock = Timer.publish(every: 1.0 / Double(displayHz), on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 10) {
@@ -592,7 +594,7 @@ struct PaletteCloudView: View {
     private func advance() {
         guard !reduceMotion else { return }
         tick &+= 1
-        if cloud.playing, tick % 3 == 0, palettes.count > 1 {
+        if cloud.playing, tick % (Self.displayHz / SFTheme.gifFrameRate) == 0, palettes.count > 1 {
             cloud.frame = (cloud.frame + 1) % palettes.count
         }
     }

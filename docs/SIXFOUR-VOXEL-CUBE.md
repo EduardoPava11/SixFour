@@ -23,9 +23,9 @@ At the rest pose (`yaw = pitch = 0`) the cube must be **byte-for-byte indistingu
 
 1. **Orthographic projection, never perspective.** Perspective foreshortens, which would break the 2D match the instant the cube is on screen. Orthographic also *is* the MagicaVoxel / 8-bit-voxel look — constraint and aesthetic agree.
 2. **Depth = time, current frame frontmost.** Depth-slice `z` shows frame `f(z) = (cursor − 63 + z) mod 64`, so the near face (`z = 63`) is the current frame `cursor` and earlier frames recede behind it. Head-on you see only the near face = the playing 2D GIF; orbit reveals the GIF's recent history extruded into space. As the playback cursor advances, the whole stack flows front-to-back.
-3. **FIXED scale — the cube never changes size, only orients (RULE-CUBE-FIXED-SCALE).** The orthographic window half-extent (`halfSpan`) is a **constant** = `side/2` = **32**, so one voxel is **always** `edge/64` = **`gifCellPt` (6 pt)** = one GIF pixel, at *every* orientation. There is NO zoom-to-fit: rotating does not shrink the voxels. Face-on, the 64-wide cube fills the square (pixel-identical to 2D); rotated, the cube's silhouette extends past the window and is **clipped to the frame** — we orient to inspect, and the visible portion stays at true cell scale. (An earlier build grew `halfSpan` to fit the rotated diagonal; that shrank the voxels and is wrong — the consistent pixelated look requires a constant cell size.)
+3. **AUTO-FIT scale — face-on = pixel identity, orbited = whole cube framed (RULE-CUBE-ISO-FIT; see §8.3).** The orthographic window half-extent (`halfSpan`) **auto-fits the cube's projected silhouette** at the current orientation (`VoxelIso.fitHalfSpan`). At the flat pose the 8 corners project to ±32, so `halfSpan = 32` and one voxel = `gifCellPt` = one GIF pixel — **pixel-identical to the 2D GIF**. As you orbit toward the isometric hero pose it grows to ~50.3 so the **whole dimetric cube stays framed** (voxels shrink ~37%, never clipped). One formula serves both the flat-identity rule and the whole-cube iso framing, with no discontinuity. (This **supersedes** an earlier fixed `halfSpan = 32` rule that clipped the corners when orbited; the project owner chose "fit whole cube at iso" on 2026-06-03.)
 
-**The look is consistent everywhere.** Flat indexed cells, nearest-neighbour, one `gifCellPt` per voxel — the same 8-bit pixelated surface as the 2D GIF hero, the capture preview, and the palette grid. The cube is a *3D view of the same pixels at the same scale*, not a re-rendering.
+**The look is consistent everywhere.** Flat indexed cells, nearest-neighbour, the same 8-bit pixelated surface as the 2D GIF hero, the capture preview, and the palette grid — extended to 3D by the 2:1 dimetric ruleset (§8). The cube is a *3D view of the same pixels*, not a re-rendering.
 
 **Verification (RULE-CUBE-2D-IDENTITY):** orbit head-on at any frame, screenshot, and compare to the 2D GIF hero at that frame — surface voxels must match the GIF pixels (modulo the sRGB-drawable parity note in the prototype assumptions).
 
@@ -35,11 +35,13 @@ The cube is the **3D member of the Review palette-explorer family** (alongside t
 
 > **RULE-BRANCHING-CANONICAL (design-language law).** Every palette tool — treemap, grid, editor, and the cube — MUST express the 256 colours through these three branchings, never an ad-hoc grouping. They are the single, design-language-sanctioned way to factor K. When the cube gains slice analysis (§0.3), any colour grouping / level-of-detail it offers uses the active `PaletteBranching`, so it reads consistently with the treemap and grid.
 
-### 0.3 Planned — per-frame transparency for slice analysis (deferred)
+### 0.3 SHIPPED — frame-isolation transparency for palette study (RULE-CUBE-ISOLATE)
 
-Later, each depth-slice (frame) gains an opacity so the user can **see through the stack and isolate individual slices for analysis** — e.g. fade all but slice `z`, or ramp opacity by depth to read the temporal structure. This is the cube's *analysis* mode (distinct from the playful 2D↔3D reveal), and it is what earns the cube its place beside the treemap and grid as an inspection lens on the palette.
+The cube's **analysis mode**: focus one frame opaque and make the rest transparent, so the user can **isolate a single frame and study its colour palette in 3D** (distinct from the playful 2D↔3D reveal). It is what earns the cube its place beside the treemap and grid as an inspection lens. Controls: a shape-changing "isolate" glass toggle (`square.stack.3d.up[.fill]`) + a **Ghost** slider (0 = the other frames vanish entirely; up to ~0.4 = they linger as a faint translucent context cloud). The focus frame is the playback `cursor` (the near face); scrub to choose it.
 
-> **GRID tension to settle (GATE-DECISIONS).** Opacity on a data cell normally violates GRID Law #2. Per-slice transparency is an *inspection lens* on the Review surface (already `EXEMPT-REVIEW-PITCH` + glass-chrome), so it is plausibly an analysis-mode exception rather than a content shading — but it must be signed off as such before it ships, not drifted in. Deferred until the cube is un-shelved and testable (opacity ramps need device tuning).
+**Renderer.** The raymarch composites front-to-back: each voxel's α is `1.0` everywhere *except* in isolate mode, where the focus frame stays α=1 and other slices take `ghostAlpha`. Because α=1 makes the over-operator saturate on the first hit, the non-isolate path is **byte-identical** to the old first-hit march — the 2D rest-pose identity (§0.1) is provably untouched (`VoxelRestPoseIdentityTests`).
+
+> **GRID tension — SETTLED (owner sign-off 2026-06-03).** Opacity on a data cell normally violates GRID Law #2. Per-slice transparency was flagged here as a plausible *inspection-lens* exception needing explicit sign-off; the project owner requested it ("see the frame you want while the others are transparent, to study the palette"), so it ships as a **sanctioned analysis-mode exception** — alpha appears ONLY on non-focus slices in isolate mode, never on the focus frame and never outside this mode.
 
 ---
 
@@ -92,9 +94,13 @@ All toggles recompute the 16 KB `airMask` on the CPU on change and re-upload; th
 
 | Control | Gesture | Glass component | Behaviour |
 |---|---|---|---|
-| **Orbit** | drag | `GlassIconButton` "reset" floats top-trailing | yaw/pitch into `VoxelCubeState`; gesture consumes the touch before the parent `ScrollView` |
+| **Orbit** | drag | bare gesture on the cube | yaw/pitch into `VoxelCubeState`; **disabled when `locked`**; gesture consumes the touch before the parent `ScrollView` |
+| **Iso corner** | tap | `GlassIconButton` "cube.fill" top-trailing | snaps to the current 2:1 dimetric corner; tapping again **cycles the 4 canonical corners** (`VoxelIso.corner`, same 30° elevation) |
+| **Lock** | toggle | `GlassIconButton` "lock.open"↔"lock.fill" top-trailing | freezes the orientation for study (orbit gesture no-op); shape changes with state |
+| **Reset to 2D** | tap | `GlassIconButton` "cube.transparent" top-trailing | folds back to the flat rest pose and unlocks |
 | **Playback** | play/pause | `GlassIconButton` (`.symbolEffect(.replace)`) | t driven by the **single** clock `frameIndex(at:rate:20,count:64)` (`PixelGrid.swift:34`) — frame-locked to the GIF hero; holds frame 0 under Reduce Motion |
-| **Auto-rotate** | tap | segment in a `GlassToolbarCluster` | slow yaw on the 20 fps clock; **frozen** under Reduce Motion (GLASS §6 RULE-GLASS-MOTION) |
+| **Auto-rotate** | tap | segment in a `GlassToolbarCluster` | spins yaw on the clock and **eases elevation to 30°** → a 2:1 dimetric turntable; **frozen** under Reduce Motion (GLASS §6 RULE-GLASS-MOTION) |
+| **Isolate frame** | toggle | `GlassIconButton` "square.stack.3d.up"↔".fill" | focus frame opaque, rest transparent (§0.3); **Ghost** slider sets non-focus α |
 | **t-slice** | range drag | glass `Capsule` pill (`pillCorner`) | sets [tLo,tHi]; debounced ≥100 ms |
 | **Time-explode** | toggle | `GlassSelector` segment | spring-morph plane spacing; snap (no animation) under Reduce Motion |
 | **Air/threshold** | slider + segmented | `GlassSelector` (`controlCorner=0`) + glass pill | recomputes `airMask`, re-uploads |
@@ -134,6 +140,57 @@ New files: `UI/Components/VoxelCubeView.swift` (representable + Coordinator, the
 - **Reduce Motion:** auto-rotate/explode freeze; playback holds frame 0 (mirrors `GIFCanvas`).
 - **Reduce Transparency / Increase Contrast:** glass chrome degrades to a solid contrast-passing fill (GLASS §6 RULE-GLASS-REDUCE-TRANSPARENCY).
 - **Decisions gate:** adding a third `RepresentationSelector` mode is a `RULE-GLASS-DECISIONS` / GRID `GATE-DECISIONS` item — signed off, not drifted in.
+
+---
+
+## 8. The 8-bit isometric ruleset (2:1 dimetric) — RULE-CUBE-ISO
+
+The cube is the app's **3D representation of the GIF**, and its 3D look is governed
+by the **isometric ruleset of 8-bit/16-bit videogames**. That look is two precise,
+separable rules — both now enforced (`VoxelIso`, `voxel_raymarch`, `VoxelRestPoseIdentityTests`):
+
+### 8.1 It is DIMETRIC at 2:1 — not true isometric (RULE-CUBE-ISO-ANGLE)
+8-bit "isometric" games were never truly isometric. True isometric uses an
+orthonormal camera at **elevation 35.26°**, whose floor diagonals have slope
+`tan30° ≈ 0.577` — non-integer stairsteps that look wrong in pixel art. Every
+classic engine instead used **azimuth 45°, elevation 30°**, because **`sin30° = 0.5`**
+makes each floor edge step **exactly 2 px across : 1 down** — a slope a 6502/Z80 could
+draw by halving. This is the canonical **hero pose**:
+
+```
+VoxelIso.yaw   = π/4   (45° azimuth)
+VoxelIso.pitch = π/6   (30° elevation)   → world-X and world-Z each project to slope 0.5
+```
+
+The camera basis is **orthonormal** (yaw about world-Y, then pitch about the
+*camera-right* axis — `voxelOrbit`, Rodrigues form). At `yaw=pitch=0` it is the
+identity, so the flat rest pose stays byte-1:1 with the 2D GIF (§0.1). The "cube.fill"
+glass button snaps to the hero pose; **auto-rotate eases elevation to 30° and spins
+yaw** — a dimetric turntable, not a flat spin. Proven by `isoPoseIsExactly2to1Dimetric`.
+
+### 8.2 It is CHUNKY — a fixed 128² art grid (RULE-CUBE-ISO-PIXELATION)
+A retina-resolution orthographic box reads as a clean 3D solid, not 8-bit. The kernel
+therefore quantises every drawable pixel to a fixed **`ART_RES = 128`** art-pixel grid
+(all drawable pixels in one art cell share its centre's raymarch result), then
+nearest-upscales. `128 = 2·64`, so **each voxel is exactly 2 aligned art-pixels** of its
+single constant colour — the 2:1 dimetric edges resolve as visible 8-bit stairsteps, and
+the flat pose stays pixel-exact (RULE-CUBE-2D-IDENTITY). The art grid is resolution-independent,
+so the chunkiness is identical on every device.
+
+### 8.3 Whole cube visible at iso — auto-fit window (RULE-CUBE-ISO-FIT, supersedes RULE-CUBE-FIXED-SCALE)
+8-bit games frame the **whole** object. The orthographic half-window therefore
+**auto-fits the cube's projected silhouette** at the current orientation
+(`VoxelIso.fitHalfSpan` = max `|corner·basis|` over the 8 corners, +1-unit pad when
+orbited). At the flat pose the corners project to ±32, so it returns **exactly 32** ⇒
+one voxel = one GIF cell = the 2D identity; orbited toward the hero pose it grows to
+~50.3 so the whole dimetric hexagon is framed (voxels shrink ~37%). One formula, no
+discontinuity. This **replaces** the earlier fixed `halfSpan = 32` rule, which clipped
+the cube's corners when orbited — the project owner chose "fit whole cube at iso"
+(2026-06-03). Proven by `fitHalfSpanIsIdentityAtFlatAndFramesWholeCubeAtIso`.
+
+> **Provenance.** The 2:1 angle, dimetric-vs-isometric distinction, and the
+> 2-px-shift hardware rationale are from the isometric-pixel-art literature
+> (slynyrd Pixelblog-41; Wikipedia "Isometric video game graphics"; pikuma).
 
 ---
 

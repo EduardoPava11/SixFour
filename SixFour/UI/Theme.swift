@@ -5,19 +5,15 @@ import SwiftUI
 ///
 /// Why a namespace and not a custom `EnvironmentValue`? — the design here
 /// is small enough (one app, two screens) that explicit references like
-/// `SFTheme.pillCorner` are easier to grep for than a SwiftUI environment
+/// `SFTheme.cardCorner` are easier to grep for than a SwiftUI environment
 /// trail. If the app grows a real design system, promote to environment.
 enum SFTheme {
     // MARK: Spacing
 
-    static let pillCorner: CGFloat = 14
     static let cardCorner: CGFloat = 10
-    static let stripCorner: CGFloat = 4
 
     static let pillVerticalPad: CGFloat = 7
     static let pillHorizontalPad: CGFloat = 14
-
-    static let sectionSpacing: CGFloat = 14
 
     // MARK: The grid render surface (8-bit graphics-engine LOOK)
 
@@ -26,6 +22,10 @@ enum SFTheme {
     /// `kernels.SIDE`). The ONE definition every GIF-content surface sizes from,
     /// so 2D (the `PixelImage` hero) and 3D (the voxel cube) render the same grid.
     static let gifSideCells: Int = SixFourShape.W           // 64
+    /// The GIF playback cadence — 64 frames at **20 fps** (a cube-language constant).
+    /// The SINGLE source for every clock: the `frameIndex(at:rate:count:)` indexer, the
+    /// render `fps:`, and the scrubbable-cursor views' tick stride (`60 / gifFrameRate`).
+    static let gifFrameRate: Int = 20
     /// One GIF fat-pixel, in points. 64 × 6 = 384pt fits the iPhone 17 Pro
     /// portrait width (393–402pt) crisply. See `docs/grid-is-the-render-surface.md`.
     static let gifCellPt: CGFloat = 6
@@ -33,44 +33,28 @@ enum SFTheme {
     /// count drives it, not a literal). The palette grid uses the SAME 384pt edge
     /// (16 × 24), so a palette cell is exactly a 4×4 block of GIF cells.
     static let gifCanvasPt: CGFloat = gifCellPt * CGFloat(gifSideCells)   // 384
-    static let paletteCellPt: CGFloat = gifCellPt * 4       // 24 → 16×24 = 384
-    /// The one grid-frame stroke (reconciles the old 0.5 / 0.18 inconsistency).
-    static let gridFrameStroke = Color.white.opacity(0.5)
+    /// The one grid-frame border — OPAQUE (GRID Law #2: opacity is shading, forbidden on
+    /// a content surface). `(128,128,128)` reads as the old white@0.5-on-black hairline but
+    /// is a flat opaque ink; applied as an INSET `.border` (not an edge-centred AA stroke).
+    static let gridFrameStroke = Color(srgb8: SIMD3<UInt8>(128, 128, 128))
 
     // MARK: Cube-derived chrome lattice (docs/cube-generated-uiux-system.md)
     //
     // Every chrome dimension is n·gifCellPt, preferring multiples of
-    // paletteCellPt (24 = 3×8, so the cube and Apple's 8pt grid already agree).
+    // 24 (= 3×8, so the cube and Apple's 8pt grid already agree).
     // No chrome size may be a free point value.
+    //
+    // The 2pt CAPTURE lattice (cellPt, 201×437, widget cell-counts) is owned by
+    // `GlobalLattice` (GRID Law #5). `gifCellPt`/`gifCanvasPt` here are the 6pt
+    // Review/palette pitch (EXEMPT-REVIEW-PITCH); the two pitches never share a screen.
 
-    /// The GLOBAL cell-lattice pitch (docs/cell-lattice-widget-spec.md). gcd(402,874)=2,
-    /// so a 2pt cell is the unique pitch that tiles the whole iPhone 17 Pro screen
-    /// exactly → 201 × 437 cells. The preview is 64 cells = 128pt at this pitch.
-    /// (`gifCellPt`/`gifCanvasPt`/`paletteCellPt` stay for the Review/palette screens.)
-    static let cellPt: CGFloat = 2
     /// Opaque "off-segment" dim for unlit LED/cell elements (never opacity — the
     /// flat-cell contract; ~1.6:1 on black so it reads without reflow).
     static let ledGhost = SIMD3<UInt8>(40, 40, 40)
 
-    /// Primary action (the shutter): 12 cells = 3 palette cells. A square.
-    static let shutterSidePt: CGFloat = gifCellPt * 12        // 72
-    /// The shutter's inner fill, leaving a 1-cell ring gap.
-    static let shutterInnerPt: CGFloat = gifCellPt * 10       // 60
-    /// Secondary square controls (gear, toggles, selector segments): 8 cells =
-    /// 2 palette cells = 48pt. Clears the 44pt HIG target; visible == hit.
-    static let controlSidePt: CGFloat = gifCellPt * 8         // 48
     /// Square corner radius for chrome controls — 0 = a true cube cell.
     static let controlCorner: CGFloat = 0
-    /// Comfortable gutter between interactive controls.
-    static let controlGutter: CGFloat = gifCellPt * 2         // 12
-    /// Control-to-decoration / canvas gutter (the Swiss gutter that holds
-    /// figure/ground around the blended preview).
-    static let decorGutter: CGFloat = gifCellPt               // 6
 
-    /// Opacity of the palette-driven background wash over black: the live scene's
-    /// dominant hue tints the room (responds to camera input) while staying dark
-    /// enough that white chrome remains readable — a flat fill, no gradient.
-    static let groundWashOpacity: Double = 0.32
     /// Treemap split-plane colour — OPAQUE (drawn as filled inset gaps, never an
     /// AA'd/translucent stroke), replacing the old `.black.opacity(0.55)`.
     static let treemapPlane = Color.black
@@ -89,14 +73,11 @@ enum SFTheme {
 
     static let captionMono = Font.system(.caption, design: .monospaced, weight: .medium)
     static let footnoteSelector = Font.system(.footnote, weight: .semibold)
-    static let titleMono = Font.system(.title2, design: .monospaced, weight: .bold)
 
     // MARK: Colour roles
 
     /// Translucent strokes used on selected segments and strip borders.
     static let hairline = Color.white.opacity(0.18)
-    static let mutedFill = Color.white.opacity(0.06)
-    static let mutedText = Color.white.opacity(0.85)
     static let dimText   = Color.white.opacity(0.6)
 
     // MARK: Liquid Glass (iOS 26)
@@ -112,15 +93,6 @@ enum SFTheme {
     static let glassClusterSpacing: CGFloat = gifCellPt * 2   // 12 = 2 cells
 
     // MARK: Live diversity instrument
-
-    /// Tick count for the shutter diversity gauge — the form's signature 64
-    /// (frames), reused as "how full is the palette's gamut".
-    static let diversityTickCount: Int = 64
-    /// Diameter of the gauge ring (matches the shutter's outer stroke).
-    static let diversityRingDiameter: CGFloat = 84
-    /// Radial tick geometry for the gauge.
-    static let diversityTickLength: CGFloat = 6
-    static let diversityTickWidth: CGFloat = 2
 
     /// Soften a raw scene colour into a **chrome-legible accent**: blend toward
     /// white so SF symbols and the gauge ring stay readable on glass over the

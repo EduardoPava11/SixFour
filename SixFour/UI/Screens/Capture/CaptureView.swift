@@ -53,22 +53,22 @@ struct CaptureView: View {
 
             VStack(spacing: 0) {
                 topBar
-                Spacer(minLength: 6 * SFTheme.cellPt)
+                Spacer(minLength: GlobalLattice.pt(6))
                 previewBlock                 // the centred anchor
-                Spacer(minLength: 6 * SFTheme.cellPt)
+                Spacer(minLength: GlobalLattice.pt(6))
                 if let summary = vm.lastTimingSummary {
                     GlassInfoChip(cornerRadius: SFTheme.cardCorner) {
                         Text(summary)
                             .font(.system(.caption2, design: .monospaced))
                             .foregroundStyle(.white.opacity(0.85))
                     }
-                    .padding(.bottom, 4 * SFTheme.cellPt)
+                    .padding(.bottom, GlobalLattice.pt(4))
                 }
                 bottomBar
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .padding(.horizontal, 8 * SFTheme.cellPt)
-            .padding(.vertical, 6 * SFTheme.cellPt)
+            .padding(.horizontal, GlobalLattice.pt(8))
+            .padding(.vertical, GlobalLattice.pt(6))
         }
     }
 
@@ -80,7 +80,7 @@ struct CaptureView: View {
     /// needs no global-offset math (which is what previously skewed the layout).
     private var previewBlock: some View {
         // The GIF's cell count (spec-canonical) at the HUD's 2pt lattice pitch.
-        let side = CGFloat(SFTheme.gifSideCells) * SFTheme.cellPt   // 64 × 2 = 128 pt
+        let side = GlobalLattice.pt(SFTheme.gifSideCells)   // 64 × 2 = 128 pt
         return ZStack {
             if let session = vm.session?.session {
                 CameraPreview(session: session) { devicePoint, localPoint in
@@ -223,10 +223,10 @@ struct CaptureView: View {
         // Cells, not glass (glass retired on the HUD per GRID): flat dark cell
         // strip behind the stage text at the one 2pt pitch.
         CellText(s, rows: 11, ink: .white)
-            .padding(.horizontal, 5 * SFTheme.cellPt)
-            .padding(.vertical, 3 * SFTheme.cellPt)
+            .padding(.horizontal, GlobalLattice.pt(5))
+            .padding(.vertical, GlobalLattice.pt(3))
             .background(Color(srgb8: SFTheme.ledGhost))
-            .padding(.top, 4 * SFTheme.cellPt)
+            .padding(.top, GlobalLattice.pt(4))
     }
 
     private struct ReticleHit: Equatable {
@@ -235,23 +235,21 @@ struct CaptureView: View {
     }
 }
 
-/// A small focus reticle that briefly animates at the user's tap location.
-/// Stateless; the parent removes it via .task after a delay.
+/// A focus reticle at the user's tap location, drawn as an opaque CELL ring at the
+/// 2 pt pitch (GRID §6.10 capture-HUD vocabulary: NO vector `Circle`, NO anti-aliased
+/// `.stroke`, NO continuous `.opacity` fade). Its brief appearance is a discrete on→off:
+/// stateless, the parent removes it via `.task` after a delay.
 private struct FocusReticle: View {
     let point: CGPoint
-    @State private var scale: CGFloat = 1.6
-    @State private var opacity: Double = 1.0
+    private let n = 30   // 30 cells = 60 pt, matching the old reticle diameter
 
     var body: some View {
-        Circle()
-            .stroke(Color.yellow, lineWidth: 2)
-            .frame(width: 60, height: 60)
-            .scaleEffect(scale)
-            .opacity(opacity)
-            .position(point)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.25)) { scale = 1.0 }
-                withAnimation(.easeOut(duration: 0.9).delay(0.1)) { opacity = 0.0 }
-            }
+        let cx = Double(n) / 2, cy = Double(n) / 2
+        CellSprite(cols: n, rows: n) { c, r in
+            let d = CellGeom.dist(c, r, cx, cy)
+            return (d >= 12 && d <= 14) ? SIMD3<UInt8>(255, 204, 0) : nil   // opaque yellow ring band
+        }
+        .position(point)
+        .accessibilityHidden(true)
     }
 }

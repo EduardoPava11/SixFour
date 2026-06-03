@@ -341,7 +341,7 @@ final class CaptureViewModel {
 
         let renderer = GIFRenderer(dither: dither, engines: engines)
         let report = try await Task.detached(priority: .userInitiated) {
-            try await renderer.render(tiles: tiles, to: baseURL, fps: 20, onPhase: onPhase)
+            try await renderer.render(tiles: tiles, to: baseURL, fps: SFTheme.gifFrameRate, onPhase: onPhase)
         }.value
 
         // Contact sheet is best-effort.

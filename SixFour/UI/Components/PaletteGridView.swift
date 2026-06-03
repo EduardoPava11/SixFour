@@ -25,7 +25,7 @@ struct PaletteGridView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(palettes: [[SIMD3<UInt8>]], xAxis: GridAxis, yAxis: GridAxis,
-         frameRate: Int = 20, brushedIndex: Int? = nil) {
+         frameRate: Int = SFTheme.gifFrameRate, brushedIndex: Int? = nil) {
         self.palettes = palettes
         self.xAxis = xAxis
         self.yAxis = yAxis

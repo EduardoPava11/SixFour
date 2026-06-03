@@ -19,6 +19,9 @@ protocol PaletteCollapse: Sendable {
 /// indices into the pooled candidate cloud (the golden pins both).
 struct CollapsedPalette: Sendable, Equatable {
     let leaves: [OKLabQ16]
+    /// The pooled-cloud index each leaf was chosen from. WITNESS-ONLY: read solely by
+    /// `CollapseGoldenTests` to pin the collapse *choice* — the runtime render path uses
+    /// `.leaves`. Don't delete without relaxing that golden.
     let chosenIndices: [Int]
 }
 

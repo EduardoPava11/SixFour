@@ -3,7 +3,7 @@ import UIKit
 import simd
 
 /// A widget drawn as a square block of CELLS at the one global pitch
-/// (`SFTheme.cellPt` = 2 pt), per the GRID design language (Law #1: one cell size
+/// (`GlobalLattice.cellPt` = 2 pt), per the GRID design language (Law #1: one cell size
 /// everywhere — widgets grow by more cells, never a bigger cell). Each cell's
 /// colour is computed by pure math (distance / angle), baked into a tiny
 /// `cols × rows` indexed bitmap, and nearest-neighbour upscaled — the same
@@ -45,7 +45,7 @@ struct CellSprite: View {
             Image(uiImage: img)
                 .interpolation(.none)
                 .resizable()
-                .frame(width: CGFloat(cols) * SFTheme.cellPt, height: CGFloat(rows) * SFTheme.cellPt)
+                .frame(width: GlobalLattice.pt(cols), height: GlobalLattice.pt(rows))
         }
     }
 }
@@ -74,7 +74,7 @@ enum CellGeom {
 /// it in the tappable Button so hit-rect == cell-rect).
 struct CellShutter: View {
     var busy: Bool = false
-    private let n = 34
+    private let n = GlobalLattice.shutterCells   // 34
     var body: some View {
         let fill: SIMD3<UInt8> = busy ? SIMD3(220, 60, 60) : SIMD3(255, 255, 255)
         let cx = Double(n) / 2, cy = Double(n) / 2
@@ -92,7 +92,7 @@ struct CellShutter: View {
 /// all by angle/distance math. Tinted by the live scene (chrome reflects content).
 struct CellGear: View {
     var ink: SIMD3<UInt8> = SIMD3(235, 235, 235)
-    private let n = 24
+    private let n = GlobalLattice.controlCells   // 24
     var body: some View {
         let cx = Double(n) / 2, cy = Double(n) / 2
         CellSprite(cols: n, rows: n) { c, r in
@@ -115,8 +115,8 @@ struct CellGear: View {
 struct CellDiversityRing: View {
     var gauge: Double
     var tint: SIMD3<UInt8>
-    private let n = 60
-    private let ticks = 64
+    private let n = GlobalLattice.ringCells    // 60
+    private let ticks = GlobalLattice.ringTicks // 64
     var body: some View {
         let cx = Double(n) / 2, cy = Double(n) / 2
         let lit = max(0, min(ticks, Int((gauge * Double(ticks)).rounded())))

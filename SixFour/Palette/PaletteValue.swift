@@ -13,6 +13,10 @@ struct RewardWeights: Sendable, Equatable {
 /// and golden-testable today). Hand-written port of `SixFour.Spec.PaletteOracle.paletteReward`
 /// (= `Loss.beautyLossLeaves` + `Diversity.gaussianColorEntropy`), gated within
 /// tolerance against `PaletteValueGolden` (`PaletteValueGoldenTests`).
+///
+/// UNWIRED: consumed ONLY by `PaletteValueGoldenTests` today — no runtime caller until
+/// the deferred `PaletteSearch` feature lands. It is verified-but-dormant groundwork
+/// (`RewardWeights` likewise), kept because it is the spec-pinned objective search will use.
 enum PaletteValue {
 
     // MARK: Diversity — OKLab Gaussian colour entropy

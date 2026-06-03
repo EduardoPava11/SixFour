@@ -68,18 +68,22 @@ struct Quad4DrillView: View {
         // At depth-1 (about to pick a leaf), a quadrant maps to a concrete leaf index.
         let leafIdx: Int? = path.count == Quad4Nav.depth - 1 ? Quad4Nav.leafIndex(path + [q]) : nil
         let isBrushed = leafIdx != nil && leafIdx == brushedIndex
-        return Rectangle()
-            .fill(Color(.sRGB, red: Double(rgb.x) / 255, green: Double(rgb.y) / 255, blue: Double(rgb.z) / 255))
-            .frame(width: cell, height: cell)
-            .overlay(alignment: .topLeading) {
-                Text(Self.signs[q]).font(SFTheme.captionMono)
-                    .foregroundStyle(.white.opacity(0.85)).padding(3)
-            }
-            .overlay(Rectangle().inset(by: 1).stroke(
-                isBrushed ? Color.white : SFTheme.treemapPlane,
-                lineWidth: isBrushed ? 2.5 : 0.5))
-            .contentShape(Rectangle())
-            .onTapGesture { descend(q) }
+        // GRID Law #2: a data cell is flat — NO anti-aliased stroke, NO opacity. The
+        // separator/selection is an OPAQUE inset border (the treemap's filled-gap idiom):
+        // a solid border ground behind the data colour, which is inset to reveal it. The
+        // brushed cell gets a wider white border; the rest a thin black one.
+        let border: SIMD3<UInt8> = isBrushed ? SIMD3(255, 255, 255) : SIMD3(0, 0, 0)
+        let bw: CGFloat = isBrushed ? 2 : 1
+        return ZStack(alignment: .topLeading) {
+            Color(srgb8: border)                 // opaque border ground (no AA stroke)
+            Color(srgb8: rgb).padding(bw)        // the data colour, inset to expose the border
+            Text(Self.signs[q]).font(SFTheme.captionMono)
+                .foregroundStyle(Color(srgb8: SIMD3(235, 235, 235)))   // opaque ink, no alpha
+                .padding(3)
+        }
+        .frame(width: cell, height: cell)
+        .contentShape(Rectangle())
+        .onTapGesture { descend(q) }
     }
 
     private func descend(_ q: Int) {

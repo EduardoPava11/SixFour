@@ -22,6 +22,17 @@ import simd
 //     (halfSpan, computed per-orientation), so face-on it fills at 32 = pixel
 //     parity, and corner-on it grows to fit without ever clipping.
 //
+// 8-BIT ISOMETRIC RULESET (docs/SIXFOUR-VOXEL-CUBE.md §8, RULE-CUBE-ISO):
+//   • the 3D "hero" pose is the canonical 2:1 DIMETRIC angle of 8-bit games —
+//     azimuth 45° / elevation 30° (sin30°=0.5 ⇒ floor edges step 2px:1px). The
+//     "cube.fill" button snaps to it and cycles the 4 iso corners; "lock" freezes
+//     the orientation for study (see `VoxelIso`).
+//   • the kernel quantises to a fixed 128² art-pixel grid (2 art-px/voxel) so the
+//     dimetric edges read as CHUNKY 8-bit stairsteps, nearest-upscaled to any size.
+//   • FRAME-ISOLATION (study): focus one frame opaque and ghost the rest (front-to-
+//     back alpha compositing; α=1 collapses to the opaque first-hit march, so the
+//     2D rest pose is untouched) to read a single frame's palette in 3D.
+//
 // RENDERER: a hand-written Metal compute DDA raymarcher (Amanatides–Woo) over a
 // 64³ R8Uint index volume + a 64×256 RGBA8 palette texture. One discrete
 // per-face brightness multiply is the ONLY depth cue (GRID Law #2: no AA /
@@ -87,6 +98,61 @@ struct VoxelCubeData: Sendable {
     }
 }
 
+// MARK: - The 8-bit isometric ruleset (2:1 dimetric)
+//
+// Classic 8-bit/16-bit "isometric" games are not truly isometric — they are
+// DIMETRIC at a 2:1 pixel ratio: every floor diagonal steps 2 px across : 1 down
+// (slope 0.5), which a 6502/Z80 could draw by halving. That ratio is produced
+// EXACTLY by an orthonormal camera at azimuth 45°, elevation 30° — because
+// sin30° = 0.5. (True isometric is 35.26°/0.577, whose non-integer stairsteps look
+// wrong in pixel art.) We therefore expose ONE canonical "hero" pose and an
+// auto-fitting orthographic window; the kernel quantises to a 128² art grid so the
+// 2:1 edges read as chunky 8-bit stairsteps. See docs/SIXFOUR-VOXEL-CUBE.md §8.
+enum VoxelIso {
+    static let yaw: Float = .pi / 4      // 45° azimuth
+    static let pitch: Float = .pi / 6    // 30° elevation → exact 2:1 dimetric
+
+    /// The 4 canonical isometric corners — each views the cube from a different
+    /// top-corner while preserving the 30° elevation (so the 2:1 look is identical;
+    /// only WHICH three faces you see changes). `n` cycles 0…3 → yaw = π/4 + n·π/2.
+    static func corner(_ n: Int) -> (yaw: Float, pitch: Float) {
+        (yaw: .pi / 4 + Float(n & 3) * (.pi / 2), pitch: pitch)
+    }
+
+    /// Mirror of the Metal `voxelOrbit` basis (orthonormal: yaw about world-Y, then
+    /// pitch about the camera-right axis). Returns the camera basis vector for the
+    /// canonical axis `v`. Kept in lockstep with Shaders.metal voxel_raymarch.
+    static func orbit(_ v: SIMD3<Float>, yaw: Float, pitch: Float) -> SIMD3<Float> {
+        let cy = cos(yaw), sy = sin(yaw)
+        let a = SIMD3<Float>(cy * v.x + sy * v.z, v.y, -sy * v.x + cy * v.z)
+        let r = SIMD3<Float>(cy, 0, -sy)
+        let cp = cos(pitch), sp = sin(pitch)
+        return a * cp + simd_cross(r, a) * sp + r * simd_dot(r, a) * (1 - cp)
+    }
+
+    /// Orthographic half-window that exactly FITS the 64³ cube's silhouette at this
+    /// orientation — so the WHOLE 8-bit cube is framed when orbited (the chosen
+    /// behaviour), while the flat pose stays pixel-exact. At yaw=pitch=0 the 8 corners
+    /// project to ±32, so this returns exactly 32 ⇒ one voxel = one GIF cell = the 2D
+    /// identity. Orbited, it grows to the largest |corner·basis|; a 1-unit pad (only
+    /// when orbited) keeps the outermost corner voxels just inside the frame edge.
+    static func fitHalfSpan(yaw: Float, pitch: Float) -> Float {
+        let xb = orbit(SIMD3(1, 0, 0), yaw: yaw, pitch: pitch)
+        let yb = orbit(SIMD3(0, 1, 0), yaw: yaw, pitch: pitch)
+        var m: Float = 0
+        for sx in [Float(-32), 32] {
+            for sy in [Float(-32), 32] {
+                for sz in [Float(-32), 32] {
+                    let c = SIMD3<Float>(sx, sy, sz)   // corner relative to centre (32,32,32)
+                    m = max(m, max(abs(simd_dot(c, xb)), abs(simd_dot(c, yb))))
+                }
+            }
+        }
+        let orbited = (yaw * yaw + pitch * pitch) > 1e-6
+        return m + (orbited ? 1 : 0)
+    }
+}
+
 // MARK: - View state (single owner of all knobs — GRID Law #5 spirit)
 
 struct VoxelCubeState: Equatable {
@@ -103,6 +169,16 @@ struct VoxelCubeState: Equatable {
     var frame: Int = 0
     var playing: Bool = true
     var autoRotate: Bool = false
+
+    /// LOCK: freeze the orientation so the orbit gesture can't disturb a chosen iso
+    /// pose (study mode). The iso-corner button still snaps among canonical corners.
+    var locked: Bool = false
+    /// Which of the 4 canonical isometric corners is selected (yaw = π/4 + n·π/2).
+    var isoCorner: Int = 0
+    /// FRAME-ISOLATION: focus the current frame opaque, ghost the rest, to study one
+    /// frame's palette in 3D (design §0.3). `ghostAlpha` 0 = pure isolation.
+    var isolate: Bool = false
+    var ghostAlpha: Double = 0
 
     /// θ = how far we are from the flat 2D pose (radians). 0 == pure 2D.
     var orbitMagnitude: Float { (yaw * yaw + pitch * pitch).squareRoot() }
@@ -133,8 +209,9 @@ struct VoxelCubeView: View {
     @State private var tick = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // The single 60 Hz driver for playback (20 fps cursor) + auto-rotate.
-    private let clock = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
+    // The single 60 Hz driver for playback (cursor at SFTheme.gifFrameRate) + auto-rotate.
+    private static let displayHz = 60
+    private let clock = Timer.publish(every: 1.0 / Double(displayHz), on: .main, in: .common).autoconnect()
 
     init(data: VoxelCubeData, edge: CGFloat = SFTheme.gifCanvasPt,
          settings: AppSettings? = nil, brushedIndex: Binding<Int?> = .constant(nil),
@@ -195,11 +272,30 @@ struct VoxelCubeView: View {
                             ? "Flat view, frame \(cube.frame + 1) of 64. Drag to orbit into 3D."
                             : "Orbited \(Int(cube.orbitMagnitude * 57)) degrees, frame \(cube.frame + 1) of 64.")
 
-                    // Reset-to-2D — the "fold back flat" affordance (glass chrome).
-                    GlassIconButton(systemImage: "cube.transparent",
-                                    accessibilityLabel: "Reset to flat 2D view") {
-                        withAnimation(.easeInOut(duration: 0.45)) {
-                            cube.yaw = 0; cube.pitch = 0
+                    // Pose affordances (glass chrome): snap to / cycle the 8-bit iso
+                    // corners (2:1 dimetric), lock the orientation for study, or fold
+                    // back flat to 2D. Buttons change shape with state.
+                    VStack(spacing: 8) {
+                        GlassIconButton(systemImage: "cube.fill",
+                                        accessibilityLabel: "Isometric view (tap to rotate corner)") {
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                // From flat: snap to the current corner. Already iso: advance
+                                // to the next of the 4 canonical corners (same 2:1 angle).
+                                if !cube.isFlat { cube.isoCorner &+= 1 }
+                                let c = VoxelIso.corner(cube.isoCorner)
+                                cube.yaw = c.yaw; cube.pitch = c.pitch
+                            }
+                        }
+                        GlassIconButton(systemImage: cube.locked ? "lock.fill" : "lock.open",
+                                        accessibilityLabel: cube.locked ? "Unlock orientation" : "Lock orientation",
+                                        tint: cube.locked ? .white : .white.opacity(0.6)) {
+                            cube.locked.toggle()
+                        }
+                        GlassIconButton(systemImage: "cube.transparent",
+                                        accessibilityLabel: "Reset to flat 2D view") {
+                            withAnimation(.easeInOut(duration: 0.45)) {
+                                cube.yaw = 0; cube.pitch = 0; cube.locked = false
+                            }
                         }
                     }
                     .padding(8)
@@ -227,6 +323,13 @@ struct VoxelCubeView: View {
                                 tint: cube.autoRotate ? .white : .white.opacity(0.6)) {
                     cube.autoRotate.toggle()
                 }
+                // Frame-isolation: focus the current frame, make the rest transparent,
+                // to study one frame's palette in 3D (the button changes shape).
+                GlassIconButton(systemImage: cube.isolate ? "square.stack.3d.up.fill" : "square.stack.3d.up",
+                                accessibilityLabel: cube.isolate ? "Show all frames" : "Isolate this frame",
+                                tint: cube.isolate ? .white : .white.opacity(0.6)) {
+                    cube.isolate.toggle()
+                }
             }
 
             // Provenance filter — which slots count as solid (design §3).
@@ -234,18 +337,28 @@ struct VoxelCubeView: View {
 
             // Knobs — a read-only-style glass panel (the cube stays content).
             VStack(spacing: 8) {
-                slider("Frame \(cube.frame + 1)/64",
+                slider("Frame \(cube.frame + 1)/\(VoxelCubeData.frameCount)",
                        value: Binding(get: { Double(cube.frame) },
                                       set: { cube.frame = Int($0.rounded()); cube.playing = false }),
-                       range: 0...63)
+                       range: 0...Double(VoxelCubeData.frameCount - 1))
                 slider("Trail depth \(cube.tHi - cube.tLo + 1)",
                        value: Binding(get: { Double(cube.tLo) },
                                       set: { cube.tLo = min(Int($0.rounded()), cube.tHi) }),
-                       range: 0...63)
+                       range: 0...Double(VoxelCubeData.frameCount - 1))
                 slider("Air below luma \(cube.lumaFloor)",
                        value: Binding(get: { Double(cube.lumaFloor) },
                                       set: { cube.lumaFloor = Int($0.rounded()) }),
                        range: 0...255)
+                // Ghost amount only matters while isolating: 0 = the other frames vanish
+                // entirely; higher = they linger as a faint translucent context cloud.
+                if cube.isolate {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Ghost other frames \(Int(cube.ghostAlpha * 100))%")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.85))
+                        Slider(value: $cube.ghostAlpha, in: 0...0.4)
+                    }
+                }
             }
             .padding(12)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: SFTheme.cardCorner))
@@ -295,6 +408,7 @@ struct VoxelCubeView: View {
     private var orbitGesture: some Gesture {
         DragGesture(minimumDistance: 1)
             .onChanged { v in
+                guard !cube.locked else { return }   // study mode: orientation frozen
                 let gain: Float = 0.006
                 cube.yaw += Float(v.translation.width) * gain
                 cube.pitch += Float(-v.translation.height) * gain
@@ -308,11 +422,15 @@ struct VoxelCubeView: View {
     private func advance() {
         guard !reduceMotion else { return }
         tick &+= 1
-        if cube.playing, tick % 3 == 0 {
-            cube.frame = (cube.frame + 1) % 64
+        if cube.playing, tick % (Self.displayHz / SFTheme.gifFrameRate) == 0 {
+            cube.frame = (cube.frame + 1) % VoxelCubeData.frameCount
         }
         if cube.autoRotate {
             cube.yaw += 0.010
+            // Ease the elevation up to the 8-bit iso angle (30°) so auto-rotate is a
+            // dimetric TURNTABLE showing the 2:1 look, not a flat spin. Blooms smoothly
+            // out of the rest pose; the auto-fit window keeps the whole cube framed.
+            cube.pitch += (VoxelIso.pitch - cube.pitch) * 0.08
         }
     }
 
@@ -371,6 +489,8 @@ private struct VoxelUniforms {
     var provMode: Int32 = 0             // 0 all / 1 extracted / 2 split
     var brushedIndex: Int32 = -1        // shared cross-view brush; -1 = none
     var brushMode: Int32 = 0            // brush set: 0 single (16²) / 1 quad (4⁴) / 2 σ-pair (2⁸)
+    var isolate: Int32 = 0             // frame-isolation: 0 off / 1 on
+    var ghostAlpha: Float = 0          // alpha of non-focus slices when isolating
 }
 
 // MARK: - Renderer
@@ -479,14 +599,18 @@ private final class Renderer: NSObject, MTKViewDelegate {
         uniforms.provMode = Int32(max(0, min(2, s.provMode)))
         uniforms.brushedIndex = brushedIndex.map { Int32(max(0, min(255, $0))) } ?? -1
         uniforms.brushMode = brushMode
+        uniforms.isolate = s.isolate ? 1 : 0
+        uniforms.ghostAlpha = Float(max(0, min(1, s.ghostAlpha)))
 
-        // FIXED orthographic scale — the cube NEVER changes size, only orients.
-        // halfSpan is the constant face-on half-extent (side/2), so one voxel is
-        // ALWAYS edge/64 = gifCellPt: a consistent pixelated look at every angle,
-        // PIXEL-IDENTICAL to the 2D GIF face-on. Rotated, the cube's silhouette
-        // extends past this window and is clipped to the frame (we orient to
-        // inspect; the visible portion stays at true cell scale). No zoom-to-fit.
-        uniforms.halfSpan = Float(VoxelCubeData.side) / 2   // 32
+        // AUTO-FIT orthographic scale (the 8-bit "whole cube visible" rule). The window
+        // exactly frames the cube's projected silhouette at the current orientation:
+        // face-on it returns 32 (one voxel = one GIF cell ⇒ PIXEL-IDENTICAL to the 2D
+        // GIF, RULE-CUBE-2D-IDENTITY); orbited toward the isometric pose it grows so the
+        // whole dimetric hexagon is framed (voxels shrink a little). One formula serves
+        // both the flat-identity rule and the chosen whole-cube iso framing, with no
+        // discontinuity — at small orbit the silhouette ≈ 64 wide so the scale barely
+        // moves out of identity. Supersedes the old fixed halfSpan=32 (which clipped).
+        uniforms.halfSpan = VoxelIso.fitHalfSpan(yaw: s.yaw, pitch: s.pitch)
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
