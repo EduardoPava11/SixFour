@@ -12,8 +12,8 @@ import simd
 /// `.interpolation(.none)` and upscaled to fill the screen — never thousands of
 /// per-cell `Canvas` fills (`fillCell` is scoped to the ≤256-cell palette only).
 enum CellField {
-    static let cols = 201
-    static let rows = 437
+    static let cols = GlobalLattice.cols   // 201 — owned by the lattice (Law #5)
+    static let rows = GlobalLattice.rows   // 437
 
     /// 4×4 Bayer matrix (0…15) — the ordered-dither threshold that makes the cell
     /// texture visible without gridline noise.
@@ -60,21 +60,31 @@ enum CellField {
 }
 
 /// Full-screen tiled cell field, nearest-neighbour upscaled so each source cell is
-/// a hard 2pt (6 device-px) tile. Recomputes only when the live tint changes.
+/// a hard 2 pt (6 device-px) tile. Recomputes only when the live tint changes.
+///
+/// CRISP-PIXEL CONTRACT (GRID Law #2 / INTEGER SCALE ONLY): the field is drawn at the
+/// EXACT locked lattice size — `GlobalLattice.pt(cols) × pt(rows)` = 402 × 874 pt = one
+/// integer 2 pt cell per source pixel — then centred and bled to the screen edges. It is
+/// NEVER stretched to a raw `GeometryReader` size (that yielded a non-integer scale and
+/// resampled the cells to mush). Per design §2.3 the field is pinned to the iPhone 17 Pro
+/// anchor and only *shifted* by whole cells for safe areas, never scaled to fit.
 struct CellFieldView: View {
     let tint: SIMD3<UInt8>
 
     var body: some View {
-        GeometryReader { geo in
+        Group {
             if let img = CellField.image(tint: tint) {
                 Image(uiImage: img)
                     .interpolation(.none)
                     .resizable()
-                    .frame(width: geo.size.width, height: geo.size.height)
+                    .frame(width: GlobalLattice.pt(CellField.cols),    // 402 — exact 2 pt pitch
+                           height: GlobalLattice.pt(CellField.rows))   // 874 — no fractional resample
             } else {
                 Color.black
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)   // centre the anchored field
+        .background(Color.black)                            // any sub-anchor edge sliver = black
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }

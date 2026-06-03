@@ -140,8 +140,8 @@ struct GIFReviewView: View {
         if reduceMotion {
             statusLine(o, frame: 0, n: n)
         } else {
-            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { ctx in
-                let i = frameIndex(at: ctx.date.timeIntervalSinceReferenceDate, rate: 20, count: n)
+            TimelineView(.animation(minimumInterval: 1.0 / Double(SFTheme.gifFrameRate))) { ctx in
+                let i = frameIndex(at: ctx.date.timeIntervalSinceReferenceDate, rate: SFTheme.gifFrameRate, count: n)
                 statusLine(o, frame: i, n: n)
             }
         }
@@ -278,7 +278,7 @@ private struct GIFCanvas: View {
             frameIndex = 0
             return
         }
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 20.0, repeats: true) { _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / Double(SFTheme.gifFrameRate), repeats: true) { _ in
             Task { @MainActor in
                 frameIndex = (frameIndex + 1) % max(1, frames.count)
             }

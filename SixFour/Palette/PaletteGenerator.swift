@@ -46,6 +46,10 @@ struct PaletteGenerator: Sendable {
     var benchmarkDither: Bool = false
     /// Optional learned PSD metric. When set, drives a 5-iter CPU
     /// Lloyd refinement step starting from the extractor centroids.
+    /// DORMANT: nothing assigns this today (the deferred look-NN metric organ is
+    /// unwired — its `GeneStore.loadMetric` loader was removed as dead code 2026-06-03),
+    /// so the refinement branch at `generate(...)` is currently unreachable. It stays
+    /// as the seam the trained metric organ will plug into.
     var refinementMetric: LearnedPSDMetric? = nil
 
     /// Per-burst output: one 256-colour palette per frame plus the per-frame

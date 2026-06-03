@@ -543,19 +543,36 @@ struct VoxelUniforms {
     int provMode;     // 0 = all, 1 = extracted only, 2 = split only
     int brushedIndex; // shared cross-view brush: palette index to highlight, -1 = none
     int brushMode;    // brush set per radix: 0 single (16²) / 1 quad (4⁴) / 2 σ-pair (2⁸)
+    int isolate;      // FRAME-ISOLATION (palette study): 0 off / 1 on — focus frame opaque, rest ghosted
+    float ghostAlpha; // alpha of non-focus slices in isolate mode (0 = pure isolation, ~0.12 = ghost)
 };
 
+// Cube/palette dimensions — the kernel's single home for these magic numbers, mirroring
+// the shape contract (SixFourShape T=W=64, K=256; Swift routes VoxelCubeData.side/
+// frameCount/paletteCount). Keep in lockstep with that contract.
+#define S4_SIDE   64    // cube edge in voxels (x,y)
+#define S4_FRAMES 64    // depth/time slices (T)
+#define S4_K      256   // palette colours per frame (K)
+
+// Camera basis for an orbit: yaw about world-Y, then pitch about the camera-RIGHT
+// axis (the yaw-rotated world-X). This keeps the projection ORTHONORMAL and, at the
+// 8-bit isometric "hero" pose yaw=45°/pitch=30°, makes world-X and world-Z each
+// project to a screen slope of exactly 1:2 — the canonical 2:1 DIMETRIC projection
+// of 8-bit games (sin30° = 0.5 ⇒ floor edges step 2 px across : 1 down). At
+// yaw=pitch=0 it is the identity, so the flat rest pose stays byte-1:1 with the 2D
+// GIF (RULE-CUBE-2D-IDENTITY). Mirrored by Swift VoxelIso.orbit.
 static inline float3 voxelOrbit(float3 v, float yaw, float pitch) {
     float cy = cos(yaw), sy = sin(yaw);
-    float3 r = float3(cy * v.x + sy * v.z, v.y, -sy * v.x + cy * v.z);
+    float3 a = float3(cy * v.x + sy * v.z, v.y, -sy * v.x + cy * v.z);  // yaw about world Y
+    float3 r = float3(cy, 0.0, -sy);                                    // camera-right axis
     float cp = cos(pitch), sp = sin(pitch);
-    return float3(r.x, cp * r.y - sp * r.z, sp * r.y + cp * r.z);
+    return a * cp + cross(r, a) * sp + r * dot(r, a) * (1.0 - cp);      // Rodrigues about r
 }
 
 static inline float2 voxelBoxHit(float3 o, float3 d) {
     float3 inv = 1.0 / d;
     float3 t0 = (float3(0.0) - o) * inv;
-    float3 t1 = (float3(64.0) - o) * inv;
+    float3 t1 = (float3(float(S4_SIDE)) - o) * inv;
     float3 tmin = min(t0, t1), tmax = max(t0, t1);
     return float2(max(max(max(tmin.x, tmin.y), tmin.z), 0.0),
                   min(min(tmax.x, tmax.y), tmax.z));
@@ -576,7 +593,18 @@ kernel void voxel_raymarch(
     float2 off = (U.resolution - side) * 0.5;
     float2 px = float2(gid) + 0.5 - off;
     if (px.x < 0.0 || px.y < 0.0 || px.x >= side || px.y >= side) { outTex.write(bg, gid); return; }
-    float2 uv = px / side;
+
+    // 8-BIT PIXELATION: snap to a fixed ART_RES×ART_RES art-pixel grid so the cube
+    // renders as CHUNKY pixels (and the 2:1 dimetric edges resolve as visible
+    // stairsteps), then nearest-upscales to the drawable. ART_RES = 128 = 2 art-pixels
+    // per voxel (64-wide face) — an EXACT multiple, so each voxel maps to 2 aligned
+    // art-pixels of its single constant colour and the flat rest pose stays byte-1:1
+    // with the 2D GIF (RULE-CUBE-2D-IDENTITY). All drawable pixels inside one art cell
+    // share its centre's raymarch result, giving hard 8-bit edges at any resolution.
+    constexpr float ART_RES = 128.0;
+    float artPx = side / ART_RES;
+    float2 cell = floor(px / artPx);
+    float2 uv = (cell + 0.5) * artPx / side;
 
     float2 plane = (uv - 0.5) * 2.0 * U.halfSpan;
     float3 Xb = voxelOrbit(float3(1, 0, 0), U.yaw, U.pitch);
@@ -596,11 +624,17 @@ kernel void voxel_raymarch(
     float3 tMax = (float3(voxel) + max(float3(stp), float3(0.0)) - o) * inv;
     float3 tDelta = abs(inv);
 
-    int tLo = clamp(U.tLo, 0, 63);
-    int tHi = clamp(U.tHi, 0, 63);
-    int cursor = clamp(U.frame, 0, 63);
+    int tLo = clamp(U.tLo, 0, S4_FRAMES - 1);
+    int tHi = clamp(U.tHi, 0, S4_FRAMES - 1);
+    int cursor = clamp(U.frame, 0, S4_FRAMES - 1);
 
-    float4 col = bg;
+    // Front-to-back alpha accumulation. Outside isolate mode every voxel is opaque
+    // (a = 1), so the first hit sets aAccum = 1 and we break — IDENTICAL to the old
+    // first-hit raymarch (RULE-CUBE-2D-IDENTITY intact). In isolate mode the focus
+    // frame stays opaque and other slices get ghostAlpha, so the user sees one frame's
+    // palette floating with the rest transparent (design §0.3, owner-signed-off).
+    float3 accum = float3(0.0);
+    float aAccum = 0.0;
     int axis = -1;
 
     // REST-POSE IDENTITY (RULE-CUBE-2D-IDENTITY): at the flat pose every depth cue
@@ -610,19 +644,21 @@ kernel void voxel_raymarch(
     bool flat = (U.yaw * U.yaw + U.pitch * U.pitch) < 1e-6;
 
     for (int i = 0; i < 220; ++i) {
-        bool inside = voxel.x >= 0 && voxel.x < 64 &&
-                      voxel.y >= 0 && voxel.y < 64 &&
-                      voxel.z >= 0 && voxel.z < 64;
+        bool inside = voxel.x >= 0 && voxel.x < S4_SIDE &&
+                      voxel.y >= 0 && voxel.y < S4_SIDE &&
+                      voxel.z >= 0 && voxel.z < S4_FRAMES;
         if (!inside) break;
 
         // Depth-band cull is flat-gated: at rest the near face (z=63) must always
         // render, regardless of a seeded trail band, or the front face would show a
         // different frame than the 2D GIF.
-        if (flat || (voxel.z >= tLo && voxel.z <= tHi)) {
-            int fz = ((cursor - 63 + voxel.z) % 64 + 64) % 64;
+        // Isolate mode bypasses the trail-depth band (the focus frame must always be
+        // reachable); the per-voxel alpha below does the hiding instead.
+        if (flat || U.isolate != 0 || (voxel.z >= tLo && voxel.z <= tHi)) {
+            int fz = ((cursor - (S4_FRAMES - 1) + voxel.z) % S4_FRAMES + S4_FRAMES) % S4_FRAMES;
             uint k = indexTex.read(uint3(uint(voxel.x), uint(voxel.y), uint(fz))).r;
             constexpr sampler s(coord::normalized, filter::nearest, address::clamp_to_edge);
-            float2 pc = float2(float(k) + 0.5, float(fz) + 0.5) / float2(256.0, 64.0);
+            float2 pc = float2(float(k) + 0.5, float(fz) + 0.5) / float2(float(S4_K), float(S4_FRAMES));
             float4 rgba = paletteTex.sample(s, pc);
 
             // Provenance (palette alpha): 0 degenerate / 1 extracted / 2 split.
@@ -654,8 +690,20 @@ kernel void voxel_raymarch(
                     if (U.brushMode == 2)      hit = hit || (int(k) == (bk ^ 1));
                     else if (U.brushMode == 1) hit = hit || ((int(k) & ~3) == (bk & ~3));
                     float brush = (!flat && bk >= 0 && !hit) ? 0.28 : 1.0;
-                    col = float4(rgba.rgb * face * split * brush, 1.0);
-                    break;
+
+                    // Per-voxel alpha: opaque everywhere unless isolating, where only the
+                    // FOCUS frame (cursor, the near face) stays opaque and the rest fade
+                    // to ghostAlpha. a == 1 makes the compositing collapse to first-hit.
+                    float a = 1.0;
+                    if (U.isolate != 0 && !flat) {
+                        a = (fz == cursor) ? 1.0 : clamp(U.ghostAlpha, 0.0, 1.0);
+                    }
+                    if (a > 0.0) {
+                        float3 rgb = rgba.rgb * face * split * brush;
+                        accum += (1.0 - aAccum) * a * rgb;       // front-to-back over
+                        aAccum += (1.0 - aAccum) * a;
+                        if (aAccum >= 0.999) break;              // fully opaque → done
+                    }
                 }
             }
         }
@@ -669,5 +717,6 @@ kernel void voxel_raymarch(
         }
     }
 
-    outTex.write(col, gid);
+    // Composite over the black background (accum is premultiplied foreground).
+    outTex.write(float4(accum, 1.0), gid);
 }

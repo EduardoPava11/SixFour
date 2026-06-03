@@ -100,11 +100,4 @@ actor GeneStore {
         let data = try JSONEncoder().encode(list)
         try data.write(to: root.appending(path: slot.rawValue).appending(path: "index.json"))
     }
-
-    // MARK: - Loading typed organs
-
-    func loadMetric(named hash: String) -> MetricOrgan? {
-        guard let d = descriptors[.metric]?.first(where: { $0.hash == hash }) else { return nil }
-        return try? MetricOrgan(descriptor: d, fileURL: url(for: d))
-    }
 }

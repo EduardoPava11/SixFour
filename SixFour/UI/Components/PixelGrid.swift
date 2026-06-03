@@ -114,13 +114,14 @@ extension GraphicsContext {
 // MARK: - Chrome frame + n-ary tiling (shared by every grid surface)
 
 extension View {
-    /// The chrome frame around a content grid: a hard square with one
+    /// The chrome frame around a content grid: a hard square with one opaque
     /// `gridFrameStroke` border and NO corner rounding (rounding would clip the
-    /// outermost indexed cells — an AA-on-content violation). Replaces the
-    /// per-view `.clipShape(RoundedRectangle).overlay(RoundedRectangle.stroke)`.
+    /// outermost indexed cells — an AA-on-content violation). Uses an INSET `.border`
+    /// (not an edge-centred `Rectangle().stroke`, which straddles + anti-aliases the
+    /// boundary cells) with a flat opaque ink (not opacity) — GRID Law #2.
     func pixelFrame() -> some View {
         aspectRatio(1, contentMode: .fit)
-            .overlay(Rectangle().stroke(SFTheme.gridFrameStroke, lineWidth: 1))
+            .border(SFTheme.gridFrameStroke, width: 1)
     }
 }
 

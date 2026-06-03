@@ -20,10 +20,10 @@ struct CellText: View {
     /// Glyph height in cells (= source bitmap pixel rows). Width follows the string.
     var rows: Int = 7
     /// Point size of one cell — the global lattice pitch.
-    var cell: CGFloat = SFTheme.cellPt
+    var cell: CGFloat = GlobalLattice.cellPt
     var ink: Color = .white
 
-    init(_ text: String, rows: Int = 7, cell: CGFloat = SFTheme.cellPt, ink: Color = .white) {
+    init(_ text: String, rows: Int = 7, cell: CGFloat = GlobalLattice.cellPt, ink: Color = .white) {
         self.text = text
         self.rows = rows
         self.cell = cell

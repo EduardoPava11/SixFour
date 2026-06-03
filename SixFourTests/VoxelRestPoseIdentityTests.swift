@@ -91,6 +91,54 @@ struct VoxelRestPoseIdentityTests {
         }
     }
 
+    // MARK: the 8-bit isometric ruleset (2:1 dimetric, az45/el30)
+
+    /// THE 2:1 RULE: at the canonical hero pose, world-X and world-Z each project to a
+    /// screen slope of exactly 0.5 (2 px across : 1 down) and world-Y stays vertical —
+    /// the dimetric projection of 8-bit games. Screen coords of a world axis `a` are
+    /// (a·Xb, a·Yb) for the camera basis Xb/Yb.
+    @Test func isoPoseIsExactly2to1Dimetric() {
+        let xb = VoxelIso.orbit(SIMD3(1, 0, 0), yaw: VoxelIso.yaw, pitch: VoxelIso.pitch)
+        let yb = VoxelIso.orbit(SIMD3(0, 1, 0), yaw: VoxelIso.yaw, pitch: VoxelIso.pitch)
+        func screen(_ a: SIMD3<Float>) -> SIMD2<Float> { SIMD2(simd_dot(a, xb), simd_dot(a, yb)) }
+        let sx = screen(SIMD3(1, 0, 0)), sz = screen(SIMD3(0, 0, 1)), sy = screen(SIMD3(0, 1, 0))
+        // floor axes step 2:1 (|screenY / screenX| == 0.5), symmetric across vertical
+        #expect(abs(abs(sx.y / sx.x) - 0.5) < 1e-5)
+        #expect(abs(abs(sz.y / sz.x) - 0.5) < 1e-5)
+        #expect(abs(sx.x + sz.x) < 1e-5 && abs(sx.y - sz.y) < 1e-5)   // mirror images
+        // vertical edge stays perfectly vertical (no horizontal component)
+        #expect(abs(sy.x) < 1e-5)
+    }
+
+    /// GOLDEN TIE for the hand-mirrored camera basis. `VoxelIso.orbit` (Swift) and
+    /// `voxelOrbit` (Shaders.metal) are line-for-line copies kept in sync by comment
+    /// only. This pins the Swift copy to exact reference vectors at the iso pose; the
+    /// Metal `voxelOrbit` MUST reproduce these same three basis vectors (verify on a
+    /// single device A/B if the basis math ever changes).
+    @Test func isoOrbitBasisMatchesGoldenVectors() {
+        let xb = VoxelIso.orbit(SIMD3(1, 0, 0), yaw: VoxelIso.yaw, pitch: VoxelIso.pitch)
+        let yb = VoxelIso.orbit(SIMD3(0, 1, 0), yaw: VoxelIso.yaw, pitch: VoxelIso.pitch)
+        let zb = VoxelIso.orbit(SIMD3(0, 0, 1), yaw: VoxelIso.yaw, pitch: VoxelIso.pitch)
+        func near(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Bool { abs(a.x-b.x)<1e-6 && abs(a.y-b.y)<1e-6 && abs(a.z-b.z)<1e-6 }
+        #expect(near(xb, SIMD3( 0.7071068,  0.0,       -0.7071068)))
+        #expect(near(yb, SIMD3( 0.3535534,  0.8660254,  0.3535534)))
+        #expect(near(zb, SIMD3( 0.6123724, -0.5,        0.6123724)))
+        // Orthonormal basis (rigid camera ⇒ no foreshortening / no shear).
+        #expect(abs(simd_length(xb) - 1) < 1e-6 && abs(simd_length(yb) - 1) < 1e-6)
+        #expect(abs(simd_dot(xb, yb)) < 1e-6 && abs(simd_dot(xb, zb)) < 1e-6 && abs(simd_dot(yb, zb)) < 1e-6)
+    }
+
+    /// AUTO-FIT collapses to 32 at the flat pose (⇒ one voxel = one GIF cell = 2D
+    /// identity) and GROWS when orbited (⇒ the whole 8-bit cube is framed, not clipped).
+    @Test func fitHalfSpanIsIdentityAtFlatAndFramesWholeCubeAtIso() {
+        #expect(abs(VoxelIso.fitHalfSpan(yaw: 0, pitch: 0) - 32) < 1e-4)   // exact 32 at rest
+        let iso = VoxelIso.fitHalfSpan(yaw: VoxelIso.yaw, pitch: VoxelIso.pitch)
+        #expect(iso > 32)                                                   // grows to fit
+        // the 64³ cube's iso silhouette half-height is 32·(√2/2 + 1)·… ≈ 50.3; fit must
+        // cover it (plus the 1-unit corner pad) so no corner clips the square frame.
+        #expect(iso >= 50.0 && iso <= 53.0)
+    }
+
     /// On-screen size identity: the cube surface and the 2D GIFCanvas both size via
     /// `SFTheme.canvasEdge(forAvailable:cells:)` from the same Review-column width, so
     /// for any available square they get the identical (integer-snapped) edge.

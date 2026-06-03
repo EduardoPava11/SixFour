@@ -21,7 +21,7 @@ struct PaletteTreeView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(palettes: [[SIMD3<UInt8>]], branching: PaletteBranching, frameRate: Int = 20) {
+    init(palettes: [[SIMD3<UInt8>]], branching: PaletteBranching, frameRate: Int = SFTheme.gifFrameRate) {
         self.palettes = palettes
         self.branching = branching
         self.frameRate = frameRate

@@ -31,6 +31,8 @@ Every screen, control, and glyph is built from the same unit the GIF is built fr
 
 Law #1 is the one that decides every later argument. It is not prose to be remembered; it is a machine-checkable predicate (Law #6) owned by one type (Law #5) and proven by a golden (Law #8).
 
+> **Law #2 holds in 3D too (the pixelated look is universal).** When the cube is shown as a 3D object (the Review voxel cube), the same flatness applies on a third axis: **orthographic** projection (never perspective), the canonical **2:1 dimetric isometric** angle of 8-bit games, and **nearest-neighbour art-pixel quantization** so edges stairstep as chunky 8-bit pixels — never smooth, AA'd, or shaded. The pixelated look is the design language in every dimension. The full 3D ruleset is `RULE-CUBE-ISO` in `docs/SIXFOUR-VOXEL-CUBE.md` §8; it is subordinate to these Cardinal Laws (content = flat indexed cells; chrome = glass).
+
 ---
 
 ## 1. Principles
@@ -190,7 +192,7 @@ A governed widget is built ONLY from these. Introducing a raw `Circle()`/`Rectan
 
 | Primitive | Status | Purpose | Consumes tier | Golden |
 |---|---|---|---|---|
-| `GlobalLattice` | **build** | sole owner of all cell↔pt math, band map, safe-area shift | 0/1 | `Spec.Lattice` [PLANNED] |
+| `GlobalLattice` | **shipped (Swift; extend)** | sole owner of all cell↔pt math + widget cell-counts (built 2026-06-03); band map / safe-area shift still to add | 0/1 | `Spec.Lattice` [PLANNED] |
 | `PixelImage` | **shipped** | nearest-neighbour CGImage ×6 upscale; preview + field renderer | — | existing GIF goldens |
 | `Color(srgb8:)` | **shipped** | the one sRGB8→Color conversion | 0 | — |
 | `fillCell` | **shipped** | Review-only flat fill (palette + treemap, ≤256 / non-uniform) | 0 | — |
@@ -600,7 +602,7 @@ The "you live inside the 64³ world" claim requires spatial continuity:
 
 ### 9.1 Single source of truth
 - **RULE-SSOT:** layout source of truth = the Haskell spec + golden vectors (not Figma, not per-widget Swift constants). Mirrors the project's Tier-0 ethos.
-- **RULE-LATTICE-OWNER:** ALL cell math lives in one `GlobalLattice` type, proven by `Spec.Lattice` **(to be authored — does not yet exist on disk; verified 2026-05-31)**. No widget computes its own pitch, golden split, or safe-area shift.
+- **RULE-LATTICE-OWNER:** ALL cell math lives in one `GlobalLattice` type. **The Swift owner now EXISTS** (`SixFour/UI/GlobalLattice.swift`, built 2026-06-03): it owns `cellPt`, the 201×437 dims, and the widget cell-counts (shutter 34 / control 24 / ring 60), and `CellField`/`CellShutter`/`CellGear`/`CellDiversityRing`/`CellText`/`CaptureView` all route through it — `SFTheme.cellPt` and the scattered `× cellPt` literals are gone. **Still PLANNED:** the `Spec.Lattice` Haskell golden that pins these numbers + every widget cell-rect, and the band-map/safe-area-shift instance state (added when `CellField` consumes it, §9.8). No widget computes its own pitch.
 - **RULE-NO-GENERATED-EDIT:** never hand-edit `SixFour/Generated/`; change `spec/src/SixFour/Codegen/` and regenerate (CLAUDE.md).
 
 ### 9.2 The build gate
