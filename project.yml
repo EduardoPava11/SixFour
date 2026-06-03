@@ -75,6 +75,7 @@ targets:
              || ! diff -q "$SCRATCH/swift/GlobalVolumeContract.swift" "$SRC/SixFour/Generated/GlobalVolumeContract.swift" \
              || ! diff -q "$SCRATCH/swift/CollapseGolden.swift"       "$SRC/SixFour/Generated/CollapseGolden.swift" \
              || ! diff -q "$SCRATCH/swift/PairTreeGolden.swift"       "$SRC/SixFour/Generated/PairTreeGolden.swift" \
+             || ! diff -q "$SCRATCH/swift/LookNetGolden.swift"        "$SRC/SixFour/Generated/LookNetGolden.swift" \
              || ! diff -q "$SCRATCH/swift/PaletteValueGolden.swift"   "$SRC/SixFour/Generated/PaletteValueGolden.swift" \
              || ! diff -q "$SCRATCH/swift/GenomeGolden.swift"         "$SRC/SixFour/Generated/GenomeGolden.swift" \
              || ! diff -q "$SCRATCH/swift/GenomeFixedGolden.swift"    "$SRC/SixFour/Generated/GenomeFixedGolden.swift" \
@@ -90,6 +91,7 @@ targets:
             diff -u "$SCRATCH/swift/GlobalVolumeContract.swift" "$SRC/SixFour/Generated/GlobalVolumeContract.swift" || true
             diff -u "$SCRATCH/swift/CollapseGolden.swift"       "$SRC/SixFour/Generated/CollapseGolden.swift"       || true
             diff -u "$SCRATCH/swift/PairTreeGolden.swift"       "$SRC/SixFour/Generated/PairTreeGolden.swift"       || true
+            diff -u "$SCRATCH/swift/LookNetGolden.swift"        "$SRC/SixFour/Generated/LookNetGolden.swift"        || true
             diff -u "$SCRATCH/swift/PaletteValueGolden.swift"   "$SRC/SixFour/Generated/PaletteValueGolden.swift"   || true
             diff -u "$SCRATCH/swift/GenomeGolden.swift"         "$SRC/SixFour/Generated/GenomeGolden.swift"         || true
             diff -u "$SCRATCH/swift/GenomeFixedGolden.swift"    "$SRC/SixFour/Generated/GenomeFixedGolden.swift"    || true

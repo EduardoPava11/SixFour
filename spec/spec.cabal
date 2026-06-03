@@ -81,6 +81,7 @@ library
         SixFour.Codegen.Golden
         SixFour.Codegen.Collapse
         SixFour.Codegen.PairTree
+        SixFour.Codegen.LookNetSwift
         SixFour.Codegen.PaletteValue
         SixFour.Codegen.Genome
         SixFour.Codegen.GenomeFixed
