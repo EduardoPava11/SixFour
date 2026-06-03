@@ -4509,7 +4509,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "look-nn"
+name = "look-nn-baseline"
 version = "0.1.0"
 dependencies = [
  "analysis-core",

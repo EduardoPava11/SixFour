@@ -202,7 +202,11 @@ mod tests {
         assert_eq!(contract::ENCODER_IO.in_dim, contract::GMM_TOKEN_DIM);
         assert_eq!(contract::ENCODER_IO.out_dim, contract::MODEL_DIM);
         assert_eq!(contract::CORE_IO.in_dim, contract::MODEL_DIM);
-        assert_eq!(contract::DECODER_IO.out_dim, contract::DOF);
+        // Post σ-pair pivot: the decoder emits SIGMA_PAIR_DOF (384) generator
+        // coefficients, which reconstruct into the DOF (768) leaf-space palette.
+        // (Pre-pivot the decoder emitted DOF directly; this assertion was stale.)
+        assert_eq!(contract::DECODER_IO.out_dim, contract::SIGMA_PAIR_DOF);
+        assert_eq!(contract::SIGMA_PAIR_DOF * 2, contract::DOF);
         assert_eq!(contract::LEVEL_DOF.iter().sum::<usize>(), contract::DOF - 3);
     }
 
