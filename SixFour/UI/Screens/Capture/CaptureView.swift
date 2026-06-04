@@ -57,12 +57,13 @@ struct CaptureView: View {
                 previewBlock                 // the centred anchor
                 Spacer(minLength: GlobalLattice.pt(6))
                 if let summary = vm.lastTimingSummary {
-                    GlassInfoChip(cornerRadius: SFTheme.cardCorner) {
-                        Text(summary)
-                            .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.85))
-                    }
-                    .padding(.bottom, GlobalLattice.pt(4))
+                    // Flat opaque cell strip (GRID §6.10: glass RETIRED on the HUD;
+                    // Law #2: no opacity on a cell). Same vocabulary as `bannerText`.
+                    CellText(summary, rows: 11, ink: .white)
+                        .padding(.horizontal, GlobalLattice.pt(5))
+                        .padding(.vertical, GlobalLattice.pt(3))
+                        .background(Color(srgb8: SFTheme.ledGhost))
+                        .padding(.bottom, GlobalLattice.pt(4))
                 }
                 bottomBar
             }
@@ -110,9 +111,10 @@ struct CaptureView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: GlobalLattice.pt(5)) {
             // Title as lattice cells — the SAME 2pt cell as the preview + field.
-            CellText("SixFour", rows: 24, ink: .white.opacity(0.9))
+            // TITLE register = 20 cells (owned by the lattice); opaque ink (Law #2).
+            CellText("SixFour", rows: GlobalLattice.wordmarkRows, ink: .white)
             Spacer()
             // Settings — a 24-cell gear (48pt). Glass is retired on the capture
             // HUD per GRID; the gear is cells at the one 2pt pitch, like everything.
@@ -129,7 +131,7 @@ struct CaptureView: View {
         // The capture screen is holy: the shutter, ringed by the live diversity
         // gauge, with its readout. The shutter does double duty as the
         // instrument that shows how much colour the camera currently sees.
-        VStack(spacing: 10) {
+        VStack(spacing: GlobalLattice.pt(5)) {
             ZStack {
                 CellDiversityRing(gauge: Double(vm.sceneGauge), tint: vm.sceneGroundTint)
                     .allowsHitTesting(false)
@@ -137,20 +139,27 @@ struct CaptureView: View {
             }
             diversityReadout
         }
-        .padding(.bottom, 16)
+        .padding(.bottom, GlobalLattice.pt(8))
     }
 
     /// The explicit "show the diversity" number — distinct colour-bins the
     /// camera sees right now, in the machine voice. Surfaced to VoiceOver via
     /// the shutter's `accessibilityValue`, so it's hidden here.
     private var diversityReadout: some View {
-        VStack(spacing: 2) {
-            // Readout as lattice cells — same 2pt cell as everything else. Sizes
-            // chosen so the longest sampler tag fits the screen width once centred.
-            CellText("◇ \(vm.scene.occupiedBins) colors", rows: 11, ink: SFTheme.dimText)
+        VStack(spacing: GlobalLattice.pt(1)) {
+            // The colour count: ◇ diamond icon + a FIXED 3-digit two-ink 7-segment
+            // field (golden SixFourSevenSeg) + label. The 7-seg never reflows and the
+            // ◇ is a real CellIcon — replacing the old reflowing single-ink CellText
+            // with a Unicode glyph (§6.9). Opaque inks only (Law #2: no alpha on a cell).
+            HStack(spacing: GlobalLattice.pt(2)) {
+                CellIcon.diamond(box: 12, ink: SIMD3<UInt8>(153, 153, 153))
+                CellDigits(value: vm.scene.occupiedBins, width: 3)
+                CellText(" colors", rows: 13, ink: Color(srgb8: SIMD3<UInt8>(153, 153, 153)))
+            }
             // The active sampler — updates the instant a Settings toggle flips
             // (the chrome shows the setting, never inert).
-            CellText(samplerTag, rows: 8, ink: SFTheme.dimText.opacity(0.85))
+            CellText(samplerTag, rows: 8,
+                     ink: Color(srgb8: SIMD3<UInt8>(130, 130, 130)))
         }
         .frame(maxWidth: .infinity)
         .accessibilityHidden(true)
@@ -172,13 +181,15 @@ struct CaptureView: View {
     @ViewBuilder
     private var shutterButton: some View {
         let isBusy = isCurrentlyBusy
+        let isDisabled = vm.phase == .configuring || vm.phase == .unauthorized
         Button {
             Task { await vm.capture() }
         } label: {
-            // The shutter as a 34-cell block (68pt) at the one 2pt pitch.
-            CellShutter(busy: isBusy)
+            // The shutter as a 34-cell block (68pt) at the one 2pt pitch. Disabled =
+            // 2×2 cell checker (Law #2: a state is a cell transform, never opacity).
+            CellShutter(busy: isBusy, disabled: isDisabled)
         }
-        .disabled(isBusy || vm.phase == .configuring || vm.phase == .unauthorized)
+        .disabled(isBusy || isDisabled)
         .accessibilityLabel("Capture 64-frame burst")
         .accessibilityValue("Scene diversity \(Int((vm.sceneGauge * 100).rounded())) percent")
         .accessibilityHint("Holds focus and exposure, captures sixty-four frames at twenty fps")

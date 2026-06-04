@@ -77,7 +77,7 @@ These are derived facts, not choices.
 `gcd(402, 874) = 2`. Two points is the **unique** pitch that tiles the iPhone 17 Pro portrait screen edge-to-edge with no remainder. At 2 pt/cell the screen is exactly **201 columns (x 0…200) × 437 rows (y 0…436)** — the global lattice. A 6 pt pitch cannot tile the full screen (`874 / 6 = 145.67`), which is *why* the HUD pitch is 2 pt. The lattice is owned by `GlobalLattice`.
 
 ### 2.3 The golden-section vertical layout
-The 64-cell preview is the primary **anchor**, LOCKED at **rows 143–206, cols 68–131** (even-start on both axes so its edges fall on field cell boundaries). Of the 373 non-preview rows, the split is **143 above : 64 preview : 230 below**, where `230 / 143 ≈ 1.608 ≈ φ`. The golden split is a *consequence* of the anchor, asserted by `Spec.Lattice` (LAW-GOLDEN), not eyeballed. A full-width 384 pt preview would require a 6 pt pitch the lattice forbids; the 384→128 pt shrink is a **decisions-gate** item (§9.5), not a free parameter.
+The 64-cell preview is the primary **anchor**, LOCKED at **rows 143–206, cols 68–131**. Of the 373 non-preview rows, the split is **143 above : 64 preview : 230 below**, where `230 / 143 ≈ 1.608 ≈ φ`. The golden split is a *consequence* of the anchor, asserted by `Spec.Lattice` (`lawGoldenSplit` + `lawPreviewRect`), not eyeballed. **Parity note (corrected):** the COLUMN start is even (68) and the rect is centered on the col-99.5 centerline (`68 + 131 = 199 = cols − 2`); the ROW anchor (143) is **odd on purpose** — fixed by the golden section, not by parity. (An earlier draft claimed "even-start on both axes"; `lawPreviewRect` proves that false for the row, so the over-claim is retired — only the horizontal axis is even/centered.) A full-width 384 pt preview would require a 6 pt pitch the lattice forbids; the 384→128 pt shrink is a **decisions-gate** item (§9.5), not a free parameter.
 
 ### 2.4 The Fibonacci size ladder
 Widget *sizes* are drawn from `[8, 13, 21, 34, 55, 89]` cells (successive ratios ≈ φ). Pinned floors: interactive ≥ **22 cells** (44 pt); **shutter = 34 cells** (68 pt); **secondary control = 24 cells** (48 pt). **Ladder exemption registry** (counts and HIG/OS constants are *not* sizes and are exempt by definition): `touchFloorCells = 22` (HIG 44 pt floor), `controlCells = 24` (HIG-derived, 8 pt-grid-aligned), `ring.tick.countCells = 64` (a count = `previewCells`), `digit.glyphBoxCells = 10×18`, `title.glyph.advanceCells` (glyph metrics). Anything off-ladder that is *not* in this registry requires a new documented exemption.
@@ -234,7 +234,7 @@ Adding a primitive is itself a GATE-DECISIONS proposal (§9.5), never done ad ho
 
 ### 6.1 Preview — the hero (`PixelImage`)
 
-**Anatomy** — a single 64×64 block of GIF cells at the locked rect **cols 68–131 × rows 143–206**, at the golden section (143:64:230, 230/143 ≈ φ). Even-start; the field is its border. No frame, no rounding, no inset.
+**Anatomy** — a single 64×64 block of GIF cells at the locked rect **cols 68–131 × rows 143–206**, at the golden section (143:64:230, 230/143 ≈ φ). Even-started + centered on col 99.5 horizontally; the row anchor 143 is golden-fixed (odd, per §2.3); the field is its border. No frame, no rounding, no inset.
 
 **Sizing** — `previewCells = 64` → 128 pt square. The *only* legal size at the 2 pt pitch. "Bigger" only via the decisions-gate (the 384 pt full-width hero is a *different surface*, §6.10/§7.2), never by changing the pitch.
 

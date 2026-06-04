@@ -20,6 +20,9 @@ import qualified Properties.Quad4Fixed   as Quad4Fixed
 import qualified Properties.GlobalVolume as GlobalVolume
 import qualified Properties.SplitTree    as SplitTree
 import qualified Properties.GridAxis     as GridAxis
+import qualified Properties.Lattice      as Lattice
+import qualified Properties.CellShapes   as CellShapes
+import qualified Properties.SevenSeg     as SevenSeg
 import qualified Properties.CloudProjection as CloudProjection
 import qualified Properties.AddressPicker as AddressPicker
 import qualified Properties.PaletteSearch as PaletteSearch
@@ -75,6 +78,9 @@ main = defaultMain $ testGroup "sixfour-spec"
   , GlobalVolume.tests
   , SplitTree.tests
   , GridAxis.tests
+  , Lattice.tests
+  , CellShapes.tests
+  , SevenSeg.tests
   , CloudProjection.tests
   , AddressPicker.tests
   , PaletteSearch.tests

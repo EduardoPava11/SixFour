@@ -39,6 +39,9 @@ library
         SixFour.Spec.GlobalVolume
         SixFour.Spec.SplitTree
         SixFour.Spec.GridAxis
+        SixFour.Spec.Lattice
+        SixFour.Spec.CellShapes
+        SixFour.Spec.SevenSeg
         SixFour.Spec.CloudProjection
         SixFour.Spec.AddressPicker
         SixFour.Spec.PaletteSearch
@@ -251,6 +254,9 @@ test-suite spec-tests
         Properties.GlobalVolume
         Properties.SplitTree
         Properties.GridAxis
+        Properties.Lattice
+        Properties.CellShapes
+        Properties.SevenSeg
         Properties.CloudProjection
         Properties.AddressPicker
         Properties.PaletteSearch

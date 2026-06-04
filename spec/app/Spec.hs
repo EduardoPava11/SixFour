@@ -33,7 +33,8 @@ import           Data.Maybe (fromMaybe)
 
 import SixFour.Codegen.Swift
   ( emitStageContract, emitNetContract, emitSTBN3DContract, emitSignificanceContract
-  , emitGlobalVolumeContract )
+  , emitGlobalVolumeContract, emitLatticeContract, emitCellShapesContract
+  , emitSevenSegContract )
 import SixFour.Codegen.Shapes (emitStagesPy,      emitNetShapePy)
 import SixFour.Codegen.Burn   (emitBurnContract)
 import SixFour.Codegen.CoreML (emitLookNetTorch,  emitBuildMlpackage)
@@ -60,6 +61,9 @@ main = do
   writeUtf8 (swiftOutDir   </> "STBN3DContract.swift") emitSTBN3DContract
   writeUtf8 (swiftOutDir   </> "SignificanceContract.swift") emitSignificanceContract
   writeUtf8 (swiftOutDir   </> "GlobalVolumeContract.swift") emitGlobalVolumeContract
+  writeUtf8 (swiftOutDir   </> "LatticeContract.swift")      emitLatticeContract
+  writeUtf8 (swiftOutDir   </> "CellShapesContract.swift")   emitCellShapesContract
+  writeUtf8 (swiftOutDir   </> "SevenSegContract.swift")     emitSevenSegContract
   writeUtf8 (swiftOutDir   </> "CollapseGolden.swift")       emitCollapseGolden
   writeUtf8 (swiftOutDir   </> "PairTreeGolden.swift")       emitPairTreeGolden
   writeUtf8 (swiftOutDir   </> "PaletteValueGolden.swift")   emitPaletteValueGolden
@@ -88,7 +92,7 @@ main = do
   let Mask3D maskBytes = generateSTBN3D @8 @8 @8
   writeBinary (resourceOutDir </> "stbn3d-8.bin") maskBytes
 
-  putStrLn "spec-codegen: wrote 16 files + 1 resource."
+  putStrLn "spec-codegen: wrote 19 files + 1 resource."
   putStrLn $ "  swift   : " <> swiftOutDir
   putStrLn $ "  mlx     : " <> mlxOutDir
   putStrLn $ "  burn    : " <> burnOutDir

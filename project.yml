@@ -78,6 +78,9 @@ targets:
              || ! diff -q "$SCRATCH/swift/PaletteValueGolden.swift"   "$SRC/SixFour/Generated/PaletteValueGolden.swift" \
              || ! diff -q "$SCRATCH/swift/GenomeGolden.swift"         "$SRC/SixFour/Generated/GenomeGolden.swift" \
              || ! diff -q "$SCRATCH/swift/GenomeFixedGolden.swift"    "$SRC/SixFour/Generated/GenomeFixedGolden.swift" \
+             || ! diff -q "$SCRATCH/swift/LatticeContract.swift"      "$SRC/SixFour/Generated/LatticeContract.swift" \
+             || ! diff -q "$SCRATCH/swift/CellShapesContract.swift"   "$SRC/SixFour/Generated/CellShapesContract.swift" \
+             || ! diff -q "$SCRATCH/swift/SevenSegContract.swift"     "$SRC/SixFour/Generated/SevenSegContract.swift" \
              || ! diff -q "$SCRATCH/res/stbn3d-8.bin"                 "$SRC/SixFour/Resources/stbn3d-8.bin" \
              || ! diff -q "$SCRATCH/mlx/stages.py"                    "$SRC/trainer/generated/stages.py" \
              || ! diff -q "$SCRATCH/mlx/net_shape.py"                 "$SRC/trainer/generated/net_shape.py"; then
@@ -93,10 +96,22 @@ targets:
             diff -u "$SCRATCH/swift/PaletteValueGolden.swift"   "$SRC/SixFour/Generated/PaletteValueGolden.swift"   || true
             diff -u "$SCRATCH/swift/GenomeGolden.swift"         "$SRC/SixFour/Generated/GenomeGolden.swift"         || true
             diff -u "$SCRATCH/swift/GenomeFixedGolden.swift"    "$SRC/SixFour/Generated/GenomeFixedGolden.swift"    || true
+            diff -u "$SCRATCH/swift/LatticeContract.swift"      "$SRC/SixFour/Generated/LatticeContract.swift"      || true
+            diff -u "$SCRATCH/swift/CellShapesContract.swift"   "$SRC/SixFour/Generated/CellShapesContract.swift"   || true
+            diff -u "$SCRATCH/swift/SevenSegContract.swift"     "$SRC/SixFour/Generated/SevenSegContract.swift"     || true
             diff -u "$SCRATCH/mlx/stages.py"                    "$SRC/trainer/generated/stages.py"                  || true
             diff -u "$SCRATCH/mlx/net_shape.py"                 "$SRC/trainer/generated/net_shape.py"               || true
             exit 1
           fi
+        basedOnDependencyAnalysis: false
+      - name: GRID design-language lint
+        script: |
+          # Enforce the capture-HUD GRID invariants (docs/SIXFOUR-DESIGN-LANGUAGE.md):
+          # no glass / opacity-on-a-cell / raw vector primitives on the HUD
+          # (LINT-DRAW-VOCAB), no bare point literal bypassing GlobalLattice.pt()
+          # (LINT-SINGLE-PITCH), and the Spec.* goldens + contracts exist (LINT-GOLDEN).
+          # Fails the build on drift so Phases 1–3a cannot silently regress.
+          "$SRCROOT/scripts/lint-grid.sh"
         basedOnDependencyAnalysis: false
       - name: compile native Zig kernels
         script: |

@@ -10,32 +10,59 @@ import SwiftUI
 /// cell-counts, and the one cells→points conversion, so **no view computes `× cellPt`
 /// itself**.
 ///
+/// **Verified mirror (Law #8).** Every number below is sourced from `SixFourLattice`
+/// in `Generated/LatticeContract.swift`, emitted byte-for-byte from the Haskell
+/// `SixFour.Spec.Lattice` and gated by `cabal test` (the gcd pitch, the shutter
+/// closure `15·2 + 2·2 = 34`, the touch floor, the golden split, every-dim-is-cells).
+/// `GlobalLattice` is the typed `CGFloat` facade — it adds *no* independent authority;
+/// it only re-types the spec constants for SwiftUI. Change a number in `Spec.Lattice`,
+/// regenerate, and it cascades here. (This closes the prior "interim authority" gap:
+/// the constants no longer live in Swift.)
+///
 /// Scope: the **2 pt capture lattice only**. The Review/palette screens keep their own
 /// 6 pt `SFTheme.gifCellPt` family (EXEMPT-REVIEW-PITCH) — the two pitches never share a
-/// screen (Law #3).
-///
-/// Interim authority: the Haskell `Spec.Lattice` golden that will pin these numbers and
-/// enumerate every widget cell-rect is **[PLANNED]** (§9.3/§9.8); until it ships this is
-/// the single Swift source of truth. A `struct` (not an `enum`) because the safe-area
-/// band shift becomes instance state the day `CellField` consumes it (§9.8).
+/// screen (Law #3). A `struct` (not an `enum`) because the safe-area band shift becomes
+/// instance state the day `CellField` consumes it (§9.8).
 struct GlobalLattice {
     /// The unique gcd-derived pitch that tiles the screen: 2 pt = 6 device-px @3x.
-    static let cellPt: CGFloat = 2
+    static let cellPt: CGFloat = CGFloat(SixFourLattice.cellPt)
 
     /// The full-screen lattice — 201 cols × 437 rows at `cellPt`.
-    static let cols = 201
-    static let rows = 437
+    static let cols = SixFourLattice.cols
+    static let rows = SixFourLattice.rows
 
     // MARK: Widget cell-counts (square blocks; grow by more cells, never bigger cells)
 
-    /// The shutter: 34 cells = 68 pt. Clears the 22-cell (44 pt) touch floor.
-    static let shutterCells = 34
+    /// The hero preview: 64 cells = 1 GIF pixel per cell (the cube law).
+    static let previewCells = SixFourLattice.previewCells
+    /// HIG 44 pt minimum hit target, in cells. The floor every interactive widget clears.
+    static let touchFloorCells = SixFourLattice.touchFloorCells
     /// Secondary square controls (gear, selector segments): 24 cells = 48 pt.
-    static let controlCells = 24
+    static let controlCells = SixFourLattice.controlCells
+    /// The shutter: 34 cells = 68 pt. Clears the 22-cell (44 pt) touch floor.
+    static let shutterCells = SixFourLattice.shutterCells
+    /// Shutter filled-disc radius (Ø30) + ring-band thickness — the closure `15·2 + 2·2 = 34`.
+    static let shutterDiscRadiusCells = SixFourLattice.shutterDiscRadiusCells
+    static let shutterRingThicknessCells = SixFourLattice.shutterRingThicknessCells
     /// The diversity gauge ring: 60 cells = 120 pt.
-    static let ringCells = 60
+    static let ringCells = SixFourLattice.ringCells
     /// Radial ticks on the gauge — one per GIF frame.
-    static let ringTicks = 64
+    static let ringTicks = SixFourLattice.ringTicks
+    /// Wordmark TITLE register height in cells (rows 96–115).
+    static let wordmarkRows = SixFourLattice.wordmarkRows
+    /// Wordmark advance width in cells (cols 68–191): 7·16 + 6·2 = 124.
+    static let wordmarkCols = SixFourLattice.wordmarkCols
+    /// A selector segment never narrows below the touch floor.
+    static let segmentCells = SixFourLattice.segmentCells
+    /// The Swiss gutter: one cell.
+    static let gutterCells = SixFourLattice.gutterCells
+
+    // MARK: The golden vertical layout (preview anchor)
+
+    static let previewStartRow = SixFourLattice.previewStartRow
+    static let previewEndRow = SixFourLattice.previewEndRow
+    static let previewStartCol = SixFourLattice.previewStartCol
+    static let previewEndCol = SixFourLattice.previewEndCol
 
     // MARK: The one conversion
 
