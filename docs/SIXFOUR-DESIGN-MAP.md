@@ -45,6 +45,24 @@ is *fully* resolved AND enforced; partially-fixed rows stay ⚠️ with the resi
 **New enforcement:** `scripts/lint-grid.sh` runs as a `project.yml` pre-build phase
 (verified failing on injected drift, passing clean) — Phases 1–3a cannot silently regress.
 
+**Phase 3b update (the font + bake layers):**
+- **3b-1 ✅ 7-seg CountReadout** — `Spec.SevenSeg` (parametric, 7 laws) → `SevenSegContract.swift` →
+  `CellDigits` two-ink fixed-width field. The count NEVER reflows (§6.9); the old reflowing
+  single-ink `CellText` + Unicode `◇` are gone (`◇` is now a real `CellIcon.diamond`).
+- **3b-2 ✅ Settings rebuilt cell-based** — native `Form`/`UISegmentedControl`/`Toggle` RETIRED;
+  `CellSelector` (accent-bordered segments) + `CellToggle` replace them. Long blurbs stay readable
+  via the §6.8 system-`Text` prose fallback (pixel prose is unreadable at sentence length).
+- **3b-3 ◐ setCell primitive shipped; live bake GATED.** `CellField.setCell` (the Pass-A byte
+  writer, Law #4) + `image(tint:chrome:)` + `PlacedCellMask` + `CellChrome.ringAxis` are built and
+  demonstrated (a `#Preview` bakes field + ring axis into one bitmap via the golden `CellShapes`
+  geometry). **The full live HUD migration onto the Pass-A bake is deliberately NOT done**, gated on:
+  (a) **a real §7.1 band-map bug** — the wordmark advance (cols 68–191) **overlaps the gear**
+  (cols 173–196) by 19 cols; absolute baking can't place a wordmark that underlaps the gear, so the
+  band map needs design resolution first; (b) text chrome (wordmark/count/sampler) needs the
+  `CellFont` masters to bake; (c) the migration moves the HUD from SwiftUI flow to absolute
+  positioning and needs on-device visual verification. NOTE: `setCell` is a **perf optimization**,
+  not a conformance fix — the HUD already renders correctly without it.
+
 ---
 
 ## 1. Scoreboard
@@ -155,7 +173,7 @@ Each law's overall state is derived from the elements whose traces depend on it.
 | **#1** ONE CELL SIZE | 2 pt cell everywhere; widgets grow by more cells, never bigger cells | `GlobalLattice.cellPt = 2` ← `Spec.Lattice` | ⚠️ partial — `Spec.Lattice` ships + shutter on-ladder/closure proven; residual: `CellText` glyph register ad-hoc + `CellSelector` still UIKit (Phase 3b) |
 | **#2** GRID IS THE RENDER SURFACE | flat opaque indexed cells; no glass/opacity/AA/rounding on the HUD | `CellField`, `ledGhost` opaque token; `LINT-DRAW-VOCAB` | ✅ RESOLVED & ENFORCED on the capture HUD (lint fails the build on drift); residual: `StateScreens` full-screen views are a different surface (later) |
 | **#3** ONE PITCH PER SCREEN | 2 pt HUD lattice and 6 pt Review pitch never share a screen | `GlobalLattice` (2 pt) vs `SFTheme.gifCellPt` (6 pt), EXEMPT-REVIEW-PITCH | ✅ honored — no cross-screen pitch mixing observed |
-| **#4** ONE CLOCK | one `frameIndex(…,20,64)`; Pass A static bake / Pass B animate only | `frameIndex()` (`PixelGrid.swift:34`); `setCell` [PLANNED] | ⚠️ drift — no unified Pass-A bake (`setCell` absent, Phase 3b); ring now reads the golden table but the split clock still awaits `setCell` |
+| **#4** ONE CLOCK | one `frameIndex(…,20,64)`; Pass A static bake / Pass B animate only | `frameIndex()` (`PixelGrid.swift:34`); `setCell` ✓ (`CellField.swift`) | ◐ primitive shipped — `setCell`/`CellChrome` bake + demo exist; the live HUD migration onto Pass-A is gated on the §7.1 band-map wordmark/gear overlap + `CellFont` text masters (a perf opt, not a conformance gap) |
 | **#5** ONE OWNER FOR CELL MATH | all `cells→pt` via `GlobalLattice.pt()`; no view computes `×cellPt` | `GlobalLattice` ← `Spec.Lattice` (verified facade) | ✅ RESOLVED — numbers live in Haskell; all HUD literals via `pt()`; `previewCells`/`segmentCells`/`wordmarkRows` added; LINT-SINGLE-PITCH enforces |
 | **#6** EVERY DIMENSION A CELL COUNT | every governed chrome dim an integer cell count via the owner | `GlobalLattice` cell-count constants | ✅ RESOLVED on the HUD — all spacing via `pt()`, shutter closure proven `15·2+2·2=34`; residual: UIKit-sized Settings selector (Phase 3b) |
 | **#7** PIXEL LOOK IS UNIVERSAL (incl. 3D) | RULE-CUBE-ISO: orthographic, NN, flat opaque voxels; face-on == 2D GIF | `VoxelCubeView` + `Shaders.metal` | ⚠️ drift (low) — only the face-multiply doc-vs-code mismatch; flatness/no-AA/no-alpha contract met |
