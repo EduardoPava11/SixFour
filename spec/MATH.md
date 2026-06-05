@@ -1,21 +1,22 @@
 # Mathematical Foundations of SixFour
 
-> **Status note (2026-05-25).** The app now ships a **per-frame palette only**:
+> **Status note (updated 2026-06-05).** The app ships a **per-frame palette only**:
 > each of the 64 frames keeps its own 256-colour palette (a complete
-> `CompleteVoxelVolume`, every frame surjective onto all 256 slots). The
-> cross-frame **Stage B Sinkhorn global merge** and its user-facing `.shared`
-> (θ≈0.05) / `.global` (θ→∞) modes have been **removed** — the Stage B sections
-> below are retained as reference math, not as a shipped pipeline. The
-> entropic-OT / Sinkhorn-Knopp machinery *does* live on inside the cyclic
-> palette-stack **descriptor** (`Spec/Cyclic.hs`, §8), which is the deferred-NN
-> feature seam; read the Sinkhorn material with that as its only live consumer.
+> `CompleteVoxelVolume`, every frame surjective onto all 256 slots). The cross-frame
+> **Stage B Sinkhorn global merge** and its `.shared` (θ≈0.05) / `.global` (θ→∞) modes
+> were removed, and as of the 2026-06-05 docs pass the Stage-B *reference math* (the
+> former §§3–4 endpoint theorems) has been **rewritten out** of this document — §§3–5
+> now describe the per-frame model and the open **GIFA → GIFB collapse**
+> (`docs/GIFA-GIFB-COLLAPSE-REDESIGN.md`). The entropic-OT / Sinkhorn-Knopp machinery
+> lives on only inside the cyclic palette-stack **descriptor** (`Spec/Cyclic.hs`, §8),
+> the deferred-NN feature seam.
 
 > **Pivot note (2026-05-27).** The deferred NN's input is no longer the §8 Def-20
 > 16-D descriptor *via 11 colour categories*. It is the continuous OKLab **Gaussian
 > mixture** (`SixFour.Spec.GMM`), collapsed by the **Wasserstein-2 / Bures** barycenter
 > (`SixFour.Spec.Bures`). This *promotes* the machinery already here: Def 16 (Gaussian
 > colour entropy, the per-frame covariance Σ) becomes the substrate's building block,
-> and the §8 transport/Sinkhorn kernel is the barycenter's. The k-means collapse of
+> and the §8 transport/Sinkhorn kernel is the barycenter's. The per-frame k-means of
 > §§1–4 remains the free-support W₂ barycenter floor (the Bures path reduces to it as
 > Σ→0). See `spec/LOOK_NN.md`'s pivot banner.
 
@@ -158,223 +159,125 @@ product. The codebase computes $\|\cdot\|^2_{\mathrm{OKLab}}$ pointwise in
 
 ---
 
-## 3. The Parameter Space and Its Two Endpoints
+## 3. The Per-Frame Model and the Collapse Problem
 
-The SixFour model is **semi-parametric** in the precise sense of
-Fahmy §3.2 (p. 84, Figure 1): the parameter space decomposes as
+The shipped SixFour model is **per-frame only**: Stage A extracts a complete
+256-colour palette for *each* of the T frames independently — every frame is a
+`CompleteVoxelVolume`, surjective onto all 256 slots. There is no cross-frame
+tying parameter; the `.shared` / `.global` Sinkhorn-merge modes of earlier
+revisions were removed (see the status note above). The per-frame palette stack
+$\mathbf{P}$ (Def 4) and index tensor $\mathbf{I}$ (Def 5) are therefore the
+*direct* Stage-A estimate, with no second stage on the shipped path.
+
+This is still **semi-parametric** in the sense of Fahmy §3.2 (p. 84): the
+parameter space decomposes as
 
 $$
 \Theta \;=\; \Theta_1 \times \Theta_2,
 $$
 
-where
+but the two factors are now read differently:
 
-- $\Theta_1 \;=\; [0, +\infty]$ is **finite-dimensional** (the
-  *tying parameter* θ), and
-- $\Theta_2 \;=\; (\mathbb{R}^3)^{T \cdot K}$ is the
-  **infinite-dimensional** space of admissible palette stacks.
+- $\Theta_2 = (\mathbb{R}^3)^{T \cdot K}$ — the **infinite-dimensional** space of
+  admissible palette stacks (unchanged), and
+- $\Theta_1$ — the **finite-dimensional** parameters of the **GIFA → GIFB
+  collapse**: the (still-open) operator that turns the T per-frame palettes
+  (**GIFA**) into one **global** 256-colour palette (**GIFB**). Its
+  parametrisation is a live design question, not a fixed scalar θ — see
+  `docs/GIFA-GIFB-COLLAPSE-REDESIGN.md`.
 
-θ controls how strongly the T per-frame palettes are tied to a single
-shared mean. The two SixFour output modes the user can currently choose
-are *the two endpoints of $\Theta_1$*:
-
-**Theorem 1** (per-frame is the lower endpoint). Let
-$\mathbf{P}^{\mathrm{A}}_t$ be the Stage-A output (variance-cut seed +
-Lloyd k-means + Atkinson dither) for frame $t$. Then
+**Definition 9** (the collapse operator). The **collapse** is a map
 
 $$
-\lim_{\theta \to 0^{+}}\; \mathbf{P}(\theta) \;=\; \mathbf{P}^{\mathrm{A}}.
+\mathcal{C} \;:\; (\mathbb{R}^3)^{T\times K} \times \Theta_1
+\;\longrightarrow\; (\mathbb{R}^3)^{K},
 $$
 
-*Proof sketch.* The Sinkhorn-balanced k-means merger
-(`Palette/StageBSinkhorn.swift`) builds a transport plan
-$\mathbf{T}(\theta) \in \mathbb{R}^{n_C \times K}_{\ge 0}$ with kernel
-$\mathbf{K}_{ij} = \exp\!\bigl(-\|x_i - \mu_j\|^2 / \theta\bigr)$. As
-$\theta \to 0^{+}$, $\mathbf{K}$ becomes a one-hot indicator at each row's
-arg-min, so $\mathbf{T}$ degenerates to a Monge plan, and each centroid
-$\mu_k$ reduces to the candidate it was nearest to. Since the candidates
-are themselves the Stage-A entries, the merger reduces to the identity on
-$\mathbf{P}^{\mathrm{A}}$. ∎
+taking the per-frame stack $\mathbf{P}$ (and collapse parameters in $\Theta_1$) to
+a single global palette $\mathbf{P}^{\mathrm{G}}\in(\mathbb{R}^3)^{K}$ that
+recolours the whole $64^3$ cube. The contract on its output is **global
+surjectivity** (`Spec.Indices.GlobalSurjective`: $\bigcup_t \mathrm{used}_t = K$):
+a single frame uses a *subset* of the 256, the loop's union covers all of them —
+the deliberate opposite of Stage-A's per-frame `CompleteVoxelVolume`.
 
-**Theorem 2** (global is the upper endpoint, realised in log-domain).
-For all sufficiently large θ, the palette stack $\mathbf{P}(\theta)$
-produced by `logDomainSinkhornReference` satisfies
-
-$$
-\mathrm{rank}_{\text{row}}\bigl(\mathbf{P}(\theta)\bigr) \;=\; 1,
-$$
-
-i.e. every per-frame palette equals one common 256-entry palette.
-
-*Proof sketch.* As $\theta \to \infty$, the log-kernel entries
-$\log\mathbf{K}_{ij} = -\|x_i - \mu_j\|^2/\theta \to 0$ uniformly,
-so the kernel approaches the uniform matrix. Sinkhorn scaling then
-enforces uniform column mass with uniform row mass, which collapses
-every centroid to the unweighted mean of all candidates.
-
-**Numerical note.** The *direct-exp* Sinkhorn (`sinkhornReference`)
-cannot realise this limit on a finite machine — at θ ≳ 1, $\exp(-C/\theta)$
-becomes indistinguishable from $\mathbf{1}$ in IEEE-754, so the
-$v[k]=1/\sum_i u_i K_{ik}$ update loses all geometric signal in
-catastrophic cancellation. SixFour therefore implements *two*
-Sinkhorn variants in `Palette/StageBSinkhorn.swift`:
-
-  * `Params.shared` (θ = 0.05) — direct-exp path, used by `Mode.shared`.
-  * `Params.global` (θ = 50)   — log-domain path via `logSumExp`, used
-    by `Mode.global`. This is the only path that realises the
-    Theorem-2 limit faithfully.
-
-The QuickCheck suite (`spec/test/Properties/Sinkhorn.hs`) verifies
-log-domain ≈ direct-exp at θ ∈ {0.05, 0.5} and that θ = 50 collapses
-the palette to a tight OKLab ball. ∎
-
-### §3.bis. The middle endpoint, *Shared*
-
-Between the two extremes Theorem 1 and Theorem 2 specify, the user
-experiences a *third* practical endpoint that is neither of them:
-
-**Definition 9.bis** (the Shared endpoint). The finite-θ point
-θ = 0.05 at which the soft column mass is uniform enough that the
-nearest-neighbour hardening collapses to a *shared* (not literally
-row-rank-1) palette — every frame's index tensor resolves through one
-256-entry global palette, but the centroids are not the global mean.
-This is the practical "one shared palette" the user perceives when
-they pick the middle mode in `ModeSelector`, and corresponds to
-`PaletteGenerator.Mode.shared` with `StageBSinkhorn.Params.shared`.
-
-θ = 0.05 was chosen empirically as the smallest θ for which the
-nearest-neighbour remap is dense (low rate of Surjective256 rescue)
-and the resulting palette still discriminates highlights from
-shadows. It is a *finite-dimensional* parameter of the same
-semi-parametric family of Definition 9, not a separate model.
-
-**Definition 9** (the spectrum). The **SixFour spectrum** is the curve
-
-$$
-\Theta_1 \;=\; \{\theta : 0 \le \theta \le \infty\},
-\qquad \theta \mapsto \bigl(\mathbf{P}(\theta),\,\mathbf{I}(\theta)\bigr).
-$$
-
-Its two endpoints are the two GIF modes the device currently ships; its
-interior is the continuous family of partial-tying solutions.
-
-**Remark 2** (what changes monotonically with θ). The interior of the
-spectrum is monotone in a *soft-rank* sense, not in literal integer row
-rank. The continuous monotone is the **transport entropy**
-
-$$
-H\bigl(\mathbf{T}(\theta)\bigr) \;=\; - \sum_{i,j} T_{ij}\, \log T_{ij},
-$$
-
-which is *strictly increasing* in θ on $(0, \infty)$. Equivalently the
-**Sinkhorn divergence** $\mathrm{KL}(\mathbf{T}(\theta) \,\|\,
-\mathbf{T}_{\text{uniform}})$ is strictly decreasing in θ. So the
-spectrum is *continuously* and *monotonically* parametrised by θ via
-either of these scalars; the integer row-rank of $\mathbf{P}$ falls
-through the discrete sequence $T, T-1, \dots, 2, 1$ as θ traverses
-$[0, \infty]$.
+The operator exists in the integer-floor core (`s4_global_collapse`, wrapped as
+`SixFourNative.globalCollapse`) but currently has **zero callers** — GIFB is not
+yet produced. Wiring it is the structural keystone (`SIXFOUR-ARCHITECTURE-MAP.md`
+§4, step 1). *Which* collapse to apply (the move set, the value it optimises) is
+the redesign brief's open research question, intentionally left unspecified here
+so that the brief's literature survey drives it rather than this document.
 
 ---
 
 ## 4. Estimator and Estimate — Fahmy §3.5
 
-For a fixed θ ∈ Θ₁, the pipeline computes the **estimator**
+For the shipped per-frame model, the **estimator** is Stage A:
 
 $$
-\bigl(\hat{\mathbf{P}}(\cdot;\theta),\,\hat{\mathbf{I}}(\cdot;\theta)\bigr)
+\bigl(\hat{\mathbf{P}}(\cdot),\,\hat{\mathbf{I}}(\cdot)\bigr)
 \;:\; \Omega \;\longrightarrow\; \Theta_2 \times \{0,\dots,K-1\}^{T \cdot H \cdot W}
 $$
 
-defined by Stage A followed by Stage B at tying parameter θ. The
-**estimate** for a specific observed $\mathbf{x} = \mathbf{X}(\omega)$ is
-the value $\bigl(\hat{\mathbf{P}}(\mathbf{x};\theta),\,
-\hat{\mathbf{I}}(\mathbf{x};\theta)\bigr) \in \Theta_2 \times \{0,\dots,K-1\}^{T H W}$.
+(variance-cut seed → Lloyd k-means → Atkinson / blue-noise dither, per frame). The
+**estimate** for a specific observed $\mathbf{x} = \mathbf{X}(\omega)$ is the
+realised pair $\bigl(\hat{\mathbf{P}}(\mathbf{x}),\,\hat{\mathbf{I}}(\mathbf{x})\bigr)
+\in \Theta_2 \times \{0,\dots,K-1\}^{T H W}$.
 
-Fahmy's distinction (p. 88, footnote 2) is preserved:
+Fahmy's estimator / estimate distinction (p. 88, footnote 2) is preserved:
 
 | Fahmy | SixFour |
 |-------|---------|
-| $\hat{\beta}$ — the estimator (a formula in $\mathbf{X}, \mathbf{Y}$) | `StageBSinkhorn.merge(perFramePalettes:perFrameIndices:)` as a function |
-| $\hat{\beta}$ evaluated on a sample — the estimate (a number) | the returned tuple `(globalPalette, witness)` |
+| $\hat{\beta}$ — the estimator (a formula in $\mathbf{X}$) | `PaletteGenerator.generate(_:)` as a function |
+| $\hat{\beta}$ evaluated on a sample — the estimate | the returned `(perFramePalettes, frameIndices)` |
 
-**Theorem 3** (the surjectivity witness — runtime, not theoretical).
-For every θ > 0, the Stage-B estimator *attempts* to produce an
-index tensor whose image contains every value $\{0, 1, \dots, K-1\}$.
-*No theorem* guarantees this: Sinkhorn-Knopp balance (Sinkhorn &
-Knopp 1967; Cuturi 2013; Peyré & Cuturi 2018) only gives equal soft
-column-mass on the transport plan $\mathbf{T}(\theta)$ — the hard
-nearest-neighbour assignment that follows can still skip a centroid.
+**Per-frame surjectivity (witness).** Each frame's Stage-A palette is a
+`CompleteVoxelVolume` — every one of the 256 slots is populated. This is checked,
+not assumed: `Surjective256(checking:)` (`SixFour/Generated/StageContract.swift`)
+is an O(K) witness, and the significance brand additionally requires
+≥ `minPopulation` pixels per slot (`Spec.Significance`). For the *global* palette
+the analogous contract is `GlobalSurjective` over the loop (Def 9), to be
+discharged once the collapse operator is wired.
 
-Soundness here is therefore a *runtime* mechanism with three states:
-
-  1. **Witness held.** `Surjective256(checking:)`
-     (`SixFour/Generated/StageContract.swift`) succeeds in O(K).
-     Downstream code may trust the invariant for free.
-  2. **Rescued.** `Surjective256(checking:)` fails. `forceSurjective`
-     reassigns single pixels from oversubscribed slots to fill
-     missing ones (O(K + THW)). The reissued witness is genuine.
-  3. **Fallback.** The rescue itself cannot complete (no donor slot
-     has count > 1 for some missing slot). Stage B returns
-     `Result.failure(.surjectivityRescueFailed)`, the renderer falls
-     back to per-frame mode (Theorem 1), and the UI banner reports
-     `"Sinkhorn merge degenerate — rendered as per-frame instead."`
-
-The Haskell reference returns `sbWitness :: Maybe (Surjective256 ...)`
-to make the optionality structural in the spec; the Swift port returns
-`Result<MergeResult, StageBError>` to surface the three states
-through the renderer. The QuickCheck suite
-(`spec/test/Properties/Sinkhorn.hs`) demonstrates that
-$\mathit{witness} = \mathit{Nothing}$ is reachable on randomly-sampled
-inputs, formally refuting the prior "Sinkhorn guarantees surjectivity"
-claim.
-
-**Remark 3** (RSS is the OLS analog). Choosing θ to minimise
-$\mathrm{RSS}\bigl(\hat{\mathbf{P}}(\theta), \hat{\mathbf{I}}(\theta)\bigr)$
-over $\Theta_1$ is exactly an OLS-style minimisation
-(Fahmy §3.5, p. 92, eq. 3.32) — the only differences are that the
-"design matrix" $\hat{\mathbf{P}}$ is itself estimated from
-$\mathbf{X}$, and the optimisation over the discrete index tensor
-$\hat{\mathbf{I}}$ is solved by hard nearest-neighbour assignment rather
-than the closed-form normal equation. The Sinkhorn relaxation softens
-*only* the assignment, not the OLS principle.
+**Remark 3** (RSS is the OLS analog). Choosing the Stage-A palette to minimise
+$\mathrm{RSS}\bigl(\hat{\mathbf{P}}, \hat{\mathbf{I}}\bigr)$ (Def 8) over $\Theta_2$
+is an OLS-style minimisation (Fahmy §3.5, p. 92, eq. 3.32) — the differences being
+that the "design matrix" $\hat{\mathbf{P}}$ is itself estimated from $\mathbf{X}$,
+and the discrete index tensor $\hat{\mathbf{I}}$ is solved by hard
+nearest-neighbour assignment rather than the closed-form normal equation. Lloyd–Max
+(1-D k-means) is the MSE floor this descent approaches.
 
 ---
 
-## 5. The Spectrum and the Future Estimator (deferred — no code surface)
+## 5. The Deferred Estimator — the GIFA → GIFB collapse (no shipped code surface)
 
-The deferred neural network has a well-specified type signature inside
-this framework but **no code surface** in the current build, per the
-project rule "no stubs — fully working and tested code only."
+The deferred neural network has a well-specified slot in this framework but **no
+shipped code surface**, per the project rule "no stubs — fully working and tested
+code only."
 
-**Definition 10** (the spectrum estimator — purely documentary).
-The eventual neural network is a **semi-parametric estimator** in the
-exact sense of Fahmy §3.2 (p. 84, lines 1–9). It will map
+**Definition 10** (the deferred semi-parametric estimator). The eventual network
+is a **semi-parametric estimator** in the exact sense of Fahmy §3.2 (p. 84,
+lines 1–9). It estimates the finite-dimensional collapse parameters
 
 $$
-\hat{\theta} \;:\; \Omega \;\longrightarrow\; \Theta_1 \;=\; [0, \infty]
+\hat{\theta} \;:\; \Omega \;\longrightarrow\; \Theta_1
 $$
 
-so that $\hat{\theta}(\mathbf{X})$ is a finite-dimensional estimate of
-the best tying parameter for the realised burst. The
-infinite-dimensional component $\Theta_2$ is then determined by a
-**second-stage** estimator (the existing Stage A + Stage B pipeline)
-evaluated at $\hat{\theta}$. This is Fahmy's "we are interested in
-estimating $\theta$. So [the infinite-dimensional component] is just an
-input to a second-stage estimation problem" verbatim.
+so that $\hat{\theta}(\mathbf{X})$ chooses *how* the per-frame stack collapses to
+the global palette for the realised burst; the infinite-dimensional component
+$\Theta_2$ is supplied by the Stage-A estimator of §4. This is Fahmy's "we are
+interested in estimating $\theta$; [the infinite-dimensional component] is just an
+input to a second-stage estimation problem" verbatim — with the second stage now
+the **collapse** $\mathcal{C}$ (Def 9), not a tying merge.
 
-When such a trainer ships in `trainer/`, the pipeline's contract will
-add a `NetSlot.theta` entry to `Net.hs` and a corresponding mode to
-`PaletteGenerator.Mode`. Until then, the three user-facing modes are:
-
-| Mode | θ | Theorem / Definition |
-|------|---|----------------------|
-| `Mode.perFrame` | 0 | Theorem 1 |
-| `Mode.shared`   | 0.05 (direct-exp) | §3.bis Definition 9.bis |
-| `Mode.global`   | 50 (log-domain) | Theorem 2 |
-
-Each is realised by *executable, tested code*; the interior
-$\theta \in (0, 0.05) \cup (0.05, 50)$ is reachable from
-`StageBSinkhorn.Params` programmatically but not from the UI.
+Its **input** is the continuous OKLab Gaussian-mixture substrate
+(`SixFour.Spec.GMM`) collapsed by the Wasserstein-2 / Bures barycenter
+(`SixFour.Spec.Bures`); the §8 invariant descriptor $\mathbf{D}$ (Def 20) is the
+loop-level feature seam that can also feed it (§8.4, Remark 4). The **target**
+(what a value head scores) and the **move set** (the legal collapses) are open
+research questions — *framed, not fixed* — in `docs/GIFA-GIFB-COLLAPSE-REDESIGN.md`
+(the AlphaGo policy + value + search framing). When a trainer ships in `trainer/`,
+the contract adds the corresponding slot to `Net.hs`; until then the only shipped
+mode is per-frame (§§3–4).
 
 ---
 
@@ -395,13 +298,13 @@ rather than the document silently extended.
 | Index tensor **I** | `PaletteGenerator.Output.frameIndices` | `Palette/PaletteGenerator.swift:49` |
 | Reconstruction $\hat{\mathbf{X}}$ | implicit in `GIFEncoder.encode` — not materialised on host | `Encoder/GIFEncoder.swift` |
 | OKLab norm $\|\cdot\|^2$ | `okLabDistanceSquared` | `Color/ColorScience.swift:91` |
-| Parameter space Θ | `(PaletteGenerator.Mode, [[SIMD3<Float>]])` | `Palette/PaletteGenerator.swift:36` |
-| Tying parameter θ ∈ Θ₁ | `StageBSinkhorn.Params.theta` | `Palette/StageBSinkhorn.swift:23` |
-| Per-frame estimator (Theorem 1) | `Mode.perFrame` (θ = 0) | `Palette/PaletteGenerator.swift` |
-| Shared endpoint (§3.bis Definition 9.bis) | `Mode.shared` (θ = 0.05) | `Palette/PaletteGenerator.swift`; `StageBSinkhorn.Params.shared` |
-| Global estimator (Theorem 2) | `Mode.global` (θ = 50, log-domain) | `Palette/PaletteGenerator.swift`; `StageBSinkhorn.Params.global` + `logSumExp` path |
-| Surjectivity witness | `Surjective256(checking:)` | `Generated/StageContract.swift` |
-| Semi-parametric estimator (deferred NN) | not implemented; no slot exists in `NetContract` until a trainer ships | — |
+| Parameter space Θ = Θ₁ × Θ₂ | per-frame `[[SIMD3<Float>]]` (Θ₂) × collapse params (Θ₁) | `Palette/PaletteGenerator.swift:36` |
+| Per-frame estimator (Stage A, §4) | `PaletteGenerator.generate(_:)` | `Palette/PaletteGenerator.swift` |
+| Per-frame surjectivity witness | `Surjective256(checking:)` | `Generated/StageContract.swift` |
+| Collapse operator 𝒞 (Def 9) | `s4_global_collapse` / `SixFourNative.globalCollapse` (**0 callers**) | `Native/…`; `SixFourNative.swift:268` |
+| Global surjectivity contract | `Spec.Indices.GlobalSurjective` | `spec/.../Spec/Indices.hs` |
+| Collapse params Θ₁ (deferred) | open — see `docs/GIFA-GIFB-COLLAPSE-REDESIGN.md` | — |
+| Semi-parametric estimator (deferred NN, Def 10) | not implemented; no `NetContract` slot until a trainer ships | — |
 | Cyclic palette stack (§8) | `Cyclic.CyclicStack` | `spec/.../Spec/Cyclic.hs` |
 | Transition transport plan $\mathbf{\Gamma}_t$ (§8 Def 13) | `Cyclic.transitionPlan` | `spec/.../Spec/Cyclic.hs` |
 | Delta field $\mathbf{\Delta}$ (§8 Def 14) | `Cyclic.alignedDelta` | `spec/.../Spec/Cyclic.hs` |
@@ -415,20 +318,22 @@ rather than the document silently extended.
 ## 7. What is and is not in scope
 
 **In scope.** Every transformation that turns ω ∈ Ω into a GIF on
-disk. The pipeline holds responsibility for: data acquisition (W),
-representation (**X**), parameter estimation
-($\hat{\mathbf{P}}, \hat{\mathbf{I}}$), and reconstruction
+disk: data acquisition (W), representation (**X**), per-frame parameter
+estimation ($\hat{\mathbf{P}}, \hat{\mathbf{I}}$), and reconstruction
 ($\hat{\mathbf{X}}$).
 
 **Out of scope.** The unknown distribution $F_\theta$ of **X**
 (the scene-and-sensor distribution); the unobserved error term ε; and
-the *choice* of the tying parameter θ when the NN is absent (the user
-makes this choice manually through `ComposeView`'s Picker).
+the *choice* of collapse parameters $\Theta_1$ while the deferred
+estimator is absent (the app ships per-frame only, so there is no
+global-collapse choice to make at runtime).
 
-**Deferred.** The estimator $\hat{\theta}(\cdot)$ of Definition 10.
-The pipeline already exposes the slot it will plug into; building it is
-a separate workstream that the math here intentionally constrains
-without specifying.
+**Deferred.** The estimator $\hat{\theta}(\cdot)$ of Definition 10 and the
+collapse operator $\mathcal{C}$ it parametrises (Def 9). The integer-floor
+core already exposes the operator slot (`s4_global_collapse`); choosing and
+wiring the collapse is a separate workstream that the math here constrains
+(global surjectivity, the §8 invariants) without specifying — the
+specification is `docs/GIFA-GIFB-COLLAPSE-REDESIGN.md`.
 
 ---
 
@@ -439,7 +344,7 @@ into a palette stack $\mathbf{P}$. This section reads the *same*
 $\mathbf{P}$ as a **looping process**: a GIF repeats, so frame $T-1$
 transitions back to frame $0$, and the object of study becomes the
 $256$ per-colour trajectories and their cyclic deltas. We import Shannon
-entropy and KL exactly as Remark 2 already does (transport entropy); the
+entropy and KL over the transport plans defined below (Def 13, 17); the
 *backbone* is Fahmy's time-series chapter (§9: covariance stationarity
 Def 38, the difference operator $\Delta X_t$) and his multivariate-normal
 covariance (App C, eq. C.8).
@@ -473,9 +378,9 @@ deltas (§8.2) over naïve per-index differences.
 the **plan** $\mathbf{\Gamma}_t \in \mathbb{R}^{K\times K}_{\ge 0}$ is the
 entropic-OT (Sinkhorn) coupling of $(\mathbf{P}_t,\mathbf{w}_t)$ and
 $(\mathbf{P}_{t+1},\mathbf{w}_{t+1})$ at regularisation $\theta$ — the
-same kernel $\mathbf{K}_{ij}=\exp(-\|\cdot\|^2/\theta)$ as Remark 2,
-scaled to the weight marginals (`Cyclic.transitionPlan`). $\mathbf{\Gamma}_t$
-is $S_K$-equivariant, so all scalars built from it are $S_K$-invariant.
+entropic-OT kernel $\mathbf{K}_{ij}=\exp(-\|\cdot\|^2/\theta)$ (Sinkhorn &
+Knopp 1967; Cuturi 2013), scaled to the weight marginals (`Cyclic.transitionPlan`).
+$\mathbf{\Gamma}_t$ is $S_K$-equivariant, so all scalars built from it are $S_K$-invariant.
 
 **Definition 14** (delta field). The **delta field** is the cyclic first
 difference (Fahmy §9 $\Delta X_t$): under the correspondence induced by

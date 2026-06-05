@@ -1,6 +1,6 @@
 # The Bleed Loop — Authoritative Mathematics of Obfuscation, Reveal, and Generative Incitement
 
-> **Status of record: 2026-05-30.** This document turns the *obfuscate → prioritize → bleed → loop → incite* idea into rigorous mathematics ready to transcribe into `Spec/*.hs`. It **continues** `MATH.md` (Definitions 1–20, Theorems 1–5) and `LOOK_NN.md` (Definitions 21–38, Theorems 6–9): numbering resumes at **Definition 45 / Theorem 14**. It **extends, never reinvents**, four existing modules — `SigmaDecomp`, `AxisNet`, `PairTree`, `SigmaPairHead` — whose signatures are load-bearing throughout.
+> **Status of record: 2026-05-30.** This document turns the *obfuscate → prioritize → bleed → loop → incite* idea into rigorous mathematics ready to transcribe into `Spec/*.hs`. It **continues** `MATH.md` (Definitions 1–20, Theorems 4–5; the former Stage-B Theorems 1–3 were retired in the 2026-06-05 per-frame/collapse rewrite) and `LOOK_NN.md` (Definitions 21–38, Theorems 6–9): numbering resumes at **Definition 45 / Theorem 14**. It **extends, never reinvents**, four existing modules — `SigmaDecomp`, `AxisNet`, `PairTree`, `SigmaPairHead` — whose signatures are load-bearing throughout.
 >
 > Produced by the `lnn-obfuscation-bleed-math-spec` workflow (6 objects formalized → adversarially verified, all REVISE none CUT → integration pass → synthesis). Five independent derivations each self-corrected onto the same two-operator discipline below — that convergence is the evidence the system is coherent.
 >
