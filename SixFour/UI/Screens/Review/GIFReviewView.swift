@@ -55,13 +55,20 @@ struct GIFReviewView: View {
                               brushedIndex: $brushedIndex)
 
                     if gridFirstReview {
-                        // Grid-first: the 256-colour palette as the 16×16 grid — the GIF's
-                        // first abstraction (256 = 16²). The heavy explorer is suspended.
+                        // Grid-first cascade (ADR-5): GIF (above) → 16×16 palette → 4×4
+                        // shutter, each a coarser Haar level of the one before.
+                        // 256 = 16² leaves; the shutter is their level-4 parents.
                         PaletteGridView(palettes: primary.palettesForDisplay,
                                         xAxis: vm.settings.gridAxisX,
                                         yAxis: vm.settings.gridAxisY,
                                         frame: clock.frame,
                                         brushedIndex: brushedIndex)
+                        let settled = primary.palettesForDisplay.isEmpty
+                            ? []
+                            : primary.palettesForDisplay[min(clock.settledFrame, primary.palettesForDisplay.count - 1)]
+                        if settled.count == 256 {
+                            HaarShutterView(palette: settled)   // 4×4 = Haar level-4 (16 colours)
+                        }
                     } else if vm.settings.showPaletteTree {
                         paletteStructure(primary)   // SUSPENDED legacy explorer
                     }

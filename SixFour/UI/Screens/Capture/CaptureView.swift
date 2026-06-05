@@ -124,13 +124,10 @@ struct CaptureView: View {
     }
 
     private var topBar: some View {
+        // NO TITLE (grid-first, ADR-5): the screen is the GIF + palette + shutter
+        // cascade, nothing else. Only the settings gear rides the top-right corner.
         HStack(spacing: GlobalLattice.pt(5)) {
-            // Title as chunky gifPx glyphs — the SAME atom as the preview + field
-            // (v2.0). TITLE band = wordmarkRows (8) atoms tall = 48 pt; opaque ink (Law #2).
-            CellText("SixFour", rows: GlobalLattice.wordmarkRows, cell: GlobalLattice.gifPx, ink: .white)
             Spacer()
-            // Settings — a 24-cell gear (48pt). Glass is retired on the capture
-            // HUD per GRID; the gear is cells at the one 2pt pitch, like everything.
             Button { showSettings = true } label: {
                 CellGear()
             }

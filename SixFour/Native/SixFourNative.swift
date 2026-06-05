@@ -362,6 +362,26 @@ enum SixFourNative {
         return (0 ..< count).map { SIMD3<Int32>(nodes[$0 * 3], nodes[$0 * 3 + 1], nodes[$0 * 3 + 2]) }
     }
 
+    /// Convenience for the UI: an sRGB8 palette (`k` a power of two) → the Haar
+    /// `level` node colours as sRGB8 (the abstraction cascade). Used by the capture
+    /// shutter (`level 4` → 16 colours) and review. sRGB8 → OKLab Q16 → haarAnalyze →
+    /// haarLevelNodes → sRGB8, all through the verified Zig kernels.
+    static func haarLevelColors(palette srgb: [SIMD3<UInt8>], level: Int) -> [SIMD3<UInt8>]? {
+        let n = srgb.count
+        guard n > 0, (n & (n - 1)) == 0, level >= 0, (1 << level) <= n else { return nil }
+        let floats = srgb.map { c -> SIMD3<Float> in
+            let lab = ColorScience.srgb8ToOKLab(c.x, c.y, c.z)
+            return SIMD3<Float>(lab.L, lab.a, lab.b)
+        }
+        let q16 = oklabToQ16(floats)
+        let leaves = (0 ..< n).map { SIMD3<Int32>(q16[$0 * 3], q16[$0 * 3 + 1], q16[$0 * 3 + 2]) }
+        guard let hp = haarAnalyze(leaves: leaves),
+              let nodes = haarLevelNodes(level: level, root: hp.root, offsets: hp.offsets) else { return nil }
+        let flat = nodes.flatMap { [$0.x, $0.y, $0.z] }
+        guard let out = paletteToSRGB8(centroidsQ16: flat, k: nodes.count) else { return nil }
+        return (0 ..< nodes.count).map { SIMD3<UInt8>(out[$0 * 3], out[$0 * 3 + 1], out[$0 * 3 + 2]) }
+    }
+
     struct SignificanceResult { let indices: [UInt8]; let cellStats: [Int32] }  // cellStats: k×7
 
     /// Rebalance indices to ≥ minPopulation per slot; emit k×7 cell stats
