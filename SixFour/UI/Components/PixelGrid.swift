@@ -46,10 +46,17 @@ struct PixelImage: View {
     let edge: CGFloat
 
     var body: some View {
+        // A `.resizable()` Image has NO intrinsic size and runs its own sizing — under
+        // `.position` (which offers the FULL parent rect), a bare `.frame(edge,edge)` is
+        // NOT honoured and the image bleeds to fill the screen (the full-width, non-square,
+        // under-the-island preview bug, found 2026-06-05). `.aspectRatio(1,.fit)` + `.frame`
+        // + `.fixedSize()` force a DEFINITE square `edge×edge` that cannot expand.
         Image(uiImage: image)
             .interpolation(.none)
             .resizable()
+            .aspectRatio(1, contentMode: .fit)
             .frame(width: edge, height: edge)
+            .fixedSize()
     }
 }
 

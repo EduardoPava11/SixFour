@@ -34,6 +34,7 @@ struct CaptureView: View {
     /// Routing here keeps `mainCaptureScene` focused on the happy path.
     @ViewBuilder
     private var rootContent: some View {
+        if true { mainCaptureScene } else {  // [DIAG-TEMP] force scene past camera-less sim
         switch vm.phase {
         case .configuring:
             BootstrapSkeleton()
@@ -46,6 +47,7 @@ struct CaptureView: View {
         default:
             mainCaptureScene
                 .overlay(alignment: .top) { phaseBanner }
+        }
         }
     }
 
@@ -115,6 +117,16 @@ struct CaptureView: View {
     }
 
     /// The settings gear, placed on the lattice (top-right) in the grid-first scene.
+    // [DIAG-TEMP] a 64×64 test image (red, yellow top-left quadrant) to exercise the
+    // resizable-Image preview path in the camera-less simulator. REVERT before commit.
+    static let diagTestImage: UIImage = {
+        let r = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64))
+        return r.image { ctx in
+            UIColor.systemRed.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+            UIColor.systemYellow.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 32, height: 32))
+        }
+    }()
+
     private var gearButton: some View {
         Button { showSettings = true } label: { CellGear() }
             .buttonStyle(.plain)
@@ -144,7 +156,7 @@ struct CaptureView: View {
                 PixelImage(image: img, edge: side)
                     .allowsHitTesting(false)   // taps fall through to the focus layer
             } else {
-                Color.black                    // first-frame fallback (~100 ms)
+                PixelImage(image: Self.diagTestImage, edge: side)   // [DIAG-TEMP] camera-free repro
             }
             if let hit = reticle {
                 FocusReticle(point: hit.point)
@@ -166,7 +178,7 @@ struct CaptureView: View {
         let pal = vm.livePalette
         // Frame is a cell-ring (added in the exact-geometry pass), not a vector stroke
         // (GRID: no raw primitives on the HUD).
-        return CellSprite(cols: 16, rows: 16, cellPt: 12) { c, r in
+        return CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gif(2)) { c, r in
             let i = r * 16 + c
             return i < pal.count ? pal[i] : SIMD3<UInt8>(20, 20, 24)
         }

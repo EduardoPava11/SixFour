@@ -40,6 +40,8 @@ library
         SixFour.Spec.SplitTree
         SixFour.Spec.GridAxis
         SixFour.Spec.Lattice
+        SixFour.Spec.CellFiber
+        SixFour.Spec.CellGrid
         SixFour.Spec.CellShapes
         SixFour.Spec.SevenSeg
         SixFour.Spec.CloudProjection
@@ -256,6 +258,8 @@ test-suite spec-tests
         Properties.SplitTree
         Properties.GridAxis
         Properties.Lattice
+        Properties.CellFiber
+        Properties.CellGrid
         Properties.CellShapes
         Properties.SevenSeg
         Properties.CloudProjection

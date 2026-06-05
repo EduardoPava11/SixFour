@@ -9,8 +9,12 @@ import SwiftUI
 struct HaarShutterView: View {
     /// The 256-colour palette (sRGB8) this is the abstraction of.
     let palette: [SIMD3<UInt8>]
-    /// Cell pitch; 24 pt ⇒ a 96 pt shutter (ADR-5 cascade).
-    var cellPt: CGFloat = 24
+    /// Review-scoped block factor (EXEMPT-REVIEW-PITCH): the shutter renders at
+    /// `gifPx × 4 = 24 pt` ⇒ a 96 pt shutter (ADR-5 cascade). Stored as a block
+    /// factor and derived through `GlobalLattice` (Law #5) so callers cannot set an
+    /// arbitrary (dual-pitch) value.
+    private let blockFactor = 4
+    private var cellPt: CGFloat { GlobalLattice.gif(blockFactor) }
     /// Optional tap action (capture screen). Nil ⇒ a static display (review).
     var onTap: (() -> Void)? = nil
 

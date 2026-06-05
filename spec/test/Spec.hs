@@ -21,6 +21,8 @@ import qualified Properties.GlobalVolume as GlobalVolume
 import qualified Properties.SplitTree    as SplitTree
 import qualified Properties.GridAxis     as GridAxis
 import qualified Properties.Lattice      as Lattice
+import qualified Properties.CellFiber    as CellFiber
+import qualified Properties.CellGrid     as CellGrid
 import qualified Properties.CellShapes   as CellShapes
 import qualified Properties.SevenSeg     as SevenSeg
 import qualified Properties.CloudProjection as CloudProjection
@@ -80,6 +82,8 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SplitTree.tests
   , GridAxis.tests
   , Lattice.tests
+  , CellFiber.tests
+  , CellGrid.tests
   , CellShapes.tests
   , SevenSeg.tests
   , CloudProjection.tests
