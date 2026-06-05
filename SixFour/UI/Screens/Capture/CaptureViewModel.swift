@@ -292,8 +292,27 @@ final class CaptureViewModel {
         Self.logger.info("[viewmodel] AE/AWB lock: \(String(describing: lockResult), privacy: .public)")
 
         phase = .capturing(progress: 0)
+        // Stream each captured frame into the SAME preview the live feed uses, so
+        // the screen animates the burst (≈20 fps) instead of freezing, and advance
+        // the progress 0→1. Runs on the Metal completion queue; marshal to main.
+        let burstTotal = session.targetFrameCount
+        session.burstFrameCallback = { [weak self] tile, n in
+            guard let self else { return }
+            let image = self.previewQuantized
+                ? Self.makeQuantizedPreviewImage(from: tile, mode: self.previewDitherMode,
+                                                 serpentine: self.previewSerpentine)
+                : Self.makePreviewImage(from: tile)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if let image { self.previewTile = image }
+                self.phase = .capturing(progress: Double(n) / Double(max(1, burstTotal)))
+            }
+        }
         do {
-            defer { session.unlockExposureAndWhiteBalance() }
+            defer {
+                session.unlockExposureAndWhiteBalance()
+                session.burstFrameCallback = nil
+            }
             let result = try await session.captureBurst(into: pipeline)
             lastTimingSummary = result.timing.summary
             Self.logger.info("[viewmodel] burst complete: \(result.timing.summary, privacy: .public)")

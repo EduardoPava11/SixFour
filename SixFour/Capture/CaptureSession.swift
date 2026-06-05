@@ -65,6 +65,14 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// the receiver is responsible for dispatching UI updates.
     var previewCallback: (@Sendable (OKLabTile) -> Void)?
 
+    /// Callback fired once per captured frame DURING a burst (`collecting ==
+    /// true`), with the just-collected tile and the running count
+    /// (`1...targetFrameCount`). Runs on the Metal completion queue (like
+    /// `previewCallback`), NOT the main actor — the receiver marshals UI updates.
+    /// This lets the preview show each frame as it captures instead of freezing
+    /// on the last live frame for the whole burst. Set to nil to disable.
+    var burstFrameCallback: (@Sendable (OKLabTile, Int) -> Void)?
+
     /// Last preview submission timestamp (nanoseconds since boot) for
     /// throttling. Only touched on `delegateQueue`.
     private var lastPreviewSubmitNanos: UInt64 = 0
@@ -789,6 +797,10 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
                 self.delegateQueue.async {
                     guard self.collecting else { return }
                     self.collected.append(tile)
+                    // Surface each frame as it lands so the preview animates the
+                    // capture live (one tick ≈ the 20 fps burst cadence) instead of
+                    // freezing on the last live frame.
+                    self.burstFrameCallback?(tile, self.collected.count)
                     if self.collected.count == self.targetFrameCount {
                         self.finishBurst()
                     }
