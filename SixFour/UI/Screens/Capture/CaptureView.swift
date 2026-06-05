@@ -53,49 +53,63 @@ struct CaptureView: View {
     /// wordmark (top) · the 64×64 live tile (centred) · shutter+ring · readout.
     /// Every direct child of the VStack is horizontally centred, so the preview
     /// sits dead-centre and the chrome bands above and below it.
+    @ViewBuilder
     private var mainCaptureScene: some View {
+        if gridFirstCapture { latticeScene } else { legacyScene }
+    }
+
+    /// The grid-first capture screen: ONE screen lattice (ScreenLattice), every region
+    /// pinned to absolute cell coordinates inside the safe band — no VStack/Spacer, no
+    /// second pitch, no bleed under the Dynamic Island. (Audit fix, 2026-06-05.)
+    private var latticeScene: some View {
+        ZStack(alignment: .topLeading) {
+            CellFieldView(tint: vm.sceneGroundTint)   // ground cells fill the screen
+                .ignoresSafeArea()
+            previewBlock.latticeRegion(ScreenLattice.preview)       // GIF 64² — 384 pt
+            livePaletteGrid.latticeRegion(ScreenLattice.palette)    // 256 — 192 pt
+            captureShutter.latticeRegion(ScreenLattice.shutter)     // 4×4 Haar — 96 pt
+            gearButton.latticeRegion(ScreenLattice.gear)            // settings — 24 pt
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .ignoresSafeArea()
+    }
+
+    /// Legacy floating-VStack HUD (pre-audit; kept behind `gridFirstCapture`).
+    private var legacyScene: some View {
         ZStack {
-            // The whole screen tiled with cells on the 201×437 @2pt lattice,
-            // tinted by the live camera (docs/cell-lattice-widget-spec.md).
             CellFieldView(tint: vm.sceneGroundTint)
                 .ignoresSafeArea()
-
-            // GRID-FIRST cascade (ADR-5): GIF 64² hero → 16×16 palette → 4×4 Haar
-            // shutter, each a coarser abstraction of the one above. No title, no ring,
-            // no readout — just the cascade. (Legacy chrome kept behind the flag.)
             VStack(spacing: 0) {
                 topBar
                     .padding(.horizontal, GlobalLattice.pt(4))
-                if gridFirstCapture {
-                    Spacer(minLength: GlobalLattice.pt(6))
-                    previewBlock              // GIF 64² — 384 pt
-                    Spacer(minLength: GlobalLattice.pt(6))
-                    livePaletteGrid           // 256 colours — 16×16
-                    Spacer(minLength: GlobalLattice.pt(6))
-                    captureShutter            // 4×4 Haar level-4 — the capture button
-                    Spacer(minLength: 0)
-                } else {
-                    Spacer(minLength: GlobalLattice.pt(6))
-                    previewBlock              // the 384 pt anchor, near the top
-                    if let note = vm.previewSamplerNote {
-                        CellText(note, rows: 7, ink: Color(srgb8: SIMD3(130, 130, 130)))
-                            .padding(.top, GlobalLattice.pt(2))
-                    }
-                    Spacer(minLength: 0)
-                    if let summary = vm.lastTimingSummary {
-                        CellText(summary, rows: 11, ink: .white)
-                            .padding(.horizontal, GlobalLattice.pt(5))
-                            .padding(.vertical, GlobalLattice.pt(3))
-                            .background(Color(srgb8: SFTheme.ledGhost))
-                            .padding(.bottom, GlobalLattice.pt(4))
-                    }
-                    bottomBar
-                        .padding(.horizontal, GlobalLattice.pt(4))
+                Spacer(minLength: GlobalLattice.pt(6))
+                previewBlock
+                if let note = vm.previewSamplerNote {
+                    CellText(note, rows: 7, ink: Color(srgb8: SIMD3(130, 130, 130)))
+                        .padding(.top, GlobalLattice.pt(2))
                 }
+                Spacer(minLength: 0)
+                if let summary = vm.lastTimingSummary {
+                    CellText(summary, rows: 11, ink: .white)
+                        .padding(.horizontal, GlobalLattice.pt(5))
+                        .padding(.vertical, GlobalLattice.pt(3))
+                        .background(Color(srgb8: SFTheme.ledGhost))
+                        .padding(.bottom, GlobalLattice.pt(4))
+                }
+                bottomBar
+                    .padding(.horizontal, GlobalLattice.pt(4))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.vertical, GlobalLattice.pt(6))
         }
+    }
+
+    /// The settings gear, placed on the lattice (top-right) in the grid-first scene.
+    private var gearButton: some View {
+        Button { showSettings = true } label: { CellGear() }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityLabel("Open settings")
     }
 
     /// The canvas: ALWAYS the live 64×64 tile (nearest-neighbour upscaled), never
