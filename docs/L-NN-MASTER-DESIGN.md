@@ -1,8 +1,9 @@
 # The L→A→B Look-NN — Authoritative Master Design
 
 **Status of record: 2026-05-30. This document supersedes and reconciles**
-`docs/L-NN-RESEARCH-AND-WORKFLOW.md`, `docs/L-NN-ATOM-DESIGN.md`,
-`docs/L-NN-PRODUCT-ABSTRACTION.md`, and `docs/PALETTE-LOOM-INTERACTION.md`. It is
+`docs/archive/L-NN-RESEARCH-AND-WORKFLOW.md`, `docs/archive/L-NN-ATOM-DESIGN.md`,
+`docs/archive/L-NN-PRODUCT-ABSTRACTION.md`, and `docs/archive/PALETTE-LOOM-INTERACTION.md`
+(all archived 2026-06-05). The forward direction is `docs/GIFA-GIFB-COLLAPSE-REDESIGN.md`. It is
 built on the landed keystone `spec/src/SixFour/Spec/Obfuscation.hs`
 (BLEED_LOOP Def 45–47, Thm 14) and the BLEED_LOOP module map. Where the older docs
 disagree, **this doc is the record**; the supersession map in §6 is the cleanup.

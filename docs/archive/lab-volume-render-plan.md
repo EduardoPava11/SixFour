@@ -1,3 +1,7 @@
+> **⚠ ARCHIVED (2026-06-05) — superseded, kept for lineage.** Folded into the palette-explorer umbrella as the 3D-volume sub-mode. Canon: palette-explorer-2d-3d-4d-design.md.
+>
+---
+
 # LAB Color-Volume Renderer — Swift Integration Plan
 
 > Companion to [`ios26-render-survey.md`](./ios26-render-survey.md). Grounded in a 2026-05-30

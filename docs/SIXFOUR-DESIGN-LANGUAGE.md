@@ -91,7 +91,7 @@ Every screen, control, and glyph is built from the same unit the GIF is built fr
 
 - **Target device anchor:** iPhone 17 Pro — 402 × 874 pt @3x = 1206 × 2622 px. All geometry is pinned to this anchor and shifted at runtime only for safe-area insets.
 - **Contract (CLAUDE.md):** Tier-2 ships **ZERO third-party dependencies** (Apple frameworks + `simd` only). SwiftUI + Metal, hand-written. The Haskell spec + golden vectors are the source of truth (not Figma). Glass is chrome *material*, **retired on the capture HUD**, retained for Review/Settings.
-- **Supersedes / organizes:** `docs/cell-lattice-widget-spec.md` (promoted to spine), `docs/cube-generated-uiux-system.md`, `docs/grid-is-the-render-surface.md`, `docs/palette-explorer-2d-3d-4d-design.md`, `~/.claude/plans/misty-greeting-panda.md`. See §10.1 for each disposition.
+- **Supersedes / organizes:** `docs/archive/cell-lattice-widget-spec.md` (absorbed, archived), `docs/archive/cube-generated-uiux-system.md` (archived), `docs/archive/grid-is-the-render-surface.md` (archived), `docs/palette-explorer-2d-3d-4d-design.md` (umbrella, scoped to Review), `~/.claude/plans/misty-greeting-panda.md`. See §10.1 for each disposition.
 
 ### The Cardinal Laws (numbered, non-negotiable)
 
@@ -106,7 +106,7 @@ Every screen, control, and glyph is built from the same unit the GIF is built fr
 
 Law #1 is the one that decides every later argument. It is not prose to be remembered; it is a machine-checkable predicate (Law #6) owned by one type (Law #5) and proven by a golden (Law #8).
 
-> **Law #2 holds in 3D too (the pixelated look is universal).** When the cube is shown as a 3D object (the Review voxel cube), the same flatness applies on a third axis: **orthographic** projection (never perspective), the canonical **2:1 dimetric isometric** angle of 8-bit games, and **nearest-neighbour art-pixel quantization** so edges stairstep as chunky 8-bit pixels — never smooth, AA'd, or shaded. The pixelated look is the design language in every dimension. The full 3D ruleset is `RULE-CUBE-ISO` in `docs/SIXFOUR-VOXEL-CUBE.md` §8; it is subordinate to these Cardinal Laws (content = flat indexed cells; chrome = glass).
+> **Law #2 holds in 3D too (the pixelated look is universal).** When the cube is shown as a 3D object (the Review voxel cube), the same flatness applies on a third axis: **orthographic** projection (never perspective), the canonical **2:1 dimetric isometric** angle of 8-bit games, and **nearest-neighbour art-pixel quantization** so edges stairstep as chunky 8-bit pixels — never smooth, AA'd, or shaded. The pixelated look is the design language in every dimension. The full 3D ruleset is `RULE-CUBE-ISO` in `docs/archive/SIXFOUR-VOXEL-CUBE.md` §8 (cube shelved/orient-only); it is subordinate to these Cardinal Laws (content = flat indexed cells; chrome = cell-rendered, glass retired).
 
 ---
 
@@ -713,7 +713,7 @@ xcodebuild -scheme SixFour \
 | **EXEMPT-OS** | Dynamic Island, status bar, Share/Settings sheets | OS-owned; the lattice renders under them, places no chrome there. |
 | **EXEMPT-PREVIEW-CELLS** | the camera preview's pixels | coloured by the scene, not the palette — content, not chrome cells. |
 | **EXEMPT-AXTEXT** | the AX-size system-`Text` fallback | reflowing system text above the floor; not cell-art by design. |
-| **EXEMPT-GLASS-REVIEW** | glass MATERIAL on Review/Settings chrome | chrome-over-content (its documented use); retained on Review, RETIRED on capture HUD. **Defined in detail in `docs/SIXFOUR-GLASS-LANGUAGE.md` ("GLASS").** |
+| **~~EXEMPT-GLASS-REVIEW~~** | ~~glass MATERIAL on Review/Settings chrome~~ | **RETIRED (2026-06-05): total pixelation wins.** Glass is retired on *every* surface, not just the HUD — Review/Settings chrome is cell-rendered too (`SIXFOUR-TOTAL-PIXELATION.md`). The former GLASS constitution is archived at `docs/archive/SIXFOUR-GLASS-LANGUAGE.md`. This supersedes the scattered "KEEP-for-Review glass" notes in §9.8 — those glass tokens RETIRE, not keep. |
 | **~~EXEMPT-REVIEW-PITCH~~** | ~~Review/palette use the 6 pt family~~ | **RETIRED (v2.0):** there is no second layout pitch — `gifPx = 6 pt` is the one atom on every surface; the capture preview already *is* the 384 pt hero. |
 | **EXEMPT-TEXT-DENSITY** *(v2.0)* | `subPx = 2 pt = gifPx/3` for (1) text registers, (2) inter-element spacing/gutters, (3) sub-atom icon detail (the gear's 24-cell mask → 48 pt) | a glyph/gear cannot resolve in 1 fat atom and chunky glyphs overflow for long strings; `subPx` is commensurate (`3·subPx = gifPx`) so it still snaps to the atom grid. NEVER a widget's own visible pixel size (preview/field/shutter/ring are `gifPx`) and NEVER a touch dimension (`gifPx`, ≥ 48 pt). |
 
@@ -731,10 +731,10 @@ xcodebuild -scheme SixFour \
 ### 10.1 What each existing doc becomes
 | Existing doc | Disposition |
 |---|---|
-| `docs/cell-lattice-widget-spec.md` | **PROMOTED to the spine.** Its resolutions/band map/widget table/primitives/font decision/perf model/a11y/build plan feed §2–§9. The resolved authority. **Fix in lockstep:** delete its stray "said 36 cells" digression so a future author cannot re-derive 36; pin shutter = 34 cells in `Spec.Lattice`. |
-| `docs/cube-generated-uiux-system.md` | **SUPERSEDED for sizing (pending migration).** Add an in-file header banner marking it superseded. Its modular-scale + Rams §8 completeness rule → LINT-SINGLE-PITCH; round-vs-square / hit==visible / preview-blend reasoning → §6/§7. The 6 pt cube pitch survives only as the Review family (EXEMPT-REVIEW-PITCH). *Left un-marked, it keeps regenerating 6 pt tokens — the exact failure the user is angry about.* |
-| `docs/grid-is-the-render-surface.md` | **FOLDED into the Render Model (§4).** `Color(srgb8:)`/`PixelImage`/`PixelGrid` + the flat-cell contract are the vocabulary; its "look-decision the user must confirm" → GATE-DECISIONS. |
-| `docs/palette-explorer-2d-3d-4d-design.md` | **SCOPED to Review (§7.2)** — the 2D/3D/4D modes are Review content on the 6 pt family. |
+| `docs/archive/cell-lattice-widget-spec.md` | **ABSORBED → ARCHIVED (2026-06-05).** Its resolutions/band map/widget table/primitives/font decision/perf model/a11y/build plan fed §2–§9; this doc is now the **sole sizing canon** (Q6 decision) so the pitch doc was archived. **Still do in lockstep:** keep the "said 36 cells" digression out of any live doc; pin shutter = 34 cells in `Spec.Lattice`. |
+| `docs/archive/cube-generated-uiux-system.md` | **SUPERSEDED for sizing → ARCHIVED (2026-06-05).** Banner applied. Its modular-scale + Rams §8 completeness rule → LINT-SINGLE-PITCH; round-vs-square / hit==visible / preview-blend reasoning → §6/§7. The 6 pt cube pitch survives only as the Review family (EXEMPT-REVIEW-PITCH). |
+| `docs/archive/grid-is-the-render-surface.md` | **FOLDED into the Render Model (§4) → ARCHIVED.** `Color(srgb8:)`/`PixelImage`/`PixelGrid` + the flat-cell contract are the vocabulary; its "look-decision the user must confirm" → GATE-DECISIONS. |
+| `docs/palette-explorer-2d-3d-4d-design.md` | **UMBRELLA for palette/volume viz (Q3 decision)** — owns all 2D/3D/4D representation modes (lab-volume + voxel-cube folded in, archived). Review content on the 6 pt family. |
 | `~/.claude/plans/misty-greeting-panda.md` | **ABSORBED** — reconciled by the §9 build/lint/golden gates. |
 
 ### 10.2 Spec-first ordered build plan (each phase: `cabal test` green before Swift)
@@ -758,4 +758,4 @@ xcodebuild -scheme SixFour \
 - **Anatomy diagrams + Do/Don't pairs (Carbon)** — Figma DS-103. https://www.figma.com/blog/design-systems-103-documentation-that-drives-adoption/
 - **Governance prevents drift via lifecycle + default-consistency** — UXPin. https://www.uxpin.com/studio/blog/design-system-governance/
 - **Code (CI) is the source of truth, not Figma** — Builder.io. https://www.builder.io/blog/governance-beyond-figma
-- **Contract precedents (codebase)** — `docs/grid-is-the-render-surface.md`, `docs/cube-generated-uiux-system.md`, `docs/cell-lattice-widget-spec.md`; the Zig deterministic-core byte-exact golden ethos; WCAG SC 1.4.3 / 1.4.11 relative luminance.
+- **Contract precedents (codebase)** — `docs/archive/grid-is-the-render-surface.md`, `docs/archive/cube-generated-uiux-system.md`, `docs/archive/cell-lattice-widget-spec.md` (all archived); the Zig deterministic-core byte-exact golden ethos; WCAG SC 1.4.3 / 1.4.11 relative luminance.

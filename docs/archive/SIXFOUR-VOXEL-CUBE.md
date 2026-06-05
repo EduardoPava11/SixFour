@@ -1,3 +1,7 @@
+> **⚠ ARCHIVED (2026-06-05) — superseded, kept for lineage.** VoxelCubeView is **SHELVED / orient-only** (retired as a Review peer by full-collapse #5). Canon: SIXFOUR-ARCHITECTURE-MAP.md §3; folded under palette-explorer-2d-3d-4d-design.md.
+>
+---
+
 # SixFour Voxel Cube Explorer — design note ("CUBE")
 
 **Status:** Design note, v1.0 (2026-06-01). A Review-surface tool; subordinate to GRID and GLASS.

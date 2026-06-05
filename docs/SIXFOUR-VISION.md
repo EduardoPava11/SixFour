@@ -3,6 +3,12 @@
 **Status:** Vision / architecture (design-only; the look-NN is designed, not trained). The doc the others hang off.
 **Date:** 2026-06-01.
 
+> **Canonical orientation (2026-06-05).** This doc owns the **narrative** (what SixFour is and
+> why); `SIXFOUR-ARCHITECTURE-MAP.md` owns the **built / design / missing ledger** (current
+> state, test counts, what's wired). README / CLAUDE.md / SETUP.md / APP-MAP.md describe stable
+> structure and **defer here for status** — they must not restate a drifting "current status"
+> line. If status disagrees across docs, this pair wins.
+
 ---
 
 ## 0. The vision in one line
@@ -80,6 +86,6 @@ The UX surfaces (cloud, address-picker, treemap, grid, voxel-cube) are the **opt
 ---
 
 ## References
-- GRID `docs/SIXFOUR-DESIGN-LANGUAGE.md` · GLASS `docs/SIXFOUR-GLASS-LANGUAGE.md` · high-D `docs/SIXFOUR-HIGHDIM-UIUX.md` · cloud/cube `docs/SIXFOUR-VOXEL-CUBE.md`.
-- Look-NN: `docs/L-NN-MASTER-DESIGN.md`, `docs/L-NN-FUNCTION-DESIGN.md`, `docs/L-NN-RESEARCH-AND-WORKFLOW.md`; `spec/src/SixFour/Spec/{LookNet*,Collapse,Bures,Preference,Diversity,PairTree,SplitTree,AddressPicker,CloudProjection,GridAxis}.hs`.
+- GRID `docs/SIXFOUR-DESIGN-LANGUAGE.md` · pixelation `docs/SIXFOUR-TOTAL-PIXELATION.md` (glass retired; `docs/archive/SIXFOUR-GLASS-LANGUAGE.md`) · high-D `docs/SIXFOUR-HIGHDIM-UIUX.md` · palette/volume `docs/palette-explorer-2d-3d-4d-design.md` (umbrella; cube shelved → `docs/archive/SIXFOUR-VOXEL-CUBE.md`).
+- Look-NN: `docs/GIFA-GIFB-COLLAPSE-REDESIGN.md` (forward brief), `docs/L-NN-MASTER-DESIGN.md`, `docs/L-NN-FUNCTION-DESIGN.md` (research lineage in `docs/archive/`); `spec/src/SixFour/Spec/{LookNet*,Collapse,Bures,Preference,Diversity,PairTree,SplitTree,AddressPicker,CloudProjection,GridAxis}.hs`.
 - Precedent: AlphaGo/AlphaZero (policy+value+MCTS), KataGo (uncertainty-weighted playouts, optimistic policy), MAP-Elites / DPP quality-diversity.

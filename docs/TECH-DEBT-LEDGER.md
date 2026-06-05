@@ -92,8 +92,8 @@ Items are ordered by where they sit on the spine, high-severity first within eac
 | 17 | palette-search-design-only | `PaletteSearch` MCTS spec-complete, zero iOS consumer | `spec/src/SixFour/Spec/PaletteSearch.hs` | unwired-core | low | feature |
 | 18 | palette-tree-unlabeled | `PaletteTreeView` split planes drawn but axis/threshold unlabelled | `SixFour/UI/Components/PaletteTreeView.swift:72` | hygiene | low | feature |
 | 19 | unwired-probe | `s4_probe` toolchain link smoke test, zero production callers | `Native/src/root.zig:26` | hygiene | low | feature |
-| 20 | cube-doc-superseded | `cube-generated-uiux-system.md` not banner-marked SUPERSEDED | `docs/cube-generated-uiux-system.md:3` | doc-drift | med | mechanical |
-| 21 | cell-lattice-36-cells | Stray "36 cells" digression docs say must be deleted | `docs/cell-lattice-widget-spec.md:30` | doc-drift | low | mechanical |
+| 20 | cube-doc-superseded | ✅ RESOLVED 2026-06-05 — banner-marked + moved to `docs/archive/cube-generated-uiux-system.md` | `docs/archive/cube-generated-uiux-system.md:1` | doc-drift | med | done |
+| 21 | cell-lattice-36-cells | ✅ RESOLVED 2026-06-05 — doc archived (`docs/archive/cell-lattice-widget-spec.md`); the 36-cell digression no longer lives in any active doc. (Still pin shutter = 34 cells in `Spec.Lattice`.) | `docs/archive/cell-lattice-widget-spec.md` | doc-drift | low | done |
 
 ---
 
@@ -382,16 +382,18 @@ Items are ordered by where they sit on the spine, high-severity first within eac
   (e.g. `s4_burst_scratch_bytes`). Multi-file ABI rewiring. Safer alternative: keep a minimal
   dedicated probe for CI link verification and only fix the mislocated cite.
 
-### 20. `cube-generated-uiux-system.md` not banner-marked SUPERSEDED — `cube-doc-superseded`
-- **File:** `docs/cube-generated-uiux-system.md:3` · class: doc-drift · sev: med · fixKind: **mechanical**
+### 20. `cube-generated-uiux-system.md` not banner-marked SUPERSEDED — `cube-doc-superseded` — ✅ RESOLVED 2026-06-05
+- **Resolution:** ARCHIVED banner applied and moved to `docs/archive/cube-generated-uiux-system.md` in the docs-consolidation pass. No longer regenerates 6 pt tokens from an unmarked "source of truth."
+- **File:** `docs/archive/cube-generated-uiux-system.md:1` · class: doc-drift · sev: med · fixKind: **done**
 - **Evidence:** `:3` reads "**Status:** spec (source of truth → Haskell golden → SwiftUI/Metal)"
   with no superseded banner. `SIXFOUR-DESIGN-LANGUAGE.md:658` dispositions it "**SUPERSEDED for
   sizing (pending migration).** Add an in-file header banner" + warns "Left un-marked, it keeps
   regenerating 6 pt tokens — the exact failure the user is angry about."
 - **Fix:** see Mechanical Fixes appendix.
 
-### 21. Stray "36 cells" digression must be deleted — `cell-lattice-36-cells`
-- **File:** `docs/cell-lattice-widget-spec.md:30` · class: doc-drift · sev: low · fixKind: **mechanical**
+### 21. Stray "36 cells" digression must be deleted — `cell-lattice-36-cells` — ✅ RESOLVED 2026-06-05
+- **Resolution:** `cell-lattice-widget-spec.md` ARCHIVED (`docs/archive/`) — the 36-cell digression no longer lives in any active doc; DESIGN-LANGUAGE is sole sizing canon. Residual action: pin shutter = 34 cells in `Spec.Lattice` (code, tracked separately).
+- **File:** `docs/archive/cell-lattice-widget-spec.md` · class: doc-drift · sev: low · fixKind: **done**
 - **Evidence:** `:30` reads "Shutter = `shutterSidePt = gifCellPt×12 = 72pt`. At 2pt that is
   **36 cells** (prior pitches said 34 — wrong, critique 2/3)." `SIXFOUR-DESIGN-LANGUAGE.md:657`
   mandates: "delete its stray '36 cells' digression so a future author cannot re-derive 36; pin
@@ -443,20 +445,14 @@ One reconciliation pass (all landed in commit `7c55d56`, never folded back):
 > is an OPEN question (NOTES.md §4, §6 Q4). Byte-exactness requires the same count across
 > Zig/Swift/Metal for a given path.
 
-### A4. `docs/cube-generated-uiux-system.md:1` — SUPERSEDED banner
-> **[SUPERSEDED for sizing — see SIXFOUR-DESIGN-LANGUAGE.md §10.1]** This document's
-> modular-scale (6pt quantum) and cube-sizing rules are obsolete. The 6pt family survives only
-> for Review/palette (EXEMPT-REVIEW-PITCH); capture HUD uses 2pt (Cardinal Law). Its Rams §8
-> completeness rule is now LINT-SINGLE-PITCH in the design language. Kept for historical
-> reference only.
+### A4. `docs/cube-generated-uiux-system.md` — SUPERSEDED banner — ✅ DONE 2026-06-05
+Banner applied and the doc moved to `docs/archive/cube-generated-uiux-system.md` (carries an
+ARCHIVED banner). No further action.
 
-### A5. `docs/cell-lattice-widget-spec.md:30` — delete the 36-cell digression
-Replace the leading sentence — "Shutter = `shutterSidePt = gifCellPt×12 = 72pt`. At 2pt that is
-**36 cells** (prior pitches said 34 — wrong, critique 2/3)." — with:
-> Shutter is pinned at **34 cells = 68pt** (the ladder value; the stale `gifCellPt×12 = 72pt`/
-> 36-cell box is retired).
-
-(Do not cite `Spec.Lattice` — it does not exist yet.)
+### A5. `docs/cell-lattice-widget-spec.md:30` — delete the 36-cell digression — ✅ MOOT 2026-06-05
+The doc was ARCHIVED (`docs/archive/cell-lattice-widget-spec.md`), so the 36-cell digression no
+longer lives in an active doc. Canonical value: **shutter = 34 cells = 68 pt**. Residual code
+action: pin it in `Spec.Lattice` once that module lands (tracked separately).
 
 ---
 

@@ -5,6 +5,11 @@ animated GIF**, with each frame quantised against a per-frame 256-colour OKLab
 palette engineered for maximum LAB diversity. Capture, palette generation,
 dithering, and GIF encoding all run on device.
 
+> **Orientation.** For the project narrative see [`docs/SIXFOUR-VISION.md`](docs/SIXFOUR-VISION.md);
+> for current state (what's built / designed / missing) see
+> [`docs/SIXFOUR-ARCHITECTURE-MAP.md`](docs/SIXFOUR-ARCHITECTURE-MAP.md). Superseded design docs
+> live in [`docs/archive/`](docs/archive/) and [`spec/archive/`](spec/archive/).
+
 > **Engineering contract:** Haskell-verified, dependency-free, hand-written.
 > The shipped iOS app has **zero third-party dependencies**; MLX (M1) is a
 > Mac-side training tool only. See [`CLAUDE.md`](CLAUDE.md) for the full
@@ -76,8 +81,9 @@ cargo build -p analysis-core -p look-nn
 ```
 
 The `look-nn` crate is the pure-Rust v1 forward net + 1+1-ES search over the
-encoder genome (per `spec/COMPETITION.md`). The autodiff (`burn`) backend is
-the deferred v2 upgrade pending dep-tree license vetting.
+encoder genome (per `spec/archive/COMPETITION.md` — note: the 1+1-ES genome was
+superseded by the continuous pivot / `Spec.Preference`; see that archived doc's banner).
+The autodiff (`burn`) backend is the deferred v2 upgrade pending dep-tree license vetting.
 
 ### Trainer (Python)
 
@@ -145,7 +151,7 @@ must match the on-device contract.
 | `spec/MATH.md` | Algebraic spec — Definitions, Theorems, Laws (numbered) |
 | `spec/LOOK_NN.md` | Look-NN design, full Wasserstein / GMM / σ-pair derivation |
 | `spec/GRAM_MAPPING.md` | Mapping the deterministic L4 core onto GRAM-style stochastic recursion (design note) |
-| `spec/COMPETITION.md` | The 1+1-ES genome encoding committed to in v1 |
+| `spec/archive/COMPETITION.md` | (archived) The 1+1-ES genome encoding from v1 — superseded by the continuous pivot / `Spec.Preference` |
 | `spec/BEAUTY_FINDINGS.md` | Ou-Luo pair beauty + Birkhoff aesthetics in OKLab |
 | `studio/CATEGORY_FINDINGS.md` | Rust-side findings that motivated the continuous-OKLab pivot |
 | `NOTES.md` | Latest session's architectural pivots + tensor findings |

@@ -53,7 +53,14 @@ levelDof = [3, 6, 12, 24, 48, 96, 192, 384]   (3·2^(ℓ-1) per level)
 ```
 
 768 reals = the same as 256 colours × 3 channels, but now addressed as **8 levels
-of detail**. That is the whole point: the NN can have **layers specialised per
+of detail**.
+
+> **Shipped genome is 384-DOF, not 768 (2026-06-05).** The 768 above is the *free*
+> Haar tree = the reconstructed **leaf space**. The shipped decoder emits the
+> σ-constrained **384-DOF σ-pair genome** (`SIGMA_PAIR_DOF = 3·128`,
+> `Spec/SigmaPairHead.hs`); L6 reconstructs that into these 768 leaf reals. Per
+> `CLAUDE.md`: *the NN emits 384, the leaf space is 768.* Read every "768-DOF" below
+> as the leaf/tree space, with the learnable genome σ-halved to 384. That is the whole point: the NN can have **layers specialised per
 level** — a *distance head* that sets offset magnitudes `‖δ‖` (variety / axis
 length), a *pairing head* that sets how subtrees couple (unity / nested balance),
 and a recursive core whose **recursion depth = tree level** (this is *why* the

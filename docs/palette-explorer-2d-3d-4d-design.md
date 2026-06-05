@@ -2,6 +2,17 @@
 
 **Status:** Design (spec-first). Supersedes the ad-hoc PaletteSphereView spike and the stale "palette globe" framing.
 **Date:** 2026-05-31
+
+> **Umbrella for palette/volume visualisation (2026-06-05 decision).** This is the single owner
+> of all palette representation modes (2D grid/treemap, 3D OKLab cloud, 4D). The separate
+> volume-render plans are folded in as sub-modes and **archived**: `archive/lab-volume-render-design.md`
+> + `archive/lab-volume-render-plan.md` (the LabVolumeView renderer) and
+> `archive/SIXFOUR-VOXEL-CUBE.md` (the 64³ raymarcher — **shelved, orient-only**, see
+> `SIXFOUR-ARCHITECTURE-MAP.md` §3). The competing one-surface proposal
+> `archive/SIXFOUR-REPRESENTATION-UNIFICATION.md` is superseded by this umbrella. Distinct
+> sibling concerns stay separate: addressing (`SIXFOUR-HIGHDIM-UIUX.md`,
+> `SIXFOUR-RADIX-CONTROLS.md`), controls audit (`SIXFOUR-CONTROL-AUDIT.md`), playback
+> (`SIXFOUR-UNIFIED-PLAYER.md`).
 **Contract:** Tier-2 (ships) — zero third-party deps, Apple frameworks + `simd` only; all numerics trace to the Haskell spec and are golden-pinned before any Swift lands.
 
 ---

@@ -1,3 +1,7 @@
+> **⚠ ARCHIVED (2026-06-05) — superseded, kept for lineage.** Specs the retired hybrid trunk+delta mode (.global removed); interior is hypothetical. Truth: the Spec.*.hs modules.
+>
+---
+
 # Trunk + Delta Phase Diagram
 
 > **Status note (2026-05-25).** This describes the **deferred, unwired** hybrid

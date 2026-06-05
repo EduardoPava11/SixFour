@@ -1,3 +1,7 @@
+> **⚠ ARCHIVED (2026-06-05) — superseded, kept for lineage.** Folded into DESIGN-LANGUAGE v2.0. Canon: SIXFOUR-DESIGN-LANGUAGE.md.
+>
+---
+
 # SixFour — The Grid Is The Render Surface
 
 **An 8-bit graphics-engine LOOK for the content layer, built atop the shipped GridLayout / Spec.GridAxis.**

@@ -1,3 +1,7 @@
+> **⚠ ARCHIVED (2026-06-05) — superseded, kept for lineage.** Never signed off; DESIGN-LANGUAGE v2.0 is sole sizing canon. Canon: SIXFOUR-DESIGN-LANGUAGE.md.
+>
+---
+
 # SixFour — TOTAL CELL-LATTICE UI on the LOCKED 201×437 @2pt Golden Lattice
 
 **Status:** authoritative build plan. Supersedes the three prior pitches (cube-system-on-2pt, SFTheme-text-registers, HUD-as-cell-art) by *resolving* their three shared contradictions against the code on disk. Builds on `docs/cube-generated-uiux-system.md`, `docs/grid-is-the-render-surface.md`, `~/.claude/plans/misty-greeting-panda.md`, and the shipped primitives in `SixFour/UI/Components/PixelGrid.swift` + `CellText.swift` + `Theme.swift`.

@@ -1,3 +1,7 @@
+> **⚠ ARCHIVED (2026-06-05) — superseded, kept for lineage.** Superseded by the palette-explorer umbrella. Canon: palette-explorer-2d-3d-4d-design.md.
+>
+---
+
 # SixFour — Unified GIF Representation Design
 
 > Generated 2026-06-02 by the `sixfour-representation-unify` workflow (7 parallel subsystem readers → synthesis). DESIGN ONLY — no code changed. Re-run the workflow to refresh.

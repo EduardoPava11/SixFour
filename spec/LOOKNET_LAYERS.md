@@ -18,7 +18,13 @@ GIF). Mirrored by `SixFour.Spec.LookNet`.
 
 `dM` = `modelDim` (width, default 64), `N` = `maxPonderDepth` (8). These are the
 **only free structural dims**; everything else is pinned by `T=64, H=64, W=64,
-K=256` and the Haar tree (`768 = 3·256`).
+K=256` and the Haar tree (`768 = 3·256` leaf reals).
+
+> **DOF correction (2026-06-05).** The decoder *emits* the **384-DOF σ-pair genome**
+> (`SIGMA_PAIR_DOF = 3·128`, `Spec/SigmaPairHead.hs`), which L6 reconstructs into the
+> 768-real leaf space. Per `CLAUDE.md`: *the NN emits 384, the leaf space is 768 — do
+> not conflate them.* Earlier revisions listed the decoder output as 768 free offsets;
+> that was the pre-σ-pair parametrisation.
 
 | # | Layer | in | out | kind |
 |---|---|---|---|---|
@@ -26,8 +32,8 @@ K=256` and the Haar tree (`768 = 3·256`).
 | L2 | Categorize (IB code) | `65536` | `11·8 = 88` | det |
 | L3 | Encoder `E` | `88` | `11·dM = 704` | learn |
 | L4 | Core `R` | `704` | `dM = 64` (depth ≤ N) | learn |
-| L5 | Decoder `D` | `64` | `768` (root + 255 offsets) | learn |
-| L6 | Reconstruct | `768` | `256·3 = 768` (balanced) | det |
+| L5 | Decoder `D` | `64` | `384` (σ-pair genome, `SIGMA_PAIR_DOF` = 3·128) | learn |
+| L6 | Reconstruct | `384` | `256·3 = 768` (balanced leaf space) | det |
 | L7 | Remap (join +global) | `T·K·3` | `T·K = 16384` | det |
 | L8 | GlobalIndex (join +remap) | `T·H·W = 262144` | `262144 ∈ [0,256)` | det |
 | L9 | Dither (+STBN3D) | `262144` | `262144` (the GIF) | learn/det |
@@ -84,5 +90,5 @@ palette+weights). There is **no per-pixel synthesis**. Consequences:
   layers, the learnable shape contracts (`encoderIO/coreIO/decoderIO`), `runLookNet`,
   `baselinePalette`.
 - `SixFour.Spec.Indices.GlobalSurjective` — the global completeness brand.
-- `Properties.LookNet` — chain-composition, the 88/768 dimensional facts, and the
+- `Properties.LookNet` — chain-composition, the 88/384/768 dimensional facts (genome 384 → leaf 768), and the
   end-to-end worked example (global-surjective yet per-frame-incomplete).

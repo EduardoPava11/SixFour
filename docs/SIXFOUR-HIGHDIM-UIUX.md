@@ -1,6 +1,6 @@
 # SixFour Palette Explorer — Honest Dimensionality Upgrade
 
-**Status:** Design (spec-first). Extends `docs/palette-explorer-2d-3d-4d-design.md`; governed by `docs/SIXFOUR-DESIGN-LANGUAGE.md` (GRID) and `docs/SIXFOUR-GLASS-LANGUAGE.md` (GLASS).
+**Status:** Design (spec-first). Extends `docs/palette-explorer-2d-3d-4d-design.md`; governed by `docs/SIXFOUR-DESIGN-LANGUAGE.md` (GRID) and `docs/SIXFOUR-TOTAL-PIXELATION.md` (glass retired; the former GLASS doc is archived at `docs/archive/SIXFOUR-GLASS-LANGUAGE.md`).
 **Date:** 2026-06-01
 **Contract:** Tier-2 (ships) — zero third-party deps, Apple frameworks + `simd` only; every new numeric is a Haskell-spec golden before any Swift lands.
 

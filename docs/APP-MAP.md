@@ -5,6 +5,9 @@
 > surfaces all the way up into the UI/UX**. Read this before adding UI/UX
 > complexity so new work lands in the right place by default.
 >
+> **Scope:** stable structure only. For current *status* (built / designed / missing) defer to
+> `SIXFOUR-ARCHITECTURE-MAP.md`; for the narrative, `SIXFOUR-VISION.md`.
+>
 > **Scope.** Map only. This document describes the structure as it is; it does
 > *not* propose refactors, token consolidation, or design-law enforcement.
 >

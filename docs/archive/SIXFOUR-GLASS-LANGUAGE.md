@@ -1,3 +1,7 @@
+> **⚠ ARCHIVED (2026-06-05) — superseded, kept for lineage.** Glass is being fully retired (total pixelation wins). Canon: SIXFOUR-TOTAL-PIXELATION.md + SIXFOUR-DESIGN-LANGUAGE.md.
+>
+---
+
 # SixFour Liquid Glass Design Language — "GLASS"
 
 **Status:** Companion constitution to `docs/SIXFOUR-DESIGN-LANGUAGE.md` ("GRID"), v1.0 (2026-06-01.)

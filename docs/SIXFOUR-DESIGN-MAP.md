@@ -156,7 +156,7 @@ Every entry below is a `confirmed=true` finding, re-verified at the cited `file:
 - **`CaptureView.swift:83` — `previewCells` not owned by GlobalLattice.** Law #5 / §9.8. Uses `SFTheme.gifSideCells` (a Review-family token) instead of a `GlobalLattice.previewCells` constant. **Fix:** add `GlobalLattice.previewCells = SixFourShape.W`; use it at line 83.
 - **`CaptureView.swift:84` — preview a11y spec unmet.** Law #1 / §6.1. The `previewBlock` ZStack has no `.accessibilityLabel("Live 64-colour preview")` and no element-ignore; `allowsHitTesting(false)` alone does not satisfy it. **Fix:** add `.accessibilityLabel(…)` + `.accessibilityElement(children: .ignore)`.
 - **`CellSprite.swift:98` — gear geometry not against `CellShapes.gear`.** Laws #1 / #5 / §6.4. Hand-rolled midpoint-circle closure rather than the spec `CellIcon(mask: CellShapes.gear(box:24))`; unpinned by any golden. **Fix:** swap to `CellIcon` when `CellShapes` ships; pin with a `Spec.CellShapes` golden.
-- **`Shaders.metal:678` — VoxelCubeView face-multiply mismatch (doc-vs-code).** Law #2. Kernel ships side=0.82 / front=0.90 / top=1.0; `SIXFOUR-VOXEL-CUBE.md` §C2 specifies side=0.70 / front=0.85 / top=1.0. All three are discrete opaque steps (the no-continuous-shading mandate is met) — this is a numeric reconciliation, not a contract break, and is unpinned (no `Spec.*` golden). **Fix:** reconcile code↔doc (owner decides canonical values) before RULE-CUBE-ISO goldens are written.
+- **`Shaders.metal:678` — VoxelCubeView face-multiply mismatch (doc-vs-code).** Law #2. *(Lower priority: VoxelCubeView is **shelved/orient-only** — see `SIXFOUR-ARCHITECTURE-MAP.md` §3.)* Kernel ships side=0.82 / front=0.90 / top=1.0; `archive/SIXFOUR-VOXEL-CUBE.md` §C2 specifies side=0.70 / front=0.85 / top=1.0. All three are discrete opaque steps (the no-continuous-shading mandate is met) — a numeric reconciliation, not a contract break, unpinned (no `Spec.*` golden). **Fix:** reconcile code↔doc only if the cube is reinstated as a peer.
 
 > **Verifier scope notes (not drifts).** `CameraPreview.opacity(0)` (`CaptureView.swift:90`) is the structural tap-to-focus / AVCaptureSession passthrough layer — a functional invisibility mechanism, not a shaded data cell — and is correctly exempt. `SFTheme.gifSideCells` passed *as a cell count* to `GlobalLattice.pt()` (`:83`) is correct single-owner use. The Review/palette GIF canvas at 6 pt pitch (`GIFReviewView`, `PaletteCloudView`) is EXEMPT-REVIEW-PITCH / EXEMPT-GLASS-REVIEW and out of HUD scope. `bannerText()` (`CaptureView.swift:222–230`, opaque `CellText` over `Color(srgb8: SFTheme.ledGhost)`) is the conformant pattern these fixes target. `CellField.swift` itself is conformant (201×437, α=255 opaque, `GlobalLattice` throughout). `frameIndex()` (`PixelGrid.swift:34`) is correctly implemented and used by Review views — the drift is only that the capture-HUD ring does not wire into it.
 
@@ -258,7 +258,7 @@ grep -rn 'frameIndex\|TimelineView' SixFour/UI/Screens/Capture/CaptureView.swift
 ```bash
 # Orthographic + nearest + the documented face-multiply triple.
 grep -nE 'filter::nearest|ART_RES|float face *=' SixFour/Metal/Shaders.metal
-# Reconcile the face-multiply triple against SIXFOUR-VOXEL-CUBE.md §C2 (currently side/front mismatch).
+# Reconcile the face-multiply triple against archive/SIXFOUR-VOXEL-CUBE.md §C2 (only if the cube is reinstated; it is shelved).
 ```
 
 ### 6.8 Regenerate the map

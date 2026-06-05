@@ -22,18 +22,19 @@ Documents directory. Use the share button to AirDrop the GIF out.
 
 ## Mac trainer
 
+The current path is the **L-NN nucleus regimen** — one command builds the classified synthetic
+corpus, runs the gates, trains, and exports the deploy blob (synthetic-only; no Haskell needed).
+See `trainer/TRAINING.md` for the authoritative runbook.
+
 ```bash
 cd ~/SixFour/trainer
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-
-# Drop reference GIFs into trainer/data/reference_gifs/, then:
-python train_metric.py --steps 2000 --out out/metric.json
-python export_organ.py --slot metric --input out/metric.json --name "warm-look"
+uv run python regimen.py --smoke    # fast structure check (~1 min)
+uv run python regimen.py            # full run (Apple Silicon / M1, ~minutes)
 ```
 
-Then copy the resulting `out/genes/metric/<hash>.json` + `index.json` to the device's
-SixFour gene library (via Files app or future AirDrop bundle support).
+The blob exporter is `export_look_net_blob.py` (byte-exact, parsed on-device by
+`s4_load_look_net`). The older `train_metric.py` / `export_organ.py` "gene library" scripts are
+the pre-look-NN-trainer path and are retained only for reference.
 
 ## Layout
 
