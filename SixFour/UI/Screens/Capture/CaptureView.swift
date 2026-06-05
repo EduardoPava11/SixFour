@@ -72,6 +72,16 @@ struct CaptureView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
+        // Build stamp: the running commit + time, on-glass, so a stale build is
+        // visible (SixFour gitignores the .xcodeproj — a pull without `xcodegen
+        // generate` ships the old file set). Top-left, below the Dynamic Island.
+        .overlay(alignment: .topLeading) {
+            CellText("\(BuildStamp.gitSHA) \(BuildStamp.buildTime)", rows: 7,
+                     ink: Color(srgb8: SIMD3<UInt8>(120, 120, 132)))
+                .padding(.leading, GlobalLattice.pt(3))
+                .padding(.top, GlobalLattice.pt(36))   // 72 pt — below the Dynamic Island
+                .allowsHitTesting(false)
+        }
     }
 
     /// Legacy floating-VStack HUD (pre-audit; kept behind `gridFirstCapture`).

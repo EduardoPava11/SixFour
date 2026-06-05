@@ -121,6 +121,19 @@ targets:
           # LIBRARY_SEARCH_PATHS=$(SRCROOT)/Native/lib/$(PLATFORM_NAME) below.
           "$SRCROOT/Native/build-ios.sh"
         basedOnDependencyAnalysis: false
+      - name: build stamp (git SHA + time, on-screen)
+        script: |
+          # Regenerate BuildStamp.swift EVERY build so the running binary shows its
+          # exact git SHA + build time on screen. Makes "no change after pulling"
+          # objectively decidable: if the on-glass SHA != HEAD, the device is on a
+          # STALE build (most often: `xcodegen generate` was skipped after a pull —
+          # SixFour gitignores project.pbxproj). Sandboxing is OFF (see settings).
+          SHA=$(git -C "$SRCROOT" rev-parse --short HEAD 2>/dev/null || echo nogit)
+          git -C "$SRCROOT" diff --quiet 2>/dev/null || SHA="$SHA+"
+          TS=$(date -u +%Y-%m-%dT%H:%M)
+          OUT="$SRCROOT/SixFour/Generated/BuildStamp.swift"
+          printf 'enum BuildStamp {\n    static let gitSHA = "%s"\n    static let buildTime = "%s"\n}\n' "$SHA" "$TS" > "$OUT"
+        basedOnDependencyAnalysis: false
     sources:
       # `path: SixFour, type: group` recursively picks up everything in
       # SixFour/, including SixFour/Resources/stbn3d-8.bin (auto-added as
