@@ -22,6 +22,14 @@ struct GIFReviewView: View {
     /// Brief "copied" flash after tapping the SHA badge to copy the full hash.
     @State private var shaCopied = false
 
+    /// GRID-FIRST UI/UX (ADR-5 / SIXFOUR-UIUX-DIMENSIONAL-MAP). While we move to the
+    /// grid-first surface, the legacy palette-explorer widgets after capture — the
+    /// RepresentationSelector and its treemap / cloud / voxel / AddressPicker / Quad4 /
+    /// editor modes — are SUSPENDED (kept in-tree, not rendered). Post-capture shows the
+    /// GIF hero + the 256-colour palette as the 16×16 grid (its first abstraction).
+    /// Flip to `false` to restore the full explorer.
+    private let gridFirstReview = true
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -46,8 +54,16 @@ struct GIFReviewView: View {
                     GIFPlayer(output: primary, clock: clock, settings: vm.settings,
                               brushedIndex: $brushedIndex)
 
-                    if vm.settings.showPaletteTree {
-                        paletteStructure(primary)
+                    if gridFirstReview {
+                        // Grid-first: the 256-colour palette as the 16×16 grid — the GIF's
+                        // first abstraction (256 = 16²). The heavy explorer is suspended.
+                        PaletteGridView(palettes: primary.palettesForDisplay,
+                                        xAxis: vm.settings.gridAxisX,
+                                        yAxis: vm.settings.gridAxisY,
+                                        frame: clock.frame,
+                                        brushedIndex: brushedIndex)
+                    } else if vm.settings.showPaletteTree {
+                        paletteStructure(primary)   // SUSPENDED legacy explorer
                     }
 
                     perFrameStatus(primary)
