@@ -129,6 +129,45 @@ before switching. Transcendental shape masks (gear `atan2`, ring turn) stay scal
 
 ---
 
+## ADR-5 — Capture-screen geometry + the Haar-pyramid abstraction cascade
+
+**Decision.** The capture screen is three framed grids, each a coarser **Haar level** of the one
+below, sized self-similarly on the iPhone 17 Pro screen (402×874 pt, exact):
+
+| Element | Grid | Cell | Size | Source (what Zig computes) |
+|---|---|---|---|---|
+| **GIF preview** | 64×64 | 6 pt | **384 pt** | the rendered GIF frame |
+| **Palette** | 16×16 (256) | 12 pt | **192 pt** | the 256 maximin leaves (`s4_quantize_frame` / `s4_global_collapse`) |
+| **Capture shutter** | 4×4 (16) | 24 pt | **96 pt** | **Haar level-4 parent colours** of the palette tree |
+
+The cascade is **self-similar**: each level size ×½, cell ×2, count ÷4-per-side (64²→16²→4²). No
+title; one consistent thin frame on all three (they read as one family). Golden vertical rhythm,
+≈109 pt slack. The shutter is square, on-brand, and **content-aware** — it IS the image reduced to
+its 16 essential colours.
+
+**Why (the abstraction is real, not cosmetic).** The owner's chain — *palette = abstraction of the
+GIF; shutter = abstraction of the palette* — maps exactly onto the **Haar tree** the core already
+builds (`Spec/PairTree.hs:18`, `Spec/PairTreeFixed.hs`, Zig `s4_haar_analyze`/`reconstruct`
+`Native/src/kernels.zig:497,540`): 256 leaves = level 8, **16 = level 4**, **4 = level 2**. The
+shutter's colours are the *parent averages* of the palette's subtrees — genuine tree levels, not a
+median-cut. The size cascade is the pyramid's own geometry (a parent covers 2× the range ⇒ cell ×2).
+
+**The honest-surfacing gap (→ ADR-5a).** Zig currently exposes only `root + offsets` and the full
+256 leaves — **not** the intermediate-level node colours. Per the project law "only surface what the
+Zig computes," the 16/4 abstractions require a new core function:
+
+> **ADR-5a.** Add `s4_haar_level_nodes(level, root_q16, offsets_q16, out_q16)` to the Zig core,
+> spec-first: define `levelNodes :: Int -> HaarPalette -> [OKLab]` in `Spec.PairTree`
+> (+ the Q16 form in `PairTreeFixed`), golden-pin it, then port to Zig byte-exact. The UI surfaces
+> the level-4 nodes for the shutter and (optionally) level-2 for a deeper drill. Until this lands the
+> shutter MUST fall back to what Zig exposes today (leaves or root) — no UI-invented reduction.
+
+Note: the palette operator is **maximin (farthest-first / Gonzalez)**, *not* median-cut/k-means/Wu
+(`kernels.zig:332`). The disposable mockups (`~/sixfour_mockups/`, render.py) illustrate the
+structure; production colours come from the Zig path above.
+
+---
+
 ## Phased implementation (proposed)
 
 Each phase is spec-first (Haskell law + golden) then Swift, gated by `cabal test` + the existing
@@ -143,6 +182,10 @@ risky refactors are isolated.
 4. **vImage bake.** Index-plane refactor of `setCell` + vImage table-lookup; golden byte-parity gate.
 5. **Iso module.** `Spec.Iso` (2D dimetric pair + unified orbit) + `Codegen` emitter + Swift/Metal
    parity; confine skew to the movement surface; flat-pose identity golden.
+6. **Haar level-nodes (ADR-5a).** `Spec.PairTree.levelNodes` (+ `PairTreeFixed` Q16) + golden →
+   Zig `s4_haar_level_nodes` (byte-exact) → Swift surface. Then build the capture screen: GIF 384 /
+   palette 192 (leaves) / shutter 96 (level-4 nodes), framed, no title, on `GlobalLattice`-snapped
+   golden gaps. This is the settled capture-screen geometry (ADR-5).
 
 ---
 
