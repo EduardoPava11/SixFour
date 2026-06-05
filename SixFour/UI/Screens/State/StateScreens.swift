@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import simd
 
 /// Full-screen fallback when camera authorization is denied. Opens iOS
 /// Settings via deep link so the user can grant access without leaving the
@@ -7,25 +8,26 @@ import UIKit
 struct UnauthorizedView: View {
     var body: some View {
         VStack(spacing: 18) {
-            Image(systemName: "camera.metering.unknown")
-                .font(.system(size: 56, weight: .light))
-                .foregroundStyle(.white.opacity(0.7))
-            Text("Camera access denied")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
+            CellSymbol(systemName: "camera.metering.unknown", box: 28, ink: Color(srgb8: SIMD3(180, 180, 180)))
+            CellText("Camera access denied", rows: 11, ink: .white)
+            // Prose paragraph kept as system Text (it must wrap) — §6.8 prose exemption.
             Text("SixFour captures 64 frames at 20 fps to build a 64×64 animated GIF. Enable camera access in Settings to continue.")
                 .font(.callout)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.7))
                 .padding(.horizontal, 32)
-            Button {
-                openSettings()
-            } label: {
-                Label("Open Settings", systemImage: "gear")
-                    .padding(.horizontal, 8)
+            Button { openSettings() } label: {
+                HStack(spacing: GlobalLattice.pt(2)) {
+                    CellSymbol(systemName: "gear", box: 8, ink: .white)
+                    CellText("Open Settings", rows: 11, ink: .white)
+                }
+                .padding(.horizontal, GlobalLattice.pt(6))
+                .frame(minHeight: 44)
+                .background(Color(srgb8: SFTheme.ledGhost))
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.glassProminent)
-            .controlSize(.large)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open Settings")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black.ignoresSafeArea())
@@ -46,21 +48,24 @@ struct FailureView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 48, weight: .light))
-                .foregroundStyle(.yellow)
-            Text("Something went wrong")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
+            CellSymbol(systemName: "exclamationmark.triangle", box: 24, ink: Color(srgb8: SIMD3(225, 200, 70)))
+            CellText("Something went wrong", rows: 11, ink: .white)
+            // Prose error message kept as system Text (must wrap) — §6.8 prose exemption.
             Text(message)
                 .font(.system(.callout, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.75))
                 .padding(.horizontal, 32)
                 .lineLimit(6)
-            Button("Try again", action: onRetry)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+            Button(action: onRetry) {
+                CellText("Try again", rows: 11, ink: Color(srgb8: SIMD3(20, 20, 20)))
+                    .padding(.horizontal, GlobalLattice.pt(6))
+                    .frame(minHeight: 44)
+                    .background(Color(srgb8: SIMD3(245, 245, 245)))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Try again")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black.ignoresSafeArea())
@@ -80,9 +85,7 @@ struct BootstrapSkeleton: View {
                     .fill(.white.opacity(animate ? 0.10 : 0.04))
                     .aspectRatio(1, contentMode: .fit)
                     .padding(.horizontal, 24)
-                Text("Configuring camera…")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.6))
+                CellText("Configuring camera…", rows: 8, ink: Color(srgb8: SIMD3(150, 150, 150)))
             }
             .padding(.vertical, 60)
         }

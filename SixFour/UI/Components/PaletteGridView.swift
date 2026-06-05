@@ -9,27 +9,27 @@ import simd
 /// *nesting*.
 ///
 /// Rank/sort placement fills every cell exactly once (no holes, no collisions), so
-/// the whole palette is always visible. Animates in sync with the GIF at
-/// `frameRate` (frozen on frame 0 under reduce-motion), mirroring `PaletteTreeView`.
-/// Content layer only — no glass (glass is chrome; see `GridAxisSelector`).
+/// the whole palette is always visible. Shows the palette of the frame the shared
+/// `PlaybackClock` is on (caller passes `frame: clock.frame`); the old internal
+/// `TimelineView` was removed so it stays locked to the player. Content layer only —
+/// no glass (glass is chrome; see `GridAxisSelector`).
 struct PaletteGridView: View {
     let palettes: [[SIMD3<UInt8>]]
     let xAxis: GridAxis
     let yAxis: GridAxis
-    let frameRate: Int
+    /// The current frame, from the shared clock.
+    var frame: Int = 0
     /// Shared brushed slot (IndexedColor.index), set by the cloud / address picker.
     /// When non-nil this cell stays full and the rest recede via an opaque darker
     /// index step — so one colour lights the same across every palette view.
     let brushedIndex: Int?
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     init(palettes: [[SIMD3<UInt8>]], xAxis: GridAxis, yAxis: GridAxis,
-         frameRate: Int = SFTheme.gifFrameRate, brushedIndex: Int? = nil) {
+         frame: Int = 0, brushedIndex: Int? = nil) {
         self.palettes = palettes
         self.xAxis = xAxis
         self.yAxis = yAxis
-        self.frameRate = frameRate
+        self.frame = frame
         self.brushedIndex = brushedIndex
     }
 
@@ -41,18 +41,10 @@ struct PaletteGridView: View {
     }
 
     var body: some View {
-        Group {
-            if palettes.count > 1 && !reduceMotion {
-                TimelineView(.animation(minimumInterval: 1.0 / Double(frameRate))) { ctx in
-                    gridView(forFrame: frameIndex(at: ctx.date.timeIntervalSinceReferenceDate, rate: frameRate, count: palettes.count))
-                }
-            } else {
-                gridView(forFrame: 0)
-            }
-        }
-        .pixelFrame()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Palette grid, 256 colours, x axis \(xAxis.label), y axis \(yAxis.label).")
+        gridView(forFrame: palettes.isEmpty ? 0 : min(frame, palettes.count - 1))
+            .pixelFrame()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Palette grid, 256 colours, x axis \(xAxis.label), y axis \(yAxis.label).")
     }
 
     /// Place the frame's 256 colours via `GridLayout` (spec-verified) and render
@@ -102,25 +94,11 @@ struct RepresentationSelector: View {
     @Binding var selection: PaletteRepresentation
     var cases: [PaletteRepresentation] = PaletteRepresentation.allCases
 
+    // Pixelated: the word segments are CellText on a flat cell ground, selected =
+    // 1-cell accent border (no glass, no AA). Rendered at the 2 pt master pitch so
+    // the words fit and stay legible next to the 6 pt GIF content.
     var body: some View {
-        GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
-            HStack(spacing: SFTheme.glassClusterSpacing) {
-                ForEach(cases, id: \.self) { rep in
-                    let isSelected = selection == rep
-                    Button { withAnimation(.snappy) { selection = rep } } label: {
-                        Text(rep.label)
-                            .font(SFTheme.footnoteSelector)
-                            .foregroundStyle(isSelected ? Color.white : SFTheme.dimText)
-                            .padding(.horizontal, SFTheme.pillHorizontalPad)
-                            .padding(.vertical, SFTheme.pillVerticalPad)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(isSelected ? .regular.tint(.white.opacity(0.18)).interactive() : .regular.interactive(), in: RoundedRectangle(cornerRadius: SFTheme.controlCorner))
-                    .accessibilityLabel(Text(rep.label))
-                    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-                }
-            }
-        }
+        CellSelector(options: cases.map { (value: $0, label: $0.label) }, selection: $selection)
     }
 }
 
@@ -132,14 +110,15 @@ struct GridAxisSelector: View {
     @Binding var yAxis: GridAxis
 
     var body: some View {
-        GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
-            HStack(spacing: SFTheme.glassClusterSpacing) {
-                axisMenu(prefix: "X", current: xAxis) { picked in assign(picked, toX: true) }
-                axisMenu(prefix: "Y", current: yAxis) { picked in assign(picked, toX: false) }
-            }
+        HStack(spacing: GlobalLattice.pt(GlobalLattice.gutterCells)) {
+            axisMenu(prefix: "X", current: xAxis) { picked in assign(picked, toX: true) }
+            axisMenu(prefix: "Y", current: yAxis) { picked in assign(picked, toX: false) }
         }
     }
 
+    // The axis VALUE list is a system Menu (a transient popover, not persistent chrome
+    // — the §6.8 prose-fallback exemption); but the menu's LABEL is pixelated CellText
+    // on a flat cell ground, so nothing anti-aliased sits on the Review surface.
     private func axisMenu(prefix: String, current: GridAxis, onPick: @escaping (GridAxis) -> Void) -> some View {
         Menu {
             ForEach(GridAxis.allCases, id: \.self) { axis in
@@ -148,15 +127,12 @@ struct GridAxisSelector: View {
                 }
             }
         } label: {
-            Text("\(prefix): \(current.label)")
-                .font(SFTheme.footnoteSelector)
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .padding(.horizontal, SFTheme.pillHorizontalPad)
-                .padding(.vertical, SFTheme.pillVerticalPad)
+            CellText("\(prefix): \(current.label)", rows: 9, ink: .white)
+                .padding(.horizontal, GlobalLattice.pt(4))
+                .frame(minHeight: 44)
+                .background(Color(srgb8: SFTheme.ledGhost))
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: SFTheme.controlCorner))
         .accessibilityLabel(Text("\(prefix) axis, \(current.label)"))
     }
 

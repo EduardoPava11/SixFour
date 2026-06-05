@@ -11,35 +11,27 @@ import simd
 /// — and choose between — a flat 16×16 grid (`16²`), nested quads (`4⁴`), or
 /// recursively halved cells (`2⁸`). Each border is a split plane the quantizer drew.
 ///
-/// Animates in sync with the GIF at `frameRate` (frozen on frame 0 under
-/// reduce-motion), via the shared `frameIndex` clock. Content layer only — no
-/// glass (glass is chrome; see `BranchingSelector`).
+/// Shows the palette of the frame the shared `PlaybackClock` is on — synced to the
+/// GIF player, not a private clock. The old internal `TimelineView` was removed; the
+/// caller passes `frame: clock.frame` (reduce-motion freeze is owned by the clock,
+/// which pins frame 0). Content layer only — no glass.
 struct PaletteTreeView: View {
     let palettes: [[SIMD3<UInt8>]]
     let branching: PaletteBranching
-    let frameRate: Int
+    /// The current frame, from the shared clock.
+    var frame: Int = 0
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    init(palettes: [[SIMD3<UInt8>]], branching: PaletteBranching, frameRate: Int = SFTheme.gifFrameRate) {
+    init(palettes: [[SIMD3<UInt8>]], branching: PaletteBranching, frame: Int = 0) {
         self.palettes = palettes
         self.branching = branching
-        self.frameRate = frameRate
+        self.frame = frame
     }
 
     var body: some View {
-        Group {
-            if palettes.count > 1 && !reduceMotion {
-                TimelineView(.animation(minimumInterval: 1.0 / Double(frameRate))) { ctx in
-                    canvas(forFrame: frameIndex(at: ctx.date.timeIntervalSinceReferenceDate, rate: frameRate, count: palettes.count))
-                }
-            } else {
-                canvas(forFrame: 0)
-            }
-        }
-        .pixelFrame()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Palette structure, \(branching.label) branching, 256 colours partitioned by perceptual similarity.")
+        canvas(forFrame: palettes.isEmpty ? 0 : min(frame, palettes.count - 1))
+            .pixelFrame()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Palette structure, \(branching.label) branching, 256 colours partitioned by perceptual similarity.")
     }
 
     private func canvas(forFrame index: Int) -> some View {
@@ -89,25 +81,10 @@ enum PaletteScope: String, CaseIterable, Codable, Sendable {
 struct ScopeSelector: View {
     @Binding var selection: PaletteScope
 
+    // Pixelated cell segments (per-frame / global) — see RepresentationSelector.
     var body: some View {
-        GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
-            HStack(spacing: SFTheme.glassClusterSpacing) {
-                ForEach(PaletteScope.allCases, id: \.self) { s in
-                    let isSelected = selection == s
-                    Button { withAnimation(.snappy) { selection = s } } label: {
-                        Text(s.label)
-                            .font(SFTheme.footnoteSelector)
-                            .foregroundStyle(isSelected ? Color.white : SFTheme.dimText)
-                            .padding(.horizontal, SFTheme.pillHorizontalPad)
-                            .padding(.vertical, SFTheme.pillVerticalPad)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(isSelected ? .regular.tint(.white.opacity(0.18)).interactive() : .regular.interactive(), in: RoundedRectangle(cornerRadius: SFTheme.controlCorner))
-                    .accessibilityLabel(Text(s.label))
-                    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-                }
-            }
-        }
+        CellSelector(options: PaletteScope.allCases.map { (value: $0, label: $0.label) },
+                     selection: $selection)
     }
 }
 
@@ -117,32 +94,9 @@ struct ScopeSelector: View {
 struct BranchingSelector: View {
     @Binding var selection: PaletteBranching
 
+    // Pixelated cell segments (16² / 4⁴ / 2⁸) — see RepresentationSelector.
     var body: some View {
-        GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
-            HStack(spacing: SFTheme.glassClusterSpacing) {
-                ForEach(PaletteBranching.allCases, id: \.self) { b in
-                    let isSelected = selection == b
-                    Button {
-                        withAnimation(.snappy) { selection = b }
-                    } label: {
-                        Text(b.label)
-                            .font(SFTheme.footnoteSelector)
-                            .foregroundStyle(isSelected ? Color.white : SFTheme.dimText)
-                            .frame(minWidth: 40)
-                            .padding(.horizontal, SFTheme.pillHorizontalPad)
-                            .padding(.vertical, SFTheme.pillVerticalPad)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(
-                        isSelected
-                            ? .regular.tint(.white.opacity(0.18)).interactive()
-                            : .regular.interactive(),
-                        in: RoundedRectangle(cornerRadius: SFTheme.controlCorner)
-                    )
-                    .accessibilityLabel(Text(b.label))
-                    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-                }
-            }
-        }
+        CellSelector(options: PaletteBranching.allCases.map { (value: $0, label: $0.label) },
+                     selection: $selection)
     }
 }

@@ -1,12 +1,87 @@
 # SixFour UI/UX Design Language — "GRID"
 
-**Status:** Canonical constitution (v1.0, 2026-05-31). Authoritative for every screen.
-**Scope:** the capture HUD + the Review/palette content cells. Named exemptions in §9.7.
-**Maturity flag (read this first):** the *numbers* in this document are locked and enforceable; the *enforcement machinery* (`Spec.Lattice`/`Spec.CellShapes`/`Spec.CellFont`, the `setCell` primitive, the single-pitch lint) is **specified here but not yet built**. Every place this matters is marked **[PLANNED]**. The single-pitch law is currently DESIGN-true and CODE-false — `SFTheme` still ships a second (6 pt) pitch on the capture path. §9.8 is the migration debt that closes that gap. Do not read any "is golden-pinned" sentence as "already passes a test today" unless it lacks the [PLANNED] tag.
+**Status:** Canonical constitution (**v2.0, 2026-06-04 — THE gifPx INVERSION**). Authoritative for every screen.
+**Scope:** the whole app (capture + Review/palette) on **one atom**. Named exemptions in §9.7.
+**Maturity flag (read this first):** the *numbers* in this document are locked and enforceable; the *enforcement machinery* (`Spec.Lattice`/`Spec.CellShapes`/`Spec.CellFont`, the `setCell` primitive, the single-pitch lint) is **specified here but not yet built**. Every place this matters is marked **[PLANNED]**. Do not read any "is golden-pinned" sentence as "already passes a test today" unless it lacks the [PLANNED] tag.
+
+> **⚠ v2.0 AMENDMENT GOVERNS (read §0.0 first).** v1.0 made the **2 pt** screen cell the atom and the 64×64 GIF a 128 pt *sub-grid instance* of it. The owner's call (2026-06-04): that is "pixelated but not first-class" — the GIF is the product, so **the GIF pixel must BE the atom, not a derived size.** §0.0 inverts the hierarchy: `gifPx = 6 pt` is now THE atom; the old 2 pt cell survives only as `subPx`, a thrice-finer **text-density sub-pixel exception**. **Where any number or law in the body below (§1–§10) conflicts with §0.0, §0.0 wins.** A full line-by-line body reconciliation is tracked in §0.0's supersession map; the cardinal laws, foundations §2, the band map §7.1, and the touch rule §8.4 are reconciled inline already.
+
+---
+
+## 0.0 v2.0 AMENDMENT — THE gifPx INVERSION (authoritative; 2026-06-04)
+
+> This section is the **decision record + the new spine**. It supersedes every conflicting number/law in §1–§10. The owner accepted, with eyes open, the costs the adversarial review raised (rewriting the generated tiling assertions, a text sub-pixel exception, a 4 pt vertical bleed, more spec churn) — *because* the product is the 64×64 GIF and its pixel must be the unit the app is built from, not a size derived from a screen-tiling cell.
+
+### 0.0.1 The atom (inverted)
+- **`gifPx = 6 pt = 18 device-px @3x` is THE atom.** One GIF pixel. Every governed element — preview, shutter, ring, gear, the field, chunky glyphs — is an integer count of `gifPx`. Widgets grow by using **more gifPx**, never a bigger one. `6 = 6·1` is crisp (18 = integer device-px, resample-free). It is the **largest** pitch at which a full 64-wide preview fits portrait width (`64·6 = 384 ≤ 402`) AND lands on integer device-px (7 pt → 448 > 402; 6.28 pt → 18.84 device-px → blur). So `gifPx = 6 pt` is *forced*, not chosen.
+- **`subPx = 2 pt = gifPx / 3` is the commensurate sub-pixel — fine detail, not the unit of meaning.** A glyph cannot be 1 atom wide, so it serves three bounded roles: (1) **text** (wordmark, count, sampler tag, banners, status — glyph-pixels at `subPx`); (2) **inter-element spacing / gutters** (the app's padding substrate — `GlobalLattice.pt(_:)` is `subPx`-based); (3) **sub-atom icon detail** that a fat atom cannot resolve (e.g. the settings gear renders its 24-cell mask at `subPx` = 48 pt). It is commensurate (`3·subPx = gifPx`) so everything still snaps to one grid. `subPx` is the *old* v1.0 master cell, **demoted**: it is NEVER a widget's own visible pixel size (the preview, field, shutter, and ring are `gifPx`) and NEVER a touch dimension (those are `gifPx`, ≥ 48 pt). EXEMPT-TEXT-DENSITY, §9.7.
+
+### 0.0.2 The screen lattice (inverted)
+- **Field = 67 cols × 145 rows of `gifPx`.** `402 / 6 = 67` exactly (zero horizontal remainder). `874 / 6 = 145.67` → **145 rows = 870 pt + a 4 pt bleed** absorbed into the bottom home-indicator safe band (off-lattice). The horizontal tiling is exact; the vertical is exact-to-the-safe-area.
+- **Contract change (accepted):** `LatticeContract.selfCheck()` v1.0 asserted `cols·cellPt == 402 && rows·cellPt == 874` at `cellPt=2`. v2.0: `cols·gifPx == 402` (exact) **and** `rows·gifPx <= 874 && 874 − rows·gifPx < gifPx` (bleed < one atom). Re-authored in `Spec.Lattice`, regenerated — never hand-edited.
+
+### 0.0.3 The forced size cascade (44 and 68 are not multiples of 6)
+| Token | v1.0 (2 pt cell) | **v2.0 (gifPx)** | Note |
+|---|---|---|---|
+| atom | `cellPt = 2 pt` | **`gifPx = 6 pt`** | inverted |
+| text sub-pixel | — (was the atom) | **`subPx = 2 pt`** | exception only |
+| screen lattice | 201 × 437 | **67 × 145** (+4 pt bleed) | |
+| preview | 64 cells = 128 pt | **64 gifPx = 384 pt** | full-width hero |
+| touch floor | 22 cells = 44 pt | **8 gifPx = 48 pt** | `ceil(44/6)` — 6 pt can't express 44 |
+| shutter | 34 cells = 68 pt | **12 gifPx = 72 pt** | un-reverts the 72→68 shrink; clean cube number |
+| secondary control (gear) | 24 cells = 48 pt | **8 gifPx = 48 pt** | unchanged in pt |
+| diversity ring | Ø 60 cells = 120 pt | **Ø 20 gifPx = 120 pt** | clean |
+| ring ticks | 64 | 64 | one per frame |
+
+### 0.0.4 Layout — top-weighted golden, controls in the thumb zone
+The 64-gifPx preview is the anchor; the golden split is re-derived over the 145-row field with the **minor segment above** so the hero rides high and the **major segment fills the bottom thumb arc** (`below/above = 50/31 ≈ 1.613 ≈ φ`).
+
+```
+ROWS      H   BAND                 CONTENT                                  pt span
+──────────────────────────────────────────────────────────────────────────────────
+  0– 10  11   TOP SAFE             Dynamic Island (62 pt inset). Field only. 0–66
+ 11– 22  12   UPPER AIR            Pure field.                               66–138
+ 23– 30   8   TITLE                "SixFour" wordmark + Gear (8 gifPx).      138–186
+ 31– 94  64   PREVIEW  ◀ ANCHOR    64×64 hero, full-width (cols 1–64).       186–570
+ 95–110  16   LOWER AIR            Field. preview→instrument gutter.         570–666
+111–130  20   DIVERSITY RING       Ø20, center col 33 / row 120.5.           666–786
+115–126  12   SHUTTER (in ring)    12-gifPx disc, center 33 / 120.5.         690–756
+131–135   5   READOUT              ◇ + count + " colors".                    786–810
+136–138   3   SAMPLER              tag line (subPx text).                    816–828
+139–139   1   LOWER AIR (b)        Field.                                    834–840
+140–144   5   BOTTOM SAFE          Home indicator (34 pt) + 4 pt bleed.      840–874
+```
+*Anchor + insets web-verified (2026-06-04): iPhone 17 Pro = 402×874 pt @3x = 1206×2622 px; portrait safe-area insets top 62 pt / bottom 34 pt — matches v1.0's "31 rows / 17 rows × 2 pt." The top inset (62 pt) lands inside UPPER AIR (field-only), so no chrome touches the Island; the lowest chrome (sampler, ends 828 pt) clears the home indicator (840 pt).*
+- **Radial centerline = col 33** (true middle of 67 cols). Even-diameter widgets straddle it by ½ atom (the v1.0 "99.5" convention, re-based).
+- **Preview horizontal:** 64 of 67 cols → a documented asymmetric inset (cols 1–64: 1 gifPx left / 2 gifPx right). Pinned in `Spec.Lattice` so it is never flagged as drift.
+- **LAW-GOLDEN is re-derived AND wired** (owner's call): the live layout must read the `Spec.Lattice` preview anchor, not a free-floating `VStack`-center. `aboveRows=31, previewGifPx=64, belowRows=50`.
+
+### 0.0.5 One pitch, one handoff (Review folds in)
+The v1.0 capture/Review pitch split is **dissolved**: both surfaces are now the *same* `gifPx` atom. `RULE-HANDOFF-SAMEPIXELS` becomes **×1** — the capture preview (384 pt) and the Review hero (384 pt) are byte-*and*-size identical; the handoff is a re-bake, never a magnification. `EXEMPT-REVIEW-PITCH` is **retired** (there is no second layout pitch to exempt); the palette grid stays 16×16 where one palette cell = a 4×4 block of GIF pixels (`paletteCellPt = 4·gifPx = 24 pt`).
+
+### 0.0.6 What carries over unchanged
+Law #2 (flat indexed cells, no AA/opacity/rounding, pixelated in 3D), Law #4 (one clock, 20 fps × 64), Law #5 (one `GlobalLattice` owner — now owns `gifPx`/`subPx`), all of §8 a11y *except* the touch floor (§8.4), §9 governance/lints (re-scoped to `gifPx`), and §10.3 references. The dependency contract is intact: **zero third-party deps; Haskell `Spec.Lattice` stays the source of truth; regenerate `LatticeContract.swift`, never hand-edit.**
+
+### 0.0.7 Supersession map (body §1–§10 → §0.0)
+| Body location | Disposition under v2.0 |
+|---|---|
+| Cardinal Law #1 (one 2 pt cell) | **reconciled inline** → one `gifPx` atom + `subPx` text exception |
+| Cardinal Law #3 (one pitch per surface; capture 2 pt / Review 6 pt) | **reconciled inline** → one atom app-wide; Review folds in |
+| Cardinal Law #6 (`dim % cellPt==0`) | **reconciled inline** → `dim % gifPx==0`; text registers may use `subPx` |
+| Cardinal Law #7 / §8.4 (≥22 cells = 44 pt) | **reconciled inline** → ≥8 gifPx = 48 pt |
+| §2.1–§2.4 foundations (gcd=2, 201×437, 128 pt preview, fib in 2 pt cells) | **reconciled inline** (see §2 edits) → gifPx, 67×145, 384 pt preview |
+| §3.2 token tier-0, §3.3 closure, §3.5 retired tokens | **superseded by §0.0.3** — re-derive in `gifPx`; full table rewrite tracked |
+| §6.0/§6.1/§6.4/§6.5/§6.6 component sizes | **superseded by §0.0.3** (sizes) + §0.0.4 (rects) |
+| §7.1 band map (201×437 @2 pt) | **superseded by §0.0.4** |
+| §7.2/§7.3 Review pitch + ×3 handoff | **superseded by §0.0.5** (one pitch, ×1) |
+| §9.7 EXEMPT-REVIEW-PITCH | **retired**; **EXEMPT-TEXT-DENSITY added** |
+| §9.8 token migration | **rewritten** — RESCOPE everything to `gifPx`; `subPx` is text-only |
 
 ---
 
 ## 0. Overview & The Cardinal Law
+
+> **NOTE (v2.0):** the prose below is v1.0 and reads "cell = 2 pt." Substitute **`gifPx = 6 pt`** for "cell"/"2 pt cell" throughout, and **`subPx = 2 pt`** wherever a *text* sub-pixel is meant, per §0.0. The *structure* of the laws is unchanged; only the atom's identity inverted.
 
 **SixFour is an 8-bit graphics engine wearing a camera.** A 64-frame burst becomes a 64×64×256 animated GIF, and that cube is not the app's *content* — it is the app's *law*:
 
@@ -20,13 +95,13 @@ Every screen, control, and glyph is built from the same unit the GIF is built fr
 
 ### The Cardinal Laws (numbered, non-negotiable)
 
-1. **ONE CELL SIZE EVERYWHERE.** The cell = **2 pt = 6 device-px @3x**, identical for every element on every governed surface. Widgets get bigger by using **MORE cells**, NEVER by enlarging the cell. **No element has its own pitch.** The 64×64 preview's cell is the *exact same physical size* as a cell in the shutter, the ring, the wordmark, the count, and the field.
+1. **ONE ATOM EVERYWHERE = `gifPx = 6 pt = 18 device-px @3x`** *(v2.0; was "2 pt cell")*. One GIF pixel is the unit of every governed element. Widgets get bigger by using **MORE `gifPx`**, NEVER by enlarging the atom. **No element has its own pitch.** The 64×64 preview's pixel is the *exact same physical size* as a pixel in the shutter, the ring, the wordmark, the count, and the field. The ONLY finer unit is `subPx = 2 pt = gifPx/3`, legal solely inside a text register for legibility (EXEMPT-TEXT-DENSITY).
 2. **THE GRID IS THE RENDER SURFACE.** Cells are flat, un-shaded, indexed colour. No anti-aliasing, no opacity, no corner-rounding on a data cell. Opacity *is* shading and is therefore forbidden on a cell. Any tint/shimmer blend is expressed as adjacent **opaque palette indices** (index dither), never alpha.
-3. **ONE PITCH PER SURFACE.** A surface uses exactly one pitch: capture HUD = 2 pt; Review/palette = the 6 pt family. The two pitches **never share a screen**.
+3. **ONE ATOM, ALL SURFACES** *(v2.0; replaces "one pitch per surface")*. Capture AND Review/palette are the **same `gifPx` atom** — there is no second layout pitch to keep apart. The capture preview and the Review hero are byte-*and*-size identical (384 pt, ×1 handoff). `subPx` text is the only sub-unit and is not a layout pitch.
 4. **ONE CLOCK.** Exactly one motion source, `frameIndex(at:rate:20,count:64)`. Only the preview and the live ring/count consume it. Everything else is a static bake.
 5. **ONE OWNER FOR CELL MATH.** All cell↔point conversion lives in a single `GlobalLattice` value type. No view computes `× cellPt` itself.
-6. **EVERY DIMENSION IS A CELL COUNT.** Every governed chrome dimension is an integer number of cells (`dimensionPt % cellPt == 0`). A point value anywhere except the OS safe-area boundary is a contract violation a lint can `grep` for.
-7. **VISIBLE == HIT, ≥ 22 CELLS.** Every interactive target is ≥ 22 cells (44 pt) and its hit-rect equals its painted cell-rect. No invisible slugs.
+6. **EVERY DIMENSION IS A `gifPx` COUNT** *(v2.0)*. Every governed chrome dimension is an integer number of atoms (`dimensionPt % gifPx == 0`, i.e. `% 6`). A *text* register may additionally subdivide to `subPx` (`% 2`). A point value anywhere except the OS safe-area boundary is a contract violation a lint can `grep` for.
+7. **VISIBLE == HIT, ≥ 8 gifPx (48 pt)** *(v2.0; was 22 cells/44 pt)*. Every interactive target is ≥ 8 `gifPx` (48 pt — `ceil(44/6)`, since a 6 pt atom cannot land on the 44 pt HIG floor exactly) and its hit-rect equals its painted pixel-rect. No invisible slugs.
 8. **NOTHING SHIPS WITHOUT A GOLDEN.** No governed chrome ships without a passing `cabal test` against a `Spec.*` golden vector. **[PLANNED — see maturity flag.]**
 
 Law #1 is the one that decides every later argument. It is not prose to be remembered; it is a machine-checkable predicate (Law #6) owned by one type (Law #5) and proven by a golden (Law #8).
@@ -73,14 +148,14 @@ These are derived facts, not choices.
 ### 2.1 The atom: the cell
 `cellPt = 2 pt = 6 device-px @3x` (`scale = 3`, `cellPx = 6`). The GIF's fat-pixel pitch and every widget's pitch, identically. Nothing on a governed surface is smaller than one cell or measured in anything but cells.
 
-### 2.2 The global lattice (gcd-derived, unique)
-`gcd(402, 874) = 2`. Two points is the **unique** pitch that tiles the iPhone 17 Pro portrait screen edge-to-edge with no remainder. At 2 pt/cell the screen is exactly **201 columns (x 0…200) × 437 rows (y 0…436)** — the global lattice. A 6 pt pitch cannot tile the full screen (`874 / 6 = 145.67`), which is *why* the HUD pitch is 2 pt. The lattice is owned by `GlobalLattice`.
+### 2.2 The global lattice — `gifPx`-derived *(v2.0 — see §0.0.2)*
+The atom is `gifPx = 6 pt` (the product's pixel, §0.0.1), so the lattice is **67 columns (x 0…66) × 145 rows (y 0…144)**: `402 / 6 = 67` exactly (no horizontal remainder), `874 / 6 = 145.67` → 145 rows (870 pt) + a **4 pt bleed** absorbed into the bottom safe band. (v1.0 chose 2 pt *because* `gcd(402,874)=2` is the unique zero-remainder pitch and "6 pt can't tile 874" — v2.0 accepts a sub-atom vertical bleed as the price of making the GIF pixel the atom; the bleed lands off-lattice in the home-indicator band, so no governed cell is split.) The lattice is owned by `GlobalLattice`.
 
 ### 2.3 The golden-section vertical layout
 The 64-cell preview is the primary **anchor**, LOCKED at **rows 143–206, cols 68–131**. Of the 373 non-preview rows, the split is **143 above : 64 preview : 230 below**, where `230 / 143 ≈ 1.608 ≈ φ`. The golden split is a *consequence* of the anchor, asserted by `Spec.Lattice` (`lawGoldenSplit` + `lawPreviewRect`), not eyeballed. **Parity note (corrected):** the COLUMN start is even (68) and the rect is centered on the col-99.5 centerline (`68 + 131 = 199 = cols − 2`); the ROW anchor (143) is **odd on purpose** — fixed by the golden section, not by parity. (An earlier draft claimed "even-start on both axes"; `lawPreviewRect` proves that false for the row, so the over-claim is retired — only the horizontal axis is even/centered.) A full-width 384 pt preview would require a 6 pt pitch the lattice forbids; the 384→128 pt shrink is a **decisions-gate** item (§9.5), not a free parameter.
 
 ### 2.4 The Fibonacci size ladder
-Widget *sizes* are drawn from `[8, 13, 21, 34, 55, 89]` cells (successive ratios ≈ φ). Pinned floors: interactive ≥ **22 cells** (44 pt); **shutter = 34 cells** (68 pt); **secondary control = 24 cells** (48 pt). **Ladder exemption registry** (counts and HIG/OS constants are *not* sizes and are exempt by definition): `touchFloorCells = 22` (HIG 44 pt floor), `controlCells = 24` (HIG-derived, 8 pt-grid-aligned), `ring.tick.countCells = 64` (a count = `previewCells`), `digit.glyphBoxCells = 10×18`, `title.glyph.advanceCells` (glyph metrics). Anything off-ladder that is *not* in this registry requires a new documented exemption.
+Widget *sizes* are drawn from a φ ladder. **v2.0 pinned floors (in `gifPx`):** interactive ≥ **8 gifPx** (48 pt); **shutter = 12 gifPx** (72 pt); **secondary control = 8 gifPx** (48 pt); **preview = 64 gifPx** (384 pt); **ring = Ø 20 gifPx** (120 pt). *(v1.0 expressed these as 22/34/24/64/60 two-pt cells; §0.0.3 is the conversion of record.)* **Ladder exemption registry** (counts and HIG/OS constants are *not* sizes and are exempt by definition): `touchFloorCells = 22` (HIG 44 pt floor), `controlCells = 24` (HIG-derived, 8 pt-grid-aligned), `ring.tick.countCells = 64` (a count = `previewCells`), `digit.glyphBoxCells = 10×18`, `title.glyph.advanceCells` (glyph metrics). Anything off-ladder that is *not* in this registry requires a new documented exemption.
 
 ### 2.5 Runtime safe-area band shift
 Bands are authored against the nominal 437-row field and shifted at runtime by whole cells: `safeTopRows = ceil(insets.top / cellPt)`, `safeBottomRows = floor(insets.bottom / cellPt)`, owned by `GlobalLattice`. Dynamic Island ≈ 31 rows (top), home indicator ≈ 17 rows (bottom) — field-only; no interactive cell in a corner.
@@ -579,9 +654,9 @@ The "you live inside the 64³ world" claim requires spatial continuity:
 ### 8.3 Motion
 - **RULE-A11Y-REDUCEMOTION:** Reduce Motion freezes (a) field Bayer shimmer, (b) ring lit-tick transition (snap to value), (c) tint cross-fade, AND (d) the shutter busy spinner (rotation → static quadrant dots). The spinner freeze is explicit because it is the one most commonly forgotten.
 
-### 8.4 Touch
-- **RULE-A11Y-TOUCH:** every interactive target ≥ 22 cells = 44 pt. Shutter 34 / gear 24 clear it.
-- **RULE-A11Y-VISIBLEISHIT:** the hit-rect equals the visible cell-rect. No invisible slugs.
+### 8.4 Touch *(v2.0 — see §0.0.3)*
+- **RULE-A11Y-TOUCH:** every interactive target ≥ **8 gifPx = 48 pt** (`ceil(44/6)`; a 6 pt atom cannot express the 44 pt HIG floor, so the floor rounds UP to 48 pt — never below 44). Shutter 12 (72 pt) / gear 8 (48 pt) clear it. Interactive targets are **forbidden** from being sized in `subPx`.
+- **RULE-A11Y-VISIBLEISHIT:** the hit-rect equals the visible pixel-rect. No invisible slugs.
 
 ### 8.5 The contrast invariant (HARD math, golden-proven) **[PLANNED golden]**
 - **RULE-CONTRAST-LUMINANCE:** true WCAG relative luminance of linearized sRGB, `Y = 0.2126·R_lin + 0.7152·G_lin + 0.0722·B_lin` (NOT OKLab L). A pure function golden-pinned in `Spec.Lattice`/`Spec.Contrast`.
@@ -625,7 +700,8 @@ xcodebuild -scheme SixFour \
 - **GATE-LAYOUT-GOLDEN:** on-device snapshots across **{idle, pressed, busy, disabled, settings-open} × {default Dynamic Type, AX Dynamic Type}** assert: (a) preview pixel pitch is an exact integer; (b) no glyph below the legibility floor; (c) field worst-case contrast ≥ 3:1; (d) AX fallback text stays above row 420; (e) Pass-A re-bake cost does not force a preview frame drop (§7.5). Nothing ships until it passes.
 
 ### 9.5 The decisions gate (what stops per-widget drift)
-- **GATE-DECISIONS:** any change that **alters the look a user sees** is signed off **before code**, never shipped silently. The canonical open items this session: (a) preview **384→128 pt** shrink; (b) shutter **72→68 pt (36→34 cells)**; (c) **retiring Glass on the capture HUD**. A new color, a moved band, a resized widget — all pass this gate first. *This is the rule that directly answers the user's anger:* look-changes can no longer be made unilaterally inside one widget's code.
+- **GATE-DECISIONS:** any change that **alters the look a user sees** is signed off **before code**, never shipped silently. A new color, a moved band, a resized widget — all pass this gate first. *This is the rule that directly answers the user's anger:* look-changes can no longer be made unilaterally inside one widget's code.
+- **GATE-DECISIONS — v2.0 sign-offs (owner, 2026-06-04):** **(a) RESOLVED — capture preview 128 → 384 pt** (full-width hero; reverses the v1.0 shrink). **(b) RESOLVED — shutter 68 → 72 pt** (12 gifPx; the v1.0 72→68 shrink is un-reverted because 68 is not a `gifPx` multiple). **(c)** Glass retirement on capture stands. **(d) NEW — touch floor 44 → 48 pt** (8 gifPx). **(e) NEW — the atom inverts to `gifPx = 6 pt`**; the 2 pt cell becomes the `subPx` text exception. **(f) NEW — preview sits in the top-weighted golden band** (above:preview:below = 31:64:50), controls in the bottom thumb arc, and `LAW-GOLDEN` is *wired* into the live layout (the `VStack`-center hack is removed).
 
 ### 9.6 Component lifecycle
 - **RULE-LIFECYCLE:** `propose → review → build → document → release → deprecate`. "Document" = a §6 entry (anatomy/sizing/states/behavior/do-don't/a11y/API) + a `Spec.*` golden. "Propose" passes GATE-DECISIONS if it alters the look.
@@ -638,7 +714,8 @@ xcodebuild -scheme SixFour \
 | **EXEMPT-PREVIEW-CELLS** | the camera preview's pixels | coloured by the scene, not the palette — content, not chrome cells. |
 | **EXEMPT-AXTEXT** | the AX-size system-`Text` fallback | reflowing system text above the floor; not cell-art by design. |
 | **EXEMPT-GLASS-REVIEW** | glass MATERIAL on Review/Settings chrome | chrome-over-content (its documented use); retained on Review, RETIRED on capture HUD. **Defined in detail in `docs/SIXFOUR-GLASS-LANGUAGE.md` ("GLASS").** |
-| **EXEMPT-REVIEW-PITCH** | Review/palette use the 6 pt family | the inspection hero wants 384 pt; one surface = one pitch, the two never share a screen. |
+| **~~EXEMPT-REVIEW-PITCH~~** | ~~Review/palette use the 6 pt family~~ | **RETIRED (v2.0):** there is no second layout pitch — `gifPx = 6 pt` is the one atom on every surface; the capture preview already *is* the 384 pt hero. |
+| **EXEMPT-TEXT-DENSITY** *(v2.0)* | `subPx = 2 pt = gifPx/3` for (1) text registers, (2) inter-element spacing/gutters, (3) sub-atom icon detail (the gear's 24-cell mask → 48 pt) | a glyph/gear cannot resolve in 1 fat atom and chunky glyphs overflow for long strings; `subPx` is commensurate (`3·subPx = gifPx`) so it still snaps to the atom grid. NEVER a widget's own visible pixel size (preview/field/shutter/ring are `gifPx`) and NEVER a touch dimension (`gifPx`, ≥ 48 pt). |
 
 ### 9.8 Token migration debt (governance-tracked)
 `SFTheme` (Theme.swift) currently ships **both** pitch families and several off-lattice legacy tokens. Until migrated, **the Cardinal Law is CODE-false on the capture path.** Tracked:

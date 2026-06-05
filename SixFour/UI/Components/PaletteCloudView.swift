@@ -115,9 +115,7 @@ struct CloudState: Equatable {
     var yaw: Float = 0
     var pitch: Float = -.pi / 2
     var projection: CloudProjection = .orthographic
-    /// Playback cursor over the 64 frames (the time projection).
-    var frame: Int = 0
-    var playing: Bool = true
+    // NOTE: the time cursor (`frame`) and `playing` moved to the shared PlaybackClock.
     var trail: CloudTrail = .off
     /// Brushed slot index (IndexedColor.index), linked across views. nil = none.
     var brushed: Int? = nil
@@ -200,19 +198,18 @@ struct PaletteCloudView: View {
     var splitTree: SplitTree?
     var branching: PaletteBranching = .b16
     var edge: CGFloat = SFTheme.gifCanvasPt
-    var frameRate: Int = 20
+    /// The shared playback clock — the cloud's time cursor / play-pause come from
+    /// here, so the cloud scrubs in lockstep with the GIF player (the old private
+    /// 60 Hz `Timer` was removed).
+    var clock: PlaybackClock
     /// Brushed index binding — shared across all palette views by IndexedColor.index.
     @Binding var brushedIndex: Int?
 
     @State private var cloud = CloudState()
     @State private var geometry: CloudGeometry? = nil
-    @State private var tick = 0
+    /// Still read for the reduce-motion "static streak" affordance (the trail signal);
+    /// the playback freeze itself is owned by the shared clock.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    // One clock (mirrors VoxelCubeView): 60 Hz display; the cursor advances every
-    // `60 / SFTheme.gifFrameRate`th tick so it scrubs at the canonical GIF cadence.
-    private static let displayHz = 60
-    private let clock = Timer.publish(every: 1.0 / Double(displayHz), on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 10) {
@@ -220,7 +217,6 @@ struct PaletteCloudView: View {
             controls
         }
         .task(id: paletteSignature) { rebuildGeometry() }
-        .onReceive(clock) { _ in advance() }
         .onChange(of: brushedIndex) { _, v in cloud.brushed = v }
         .onAppear { cloud.brushed = brushedIndex }
     }
@@ -264,18 +260,11 @@ struct PaletteCloudView: View {
     /// dot is CONTENT (opaque indexed colour, no opacity-as-shading); brushed dots
     /// step to an opaque darker index, never alpha (GRID Law #2).
     private var cloudCanvas: some View {
-        Group {
-            if palettes.count > 1 && !reduceMotion {
-                TimelineView(.animation(minimumInterval: 1.0 / Double(frameRate))) { _ in
-                    canvasFor(frame: cloud.frame)
-                }
-            } else {
-                // Reduce-Motion: static. Trails (if any) render as a faded static
-                // streak so the temporal signal isn't entirely motion-gated away.
-                canvasFor(frame: cloud.frame)
-            }
-        }
-        .pixelFrame()
+        // Reads the shared clock; re-renders when it advances (under reduce-motion the
+        // clock holds frame 0, and trails render as a faded static streak so the
+        // temporal signal isn't entirely motion-gated away).
+        canvasFor(frame: clock.frame)
+            .pixelFrame()
     }
 
     private func canvasFor(frame index: Int) -> some View {
@@ -441,58 +430,40 @@ struct PaletteCloudView: View {
         .frame(maxWidth: edge)
     }
 
+    // Pixelated cell segments for the projection mode.
     private var projectionSelector: some View {
-        GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
-            HStack(spacing: SFTheme.glassClusterSpacing) {
-                ForEach(CloudProjection.allCases, id: \.self) { mode in
-                    let isSel = cloud.projection == mode
-                    Button { withAnimation(.snappy) { cloud.projection = mode } } label: {
-                        Text(mode.label)
-                            .font(SFTheme.footnoteSelector)
-                            .foregroundStyle(isSel ? Color.white : SFTheme.dimText)
-                            .padding(.horizontal, SFTheme.pillHorizontalPad)
-                            .padding(.vertical, SFTheme.pillVerticalPad)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(isSel ? .regular.tint(.white.opacity(0.18)).interactive()
-                                       : .regular.interactive(),
-                                 in: RoundedRectangle(cornerRadius: SFTheme.controlCorner))
-                    .accessibilityLabel(Text(mode == .orthographic ? "Orthographic, distance true" : "Explore, perspective"))
-                    .accessibilityAddTraits(isSel ? [.isSelected] : [])
-                }
-            }
-        }
+        CellSelector(options: CloudProjection.allCases.map { (value: $0, label: $0.label) },
+                     selection: Binding(get: { cloud.projection }, set: { cloud.projection = $0 }))
     }
 
     /// The plane snap-selector. Tapping a plane animates yaw/pitch to the golden
     /// orbit for that OKLab axis pair (and resets the projection to ortho — the
     /// faithful planar shadow is an orthographic claim). Highlights whichever
     /// plane the current orbit is snapped to.
+    // Pixelated plane snap-selector. Not a plain CellSelector because selection is
+    // DERIVED (currentPlane) and may be none when orbited freely — so the segments are
+    // built manually: CellText on a flat cell ground, 1-cell accent border when snapped.
     private var planeSelector: some View {
-        GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
-            HStack(spacing: SFTheme.glassClusterSpacing) {
-                ForEach(CloudPlane.allCases, id: \.self) { plane in
-                    let isSel = currentPlane == plane && cloud.projection == .orthographic
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            cloud.yaw = plane.orbit.yaw
-                            cloud.pitch = plane.orbit.pitch
-                            cloud.projection = .orthographic   // a planar shadow is ortho-honest
-                        }
-                    } label: {
-                        Text(plane.label)
-                            .font(SFTheme.footnoteSelector)
-                            .foregroundStyle(isSel ? Color.white : SFTheme.dimText)
-                            .padding(.horizontal, SFTheme.pillHorizontalPad)
-                            .padding(.vertical, SFTheme.pillVerticalPad)
+        HStack(spacing: GlobalLattice.pt(GlobalLattice.gutterCells)) {
+            ForEach(CloudPlane.allCases, id: \.self) { plane in
+                let isSel = currentPlane == plane && cloud.projection == .orthographic
+                Button {
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        cloud.yaw = plane.orbit.yaw
+                        cloud.pitch = plane.orbit.pitch
+                        cloud.projection = .orthographic   // a planar shadow is ortho-honest
                     }
-                    .buttonStyle(.plain)
-                    .glassEffect(isSel ? .regular.tint(.white.opacity(0.18)).interactive()
-                                       : .regular.interactive(),
-                                 in: RoundedRectangle(cornerRadius: SFTheme.controlCorner))
-                    .accessibilityLabel(Text("\(plane.label) plane"))
-                    .accessibilityAddTraits(isSel ? [.isSelected] : [])
+                } label: {
+                    CellText(plane.label, rows: 9, ink: isSel ? .white : Color(srgb8: SIMD3(140, 140, 140)))
+                        .padding(.horizontal, GlobalLattice.pt(3))
+                        .frame(minHeight: 44)
+                        .background(Color(srgb8: SFTheme.ledGhost))
+                        .border(Color(srgb8: isSel ? SIMD3(96, 165, 250) : SFTheme.ledGhost),
+                                width: GlobalLattice.pt(1))
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("\(plane.label) plane"))
+                .accessibilityAddTraits(isSel ? [.isSelected] : [])
             }
         }
     }
@@ -507,9 +478,9 @@ struct PaletteCloudView: View {
     private var transportCluster: some View {
         VStack(spacing: 8) {
             GlassToolbarCluster {
-                GlassIconButton(systemImage: cloud.playing ? "pause.fill" : "play.fill",
-                                accessibilityLabel: cloud.playing ? "Pause time" : "Play time") {
-                    cloud.playing.toggle()
+                GlassIconButton(systemImage: clock.playing ? "pause.fill" : "play.fill",
+                                accessibilityLabel: clock.playing ? "Pause time" : "Play time") {
+                    clock.togglePlay()
                 }
                 // Trail length cycles off → short → long (the trajectory control).
                 GlassIconButton(systemImage: "point.topleft.down.to.point.bottomright.curvepath",
@@ -518,28 +489,26 @@ struct PaletteCloudView: View {
                     withAnimation(.snappy) { cloud.trail = cloud.trail.next }
                 }
             }
-            // The playhead — the literal projection of the temporal axis.
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Frame \(cloud.frame + 1)/\(max(palettes.count, 1))")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.85))
-                Slider(value: Binding(get: { Double(cloud.frame) },
-                                      set: { cloud.frame = Int($0.rounded()); cloud.playing = false }),
-                       in: 0...Double(max(palettes.count - 1, 1)), step: 1)
+            // The playhead — the literal projection of the temporal axis (pixelated).
+            VStack(alignment: .leading, spacing: GlobalLattice.pt(1)) {
+                CellText("Frame \(clock.frame + 1)/\(max(palettes.count, 1))",
+                         rows: 7, ink: Color(srgb8: SIMD3(210, 210, 210)))
+                CellSlider(value: Binding(get: { Double(clock.frame) },
+                                          set: { clock.scrub(to: Int($0.rounded())) }),
+                           range: 0...Double(max(palettes.count - 1, 1)))
             }
-            .padding(12)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: SFTheme.cardCorner))
+            .padding(GlobalLattice.pt(6))
+            .background(Color(srgb8: SFTheme.ledGhost))   // flat cell panel, no glass
         }
     }
 
     private var legend: some View {
-        GlassInfoChip {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(cloud.projection.distanceClaim)
-                Text("Dot area = population. " + (currentPlane?.axesLabel ?? "Orbited — drag to a snap plane to read axes."))
-                    .foregroundStyle(SFTheme.dimText)
+        GlassInfoChip {   // now a flat ledGhost cell ground (no glass)
+            VStack(alignment: .leading, spacing: GlobalLattice.pt(1)) {
+                CellText(cloud.projection.distanceClaim, rows: 7, ink: .white)
+                CellText("Dot area = population. " + (currentPlane?.axesLabel ?? "Orbited — drag to a snap plane to read axes."),
+                         rows: 7, ink: Color(srgb8: SIMD3(140, 140, 140)))
             }
-            .font(SFTheme.captionMono)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -566,7 +535,7 @@ struct PaletteCloudView: View {
 
     private func pickNearest(at loc: CGPoint) {
         guard let geo = geometry, !geo.frames.isEmpty else { return }
-        let f = min(cloud.frame, geo.frames.count - 1)
+        let f = min(clock.frame, geo.frames.count - 1)
         let yaw = cloud.yaw, pitch = cloud.pitch
         let size = CGSize(width: edge, height: edge)
         let center = SIMD2<Float>(Float(edge) * 0.5, Float(edge) * 0.5)
@@ -591,13 +560,8 @@ struct PaletteCloudView: View {
 
     // MARK: Drivers / a11y
 
-    private func advance() {
-        guard !reduceMotion else { return }
-        tick &+= 1
-        if cloud.playing, tick % (Self.displayHz / SFTheme.gifFrameRate) == 0, palettes.count > 1 {
-            cloud.frame = (cloud.frame + 1) % palettes.count
-        }
-    }
+    // NOTE: the cloud's private playback timer + `advance()` were removed — the time
+    // cursor now comes from the shared `PlaybackClock` (the single clock).
 
     private func rebuildGeometry() {
         geometry = CloudGeometry.build(palettes: palettes, cells: perFrameCells)
@@ -606,7 +570,7 @@ struct PaletteCloudView: View {
     /// One spoken summary (NOT 256 focusable dots) — mirrors PaletteTreeView.
     private var spokenSummary: String {
         var s = "256 colours at their OKLab coordinates. \(cloud.projection.distanceClaim) "
-        s += "Frame \(cloud.frame + 1) of \(max(palettes.count, 1)). "
+        s += "Frame \(clock.frame + 1) of \(max(palettes.count, 1)). "
         s += currentPlane.map { "Snapped to the \($0.label) plane; \($0.axesLabel). " } ?? "Orbited freely. "
         s += "Dot area shows population. Drag to orbit; tap a dot to brush."
         if reduceMotion { s += " Reduce Motion: time is shown as a static streak." }
@@ -646,11 +610,12 @@ private func makeSyntheticCloudPalettes() -> ([[SIMD3<UInt8>]], [[SixFourSignifi
 #Preview("Palette Cloud — synthetic") {
     struct Host: View {
         @State var brushed: Int? = nil
+        @State var clock = PlaybackClock()
         var body: some View {
             let (pals, cells) = makeSyntheticCloudPalettes()
             ScrollView {
                 PaletteCloudView(palettes: pals, perFrameCells: cells,
-                                 splitTree: nil, brushedIndex: $brushed)
+                                 splitTree: nil, clock: clock, brushedIndex: $brushed)
                     .padding()
             }
             .preferredColorScheme(.dark)

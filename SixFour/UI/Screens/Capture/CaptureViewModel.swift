@@ -4,8 +4,9 @@ import UIKit
 import simd
 import os
 
-/// Value type for one completed capture-and-render. The StatsFooterView
-/// reads every field directly.
+/// Value type for one completed capture-and-render. The Review screen
+/// (GIFReviewView) reads these fields to drive the player, palette views,
+/// status line, and the determinism badge.
 struct CaptureOutput: Sendable, Hashable, Identifiable {
     let gifURL: URL
     let contactURL: URL?
@@ -19,8 +20,8 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     let palettesForDisplay: [[SIMD3<UInt8>]]
     /// Which dither method produced this render (the one creative option).
     let ditherMethod: DitherMethod
-    /// Mean per-frame extraction MSE (OKLab units²). Surfaced in
-    /// StatsFooterView as a fidelity readout.
+    /// Mean per-frame extraction MSE (OKLab units²), computed in the Q16 integer
+    /// domain so it matches the deterministic bytes. Surfaced in the Review status line.
     let meanExtractMSE: Float
     /// Mean centroid condition number κ across the 64 per-frame
     /// palettes. κ ≈ 1 → orthogonal centroids (well-conditioned
@@ -57,6 +58,10 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     /// Lowercase hex SHA-256 of the GIF bytes — the reproducible fingerprint,
     /// non-nil only on the deterministic path. Same scene+settings ⇒ same hash.
     var sha256: String? = nil
+    /// Wall-time (ms) of each verified Zig kernel, in Stage order [quantize, dither,
+    /// significance, palette, encode]. Empty on the GPU path. Surfaced under the
+    /// determinism badge so the visible spine is quantitative (not `encodeMillis:0`).
+    var stageMillis: [Int] = []
 
     var id: URL { gifURL }
 
@@ -111,6 +116,41 @@ final class CaptureViewModel {
     /// by the preview callback, so the live 64×64 canvas shows the deterministic
     /// quantized look (vs the raw downsample). Updated on bootstrap and capture.
     @ObservationIgnored nonisolated(unsafe) private var previewQuantized = true
+
+    /// The CHEAP dither the live preview renders with, snapshotted off the delegate
+    /// queue (mode 0 = FS, 1 = Atkinson). Blue-noise (mode 2/3) needs a per-frame STBN
+    /// slice + temporal context a single live frame can't supply, so the preview shows
+    /// FS for it and the HUD labels the divergence (`previewSamplerNote`). Keeps the
+    /// hero WYSIWYG for the common error-diffusion case (#2).
+    @ObservationIgnored nonisolated(unsafe) private var previewDitherMode = 0
+    @ObservationIgnored nonisolated(unsafe) private var previewSerpentine = false
+
+    /// Re-snapshot the preview engine + dither from the current settings. Called on
+    /// bootstrap, on capture, and on any live Settings change (CaptureView `.onChange`)
+    /// so a mid-session sampler flip isn't stale on the hero.
+    func syncPreviewDither() {
+        previewQuantized = settings.useDeterministicCore
+        let c = settings.ditherConfig
+        switch c.method {
+        case .errorDiffusion:
+            previewDitherMode = (c.kernel == .floydSteinberg) ? 0 : 1
+            previewSerpentine = c.serpentine
+        case .blueNoise:
+            previewDitherMode = 0       // STBN/temporal can't render per live frame
+            previewSerpentine = false
+        }
+    }
+
+    /// Honest note when the live preview diverges from what the EXPORT will be —
+    /// nil when the hero is already WYSIWYG. Shown under the preview so the 384pt
+    /// hero never silently implies blue-noise or the global-collapse look.
+    var previewSamplerNote: String? {
+        guard previewQuantized else { return nil }
+        var parts: [String] = []
+        if settings.ditherConfig.method == .blueNoise { parts.append("FS shown · blue-noise on export") }
+        if settings.paletteScope == .global { parts.append("per-frame shown · global on export") }
+        return parts.isEmpty ? nil : "preview: " + parts.joined(separator: " · ")
+    }
 
     /// Live scene readout from the preview — the diversity gauge + dominant
     /// hue the capture screen reflects. EMA-smoothed (see `ingestSceneReadout`)
@@ -171,14 +211,15 @@ final class CaptureViewModel {
             // conversion + assignment to the MainActor here so the
             // SwiftUI binding fires cleanly.
             session.previewPipeline = pipeline
-            previewQuantized = settings.useDeterministicCore
+            syncPreviewDither()
             session.previewCallback = { [weak self] tile in
                 guard let self else { return }
                 // The "well done" 64×64: show the deterministic quantized look
                 // live (the actual GIF aesthetic), or the raw downsample if the
                 // deterministic engine is off.
                 let image = self.previewQuantized
-                    ? Self.makeQuantizedPreviewImage(from: tile)
+                    ? Self.makeQuantizedPreviewImage(from: tile, mode: self.previewDitherMode,
+                                                     serpentine: self.previewSerpentine)
                     : Self.makePreviewImage(from: tile)
                 guard let image else { return }
                 // Analyse on the Metal completion queue (cheap, ~0.1 ms) so we
@@ -244,7 +285,7 @@ final class CaptureViewModel {
 
     func capture() async {
         guard let session, let pipeline, let engines else { return }
-        previewQuantized = settings.useDeterministicCore  // keep the live look in sync with the engine
+        syncPreviewDither()  // keep the live look in sync with the engine + sampler
         Haptics.impact(.medium)
         phase = .locking
         let lockResult = await session.lockExposureAndWhiteBalance(timeoutMs: 400)
@@ -446,7 +487,7 @@ final class CaptureViewModel {
             contactURL: contact,
             renderMillis: totalMs,
             stageAMillis: totalMs,
-            encodeMillis: 0,
+            encodeMillis: result.stageMillis.last ?? 0,
             fileSize: result.gifData.count,
             timingSummary: summary,
             palettesForDisplay: result.srgbPalettes,
@@ -460,7 +501,8 @@ final class CaptureViewModel {
             perFrameMSE: result.perFrameMSE,
             frameIndicesForVoxels: result.frameIndices,
             deterministic: true,
-            sha256: result.sha256Hex
+            sha256: result.sha256Hex,
+            stageMillis: result.stageMillis
         )
         // No per-frame ClusterStatistics on this path (editing tools are future);
         // the CaptureBundle records an empty stats array.
@@ -536,7 +578,7 @@ final class CaptureViewModel {
             contactURL: contact,
             renderMillis: totalMs,
             stageAMillis: totalMs,
-            encodeMillis: 0,
+            encodeMillis: g.stageMillis.last ?? 0,
             fileSize: g.gifData.count,
             timingSummary: summary,
             palettesForDisplay: palettesForDisplay,
@@ -550,7 +592,8 @@ final class CaptureViewModel {
             perFrameMSE: g.perFrameMSE,
             frameIndicesForVoxels: g.frameIndices,
             deterministic: true,
-            sha256: g.sha256Hex
+            sha256: g.sha256Hex,
+            stageMillis: g.stageMillis
         )
         return RenderResult(output: output, perFrameStatistics: [])
     }
@@ -659,7 +702,8 @@ final class CaptureViewModel {
     /// ACTUAL 256-colour output look while you compose — not a smooth downsample.
     /// ~3–4 ms/frame at the 10 fps preview rate; falls back to the raw image if a
     /// kernel ever declines. Runs on the session's delegate queue (nonisolated).
-    nonisolated private static func makeQuantizedPreviewImage(from tile: OKLabTile) -> UIImage? {
+    nonisolated private static func makeQuantizedPreviewImage(from tile: OKLabTile,
+                                                               mode: Int, serpentine: Bool) -> UIImage? {
         let side = tile.side
         let pixelCount = side * side
         guard tile.pixels.count == pixelCount else { return nil }
@@ -672,7 +716,7 @@ final class CaptureViewModel {
             guard let quant = SixFourNative.quantizeFrame(oklabQ16: q16, k: k, lloydIters: 0),
                   let indices = SixFourNative.ditherFrame(
                       oklabQ16: q16, centroids: quant.centroids, k: k,
-                      mode: 0, serpentine: false, stbnSlice: nil),  // FS raster — fast, stable
+                      mode: mode, serpentine: serpentine, stbnSlice: nil),  // configured cheap dither (#2)
                   let palette = SixFourNative.paletteToSRGB8(centroidsQ16: quant.centroids, k: k)
             else {
                 return makePreviewImage(from: tile)  // graceful fallback to the raw look

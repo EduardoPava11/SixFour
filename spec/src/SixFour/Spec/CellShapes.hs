@@ -56,9 +56,11 @@ import SixFour.Spec.Lattice
 
 -- The ring tick table -------------------------------------------------------
 
--- | The radius (in cells, from the sprite centre) at which a gauge tick terminates.
+-- | The radius (in atoms, from the sprite centre) at which a gauge tick terminates:
+-- one atom inside the rim, @ringCells/2 - 1@. Derived from 'ringCells' so it scales
+-- with the gauge (v2.0: @ringCells = 20@ → 9; reproduces 29 for the old 60-atom ring).
 ringTickRadius :: Double
-ringTickRadius = 29
+ringTickRadius = fromIntegral (ringCells `div` 2) - 1
 
 -- | The cell containing the point at @radius@ and tick angle @k@ on a @side×side@
 -- sprite. @θ = 2πk/ringTicks@, measured 0 at top and increasing clockwise;
@@ -114,9 +116,14 @@ lawTickCount = length ringTickEndpoints == ringTicks
 lawTickTopExact :: Bool
 lawTickTopExact = ringTickEndpoint 0 == (ringCells `div` 2, 1)
 
--- | Ticks advance clockwise: from the top, the next tick is to the right.
+-- | Ticks advance clockwise. At the coarse v2.0 atom (Ø20 ring) adjacent ticks may
+-- share a rim cell, so we assert the quarter-turn progression rather than a strict
+-- per-tick rightward step: the 3-o'clock tick (k = ringTicks/4) is right of the top,
+-- and the 6-o'clock tick (k = ringTicks/2) is below it.
 lawTickClockwise :: Bool
-lawTickClockwise = fst (ringTickEndpoint 1) > fst (ringTickEndpoint 0)
+lawTickClockwise =
+     fst (ringTickEndpoint (ringTicks `div` 4)) > fst (ringTickEndpoint 0)
+  && snd (ringTickEndpoint (ringTicks `div` 2)) > snd (ringTickEndpoint 0)
 
 -- | Every endpoint lies inside the 60×60 sprite, @0 ≤ c,r < ringCells@.
 lawTickInBounds :: Bool
@@ -130,10 +137,16 @@ lawTickVerticalSymmetry =
   and [ snd (ringTickEndpoint k) == snd (ringTickEndpoint (ringTicks - k))
       | k <- [1 .. ringTicks `div` 2 - 1] ]
 
--- | No two adjacent ticks merge into the same cell (the doc's "≥ 1 clear cell").
+-- | The tick arc is GAP-FREE: consecutive ticks are the same cell or 8-adjacent —
+-- the coverage arc never jumps a hole. (v2.0: at the Ø20 atom ring the rim holds
+-- ~56 cells for 64 frames, so adjacent frames MAY merge into one fat-pixel cell;
+-- the old "≥ 1 clear cell between every tick" is geometrically impossible at the
+-- atom resolution and is replaced by this contiguity invariant.)
 lawTickNoMerge :: Bool
 lawTickNoMerge =
-  and [ ringTickEndpoint k /= ringTickEndpoint ((k + 1) `mod` ringTicks)
+  and [ let (c0, r0) = ringTickEndpoint k
+            (c1, r1) = ringTickEndpoint ((k + 1) `mod` ringTicks)
+        in abs (c1 - c0) <= 1 && abs (r1 - r0) <= 1
       | k <- [0 .. ringTicks - 1] ]
 
 -- | Pinned golden: a radius-3 disc on a 7×7 sprite covers exactly 29 cells.

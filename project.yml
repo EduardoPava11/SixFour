@@ -139,6 +139,12 @@ targets:
         UILaunchStoryboardName: ""
         UILaunchScreen:
           UIColorName: ""
+        # Total-pixelation: the iOS system status bar is system-font/AA chrome we can't
+        # cellularize, so hide it app-wide. The plist keys are belt-and-suspenders for
+        # the SwiftUI `.statusBarHidden()` modifier — they kill the first-frame flash on
+        # launch (before SwiftUI applies the modifier). See docs/SIXFOUR-TOTAL-PIXELATION.md.
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:

@@ -34,10 +34,17 @@ enum CellBitmap {
     }
 }
 
-/// Renders a cell bitmap at the global 2 pt pitch.
+/// Renders a cell bitmap at a cell pitch. Defaults to the global 2 pt CAPTURE pitch
+/// (`GlobalLattice.cellPt`); the Review-surface transport passes `cellPt:
+/// SFTheme.gifCellPt` (6 pt) so the whole Review screen stays ONE pitch (GRID Law #5,
+/// docs/SIXFOUR-UNIFIED-PLAYER.md decision 1). The pitch is the ONLY thing that
+/// changes — the cell math, the no-AA upscale, and the bitmap are identical.
 struct CellSprite: View {
     let cols: Int
     let rows: Int
+    /// Points per cell. Default = the 2 pt capture lattice; pass `SFTheme.gifCellPt`
+    /// for the 6 pt Review surface.
+    var cellPt: CGFloat = GlobalLattice.pt(1)
     let color: (_ col: Int, _ row: Int) -> SIMD3<UInt8>?
 
     var body: some View {
@@ -45,7 +52,7 @@ struct CellSprite: View {
             Image(uiImage: img)
                 .interpolation(.none)
                 .resizable()
-                .frame(width: GlobalLattice.pt(cols), height: GlobalLattice.pt(rows))
+                .frame(width: cellPt * CGFloat(cols), height: cellPt * CGFloat(rows))
         }
     }
 }
@@ -86,9 +93,10 @@ struct CellButton: View {
         let t = Double(GlobalLattice.shutterRingThicknessCells)   // 2
         let fill: SIMD3<UInt8> = state == .busy ? SIMD3(220, 60, 60) : SIMD3(255, 255, 255)
         let cx = Double(n) / 2, cy = Double(n) / 2
-        CellSprite(cols: n, rows: n) { c, r2 in
+        // Rendered at the gifPx ATOM (12·6 = 72 pt) — the shutter's pixels are the GIF's.
+        CellSprite(cols: n, rows: n, cellPt: GlobalLattice.gifPx) { c, r2 in
             let d = CellGeom.dist(c, r2, cx, cy)
-            let onShape = d <= r || (d > r && d <= r + t)   // filled disc + 2-cell ring
+            let onShape = d <= r || (d > r && d <= r + t)   // filled disc + 1-cell ring
             guard onShape else { return nil }
             if state == .disabled {
                 // 2×2 checker dims the block without opacity (Law #2: no alpha on a cell).
@@ -116,10 +124,13 @@ struct CellShutter: View {
 struct CellIcon: View {
     let box: Int
     var ink: SIMD3<UInt8> = SIMD3(235, 235, 235)
+    /// Points per cell. Default = the 2 pt capture lattice; Review chrome passes
+    /// `SFTheme.gifCellPt` (6 pt) for a chunky icon, or stays 2 pt for fine chrome.
+    var cellPt: CGFloat = GlobalLattice.pt(1)
     let mask: (_ col: Int, _ row: Int, _ cx: Double, _ cy: Double) -> Bool
     var body: some View {
         let cx = Double(box) / 2, cy = Double(box) / 2
-        CellSprite(cols: box, rows: box) { c, r in
+        CellSprite(cols: box, rows: box, cellPt: cellPt) { c, r in
             mask(c, r, cx, cy) ? ink : nil
         }
         .accessibilityHidden(true)
@@ -127,9 +138,80 @@ struct CellIcon: View {
 }
 
 extension CellIcon {
+    /// The Share glyph: an up-arrow (stem + chevron) rising out of an open tray —
+    /// the cell mirror of `square.and.arrow.up`.
+    static func share(box: Int = 12, ink: SIMD3<UInt8> = SIMD3(235, 235, 235),
+                      cellPt: CGFloat = GlobalLattice.pt(1)) -> CellIcon {
+        CellIcon(box: box, ink: ink, cellPt: cellPt) { c, r, cx, _ in
+            let midX = Int(cx)
+            // Arrow stem (top half, centred 2 cells wide).
+            if r >= 1 && r <= box / 2 && (c == midX - 1 || c == midX) { return true }
+            // Chevron head at the very top.
+            if r == 1 && (c == midX - 2 || c == midX + 1) { return true }
+            if r == 2 && (c == midX - 3 || c == midX + 2) { return true }
+            // Open tray: left/right walls + bottom, lower half.
+            let trayTop = box / 2 + 1
+            if r >= trayTop && (c == 2 || c == box - 3) { return true }
+            if r == box - 2 && c >= 2 && c <= box - 3 { return true }
+            return false
+        }
+    }
+
+    /// The contact-sheet glyph: a 3×3 grid of square dots — the cell mirror of
+    /// `square.grid.3x3`.
+    static func grid3x3(box: Int = 12, ink: SIMD3<UInt8> = SIMD3(235, 235, 235),
+                        cellPt: CGFloat = GlobalLattice.pt(1)) -> CellIcon {
+        CellIcon(box: box, ink: ink, cellPt: cellPt) { c, r, _, _ in
+            // Three dot bands at cells {2,3},{6,7} relative cols/rows → a 3×3 lattice.
+            func band(_ v: Int) -> Bool { let m = v % 4; return (m == 1 || m == 2) && v >= 1 && v <= box - 2 }
+            return band(c) && band(r)
+        }
+    }
+
+    /// The Retake glyph: a near-closed circular arrow (an arc with a head) — the cell
+    /// mirror of a refresh / re-shoot symbol.
+    static func retake(box: Int = 12, ink: SIMD3<UInt8> = SIMD3(235, 235, 235),
+                       cellPt: CGFloat = GlobalLattice.pt(1)) -> CellIcon {
+        CellIcon(box: box, ink: ink, cellPt: cellPt) { c, r, cx, cy in
+            let d = CellGeom.dist(c, r, cx, cy)
+            let onRing = d >= Double(box) / 2 - 2.2 && d <= Double(box) / 2 - 0.8
+            let turn = CellGeom.turn(c, r, cx, cy)        // 0 at top, clockwise
+            // Ring with a gap at the top-right; a small arrowhead at the gap.
+            if onRing && !(turn > 0.05 && turn < 0.20) { return true }
+            if (c == Int(cx) + 2 || c == Int(cx) + 3) && r == 1 { return true }   // arrowhead
+            return false
+        }
+    }
+
+    /// The "all significant" seal: a filled disc (the cell mirror of
+    /// `checkmark.seal.fill`). Tinted green by the caller.
+    static func seal(box: Int = 12, ink: SIMD3<UInt8> = SIMD3(235, 235, 235),
+                     cellPt: CGFloat = GlobalLattice.pt(1)) -> CellIcon {
+        CellIcon(box: box, ink: ink, cellPt: cellPt) { c, r, cx, cy in
+            CellGeom.dist(c, r, cx, cy) <= Double(box) / 2 - 0.6
+        }
+    }
+
+    /// The warning glyph: a filled upward triangle (the cell mirror of
+    /// `exclamationmark.triangle.fill`). Tinted yellow by the caller.
+    static func warn(box: Int = 12, ink: SIMD3<UInt8> = SIMD3(235, 235, 235),
+                     cellPt: CGFloat = GlobalLattice.pt(1)) -> CellIcon {
+        CellIcon(box: box, ink: ink, cellPt: cellPt) { c, r, cx, _ in
+            guard r >= 1 && r <= box - 2 else { return false }
+            let t = Double(r - 1) / Double(box - 3)              // 0 apex … 1 base
+            let halfW = t * (Double(box) / 2 - 1)
+            return abs(Double(c) + 0.5 - cx) <= halfW
+        }
+    }
+}
+
+extension CellIcon {
     /// The settings gear: donut hub + body ring + 8 teeth, by angle/distance math.
+    /// Fine chrome (v2.0): the gear mask needs 24 cells of detail, so it renders at the
+    /// `subPt` sub-pixel — 24 × 2 = 48 pt, exactly its `gif(controlCells)` = 48 pt touch
+    /// target. (A gear in 8 fat atoms would be a featureless blob.)
     static func gear(ink: SIMD3<UInt8> = SIMD3(235, 235, 235)) -> CellIcon {
-        CellIcon(box: GlobalLattice.controlCells, ink: ink) { c, r, cx, cy in
+        CellIcon(box: 24, ink: ink, cellPt: GlobalLattice.subPt) { c, r, cx, cy in
             let d = CellGeom.dist(c, r, cx, cy)
             if d >= 2 && d <= 4.2 { return true }                // hub donut (hole < 2)
             if d >= 5 && d <= 8.5 { return true }                // body ring
@@ -170,13 +252,15 @@ struct CellGear: View {
 struct CellRing: View {
     var gauge: Double
     var tint: SIMD3<UInt8>
-    private let n = GlobalLattice.ringCells     // 60
+    private let n = GlobalLattice.ringCells     // 20
     private let ticks = GlobalLattice.ringTicks // 64
-    private let rInner = 24.0
+    /// Tick stub runs from `rOuter - 2` to `rOuter`; derived so it scales with the
+    /// gauge size (v2.0: Ø20 atom ring → stub r7…r9).
+    private var rInner: Double { CellShapes.ringTickRadius - 2 }
     var body: some View {
         let lit = max(0, min(ticks, Int((gauge * Double(ticks)).rounded())))
         let ghost = SFTheme.ledGhost
-        let rOuter = CellShapes.ringTickRadius   // 29 (golden)
+        let rOuter = CellShapes.ringTickRadius   // 9 (golden, ringCells/2 - 1)
 
         // Precompute tick → cells from the golden θ_k (O(ticks·radii), once per update;
         // the true Pass-A static bake awaits `setCell`, Phase 4). `tickOf` maps an
@@ -190,12 +274,13 @@ struct CellRing: View {
                 guard cell.col >= 0, cell.col < n, cell.row >= 0, cell.row < n else { continue }
                 let key = cell.row * n + cell.col
                 tickOf[key] = k
-                if rad >= 27 { outer.insert(key) }
+                if rad >= rOuter - 1 { outer.insert(key) }
             }
             rad += 1
         }
 
-        return CellSprite(cols: n, rows: n) { c, r in
+        // Rendered at the gifPx ATOM (20·6 = 120 pt) — the gauge's pixels are the GIF's.
+        return CellSprite(cols: n, rows: n, cellPt: GlobalLattice.gifPx) { c, r in
             let key = r * n + c
             if let k = tickOf[key] {
                 if k < lit { return tint }                       // active: full radial stub

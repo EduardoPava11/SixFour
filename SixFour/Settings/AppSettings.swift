@@ -39,6 +39,8 @@ final class AppSettings {
         static let voxelProvenanceMode    = "sixfour.voxelProvenanceMode.v1"
         static let voxelLumaFloor         = "sixfour.voxelLumaFloor.v1"
         static let voxelAutoRotate        = "sixfour.voxelAutoRotate.v1"
+        // Unified player (Review GIF hero): which render mode the 2D/3D toggle shows.
+        static let playerMode             = "sixfour.playerMode.v1"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -150,6 +152,12 @@ final class AppSettings {
         didSet { defaults.set(voxelAutoRotate, forKey: Key.voxelAutoRotate) }
     }
 
+    /// Which render mode the unified player's 2D/3D toggle shows. Persists per the
+    /// `voxelAutoRotate` precedent; defaults to `.flat` (the GIF hero is the rest view).
+    var playerMode: PlayerMode {
+        didSet { defaults.set(playerMode.rawValue, forKey: Key.playerMode) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // `didSet` does not fire during init, so these reads don't write back.
@@ -185,5 +193,7 @@ final class AppSettings {
         self.voxelProvenanceMode = defaults.integer(forKey: Key.voxelProvenanceMode)
         self.voxelLumaFloor = defaults.integer(forKey: Key.voxelLumaFloor)
         self.voxelAutoRotate = defaults.bool(forKey: Key.voxelAutoRotate)
+        // Absent key → flat (the 2D GIF is the default hero view).
+        self.playerMode = PlayerMode(rawValue: defaults.string(forKey: Key.playerMode) ?? "") ?? .flat
     }
 }

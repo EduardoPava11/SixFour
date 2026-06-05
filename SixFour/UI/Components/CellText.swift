@@ -44,10 +44,18 @@ struct CellText: View {
         }
     }
 
+    /// Cache of rasterised masks, keyed by `text|rows`. The raster is a pure function
+    /// of (text, rows), so memoising it makes converting dozens of chrome labels —
+    /// and the 20 fps Review status line — cheap (no CGContext per body eval). Masks
+    /// are small 1-bit images; `NSCache` evicts under memory pressure.
+    private static let cache = NSCache<NSString, UIImage>()
+
     /// Rasterise `text` to a 1-bit alpha mask, one pixel per cell, AA off.
-    /// `UIImage(cgImage:)` has scale 1, so `.size` is in pixels == cells.
+    /// `UIImage(cgImage:)` has scale 1, so `.size` is in pixels == cells. Memoised.
     static func snap(_ text: String, rows: Int) -> UIImage? {
         guard !text.isEmpty, rows > 0 else { return nil }
+        let key = "\(rows)|\(text)" as NSString
+        if let hit = cache.object(forKey: key) { return hit }
         let font = UIFont.monospacedSystemFont(ofSize: CGFloat(rows), weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.white]
         let ns = text as NSString
@@ -71,6 +79,8 @@ struct CellText: View {
         ns.draw(at: .zero, withAttributes: attrs)             // white ink on clear
         UIGraphicsPopContext()
 
-        return ctx.makeImage().map { UIImage(cgImage: $0) }
+        let img = ctx.makeImage().map { UIImage(cgImage: $0) }
+        if let img { cache.setObject(img, forKey: key) }
+        return img
     }
 }

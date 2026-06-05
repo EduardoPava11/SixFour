@@ -32,8 +32,8 @@ struct CellSelector<T: Hashable>: View {
             CellText(label, rows: labelRows, ink: isSel ? .white : Color(srgb8: dimInk))
                 .padding(.horizontal, GlobalLattice.pt(3))
                 .padding(.vertical, GlobalLattice.pt(2))
-                .frame(minWidth: GlobalLattice.pt(GlobalLattice.segmentCells),
-                       minHeight: GlobalLattice.pt(GlobalLattice.touchFloorCells))
+                .frame(minWidth: GlobalLattice.gif(GlobalLattice.segmentCells),
+                       minHeight: GlobalLattice.gif(GlobalLattice.touchFloorCells))   // 48 pt floor (8 atoms)
                 .background(Color(srgb8: SFTheme.ledGhost))   // flat opaque cell ground
                 // 1-cell accent border on the selected segment (opaque, axis-aligned, no AA).
                 .border(Color(srgb8: isSel ? selectorAccent : SFTheme.ledGhost),
@@ -60,7 +60,7 @@ struct CellToggle: View {
                 Spacer(minLength: GlobalLattice.pt(4))
                 CellCheckbox(on: isOn)
             }
-            .frame(minHeight: GlobalLattice.pt(GlobalLattice.touchFloorCells))
+            .frame(minHeight: GlobalLattice.gif(GlobalLattice.touchFloorCells))   // 48 pt floor (8 atoms)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

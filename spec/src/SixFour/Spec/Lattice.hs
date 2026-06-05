@@ -1,43 +1,58 @@
 {- |
 Module      : SixFour.Spec.Lattice
-Description : The GRID capture-HUD lattice — source of truth for every chrome dimension.
+Description : The GRID lattice — source of truth for every governed dimension.
 
 The formally-pinned authority for the GRID design language's @GlobalLattice@
-(Law #5, "ONE OWNER FOR CELL MATH"). Every number the capture HUD draws with is
-derived here and emitted to @SixFour/Generated/LatticeContract.swift@; the
-hand-written @GlobalLattice.swift@ is the typed @CGFloat@ facade over these
-constants, not an independent authority.
+(Law #5, "ONE OWNER FOR CELL MATH"). Every number the app draws with is derived
+here and emitted to @SixFour/Generated/LatticeContract.swift@; the hand-written
+@GlobalLattice.swift@ is the typed @CGFloat@ facade over these constants, not an
+independent authority.
 
-== Why the pitch is 2 pt (not a choice)
+== v2.0 — THE gifPx INVERSION (2026-06-04)
 
-The iPhone 17 Pro portrait screen is @402 × 874@ pt. @gcd 402 874 = 2@, so a 2 pt
-cell is the *unique* pitch that tiles the screen edge-to-edge with no remainder:
-exactly @201 × 437@ cells. A 6 pt pitch cannot (@874 / 6@ is not integral), which
-is *why* the HUD pitch is 2 pt. The pitch is a theorem (@lawGcdPitch@), not a token.
+SixFour exists to make 64×64 GIFs, so the **GIF pixel IS the atom**, not a size
+derived from a screen-tiling cell. @gifPx = 6 pt = 18 device-px@ — the *largest*
+pitch at which a full 64-wide preview fits portrait width (@64·6 = 384 ≤ 402@) AND
+lands on integer device-px (resample-free). It is forced, not chosen: 7 pt
+overflows (@64·7 = 448 > 402@) and @6.28 pt@ gives @18.84@ fractional device-px.
+
+The old v1.0 @2 pt@ master cell survives only as @subPt = gifPx \`div\` 3@, the
+*sub-pixel* used for fine spacing/gutters and text legibility (a glyph cannot be
+one atom wide). It is commensurate (@3·subPt = gifPx@), so everything still snaps
+to one grid — proven by 'lawSubPixelCommensurate'.
+
+== The screen lattice (inverted)
+
+@402 \`div\` 6 = 67@ columns exactly (zero horizontal remainder). @874 \`div\` 6 =
+145.67@ → 145 rows (@870 pt@) + a @4 pt@ 'bleedPt' absorbed into the bottom
+home-indicator safe band (off-lattice). Horizontal tiling is exact, vertical is
+exact-to-the-safe-area ('lawLatticeTiles' + 'lawVerticalBleed'). v1.0 chose 2 pt
+*because* @gcd 402 874 = 2@ is the unique zero-remainder pitch; v2.0 accepts a
+sub-atom bleed as the price of making the GIF pixel the atom.
 
 == The closure law
 
 The shutter is a filled disc directly abutted by a ring band:
-@discRadius·2 + ringThickness·2 = 15·2 + 2·2 = 34 = shutterCells@
-(@lawShutterClosure@). This is the predicate the shipped code drifted from (the
-disc was sized @d ≤ 13@, leaving an unspecified annulus); the spec asserts the
-geometry the renderer must match.
+@discRadius·2 + ringThickness·2 = 5·2 + 1·2 = 12 = shutterCells@
+('lawShutterClosure'), i.e. a 72 pt shutter (@12·6@).
 
-Laws (see @Properties.Lattice@): the gcd pitch; the pitch tiles the screen; the
-shutter closure; the touch floor (every interactive widget ≥ 22 cells = 44 pt);
-the shutter sits on the Fibonacci ladder; the golden vertical split
-(@below / above ≈ φ@); the preview is an even-anchored 64×64 square; the wordmark
-advance (7 glyph boxes + 6 gaps = 124 cells); and every governed chrome dimension
-is an integer cell count.
+Laws (see @Properties.Lattice@): the atom identity; the sub-pixel commensurability;
+the lattice tiling + vertical bleed; the shutter closure; the touch floor (every
+interactive widget ≥ 8 gifPx = 48 pt); the shutter:control 3:2 ratio; the
+top-weighted golden vertical split (@below / above ≈ φ@); the preview is a 64×64
+square centered on the field; the wordmark fits the title band; and every governed
+dimension is an integer @gifPx@ count.
 -}
 module SixFour.Spec.Lattice
   ( -- * Anchor (the physical screen, iPhone 17 Pro portrait)
     screenWidthPt, screenHeightPt, scale
-    -- * The pitch (gcd-derived) + the lattice it tiles
-  , cellPt, cellPx, cols, rows
+    -- * The atom (gifPx) + the sub-pixel (subPt) + the lattice they tile
+  , gifPx, gifDevicePx, subPt, cols, rows, bleedPt, reviewPitchPt
+    -- * Verified OS safe-area insets (iPhone 17 Pro portrait, iOS 26+)
+  , safeTopPt, safeBottomPt
     -- * Fibonacci size ladder
   , fibLadder
-    -- * Widget cell-counts
+    -- * Widget gifPx-counts
   , previewCells, touchFloorCells, controlCells, shutterCells
   , ringCells, ringTicks, wordmarkRows, wordmarkCols
   , segmentCells, gutterCells
@@ -48,15 +63,18 @@ module SixFour.Spec.Lattice
     -- * The one conversion
   , cellsToPt
     -- * Laws
-  , lawGcdPitch
-  , lawPitchTilesScreen
+  , lawAtomIsGifPx
+  , lawSubPixelCommensurate
+  , lawLatticeTiles
+  , lawVerticalBleed
   , lawShutterClosure
   , lawTouchFloor
-  , lawShutterOnLadder
+  , lawShutterRatio
   , lawGoldenSplit
   , lawPreviewRect
   , lawWordmarkAdvance
   , lawEveryGovernedDimIsCells
+  , lawSafeAreaClearance
   ) where
 
 -- The reference anchor ------------------------------------------------------
@@ -73,98 +91,137 @@ screenHeightPt = 874
 scale :: Int
 scale = 3
 
--- The pitch and the lattice -------------------------------------------------
+-- The atom and the lattice --------------------------------------------------
 
--- | The one pitch: @gcd 402 874 = 2 pt@ — the unique value that tiles the screen
--- with no remainder. Derived, not chosen (@lawGcdPitch@).
-cellPt :: Int
-cellPt = gcd screenWidthPt screenHeightPt
+-- | THE ATOM: one GIF pixel = @6 pt@. SixFour's product is the 64×64 GIF, so its
+-- pixel is the unit every governed element is built from (v2.0 inversion). The
+-- largest pitch at which a 64-wide preview fits portrait width and lands on
+-- integer device-px — forced, not chosen ('lawAtomIsGifPx'). Mirror of
+-- @SFTheme.gifCellPt@.
+gifPx :: Int
+gifPx = 6
 
--- | One cell in device pixels: @cellPt · scale = 6 px@.
-cellPx :: Int
-cellPx = cellPt * scale
+-- | One atom in device pixels: @gifPx · scale = 18 px@ (crisp; resample-free).
+gifDevicePx :: Int
+gifDevicePx = gifPx * scale
 
--- | Full-screen lattice width in cells: @402 / 2 = 201@.
+-- | The sub-pixel: @gifPx \`div\` 3 = 2 pt@. The old v1.0 master cell, demoted to a
+-- commensurate sub-grid for fine spacing/gutters and text legibility (a glyph
+-- cannot be one atom wide). Legal only as a sub-unit, never as a widget's own
+-- pixel size ('lawSubPixelCommensurate'). Mirror of @GlobalLattice.subPt@.
+subPt :: Int
+subPt = gifPx `div` 3
+
+-- | Backward-compat alias kept for the Review/content surfaces: the content pitch
+-- equals the atom now (Review folds into the one atom; @EXEMPT-REVIEW-PITCH@ is
+-- retired). Mirror of @SFTheme.gifCellPt@; preserved so the Swift content tokens
+-- (@gifCellPt = 6@, @gifCanvasPt = 384@) need no change.
+reviewPitchPt :: Int
+reviewPitchPt = gifPx
+
+-- | Full-screen lattice width in atoms: @402 \`div\` 6 = 67@ (exact).
 cols :: Int
-cols = screenWidthPt `div` cellPt
+cols = screenWidthPt `div` gifPx
 
--- | Full-screen lattice height in cells: @874 / 2 = 437@.
+-- | Full-screen lattice height in atoms: @874 \`div\` 6 = 145@ (870 pt + 4 pt bleed).
 rows :: Int
-rows = screenHeightPt `div` cellPt
+rows = screenHeightPt `div` gifPx
+
+-- | The vertical remainder absorbed into the bottom safe band: @874 - 145·6 = 4 pt@
+-- (less than one atom; off-lattice — splits no governed cell).
+bleedPt :: Int
+bleedPt = screenHeightPt - rows * gifPx
+
+-- OS safe-area insets (verified) --------------------------------------------
+
+-- | iPhone 17 Pro portrait TOP safe-area inset (Dynamic Island + status bar), in
+-- points. Web-verified 2026-06-04 (useyourloaf / yesviz); equals v1.0's "31 rows ×
+-- 2 pt". Field renders under it; no chrome may enter the top @safeTopPt@.
+safeTopPt :: Int
+safeTopPt = 62
+
+-- | iPhone 17 Pro portrait BOTTOM safe-area inset (home indicator), in points.
+-- Web-verified 2026-06-04; equals v1.0's "17 rows × 2 pt". Absorbs the 'bleedPt'.
+safeBottomPt :: Int
+safeBottomPt = 34
 
 -- The Fibonacci size ladder -------------------------------------------------
 
--- | Widget sizes are drawn from this φ-ratio ladder (successive ratios ≈ φ).
+-- | Widget sizes draw from this φ-ratio ladder (successive ratios ≈ φ); the touch
+-- floor and secondary control sit on it at @8@.
 fibLadder :: [Int]
 fibLadder = [8, 13, 21, 34, 55, 89]
 
--- Widget cell-counts --------------------------------------------------------
+-- Widget gifPx-counts -------------------------------------------------------
 
--- | The hero preview: 64 cells = 1 GIF pixel per cell (the cube law).
+-- | The hero preview: 64 atoms = 1 GIF pixel per atom (the cube law), 384 pt.
 previewCells :: Int
 previewCells = 64
 
--- | HIG 44 pt minimum hit target, in cells (@22 · 2 = 44@).
+-- | HIG touch floor in atoms: @ceil(44 / 6) = 8@ → 48 pt. A 6 pt atom cannot land
+-- on 44 pt exactly, so the floor rounds UP to 48 (never below 44).
 touchFloorCells :: Int
-touchFloorCells = 22
+touchFloorCells = 8
 
--- | HIG 48 pt comfortable secondary control, in cells (@24 · 2 = 48@).
+-- | Secondary control (gear / selector segment): 8 atoms = 48 pt.
 controlCells :: Int
-controlCells = 24
+controlCells = 8
 
--- | The shutter: 34 cells = 68 pt (a ladder value).
+-- | The shutter: 12 atoms = 72 pt (the clean cube number; shutter:control = 3:2).
 shutterCells :: Int
-shutterCells = 34
+shutterCells = 12
 
--- | The diversity gauge ring: 60 cells = 120 pt (Ø60, R30).
+-- | The diversity gauge ring: 20 atoms = 120 pt (Ø20, R10).
 ringCells :: Int
-ringCells = 60
+ringCells = 20
 
 -- | Radial ticks on the gauge — one per GIF frame.
 ringTicks :: Int
 ringTicks = 64
 
--- | Wordmark TITLE register height in cells (rows 96–115).
+-- | Wordmark TITLE band height in atoms (= the control height).
 wordmarkRows :: Int
-wordmarkRows = 20
+wordmarkRows = 8
 
--- | Wordmark advance width in cells (cols 68–191): see @lawWordmarkAdvance@.
+-- | Wordmark advance width in atoms — fits within the preview width.
 wordmarkCols :: Int
-wordmarkCols = 124
+wordmarkCols = 60
 
 -- | A selector segment never narrows below the touch floor.
 segmentCells :: Int
-segmentCells = 22
+segmentCells = 8
 
--- | The Swiss gutter: one cell.
+-- | The Swiss gutter: one atom.
 gutterCells :: Int
 gutterCells = 1
 
--- | Shutter filled-disc radius (Ø30).
+-- | Shutter filled-disc radius (Ø10).
 shutterDiscRadiusCells :: Int
-shutterDiscRadiusCells = 15
+shutterDiscRadiusCells = 5
 
 -- | Shutter ring-band thickness, each side of the disc.
 shutterRingThicknessCells :: Int
-shutterRingThicknessCells = 2
+shutterRingThicknessCells = 1
 
 -- The golden vertical layout ------------------------------------------------
 
--- | Preview anchor rows (inclusive). 143–206 → 64 rows.
+-- | Preview anchor rows (inclusive). 31–94 → 64 rows (top-weighted golden band).
 previewStartRow, previewEndRow :: Int
-previewStartRow = 143
-previewEndRow   = 206
+previewStartRow = 31
+previewEndRow   = 94
 
--- | Preview anchor cols (inclusive). 68–131 → 64 cols.
+-- | Preview anchor cols (inclusive). 1–64 → 64 cols, centered on the 67-col field
+-- (1 atom left margin / 2 atoms right; @1 + 64 = 65 = cols - 2@).
 previewStartCol, previewEndCol :: Int
-previewStartCol = 68
-previewEndCol   = 131
+previewStartCol = 1
+previewEndCol   = 64
 
--- | Field rows above the preview anchor.
+-- | Field rows above the preview anchor (the minor golden segment → preview rides
+-- high, controls fill the bottom thumb zone).
 aboveRows :: Int
 aboveRows = previewStartRow
 
--- | Field rows below the preview anchor: @rows - (previewEndRow + 1)@ = 230.
+-- | Field rows below the preview anchor: @rows - (previewEndRow + 1)@ = 50.
 belowRows :: Int
 belowRows = rows - (previewEndRow + 1)
 
@@ -174,71 +231,107 @@ phi = (1 + sqrt 5) / 2
 
 -- The one conversion --------------------------------------------------------
 
--- | Cells → points. The single place a cell count becomes a point size.
+-- | Atoms → points. The single place an atom count becomes a point size.
 cellsToPt :: Int -> Int
-cellsToPt c = c * cellPt
+cellsToPt c = c * gifPx
 
 -- Laws ----------------------------------------------------------------------
 
--- | The pitch is the gcd of the screen dimensions — the unique tiling pitch (2 pt).
-lawGcdPitch :: Bool
-lawGcdPitch = cellPt == 2 && gcd screenWidthPt screenHeightPt == cellPt
+-- | The atom is the GIF pixel: @gifPx = 6 pt = 18 device-px@, the largest pitch
+-- that fits a 64-wide preview in portrait width and is integer device-px.
+lawAtomIsGifPx :: Bool
+lawAtomIsGifPx =
+     gifPx == 6
+  && gifDevicePx == 18
+  && previewCells * gifPx <= screenWidthPt          -- 64·6 = 384 ≤ 402: a full preview fits
+  && previewCells * (gifPx + 1) > screenWidthPt      -- 64·7 = 448 > 402: 7 pt overflows, 6 is the max
 
--- | The pitch tiles the full screen with no remainder, giving exactly 201×437.
-lawPitchTilesScreen :: Bool
-lawPitchTilesScreen =
-     screenWidthPt  `mod` cellPt == 0
-  && screenHeightPt `mod` cellPt == 0
-  && cols * cellPt == screenWidthPt
-  && rows * cellPt == screenHeightPt
-  && cols == 201 && rows == 437
+-- | The sub-pixel is an EXACT third of the atom, so spacing/text snap to one grid.
+lawSubPixelCommensurate :: Bool
+lawSubPixelCommensurate =
+     subPt == 2
+  && gifPx `mod` subPt == 0
+  && gifPx `div` subPt == 3
+  && reviewPitchPt == gifPx
 
--- | Shutter closure: filled disc (Ø30) directly abutted by a 2-cell ring band each
--- side sums to the 34-cell block — @15·2 + 2·2 = 34@.
+-- | The atom tiles the width exactly (67 cols) and the height to the safe-area
+-- (145 rows + a sub-atom bleed), giving exactly 67×145.
+lawLatticeTiles :: Bool
+lawLatticeTiles =
+     cols * gifPx == screenWidthPt                   -- 67·6 = 402 exact
+  && rows * gifPx <= screenHeightPt                  -- 145·6 = 870 ≤ 874
+  && cols == 67 && rows == 145
+
+-- | The vertical remainder is a positive sub-atom bleed (@4 pt < gifPx@).
+lawVerticalBleed :: Bool
+lawVerticalBleed =
+     bleedPt == screenHeightPt - rows * gifPx
+  && bleedPt >= 0 && bleedPt < gifPx
+  && bleedPt == 4
+
+-- | Shutter closure: filled disc (Ø10) directly abutted by a 1-atom ring band each
+-- side sums to the 12-atom block — @5·2 + 1·2 = 12@.
 lawShutterClosure :: Bool
 lawShutterClosure =
   shutterDiscRadiusCells * 2 + shutterRingThicknessCells * 2 == shutterCells
 
--- | Every interactive widget clears the HIG 44 pt touch floor (= 22 cells).
+-- | Every interactive widget clears the HIG 44 pt touch floor; the floor is 8 atoms
+-- = 48 pt (≥ 44, since 6 pt cannot express 44 exactly).
 lawTouchFloor :: Bool
 lawTouchFloor =
      shutterCells   >= touchFloorCells
   && controlCells   >= touchFloorCells
   && segmentCells   >= touchFloorCells
-  && cellsToPt touchFloorCells == 44
+  && cellsToPt touchFloorCells == 48
+  && cellsToPt touchFloorCells >= 44
 
--- | The shutter size is a Fibonacci-ladder value (grows by ladder steps, not pitch).
-lawShutterOnLadder :: Bool
-lawShutterOnLadder = shutterCells `elem` fibLadder
+-- | The control sits on the Fibonacci ladder (8) and the shutter is a clean 3:2 of
+-- it (12) — widgets grow by ladder relations, not by enlarging the atom.
+lawShutterRatio :: Bool
+lawShutterRatio =
+     controlCells `elem` fibLadder
+  && shutterCells * 2 == controlCells * 3
+  && touchFloorCells == controlCells
 
 -- | The vertical layout is the golden section: @above + preview + below = rows@
--- and @below / above ≈ φ@.
+-- and @below / above ≈ φ@ (the minor segment above; preview rides high).
 lawGoldenSplit :: Bool
 lawGoldenSplit =
      aboveRows + previewCells + belowRows == rows
+  && aboveRows < belowRows
   && abs (fromIntegral belowRows / fromIntegral aboveRows - phi) < (0.02 :: Double)
 
--- | The preview is a 64×64 square, even-started and centered on the col-99.5
--- PATTERN-CENTERLINE horizontally (@68 + 131 = 199 = cols - 2@). Its ROW anchor is
--- fixed by the golden section (@lawGoldenSplit@), NOT by parity — 143 is odd on
--- purpose, because @230/143 ≈ φ@. (The doc's earlier "even-start on both axes" was
--- an over-claim corrected here: only the horizontal axis is even/centered.)
+-- | The preview is a 64×64 square centered on the field (@startCol + endCol =
+-- cols - 2@, a 1-atom/2-atom inset) with its row anchor at the golden split.
 lawPreviewRect :: Bool
 lawPreviewRect =
      previewEndCol - previewStartCol + 1 == previewCells
   && previewEndRow - previewStartRow + 1 == previewCells
-  && even previewStartCol
   && previewStartCol + previewEndCol == cols - 2
+  && previewStartRow == aboveRows
 
--- | Wordmark advance: 7 glyph boxes (16 cells) + 6 gaps (2 cells) = 124 cells.
+-- | Wordmark advance fits within the preview width and the title band height equals
+-- the control height.
 lawWordmarkAdvance :: Bool
-lawWordmarkAdvance = 7 * 16 + 6 * 2 == wordmarkCols
+lawWordmarkAdvance =
+     wordmarkCols <= previewCells
+  && wordmarkRows == controlCells
 
--- | Every governed chrome dimension, expressed in points, is an integer multiple
--- of the pitch (Law #6) — there is no off-lattice point value.
+-- | The top-weighted golden split leaves room for BOTH OS safe areas: the preview's
+-- top (@aboveRows·gifPx = 186 pt@) clears the Dynamic Island (62 pt), and the region
+-- below the preview (@belowRows·gifPx = 300 pt@) can absorb the home indicator + the
+-- vertical bleed (@34 + 4 = 38 pt@) with room for the control band. Proven on the
+-- web-verified iPhone 17 Pro insets, so "chrome never underlaps the OS" is a theorem.
+lawSafeAreaClearance :: Bool
+lawSafeAreaClearance =
+     aboveRows * gifPx >= safeTopPt
+  && belowRows * gifPx >= safeBottomPt + bleedPt
+
+-- | Every governed dimension, in points, is an integer multiple of the atom
+-- (Law #6) — there is no off-lattice point value.
 lawEveryGovernedDimIsCells :: Bool
 lawEveryGovernedDimIsCells =
-  all (\p -> p `mod` cellPt == 0) governedDimsPt
+  all (\p -> p `mod` gifPx == 0) governedDimsPt
   where
     governedDimsPt = map cellsToPt
       [ previewCells, shutterCells, controlCells, ringCells

@@ -26,18 +26,17 @@ struct AddressPickerView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            if let tree = splitTree, !selectedDigits.isEmpty {
-                // Glass chrome container wrapping the pickers.
-                GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
-                    HStack(spacing: 8) {
-                        ForEach(0..<selectedDigits.count, id: \.self) { wheelIdx in
-                            wheelView(index: wheelIdx)
-                        }
-                        Spacer()
+            if splitTree != nil, !selectedDigits.isEmpty {
+                // Flat cell container — the wheels are now pixelated cell steppers.
+                HStack(spacing: GlobalLattice.pt(GlobalLattice.gutterCells)) {
+                    ForEach(0..<selectedDigits.count, id: \.self) { wheelIdx in
+                        wheelView(index: wheelIdx)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    Spacer()
                 }
+                .padding(.horizontal, GlobalLattice.pt(6))
+                .padding(.vertical, GlobalLattice.pt(4))
+                .background(Color(srgb8: SFTheme.ledGhost))
             }
         }
         .task(id: treeSignature) {
@@ -136,34 +135,47 @@ struct AddressPickerView: View {
     }
 
     /// The picker UI for one digit wheel.
+    // PIXELATED wheel: a cell STEPPER (chevron-up · CellDigits value · chevron-down)
+    // replacing the native AA `Picker(.wheel)`. Wrapping the digit mod `factor` keeps
+    // the "wheel" feel; `accessibilityAdjustableAction` preserves the VoiceOver
+    // adjustability the native wheel had (the critique's a11y must-fix).
     @ViewBuilder
     private func wheelView(index: Int) -> some View {
-        VStack(spacing: 4) {
-            // Label above the wheel: the (axis, pos) this digit controls.
+        let factor = branching.factor
+        VStack(spacing: GlobalLattice.pt(2)) {
             if index < wheelLabels.count {
-                Text(wheelLabels[index])
-                    .font(SFTheme.captionMono)
-                    .foregroundStyle(.white.opacity(0.9))
+                CellText(wheelLabels[index], rows: 7, ink: Color(srgb8: SIMD3(210, 210, 210)))
             }
-            // The Picker wheel itself: a compact vertical-scrolling selector.
-            // (SwiftUI Picker with .pickerStyle(.wheel) renders a native spinning wheel.)
-            Picker(selection: Binding(
-                get: { selectedDigits[index] },
-                set: { newVal in updateDigit(index: index, value: newVal) }
-            )) {
-                ForEach(0..<branching.factor, id: \.self) { val in
-                    Text("\(val)").tag(val)
-                }
-            } label: {
-                EmptyView()
+            stepButton(systemName: "chevron.up") {
+                updateDigit(index: index, value: (selectedDigits[index] + 1) % factor)
             }
-            .pickerStyle(.wheel)
-            .frame(height: 80)
-            .clipped()
-            .accessibilityLabel("Digit \(index + 1) of \(branching.depth)")
-            .accessibilityValue("\(selectedDigits[index]) of 0–\(branching.factor - 1)")
+            CellDigits(value: selectedDigits[index], width: 2, lit: SIMD3(96, 165, 250))
+            stepButton(systemName: "chevron.down") {
+                updateDigit(index: index, value: (selectedDigits[index] - 1 + factor) % factor)
+            }
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement()
+        .accessibilityLabel("Digit \(index + 1) of \(branching.depth)")
+        .accessibilityValue("\(selectedDigits[index]) of 0 to \(factor - 1)")
+        .accessibilityAdjustableAction { dir in
+            switch dir {
+            case .increment: updateDigit(index: index, value: (selectedDigits[index] + 1) % factor)
+            case .decrement: updateDigit(index: index, value: (selectedDigits[index] - 1 + factor) % factor)
+            default: break
+            }
+        }
+    }
+
+    private func stepButton(systemName: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            CellSymbol(systemName: systemName, box: 8, ink: .white)
+                .frame(width: 44, height: 28)
+                .background(Color(srgb8: SIMD3(55, 55, 55)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHidden(true)
     }
 
     /// Called when a wheel value changes: update the digit, rebuild labels, compute leaf index.

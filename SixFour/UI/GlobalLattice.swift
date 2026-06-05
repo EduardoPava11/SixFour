@@ -1,33 +1,36 @@
 import SwiftUI
 
-/// GRID **Law #5 — the SOLE owner of cell↔point math** for the capture HUD.
+/// GRID **Law #5 — the SOLE owner of cell↔point math** (v2.0 gifPx inversion).
 ///
-/// The capture surface is a single global lattice: `gcd(402, 874) = 2`, so a **2 pt**
-/// cell is the unique pitch that tiles the iPhone 17 Pro portrait screen edge-to-edge
-/// → exactly **201 columns × 437 rows** (docs/SIXFOUR-DESIGN-LANGUAGE.md §2). Every HUD
-/// widget is a square block of cells and grows by using **more cells, never a bigger
-/// cell** (Law #1). This type owns the pitch, the lattice dimensions, the widget
-/// cell-counts, and the one cells→points conversion, so **no view computes `× cellPt`
-/// itself**.
+/// **The atom is the GIF pixel: `gifPx = 6 pt = 18 device-px @3x`** (the product's
+/// pixel IS the unit the app is built from, docs/SIXFOUR-DESIGN-LANGUAGE.md §0.0). It
+/// tiles the iPhone 17 Pro width exactly (`402 / 6 = 67` cols) and the height to the
+/// safe-area (`145` rows + a 4 pt bleed). Every governed widget is a square block of
+/// atoms and grows by using **more atoms, never a bigger atom** (Law #1). Use
+/// `gif(_:)` for content/instrument sizes.
+///
+/// **`subPt = 2 pt = gifPx / 3`** is the commensurate sub-pixel for fine spacing /
+/// gutters and text legibility (a glyph cannot be one atom wide). Use `pt(_:)` for
+/// spacing — it is `subPt`-based, so the app's existing gutters are unchanged. The two
+/// snap to one grid (`3·subPt = gifPx`). `cellPt` is kept as the name of this
+/// sub-pixel substrate for the spacing call-sites.
 ///
 /// **Verified mirror (Law #8).** Every number below is sourced from `SixFourLattice`
 /// in `Generated/LatticeContract.swift`, emitted byte-for-byte from the Haskell
-/// `SixFour.Spec.Lattice` and gated by `cabal test` (the gcd pitch, the shutter
-/// closure `15·2 + 2·2 = 34`, the touch floor, the golden split, every-dim-is-cells).
-/// `GlobalLattice` is the typed `CGFloat` facade — it adds *no* independent authority;
-/// it only re-types the spec constants for SwiftUI. Change a number in `Spec.Lattice`,
-/// regenerate, and it cascades here. (This closes the prior "interim authority" gap:
-/// the constants no longer live in Swift.)
-///
-/// Scope: the **2 pt capture lattice only**. The Review/palette screens keep their own
-/// 6 pt `SFTheme.gifCellPt` family (EXEMPT-REVIEW-PITCH) — the two pitches never share a
-/// screen (Law #3). A `struct` (not an `enum`) because the safe-area band shift becomes
-/// instance state the day `CellField` consumes it (§9.8).
+/// `SixFour.Spec.Lattice` and gated by `cabal test` (the atom identity, the lattice
+/// tiling + bleed, the shutter closure `5·2 + 1·2 = 12`, the 48 pt touch floor, the
+/// golden split). `GlobalLattice` adds *no* independent authority; it re-types the
+/// spec constants. Change a number in `Spec.Lattice`, regenerate, and it cascades here.
 struct GlobalLattice {
-    /// The unique gcd-derived pitch that tiles the screen: 2 pt = 6 device-px @3x.
-    static let cellPt: CGFloat = CGFloat(SixFourLattice.cellPt)
+    /// THE ATOM: one GIF pixel = 6 pt = 18 device-px @3x. The content/instrument unit.
+    static let gifPx: CGFloat = CGFloat(SixFourLattice.gifPx)
 
-    /// The full-screen lattice — 201 cols × 437 rows at `cellPt`.
+    /// The sub-pixel substrate = 2 pt = gifPx/3 — fine spacing/gutters + text.
+    /// (Kept under the name `cellPt` so the existing spacing call-sites are unchanged.)
+    static let subPt: CGFloat = CGFloat(SixFourLattice.subPt)
+    static let cellPt: CGFloat = CGFloat(SixFourLattice.subPt)
+
+    /// The full-screen lattice — 67 cols × 145 rows at the `gifPx` atom.
     static let cols = SixFourLattice.cols
     static let rows = SixFourLattice.rows
 
@@ -64,8 +67,13 @@ struct GlobalLattice {
     static let previewStartCol = SixFourLattice.previewStartCol
     static let previewEndCol = SixFourLattice.previewEndCol
 
-    // MARK: The one conversion
+    // MARK: The conversions
 
-    /// cells → points. The ONLY place a cell count becomes a point size.
-    @inline(__always) static func pt(_ cells: Int) -> CGFloat { CGFloat(cells) * cellPt }
+    /// atoms → points (the GIF-pixel atom). Use for content + instrument sizes:
+    /// the preview, the field, the shutter, the ring. `gif(64) = 384`.
+    @inline(__always) static func gif(_ cells: Int) -> CGFloat { CGFloat(cells) * gifPx }
+
+    /// sub-pixels → points (the 2 pt substrate). Use for fine spacing/gutters + text.
+    /// Kept named `pt` so the app's existing spacing call-sites are unchanged.
+    @inline(__always) static func pt(_ subcells: Int) -> CGFloat { CGFloat(subcells) * cellPt }
 }

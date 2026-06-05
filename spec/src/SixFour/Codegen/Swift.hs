@@ -24,6 +24,7 @@ module SixFour.Codegen.Swift
   , emitLatticeContract
   , emitCellShapesContract
   , emitSevenSegContract
+  , emitPlaybackClockContract
   ) where
 
 import qualified Data.Text    as T
@@ -37,6 +38,7 @@ import SixFour.Spec.Net
 import qualified SixFour.Spec.Lattice as L
 import qualified SixFour.Spec.CellShapes as CS
 import qualified SixFour.Spec.SevenSeg as SS
+import qualified SixFour.Spec.PlaybackClock as PC
 
 -- | Generate @GlobalVolumeContract.swift@ — the whole-GIF brands for a single
 -- global palette (GIFB). Mirrors 'SixFour.Spec.GlobalVolume'. The Swift logic
@@ -102,29 +104,40 @@ emitLatticeContract = T.unlines
   , ""
   , "import Foundation"
   , ""
-  , "/// The GRID capture-HUD lattice — every governed chrome dimension, in cells."
-  , "/// The 2 pt pitch is `gcd(402, 874)`, the unique value that tiles the iPhone 17"
-  , "/// Pro portrait screen edge-to-edge (→ exactly 201×437 cells). `GlobalLattice`"
-  , "/// is the typed `CGFloat` facade over these constants, NOT an independent"
-  , "/// authority (GRID Law #5). Mirrors `SixFour.Spec.Lattice`; `cabal test` proves"
-  , "/// the laws every CI run."
+  , "/// The GRID lattice — every governed dimension, in `gifPx` atoms (v2.0 inversion)."
+  , "/// The atom is the GIF pixel: `gifPx = 6 pt = 18 device-px @3x` — the largest"
+  , "/// pitch at which a 64-wide preview fits portrait width (64·6=384 ≤ 402) and lands"
+  , "/// on integer device-px. It tiles the width exactly (402/6 = 67 cols) and the"
+  , "/// height to the safe-area (145 rows + a 4 pt bleed). `subPt = 2 pt = gifPx/3` is"
+  , "/// the commensurate sub-pixel for fine spacing/gutters + text. `GlobalLattice` is"
+  , "/// the typed `CGFloat` facade over these constants, NOT an independent authority"
+  , "/// (GRID Law #5). Mirrors `SixFour.Spec.Lattice`; `cabal test` proves the laws."
   , "public enum SixFourLattice {"
   , "    /// Reference anchor: iPhone 17 Pro portrait logical size + @3x scale."
   , "    public static let screenWidthPt: Int = "  <> tshow L.screenWidthPt
   , "    public static let screenHeightPt: Int = " <> tshow L.screenHeightPt
   , "    public static let scale: Int = "          <> tshow L.scale
   , ""
-  , "    /// The one pitch: gcd(402,874) = 2 pt = 6 device-px @3x."
-  , "    public static let cellPt: Int = " <> tshow L.cellPt
-  , "    public static let cellPx: Int = " <> tshow L.cellPx
-  , "    /// The full-screen lattice in cells (201 cols × 437 rows)."
+  , "    /// THE ATOM: one GIF pixel = 6 pt = 18 device-px @3x."
+  , "    public static let gifPx: Int = " <> tshow L.gifPx
+  , "    public static let gifDevicePx: Int = " <> tshow L.gifDevicePx
+  , "    /// The sub-pixel: gifPx/3 = 2 pt (fine spacing/gutters + text legibility)."
+  , "    public static let subPt: Int = " <> tshow L.subPt
+  , "    /// Content pitch = the atom (Review folds in; EXEMPT-REVIEW-PITCH retired)."
+  , "    public static let reviewPitchPt: Int = " <> tshow L.reviewPitchPt
+  , "    /// The full-screen lattice in atoms (67 cols × 145 rows) + the vertical bleed."
   , "    public static let cols: Int = " <> tshow L.cols
   , "    public static let rows: Int = " <> tshow L.rows
+  , "    public static let bleedPt: Int = " <> tshow L.bleedPt
   , ""
-  , "    /// The φ-ratio size ladder; widgets grow by ladder steps, never by pitch."
+  , "    /// OS safe-area insets (iPhone 17 Pro portrait, iOS 26+; web-verified)."
+  , "    public static let safeTopPt: Int = " <> tshow L.safeTopPt
+  , "    public static let safeBottomPt: Int = " <> tshow L.safeBottomPt
+  , ""
+  , "    /// The φ-ratio size ladder; widgets grow by ladder steps, never by atom size."
   , "    public static let fibLadder: [Int] = " <> intListLiteral L.fibLadder
   , ""
-  , "    /// Widget cell-counts (square blocks; grow by more cells, never bigger cells)."
+  , "    /// Widget atom-counts (square blocks; grow by more atoms, never bigger atoms)."
   , "    public static let previewCells: Int = "   <> tshow L.previewCells
   , "    public static let touchFloorCells: Int = " <> tshow L.touchFloorCells
   , "    public static let controlCells: Int = "   <> tshow L.controlCells
@@ -146,24 +159,31 @@ emitLatticeContract = T.unlines
   , "    public static let aboveRows: Int = " <> tshow L.aboveRows
   , "    public static let belowRows: Int = " <> tshow L.belowRows
   , ""
-  , "    /// Cells → points. The single place a cell count becomes a point size."
-  , "    @inline(__always) public static func cellsToPt(_ cells: Int) -> Int { cells * cellPt }"
+  , "    /// Atoms → points. The single place an atom count becomes a point size."
+  , "    @inline(__always) public static func cellsToPt(_ cells: Int) -> Int { cells * gifPx }"
   , ""
   , "    /// Re-asserts the Haskell laws at runtime (defense-in-depth). True iff the"
-  , "    /// emitted constants satisfy every GRID geometry invariant."
+  , "    /// emitted constants satisfy every GRID geometry invariant (v2.0 gifPx atom)."
   , "    public static func selfCheck() -> Bool {"
-  , "        cellPt == 2"
-  , "        && cols * cellPt == screenWidthPt && rows * cellPt == screenHeightPt"
-  , "        && cols == 201 && rows == 437"
+  , "        gifPx == 6 && gifDevicePx == 18 && subPt == 2"
+  , "        && gifPx % subPt == 0 && gifPx / subPt == 3 && reviewPitchPt == gifPx"
+  , "        && previewCells * gifPx <= screenWidthPt"
+  , "        && previewCells * (gifPx + 1) > screenWidthPt"
+  , "        && cols * gifPx == screenWidthPt && rows * gifPx <= screenHeightPt"
+  , "        && cols == 67 && rows == 145"
+  , "        && bleedPt == screenHeightPt - rows * gifPx && bleedPt >= 0 && bleedPt < gifPx"
   , "        && shutterDiscRadiusCells * 2 + shutterRingThicknessCells * 2 == shutterCells"
   , "        && shutterCells >= touchFloorCells && controlCells >= touchFloorCells"
-  , "        && segmentCells >= touchFloorCells && cellsToPt(touchFloorCells) == 44"
-  , "        && fibLadder.contains(shutterCells)"
-  , "        && aboveRows + previewCells + belowRows == rows"
+  , "        && segmentCells >= touchFloorCells && cellsToPt(touchFloorCells) == 48"
+  , "        && cellsToPt(touchFloorCells) >= 44"
+  , "        && controlCells == touchFloorCells && fibLadder.contains(controlCells)"
+  , "        && shutterCells * 2 == controlCells * 3"
+  , "        && aboveRows + previewCells + belowRows == rows && aboveRows < belowRows"
   , "        && (previewEndCol - previewStartCol + 1) == previewCells"
   , "        && (previewEndRow - previewStartRow + 1) == previewCells"
-  , "        && previewStartCol % 2 == 0 && previewStartCol + previewEndCol == cols - 2"
-  , "        && 7 * 16 + 6 * 2 == wordmarkCols"
+  , "        && previewStartCol + previewEndCol == cols - 2 && previewStartRow == aboveRows"
+  , "        && wordmarkCols <= previewCells && wordmarkRows == controlCells"
+  , "        && aboveRows * gifPx >= safeTopPt && belowRows * gifPx >= safeBottomPt + bleedPt"
   , "    }"
   , "}"
   ]
@@ -258,6 +278,84 @@ emitSevenSegContract = T.unlines $
   ++ [ "        " <> cellListLiteral (SS.litCells d) <> ",   // " <> tshow d | d <- [0 .. 9] ]
   ++
   [ "    ]"
+  , "}"
+  ]
+
+-- | Generate @PlaybackClockContract.swift@ — the single playback-clock math,
+-- mirrored byte-for-byte from 'SixFour.Spec.PlaybackClock'. This is the source of
+-- truth the hand-written @PlaybackClock@ ObservableObject defers to: it owns only
+-- @@Published@ state + the 20 fps timer, and routes every frame computation through
+-- this enum so the cyclic arithmetic is spec-pinned (docs/SIXFOUR-UNIFIED-PLAYER.md).
+-- @selfCheck()@ re-derives the golden advance table at runtime as defense-in-depth.
+emitPlaybackClockContract :: Text
+emitPlaybackClockContract = T.unlines
+  [ "// GENERATED by sixfour-spec / Codegen.Swift — do not edit by hand."
+  , "// Source of truth: ~/SixFour/spec/src/SixFour/Spec/PlaybackClock.hs"
+  , "// Regenerate with: cabal run spec-codegen"
+  , ""
+  , "import Foundation"
+  , ""
+  , "/// The single playback clock's cyclic arithmetic — the one source of truth"
+  , "/// that the unified 2D/3D player, the status line, and every palette analyzer"
+  , "/// read \"the current frame\" through. A looping GIF is a cursor on `Z_N` (frame"
+  , "/// `N-1` wraps to `0`); `PlaybackClock` (the ObservableObject) holds the cursor"
+  , "/// and the 20 fps timer but defers ALL frame math to this enum, so it is pinned"
+  , "/// bit-for-bit to `SixFour.Spec.PlaybackClock` and gated by `cabal test`."
+  , "public enum SixFourPlaybackClock {"
+  , "    /// The loop length. Always `SixFourShape.T` (= 64) for a SixFour GIF."
+  , "    public static let frameCount: Int = " <> tshow tVal
+  , ""
+  , "    /// Advance the cursor exactly one frame, wrapping `N-1 -> 0`. Total:"
+  , "    /// `count <= 0` yields 0 (an empty loop has no other frame to show)."
+  , "    @inline(__always)"
+  , "    public static func frameAfter(_ f: Int, count n: Int) -> Int {"
+  , "        n <= 0 ? 0 : ((f + 1) % n + n) % n"
+  , "    }"
+  , ""
+  , "    /// Clamp an arbitrary scrub index into the valid cursor range `[0, N)`."
+  , "    @inline(__always)"
+  , "    public static func clampFrame(_ i: Int, count n: Int) -> Int {"
+  , "        n <= 0 ? 0 : max(0, min(n - 1, i))"
+  , "    }"
+  , ""
+  , "    /// The Metal kernel's depth->frame map `f(z) = (cursor - (N-1) + z) mod N`"
+  , "    /// (Shaders.metal:658), for any depth slice z. At `z = N-1` it reduces to the"
+  , "    /// clamped cursor, so the cube's flat-pose FRONT face shows the same frame as"
+  , "    /// the 2D GIF — the 2D/3D agreement invariant, made literal."
+  , "    @inline(__always)"
+  , "    public static func frontFaceFrame(_ cursor: Int, depth z: Int, count n: Int) -> Int {"
+  , "        n <= 0 ? 0 : ((clampFrame(cursor, count: n) - (n - 1) + z) % n + n) % n"
+  , "    }"
+  , ""
+  , "    /// The 2D GIF image frame for `cursor` — the clamped cursor."
+  , "    @inline(__always)"
+  , "    public static func twoDFrame(_ cursor: Int, count n: Int) -> Int {"
+  , "        clampFrame(cursor, count: n)"
+  , "    }"
+  , ""
+  , "    /// The cube's front-face (z = N-1) frame for `cursor`. Equals `twoDFrame`."
+  , "    @inline(__always)"
+  , "    public static func threeDFrontFace(_ cursor: Int, count n: Int) -> Int {"
+  , "        frontFaceFrame(cursor, depth: n - 1, count: n)"
+  , "    }"
+  , ""
+  , "    /// One full cycle of advances from frame 0: `[1, 2, ..., N-1, 0]`."
+  , "    /// The Swift parity gate for `PlaybackClock.advance`."
+  , "    public static let goldenAdvanceTable: [Int] = " <> intListLiteral (PC.goldenAdvanceTable tVal)
+  , ""
+  , "    /// Re-derives `goldenAdvanceTable` from `frameAfter` and asserts equality —"
+  , "    /// a live Haskell<->Swift parity gate for the cyclic step."
+  , "    public static func selfCheck() -> Bool {"
+  , "        guard goldenAdvanceTable.count == frameCount else { return false }"
+  , "        for f in 0..<frameCount where goldenAdvanceTable[f] != frameAfter(f, count: frameCount) {"
+  , "            return false"
+  , "        }"
+  , "        // 2D and 3D-front-face index the same frame for every cursor."
+  , "        for i in 0..<frameCount where twoDFrame(i, count: frameCount) != threeDFrontFace(i, count: frameCount) {"
+  , "            return false"
+  , "        }"
+  , "        return true"
+  , "    }"
   , "}"
   ]
 

@@ -77,8 +77,7 @@ struct Quad4DrillView: View {
         return ZStack(alignment: .topLeading) {
             Color(srgb8: border)                 // opaque border ground (no AA stroke)
             Color(srgb8: rgb).padding(bw)        // the data colour, inset to expose the border
-            Text(Self.signs[q]).font(SFTheme.captionMono)
-                .foregroundStyle(Color(srgb8: SIMD3(235, 235, 235)))   // opaque ink, no alpha
+            CellText(Self.signs[q], rows: 6, ink: Color(srgb8: SIMD3(235, 235, 235)))   // pixelated sign
                 .padding(3)
         }
         .frame(width: cell, height: cell)
@@ -99,13 +98,14 @@ struct Quad4DrillView: View {
     // MARK: chrome
 
     private var breadcrumb: some View {
-        HStack(spacing: 8) {
-            Text("4⁴").font(SFTheme.captionMono).foregroundStyle(SFTheme.dimText)
+        let dim = SIMD3<UInt8>(140, 140, 140)
+        return HStack(spacing: GlobalLattice.pt(2)) {
+            CellText("4⁴", rows: 7, ink: Color(srgb8: dim))
             if path.isEmpty {
-                Text("root — tap an opponent quadrant").font(SFTheme.captionMono).foregroundStyle(SFTheme.dimText)
+                CellText("root — tap an opponent quadrant", rows: 7, ink: Color(srgb8: dim))
             } else {
                 ForEach(Array(path.enumerated()), id: \.offset) { _, q in
-                    Text(Self.signs[q]).font(SFTheme.captionMono)
+                    CellText(Self.signs[q], rows: 7, ink: .white)
                 }
             }
             Spacer()
@@ -116,14 +116,21 @@ struct Quad4DrillView: View {
         HStack {
             if !path.isEmpty {
                 Button { path.removeLast() } label: {
-                    Label("up", systemImage: "chevron.up").font(SFTheme.captionMono)
+                    HStack(spacing: GlobalLattice.pt(1)) {
+                        CellSymbol(systemName: "chevron.up", box: 8, ink: .white)
+                        CellText("up", rows: 7, ink: .white)
+                    }
+                    .padding(.horizontal, GlobalLattice.pt(4))
+                    .frame(minHeight: 44)
+                    .background(Color(srgb8: SFTheme.ledGhost))
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.glass)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Up one level")
             }
             Spacer()
             // Colours covered by the current node = 256 / 4^depth.
-            Text("\(256 / (1 << (2 * path.count))) colours")
-                .font(SFTheme.captionMono).foregroundStyle(SFTheme.dimText)
+            CellText("\(256 / (1 << (2 * path.count))) colours", rows: 7, ink: Color(srgb8: SIMD3(140, 140, 140)))
         }
     }
 }

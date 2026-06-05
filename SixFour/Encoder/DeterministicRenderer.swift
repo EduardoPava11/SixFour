@@ -54,6 +54,11 @@ struct DeterministicRenderer {
         let perFrameCoverage: [Int]
         /// Mean of `perFrameMSE`.
         let meanExtractMSE: Float
+        /// Wall-time (ms) of each of the 5 verified kernels, in `Stage.allCases` order
+        /// [quantize, dither, significance, palette, encode] — surfaced so the visible
+        /// spine is quantitative (Review pipeline trace). Non-deterministic (timing),
+        /// subordinate to the SHA reproducibility proof.
+        let stageMillis: [Int]
     }
 
     enum DetError: Error, CustomStringConvertible {
@@ -225,7 +230,8 @@ struct DeterministicRenderer {
             sha256Hex: sha,
             perFrameMSE: perFrameMSE,
             perFrameCoverage: perFrameCoverage,
-            meanExtractMSE: meanMSE
+            meanExtractMSE: meanMSE,
+            stageMillis: [qMs, dMs, sMs, pMs, eMs]
         )
     }
 
@@ -246,6 +252,9 @@ struct DeterministicRenderer {
         /// is shared, so every frame has the same gamut coverage).
         let globalCoverage: Int
         let sha256Hex: String
+        /// Wall-time (ms) per stage [quantize(+collapse), dither, significance, palette,
+        /// encode] — same 5-slot shape as the per-frame path's `Result.stageMillis`.
+        let stageMillis: [Int]
     }
 
     /// GIFA → GIFB: collapse the 64 per-frame palettes into ONE global 256-colour
@@ -282,6 +291,11 @@ struct DeterministicRenderer {
             stbn = m
         }
 
+        // Per-stage timing — same 5-slot shape as the per-frame path.
+        let clk = ContinuousClock()
+        var mark = clk.now
+        func lap() -> Int { let ms = Self.milliseconds(clk.now - mark); mark = clk.now; return ms }
+
         // Stage 1: per-frame quantize → the 64 per-frame palettes (GIFA).
         onStage(.quantize)
         var centroidsPerFrame: [[Int32]] = []
@@ -306,6 +320,7 @@ struct DeterministicRenderer {
         // colour table — exact integer, so GIFB stays byte-exact for every radix.
         let globalLeaves = BranchedPalette.projectQ16(collapse.leaves, branching: branching)
         let globalFlat: [Int32] = globalLeaves.flatMap { [$0.x, $0.y, $0.z] }
+        let qMs = lap()   // quantize + collapse
 
         // Stage 2: dither each frame's pixels against the GLOBAL palette.
         onStage(.dither)
@@ -319,6 +334,7 @@ struct DeterministicRenderer {
             ) else { throw DetError.stageFailed("dither") }
             indicesPerFrame.append(idx)
         }
+        let dMs = lap()
 
         // Stage 3: WHOLE-GIF significance rescue. A global slot need not be the
         // nearest to any pixel after dithering, so surjectivity is not free — run
@@ -338,6 +354,7 @@ struct DeterministicRenderer {
             Array(sig.indices[(f * perFrame)..<((f + 1) * perFrame)])
         }
         let pooledCounts: [Int] = (0..<k).map { Int(sig.cellStats[$0 * 7 + 6]) }
+        let sMs = lap()
 
         // Per-frame quantization MSE vs the GLOBAL palette (same integer domain as
         // the per-frame path's diagnostics) + the shared gamut coverage.
@@ -370,6 +387,7 @@ struct DeterministicRenderer {
             throw DetError.stageFailed("palette")
         }
         let globalPalette: [SIMD3<UInt8>] = (0..<k).map { SIMD3(rgb[$0 * 3], rgb[$0 * 3 + 1], rgb[$0 * 3 + 2]) }
+        let pMs = lap()   // palette + the MSE/coverage diagnostic loop above
 
         // Stage 5: assemble — the global table is fed to every frame.
         onStage(.encode)
@@ -382,13 +400,15 @@ struct DeterministicRenderer {
             frameCount: tiles.count, side: side, k: k, delayCs: 5, comment: comment
         ) else { throw DetError.stageFailed("encode") }
         let sha = SHA256.hash(data: gif).map { String(format: "%02x", $0) }.joined()
+        let eMs = lap()
 
         Self.logger.notice("[deterministic·global] \(tiles.count)f → \(gif.count)B · one 256-colour palette · sha256 \(sha.prefix(12), privacy: .public)…")
         return GlobalResult(
             gifData: gif, frameIndices: indicesPerFrame,
             globalPalette: globalPalette, globalLeavesQ16: globalLeaves,
             pooledCounts: pooledCounts, perFrameMSE: perFrameMSE,
-            globalCoverage: globalCoverage, sha256Hex: sha
+            globalCoverage: globalCoverage, sha256Hex: sha,
+            stageMillis: [qMs, dMs, sMs, pMs, eMs]
         )
     }
 

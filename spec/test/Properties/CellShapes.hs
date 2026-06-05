@@ -13,16 +13,16 @@ tests = testGroup "CellShapes (golden HUD cell-mask geometry — CellShapes sour
   , testProperty "top tick is exactly (30, 1)" $
       once lawTickTopExact
 
-  , testProperty "ticks advance clockwise (next from top is rightward)" $
+  , testProperty "ticks advance clockwise (quarter-turn: 3 o'clock right, 6 o'clock below)" $
       once lawTickClockwise
 
-  , testProperty "every endpoint lies inside the 60×60 sprite" $
+  , testProperty "every endpoint lies inside the ringCells×ringCells sprite" $
       once lawTickInBounds
 
   , testProperty "vertical symmetry: row(k) = row(64−k)" $
       once lawTickVerticalSymmetry
 
-  , testProperty "no two adjacent ticks merge into one cell" $
+  , testProperty "tick arc is gap-free (consecutive ticks same-or-8-adjacent; merges allowed at atom resolution)" $
       once lawTickNoMerge
 
   , testProperty "disc golden: radius-3 disc on 7×7 = 29 cells" $

@@ -47,6 +47,7 @@ import qualified Properties.Significance as Significance
 import qualified Properties.SignificanceFixed as SignificanceFixed
 import qualified Properties.STBN3D       as STBN3D
 import qualified Properties.Cyclic       as Cyclic
+import qualified Properties.PlaybackClock as PlaybackClock
 import qualified Properties.Look         as Look
 import qualified Properties.Tensor       as Tensor
 import qualified Properties.LookNetE     as LookNetE
@@ -104,6 +105,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SignificanceFixed.tests
   , STBN3D.tests
   , Cyclic.tests
+  , PlaybackClock.tests
   , Look.tests
   , Scale.tests
   , Tensor.tests

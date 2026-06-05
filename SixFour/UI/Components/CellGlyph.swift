@@ -12,12 +12,15 @@ struct CellDigits: View {
     var width: Int = 3
     var lit: SIMD3<UInt8> = SIMD3(255, 255, 255)
     var ghost: SIMD3<UInt8> = SFTheme.ledGhost
+    /// Points per cell. Default = the 2 pt capture lattice; the Review player's frame
+    /// counter passes `SFTheme.gifCellPt` (6 pt) to stay on the single Review pitch.
+    var cellPt: CGFloat = GlobalLattice.pt(1)
 
     var body: some View {
         let digits = Self.fixedDigits(value, width: width)
-        HStack(spacing: GlobalLattice.pt(1)) {
+        HStack(spacing: cellPt) {
             ForEach(0 ..< width, id: \.self) { i in
-                DigitGlyph(digit: digits[i], lit: lit, ghost: ghost)
+                DigitGlyph(digit: digits[i], lit: lit, ghost: ghost, cellPt: cellPt)
             }
         }
         .accessibilityHidden(true)
@@ -43,6 +46,7 @@ private struct DigitGlyph: View {
     let digit: Int?
     let lit: SIMD3<UInt8>
     let ghost: SIMD3<UInt8>
+    var cellPt: CGFloat = GlobalLattice.pt(1)
     private let cols = SixFourSevenSeg.digitBoxCols
     private let rows = SixFourSevenSeg.digitBoxRows
 
@@ -60,7 +64,7 @@ private struct DigitGlyph: View {
     var body: some View {
         let litSet: Set<Int> = digit == nil ? [] : Self.encoded(SixFourSevenSeg.digitLitCells[digit!])
         let ghostSet = Self.ghostSet
-        return CellSprite(cols: cols, rows: rows) { c, r in
+        return CellSprite(cols: cols, rows: rows, cellPt: cellPt) { c, r in
             let key = r * cols + c
             if litSet.contains(key) { return lit }       // lit segment
             if ghostSet.contains(key) { return ghost }   // unlit "8" footprint

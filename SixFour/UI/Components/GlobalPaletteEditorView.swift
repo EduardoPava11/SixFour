@@ -72,16 +72,29 @@ struct GlobalPaletteEditorView: View {
 
     // MARK: controls
 
+    // Pixelated grain stepper: chevron cell buttons + CellText (replaces the system
+    // `Stepper`, which renders AA glass +/- controls).
     private var grainRow: some View {
-        HStack {
-            Stepper(value: $grain, in: 0 ... branching.depth) {
-                Text("grain \(grain)").font(SFTheme.captionMono)
-            }
-            .onChange(of: grain) { _, _ in selectedPath = Array(selectedPath.prefix(grain)) }
+        let count = current.isEmpty ? 0 : current.count / Int(pow(Double(branching.factor), Double(grain)))
+        return HStack(spacing: GlobalLattice.pt(2)) {
+            grainButton("chevron.down") { grain = max(0, grain - 1) }
+            CellText("grain \(grain)", rows: 7, ink: .white)
+            grainButton("chevron.up") { grain = min(branching.depth, grain + 1) }
             Spacer()
-            let count = current.isEmpty ? 0 : current.count / Int(pow(Double(branching.factor), Double(grain)))
-            Text("\(max(count, 1)) colours").font(SFTheme.captionMono).foregroundStyle(SFTheme.dimText)
+            CellText("\(max(count, 1)) colours", rows: 7, ink: Color(srgb8: SIMD3(140, 140, 140)))
         }
+        .onChange(of: grain) { _, _ in selectedPath = Array(selectedPath.prefix(grain)) }
+    }
+
+    private func grainButton(_ systemName: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            CellSymbol(systemName: systemName, box: 8, ink: .white)
+                .frame(width: 44, height: 30)
+                .background(Color(srgb8: SIMD3(55, 55, 55)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(systemName == "chevron.up" ? "Finer grain" : "Coarser grain")
     }
 
     private var nudgeRow: some View {

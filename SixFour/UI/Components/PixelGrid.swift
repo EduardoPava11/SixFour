@@ -27,14 +27,11 @@ extension Color {
 }
 
 // MARK: - One clock
-
-/// The single 20fps frame indexer driving the GIF, palette views, and status line.
-/// `t` is `Date.timeIntervalSinceReferenceDate`. Returns 0 for an empty timeline.
-@inline(__always)
-func frameIndex(at t: TimeInterval, rate: Int, count: Int) -> Int {
-    guard count > 0 else { return 0 }
-    return Int((t * Double(rate)).rounded(.down)) % count
-}
+//
+// The old `frameIndex(at:rate:count:)` wall-clock indexer was REMOVED: every Review
+// surface (the unified player, the status line, and the palette analyzers) now reads
+// the shared `PlaybackClock` (an ObservableObject), so there is no longer a Date-based
+// indexer to drift. See docs/SIXFOUR-UNIFIED-PLAYER.md and `PlaybackClock.swift`.
 
 // MARK: - Bitmap upscale (GIF playback + live preview)
 

@@ -66,6 +66,7 @@ library
         SixFour.Spec.SignificanceFixed
         SixFour.Spec.Net
         SixFour.Spec.Cyclic
+        SixFour.Spec.PlaybackClock
         SixFour.Spec.Look
         SixFour.Spec.Laws
         SixFour.Spec.Tensor
@@ -281,6 +282,7 @@ test-suite spec-tests
         Properties.SignificanceFixed
         Properties.STBN3D
         Properties.Cyclic
+        Properties.PlaybackClock
         Properties.Look
         Properties.Tensor
         Properties.LookNetE

@@ -23,12 +23,15 @@ enum SFTheme {
     /// so 2D (the `PixelImage` hero) and 3D (the voxel cube) render the same grid.
     static let gifSideCells: Int = SixFourShape.W           // 64
     /// The GIF playback cadence — 64 frames at **20 fps** (a cube-language constant).
-    /// The SINGLE source for every clock: the `frameIndex(at:rate:count:)` indexer, the
-    /// render `fps:`, and the scrubbable-cursor views' tick stride (`60 / gifFrameRate`).
+    /// The SINGLE source for the one `PlaybackClock` timer, the render `fps:`, and the
+    /// `PlayerTransport`. (The old per-view `frameIndex(at:)` indexer was removed.)
     static let gifFrameRate: Int = 20
     /// One GIF fat-pixel, in points. 64 × 6 = 384pt fits the iPhone 17 Pro
-    /// portrait width (393–402pt) crisply. See `docs/grid-is-the-render-surface.md`.
-    static let gifCellPt: CGFloat = 6
+    /// portrait width (393–402pt) crisply. This is the Review/content pitch =
+    /// `3 × cellPt`, proven commensurate with the 2pt master lattice by
+    /// `Spec.Lattice.lawReviewPitchCommensurate` and emitted into the contract — so
+    /// the `6` is a theorem, not a free literal. See `docs/SIXFOUR-TOTAL-PIXELATION.md`.
+    static let gifCellPt: CGFloat = CGFloat(SixFourLattice.reviewPitchPt)
     /// The shared content canvas edge = `gifSideCells × gifCellPt` (the GIF's cell
     /// count drives it, not a literal). The palette grid uses the SAME 384pt edge
     /// (16 × 24), so a palette cell is exactly a 4×4 block of GIF cells.

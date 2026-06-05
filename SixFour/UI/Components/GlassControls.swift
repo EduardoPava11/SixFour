@@ -35,19 +35,15 @@ struct GlassIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .foregroundStyle(tint)
-                .frame(
-                    width: SFTheme.glassIconButtonSize,
-                    height: SFTheme.glassIconButtonSize
-                )
-                .contentTransition(.symbolEffect(.replace))
+            // PIXELATED (total-pixelation): the SF Symbol is rasterised to hard cells
+            // (CellSymbol) on a flat ledGhost square ground — NO glass, NO AA, NO
+            // circle (GRID Law #2). The whole 48 pt square is the hit target.
+            CellSymbol(systemName: systemImage, box: 16, cell: GlobalLattice.pt(1), ink: tint)
+                .frame(width: SFTheme.glassIconButtonSize, height: SFTheme.glassIconButtonSize)
+                .background(Color(srgb8: SFTheme.ledGhost))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // `.interactive()` gives the glass a live press/scale response;
-        // it is an iOS-only variant, which is fine — SixFour is iOS-only.
-        .glassEffect(.regular.interactive(), in: Circle())
         .accessibilityLabel(Text(accessibilityLabel))
         .modifier(OptionalAccessibilityHint(hint: accessibilityHint))
     }
@@ -60,10 +56,10 @@ struct GlassToolbarCluster<Content: View>: View {
     var spacing: CGFloat = SFTheme.glassClusterSpacing
     @ViewBuilder var content: Content
 
+    // No longer a GlassEffectContainer — the children are flat cell buttons now, so a
+    // plain HStack is correct (no shared glass sampling region to manage).
     var body: some View {
-        GlassEffectContainer(spacing: spacing) {
-            HStack(spacing: spacing) { content }
-        }
+        HStack(spacing: spacing) { content }
     }
 }
 
@@ -73,11 +69,14 @@ struct GlassInfoChip<Content: View>: View {
     var cornerRadius: CGFloat = SFTheme.cardCorner
     @ViewBuilder var content: Content
 
+    // Flat ledGhost cell ground instead of glass — read-only status chips stay on the
+    // grid (GRID Law #2: no glass on chrome). cornerRadius retained for source compat
+    // but the panel is square (controlCorner = 0).
     var body: some View {
         content
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius))
+            .padding(.horizontal, GlobalLattice.pt(6))
+            .padding(.vertical, GlobalLattice.pt(4))
+            .background(Color(srgb8: SFTheme.ledGhost))
     }
 }
 

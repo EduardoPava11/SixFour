@@ -153,6 +153,18 @@ enum VoxelIso {
     }
 }
 
+// MARK: - Chrome level
+
+/// How much chrome the cube renders around its surface.
+enum VoxelChrome {
+    /// The palette-explorer `.voxel3D` mode: render + pose overlay + the study panel
+    /// (provenance air-mask, trail depth, luma floor, frame-isolation).
+    case full
+    /// The `GIFPlayer` 3D mode: render + pose overlay only. The shared
+    /// `PlayerTransport` owns play/pause/scrub, so the cube hides its own.
+    case heroMinimal
+}
+
 // MARK: - View state (single owner of all knobs — GRID Law #5 spirit)
 
 struct VoxelCubeState: Equatable {
@@ -165,9 +177,9 @@ struct VoxelCubeState: Equatable {
     var lumaFloor: Int = 0
     /// Provenance filter: 0 = all, 1 = extracted only, 2 = split only.
     var provMode: Int = 0
-    /// Playback cursor — the frame shown on the front face. 0…63.
-    var frame: Int = 0
-    var playing: Bool = true
+    // NOTE: `frame` and `playing` were REMOVED from the cube's local state — the
+    // playback cursor now lives in the shared `PlaybackClock` (the single clock), so
+    // the cube can never disagree with the 2D GIF or the palette analyzers.
     var autoRotate: Bool = false
 
     /// LOCK: freeze the orientation so the orbit gesture can't disturb a chosen iso
@@ -190,6 +202,10 @@ struct VoxelCubeState: Equatable {
 @MainActor
 struct VoxelCubeView: View {
     let data: VoxelCubeData
+    /// The shared playback clock — the cube's front-face frame and play/pause come
+    /// from here, NOT a private timer, so the 3D cube can never disagree with the 2D
+    /// GIF or the palette analyzers about "the current frame".
+    var clock: PlaybackClock
     /// Nominal chrome/placeholder width cap, in points (the controls panel + the
     /// not-well-formed placeholder). The RENDER SURFACE no longer uses this — it
     /// self-sizes via `SFTheme.canvasEdge` in `cubeBody`, exactly like the 2D
@@ -204,23 +220,27 @@ struct VoxelCubeView: View {
     @Binding var brushedIndex: Int?
     /// Brush set per radix (`BrushSet.mode`): 0 single / 1 quad (4⁴) / 2 σ-pair (2⁸).
     var brushMode: Int32 = 0
+    /// How much chrome to draw. `.full` = palette-explorer study cube; `.heroMinimal`
+    /// = the `GIFPlayer` 3D mode (the shared transport owns play/pause/scrub).
+    var chrome: VoxelChrome = .full
 
     @State private var cube: VoxelCubeState
-    @State private var tick = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // The single 60 Hz driver for playback (cursor at SFTheme.gifFrameRate) + auto-rotate.
+    // 60 Hz driver for AUTO-ROTATE ONLY — the playback cursor now lives in `clock`.
     private static let displayHz = 60
-    private let clock = Timer.publish(every: 1.0 / Double(displayHz), on: .main, in: .common).autoconnect()
+    private let rotateClock = Timer.publish(every: 1.0 / Double(displayHz), on: .main, in: .common).autoconnect()
 
-    init(data: VoxelCubeData, edge: CGFloat = SFTheme.gifCanvasPt,
+    init(data: VoxelCubeData, clock: PlaybackClock, edge: CGFloat = SFTheme.gifCanvasPt,
          settings: AppSettings? = nil, brushedIndex: Binding<Int?> = .constant(nil),
-         brushMode: Int32 = 0) {
+         brushMode: Int32 = 0, chrome: VoxelChrome = .full) {
         self.data = data
+        self.clock = clock
         self.edge = edge
         self.settings = settings
         self._brushedIndex = brushedIndex
         self.brushMode = brushMode
+        self.chrome = chrome
         var initial = VoxelCubeState()
         if let s = settings {
             initial.provMode = s.voxelProvenanceMode
@@ -234,7 +254,7 @@ struct VoxelCubeView: View {
         Group {
             if data.isWellFormed { cubeBody } else { placeholder }
         }
-        .onReceive(clock) { _ in advance() }
+        .onReceive(rotateClock) { _ in advance() }
         // Persist the durable knobs (orbit + frame stay session-transient).
         .onChange(of: cube.provMode) { _, v in settings?.voxelProvenanceMode = v }
         .onChange(of: cube.lumaFloor) { _, v in settings?.voxelLumaFloor = v }
@@ -251,7 +271,8 @@ struct VoxelCubeView: View {
                 let e = SFTheme.canvasEdge(forAvailable: min(geo.size.width, geo.size.height),
                                            cells: SFTheme.gifSideCells)
                 ZStack(alignment: .topTrailing) {
-                    VoxelMetalView(data: data, state: cube, brushedIndex: brushedIndex, brushMode: brushMode)
+                    VoxelMetalView(data: data, state: cube, frame: clock.frame,
+                                   brushedIndex: brushedIndex, brushMode: brushMode)
                         .frame(width: e, height: e)
                         .background(Color.black)
                         .highPriorityGesture(orbitGesture)
@@ -263,14 +284,14 @@ struct VoxelCubeView: View {
                             let side = VoxelCubeData.side
                             let x = min(side - 1, max(0, Int(v.location.x / e * CGFloat(side))))
                             let y = min(side - 1, max(0, Int(v.location.y / e * CGFloat(side))))
-                            let idx = Int(data.frameIndices[cube.frame][y * side + x])
+                            let idx = Int(data.frameIndices[clock.frame][y * side + x])
                             brushedIndex = (brushedIndex == idx) ? nil : idx
                         })
                         .accessibilityElement()
                         .accessibilityLabel("64 by 64 by 64 voxel palette cube")
                         .accessibilityValue(cube.isFlat
-                            ? "Flat view, frame \(cube.frame + 1) of 64. Drag to orbit into 3D."
-                            : "Orbited \(Int(cube.orbitMagnitude * 57)) degrees, frame \(cube.frame + 1) of 64.")
+                            ? "Flat view, frame \(clock.frame + 1) of 64. Drag to orbit into 3D."
+                            : "Orbited \(Int(cube.orbitMagnitude * 57)) degrees, frame \(clock.frame + 1) of 64.")
 
                     // Pose affordances (glass chrome): snap to / cycle the 8-bit iso
                     // corners (2:1 dimetric), lock the orientation for study, or fold
@@ -304,7 +325,12 @@ struct VoxelCubeView: View {
             }
             .pixelFrame()
 
-            controls
+            // The study panel (provenance / trail / luma / isolate) only in the
+            // palette-explorer `.full` chrome. In the `GIFPlayer` hero, the shared
+            // `PlayerTransport` owns play/pause/scrub, so the cube shows render-only.
+            if chrome == .full {
+                controls
+            }
         }
     }
 
@@ -312,11 +338,12 @@ struct VoxelCubeView: View {
 
     private var controls: some View {
         VStack(spacing: 10) {
-            // Transport cluster — one GlassEffectContainer (GLASS G3).
+            // Transport cluster — flat cell icon buttons (GlassToolbarCluster is now a
+            // plain HStack; the buttons are pixelated CellSymbol grounds).
             GlassToolbarCluster {
-                GlassIconButton(systemImage: cube.playing ? "pause.fill" : "play.fill",
-                                accessibilityLabel: cube.playing ? "Pause" : "Play") {
-                    cube.playing.toggle()
+                GlassIconButton(systemImage: clock.playing ? "pause.fill" : "play.fill",
+                                accessibilityLabel: clock.playing ? "Pause" : "Play") {
+                    clock.togglePlay()
                 }
                 GlassIconButton(systemImage: "rotate.3d",
                                 accessibilityLabel: cube.autoRotate ? "Stop auto-rotate" : "Auto-rotate",
@@ -337,9 +364,9 @@ struct VoxelCubeView: View {
 
             // Knobs — a read-only-style glass panel (the cube stays content).
             VStack(spacing: 8) {
-                slider("Frame \(cube.frame + 1)/\(VoxelCubeData.frameCount)",
-                       value: Binding(get: { Double(cube.frame) },
-                                      set: { cube.frame = Int($0.rounded()); cube.playing = false }),
+                slider("Frame \(clock.frame + 1)/\(VoxelCubeData.frameCount)",
+                       value: Binding(get: { Double(clock.frame) },
+                                      set: { clock.scrub(to: Int($0.rounded())) }),
                        range: 0...Double(VoxelCubeData.frameCount - 1))
                 slider("Trail depth \(cube.tHi - cube.tLo + 1)",
                        value: Binding(get: { Double(cube.tLo) },
@@ -352,53 +379,33 @@ struct VoxelCubeView: View {
                 // Ghost amount only matters while isolating: 0 = the other frames vanish
                 // entirely; higher = they linger as a faint translucent context cloud.
                 if cube.isolate {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Ghost other frames \(Int(cube.ghostAlpha * 100))%")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.85))
-                        Slider(value: $cube.ghostAlpha, in: 0...0.4)
+                    VStack(alignment: .leading, spacing: GlobalLattice.pt(1)) {
+                        CellText("Ghost other frames \(Int(cube.ghostAlpha * 100))%",
+                                 rows: 7, ink: Color(srgb8: SIMD3(210, 210, 210)))
+                        CellSlider(value: $cube.ghostAlpha, range: 0...0.4, step: 0.05)
                     }
                 }
             }
-            .padding(12)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: SFTheme.cardCorner))
+            .padding(GlobalLattice.pt(6))
+            .background(Color(srgb8: SFTheme.ledGhost))   // flat cell panel, no glass
             .frame(maxWidth: edge)
         }
     }
 
-    // Segmented glass selector for the air-mask filter (GLASS GlassSelector style).
+    // Pixelated air-mask filter — a CellSelector over provMode (0 all / 1 extracted /
+    // 2 split), flat cell segments instead of glass.
     private var provenanceFilter: some View {
-        let options = ["All", "Real", "Split"]   // all / extracted-only / split-only
-        return GlassEffectContainer(spacing: SFTheme.glassClusterSpacing) {
-            HStack(spacing: SFTheme.glassClusterSpacing) {
-                ForEach(Array(options.enumerated()), id: \.offset) { idx, title in
-                    let isSelected = cube.provMode == idx
-                    Button { withAnimation(.snappy) { cube.provMode = idx } } label: {
-                        Text(title)
-                            .font(SFTheme.footnoteSelector)
-                            .foregroundStyle(isSelected ? Color.white : SFTheme.dimText)
-                            .padding(.horizontal, SFTheme.pillHorizontalPad)
-                            .padding(.vertical, SFTheme.pillVerticalPad)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(isSelected ? .regular.tint(.white.opacity(0.18)).interactive()
-                                            : .regular.interactive(),
-                                 in: RoundedRectangle(cornerRadius: SFTheme.controlCorner))
-                    .accessibilityLabel(Text("\(title) palette slots"))
-                    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-                }
-            }
-        }
+        CellSelector(options: [(value: 0, label: "All"), (value: 1, label: "Real"), (value: 2, label: "Split")],
+                     selection: Binding(get: { cube.provMode }, set: { cube.provMode = $0 }))
     }
 
+    // Pixelated knob row: CellText label + CellSlider (a discrete cell stepper).
     private func slider(_ title: String,
                         value: Binding<Double>,
                         range: ClosedRange<Double>) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.85))
-            Slider(value: value, in: range, step: 1)
+        VStack(alignment: .leading, spacing: GlobalLattice.pt(1)) {
+            CellText(title, rows: 7, ink: Color(srgb8: SIMD3(210, 210, 210)))
+            CellSlider(value: value, range: range)
         }
     }
 
@@ -416,30 +423,24 @@ struct VoxelCubeView: View {
             }
     }
 
-    /// One clock: advance the 20 fps playback cursor (every 3rd 60 Hz tick) and
-    /// the slow auto-rotate. Reduce Motion freezes BOTH (the cube holds still;
-    /// the user can still scrub manually) — GLASS §6 RULE-GLASS-MOTION.
+    /// Auto-rotate driver ONLY. The playback cursor is advanced by the shared
+    /// `PlaybackClock` (the single clock) — this 60 Hz timer now drives just the slow
+    /// turntable. Reduce Motion freezes auto-rotate (the clock owns the playback
+    /// freeze); the user can still orbit/scrub by hand.
     private func advance() {
-        guard !reduceMotion else { return }
-        tick &+= 1
-        if cube.playing, tick % (Self.displayHz / SFTheme.gifFrameRate) == 0 {
-            cube.frame = (cube.frame + 1) % VoxelCubeData.frameCount
-        }
-        if cube.autoRotate {
-            cube.yaw += 0.010
-            // Ease the elevation up to the 8-bit iso angle (30°) so auto-rotate is a
-            // dimetric TURNTABLE showing the 2:1 look, not a flat spin. Blooms smoothly
-            // out of the rest pose; the auto-fit window keeps the whole cube framed.
-            cube.pitch += (VoxelIso.pitch - cube.pitch) * 0.08
-        }
+        guard !reduceMotion, cube.autoRotate else { return }
+        // Ease the elevation up to the 8-bit iso angle (30°) so auto-rotate is a
+        // dimetric TURNTABLE showing the 2:1 look, not a flat spin. Blooms smoothly
+        // out of the rest pose; the auto-fit window keeps the whole cube framed.
+        cube.yaw += 0.010
+        cube.pitch += (VoxelIso.pitch - cube.pitch) * 0.08
     }
 
     private var placeholder: some View {
         RoundedRectangle(cornerRadius: SFTheme.cardCorner)
             .fill(.white.opacity(0.06))
             .frame(width: edge, height: edge)
-            .overlay(Text("Voxel data unavailable")
-                .font(.caption).foregroundStyle(.white.opacity(0.6)))
+            .overlay(CellText("Voxel data unavailable", rows: 8, ink: Color(srgb8: SIMD3(150, 150, 150))))
     }
 }
 
@@ -449,6 +450,8 @@ struct VoxelCubeView: View {
 private struct VoxelMetalView: UIViewRepresentable {
     let data: VoxelCubeData
     let state: VoxelCubeState
+    /// The front-face frame, supplied by the shared `PlaybackClock`.
+    let frame: Int
     /// Shared cross-view brush: palette index to highlight, or nil.
     var brushedIndex: Int?
     /// Brush set per radix (BrushSet.mode): 0 single / 1 quad (4⁴) / 2 σ-pair (2⁸).
@@ -466,12 +469,12 @@ private struct VoxelMetalView: UIViewRepresentable {
         v.isPaused = false
         v.enableSetNeedsDisplay = false
         v.clearColor = MTLClearColorMake(0, 0, 0, 1)
-        context.coordinator.apply(state, brushedIndex: brushedIndex, brushMode: brushMode)
+        context.coordinator.apply(state, frame: frame, brushedIndex: brushedIndex, brushMode: brushMode)
         return v
     }
 
     func updateUIView(_ uiView: MTKView, context: Context) {
-        context.coordinator.apply(state, brushedIndex: brushedIndex, brushMode: brushMode)
+        context.coordinator.apply(state, frame: frame, brushedIndex: brushedIndex, brushMode: brushMode)
     }
 }
 
@@ -589,10 +592,10 @@ private final class Renderer: NSObject, MTKViewDelegate {
         super.init()
     }
 
-    func apply(_ s: VoxelCubeState, brushedIndex: Int? = nil, brushMode: Int32 = 0) {
+    func apply(_ s: VoxelCubeState, frame: Int, brushedIndex: Int? = nil, brushMode: Int32 = 0) {
         uniforms.yaw = s.yaw
         uniforms.pitch = s.pitch
-        uniforms.frame = Int32(max(0, min(63, s.frame)))
+        uniforms.frame = Int32(max(0, min(63, frame)))
         uniforms.tLo = Int32(max(0, min(63, s.tLo)))
         uniforms.tHi = Int32(max(0, min(63, s.tHi)))
         uniforms.lumaFloor = Int32(max(0, min(255, s.lumaFloor)))
@@ -678,7 +681,7 @@ private func makeSyntheticVoxelData() -> VoxelCubeData {
 }
 
 #Preview("Voxel Cube — synthetic") {
-    VoxelCubeView(data: makeSyntheticVoxelData())
+    VoxelCubeView(data: makeSyntheticVoxelData(), clock: PlaybackClock(count: 64))
         .padding()
         .preferredColorScheme(.dark)
 }

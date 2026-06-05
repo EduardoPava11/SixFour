@@ -113,9 +113,8 @@ struct ClusterStatistics: Sendable, Codable {
         let extractMillis: Int
         /// Mean squared error in OKLab units²:
         ///   `Σ_i ‖tile.pixels[i] − clusters[assignments[i]].mean‖² / nPixels`
-        /// Lower = tighter quantization. Surfaced in
-        /// `StatsFooterView` so the user can compare algorithms on
-        /// the same scene.
+        /// Lower = tighter quantization. (A per-algorithm diagnostic; the shipped
+        /// Review status line surfaces the Q16-domain `meanExtractMSE` instead.)
         let mse: Float
     }
 

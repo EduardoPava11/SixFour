@@ -9,6 +9,10 @@ struct CaptureView: View {
     var body: some View {
         rootContent
             .task { await vm.bootstrap() }
+            // Re-sync the live preview's dither when a Settings flip changes the sampler,
+            // so a mid-session change isn't stale on the 384pt hero (#2).
+            .onChange(of: vm.settings.ditherConfig) { _, _ in vm.syncPreviewDither() }
+            .onChange(of: vm.settings.useDeterministicCore) { _, _ in vm.syncPreviewDither() }
             .sheet(isPresented: $showSettings) {
                 SettingsView(settings: vm.settings)
             }
@@ -51,11 +55,19 @@ struct CaptureView: View {
             CellFieldView(tint: vm.sceneGroundTint)
                 .ignoresSafeArea()
 
+            // Top-weighted GRID band map (§0.0.4): title + 384 pt hero ride HIGH; the
+            // flexible Spacer pushes the shutter/ring/readout into the bottom thumb arc.
             VStack(spacing: 0) {
                 topBar
+                    .padding(.horizontal, GlobalLattice.pt(4))
                 Spacer(minLength: GlobalLattice.pt(6))
-                previewBlock                 // the centred anchor
-                Spacer(minLength: GlobalLattice.pt(6))
+                previewBlock                 // the 384 pt anchor, near the top
+                // Honesty note when the hero can't show the exact export look (#2).
+                if let note = vm.previewSamplerNote {
+                    CellText(note, rows: 7, ink: Color(srgb8: SIMD3(130, 130, 130)))
+                        .padding(.top, GlobalLattice.pt(2))
+                }
+                Spacer(minLength: 0)         // flexible — controls fall to the thumb zone
                 if let summary = vm.lastTimingSummary {
                     // Flat opaque cell strip (GRID §6.10: glass RETIRED on the HUD;
                     // Law #2: no opacity on a cell). Same vocabulary as `bannerText`.
@@ -66,9 +78,9 @@ struct CaptureView: View {
                         .padding(.bottom, GlobalLattice.pt(4))
                 }
                 bottomBar
+                    .padding(.horizontal, GlobalLattice.pt(4))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .padding(.horizontal, GlobalLattice.pt(8))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.vertical, GlobalLattice.pt(6))
         }
     }
@@ -80,8 +92,9 @@ struct CaptureView: View {
     /// The focus reticle is overlaid in the preview's OWN coordinate space, so it
     /// needs no global-offset math (which is what previously skewed the layout).
     private var previewBlock: some View {
-        // The GIF's cell count (spec-canonical) at the HUD's 2pt lattice pitch.
-        let side = GlobalLattice.pt(SFTheme.gifSideCells)   // 64 × 2 = 128 pt
+        // The 64×64 GIF at the gifPx ATOM — the full-width 384 pt hero (v2.0). Each GIF
+        // pixel is 6 pt / 18 device-px: first-class, byte-and-size-identical to Review.
+        let side = GlobalLattice.gif(SFTheme.gifSideCells)   // 64 × 6 = 384 pt
         return ZStack {
             if let session = vm.session?.session {
                 CameraPreview(session: session) { devicePoint, localPoint in
@@ -112,9 +125,9 @@ struct CaptureView: View {
 
     private var topBar: some View {
         HStack(spacing: GlobalLattice.pt(5)) {
-            // Title as lattice cells — the SAME 2pt cell as the preview + field.
-            // TITLE register = 20 cells (owned by the lattice); opaque ink (Law #2).
-            CellText("SixFour", rows: GlobalLattice.wordmarkRows, ink: .white)
+            // Title as chunky gifPx glyphs — the SAME atom as the preview + field
+            // (v2.0). TITLE band = wordmarkRows (8) atoms tall = 48 pt; opaque ink (Law #2).
+            CellText("SixFour", rows: GlobalLattice.wordmarkRows, cell: GlobalLattice.gifPx, ink: .white)
             Spacer()
             // Settings — a 24-cell gear (48pt). Glass is retired on the capture
             // HUD per GRID; the gear is cells at the one 2pt pitch, like everything.

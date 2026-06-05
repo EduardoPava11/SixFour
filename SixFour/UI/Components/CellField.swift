@@ -116,8 +116,8 @@ struct CellFieldView: View {
                 Image(uiImage: img)
                     .interpolation(.none)
                     .resizable()
-                    .frame(width: GlobalLattice.pt(CellField.cols),    // 402 — exact 2 pt pitch
-                           height: GlobalLattice.pt(CellField.rows))   // 874 — no fractional resample
+                    .frame(width: GlobalLattice.gif(CellField.cols),    // 67·6 = 402 — exact atom pitch
+                           height: GlobalLattice.gif(CellField.rows))   // 145·6 = 870 (+4 pt bleed) — no resample
             } else {
                 Color.black
             }
