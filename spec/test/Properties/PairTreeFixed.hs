@@ -38,4 +38,14 @@ tests = testGroup "PairTreeFixed (owned integer Haar — reversible lifting)"
 
   , testProperty "a move preserves well-formedness (structure unchanged)" $
       forAll genMoveI $ \m -> forAll genHaarI $ \s -> lawMovePreservesWellFormed m s
+
+  , -- The abstraction cascade (Q16, byte-exact to Zig s4_haar_level_nodes).
+    testProperty "levelNodesFixed: 2^level nodes at each level (cascade shape)" $
+      forAll genHaarI lawLevelNodesFixedCount
+
+  , testProperty "levelNodesFixed (treeDepthI) = reconstructFixed (exact)" $
+      forAll genHaarI lawLevelNodesFixedFull
+
+  , testProperty "shutter = levelNodesFixed 4 has exactly 16 colours on a 256-leaf palette" $
+      forAll (vectorOf 256 genPxI) $ \ls -> length (levelNodesFixed 4 (analyzeFixed ls)) == 16
   ]

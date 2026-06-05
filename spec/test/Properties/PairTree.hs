@@ -47,6 +47,20 @@ tests = testGroup "PairTree (Haar pairing pyramid — the NN's dimensional space
   , testProperty "leaf count = 2^depth" $
       forAll genHaar lawLeafCount
 
+  , -- The abstraction cascade: levelNodes are genuine coarse palettes (parent means).
+    testProperty "levelNodes: 2^level nodes at each level (cascade shape)" $
+      forAll genHaar lawLevelNodesCount
+
+  , testProperty "levelNodes (treeDepth) = reconstruct (deepest level is the palette)" $
+      forAll genHaar lawLevelNodesFull
+
+  , testProperty "levelNodes l !! i = mean of its 2^(D−l) leaf subtree (true abstraction)" $
+      forAll genHaar (lawLevelNodesParentMean 1e-9)
+
+  , testProperty "shutter = levelNodes 4 has exactly 16 colours on the 256-leaf palette" $
+      forAll genLeaves $ \ls ->
+        not (length ls == 256) || length (levelNodes 4 (analyze ls)) == 16
+
   , testProperty "bounded offsets ⇒ gamut closure" $
       forAll genBoundedHaar lawGamutClosure
 

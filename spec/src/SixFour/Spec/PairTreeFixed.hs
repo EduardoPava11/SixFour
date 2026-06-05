@@ -45,6 +45,10 @@ module SixFour.Spec.PairTreeFixed
     -- * Reversible integer lifting (palette ↔ tree)
   , analyzeFixed
   , reconstructFixed
+    -- * Coarse-level node colours (byte-exact to Zig @s4_haar_level_nodes@)
+  , levelNodesFixed
+  , lawLevelNodesFixedCount
+  , lawLevelNodesFixedFull
     -- * Reversible integer moves (the path through LAB)
   , MoveI(..)
   , applyMoveI
@@ -130,6 +134,17 @@ reconstructFixed (HaarPaletteI rt lvls) = foldl step [rt] lvls
   where step nodes offs = concat [ let (x, y) = unliftPair n d in [x, y]
                                   | (n, d) <- zip nodes offs ]
 
+-- | The integer node colours at a given pairing @level@ — the **abstraction
+-- cascade**, Q16. @level 0 = [rootI]@; @level i@ has @2^i@ nodes; @level treeDepthI@
+-- is the full leaf palette. This is 'reconstructFixed' stopped after @level@
+-- inverse-lift expansions, so it is byte-identical to the Zig
+-- @s4_haar_level_nodes(level, …)@ kernel (same @divFloor@ rounding). SixFour
+-- surfaces @levelNodesFixed 4@ (16 colours) as the capture shutter.
+levelNodesFixed :: Int -> HaarPaletteI -> [OKLabI]
+levelNodesFixed level (HaarPaletteI rt lvls) = foldl step [rt] (take (max 0 level) lvls)
+  where step nodes offs = concat [ let (x, y) = unliftPair n d in [x, y]
+                                  | (n, d) <- zip nodes offs ]
+
 -- ---------------------------------------------------------------------------
 -- Reversible integer moves (the path through LAB)
 -- ---------------------------------------------------------------------------
@@ -181,6 +196,18 @@ lawAnalyzeReconstructStructure hp =
   let leaves = reconstructFixed hp
   in length leaves == 2 ^ treeDepthI hp
      && treeDepthI (analyzeFixed leaves) == treeDepthI hp
+
+-- | 'levelNodesFixed' has @2^level@ nodes at every level @0..treeDepthI@ (for a
+-- well-formed tree) — the cascade shape 256→…→16→…→4→…→1.
+lawLevelNodesFixedCount :: HaarPaletteI -> Bool
+lawLevelNodesFixedCount hp =
+  not (wellFormedI hp) ||
+  and [ length (levelNodesFixed l hp) == 2 ^ l | l <- [0 .. treeDepthI hp] ]
+
+-- | The deepest level is the full palette: @levelNodesFixed (treeDepthI) ==
+-- reconstructFixed@ (exact, integer).
+lawLevelNodesFixedFull :: HaarPaletteI -> Bool
+lawLevelNodesFixedFull hp = levelNodesFixed (treeDepthI hp) hp == reconstructFixed hp
 
 -- | A move composed with its inverse is EXACTLY the identity (integer reversibility).
 lawMoveRoundTripExact :: MoveI -> HaarPaletteI -> Bool

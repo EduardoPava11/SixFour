@@ -29,6 +29,11 @@ module SixFour.Spec.PairTree
     -- * Forward / inverse Haar (palette ↔ tree)
   , reconstruct
   , analyze
+    -- * Coarse-level node colours (the abstraction cascade the UI surfaces)
+  , levelNodes
+  , lawLevelNodesCount
+  , lawLevelNodesFull
+  , lawLevelNodesParentMean
     -- * Degrees of freedom of interest
   , pairOffsets
   , pairDistances
@@ -117,6 +122,17 @@ reconstruct :: HaarPalette -> [OKLab]
 reconstruct (HaarPalette rt lvls) = foldl step [rt] lvls
   where step nodes offs = concat [ [addOK n d, subOK n d] | (n, d) <- zip nodes offs ]
 
+-- | The node colours at a given pairing @level@ (the **abstraction cascade**).
+-- @level 0 = [root]@ (1 node); @level i@ has @2^i@ nodes; @level treeDepth@ is the
+-- full leaf palette. This is 'reconstruct' stopped after @level@ expansions, so each
+-- node is the Haar **parent average** of its @2^(D−level)@ leaf descendants
+-- (see 'lawLevelNodesParentMean'). SixFour surfaces @levelNodes 4@ (16 colours) as
+-- the capture shutter and @levelNodes 2@ (4 colours) as a deeper drill; the Zig core
+-- exposes these via @s4_haar_level_nodes@ (byte-exact against the Q16 form).
+levelNodes :: Int -> HaarPalette -> [OKLab]
+levelNodes level (HaarPalette rt lvls) = foldl step [rt] (take (max 0 level) lvls)
+  where step nodes offs = concat [ [addOK n d, subOK n d] | (n, d) <- zip nodes offs ]
+
 -- | Forward Haar: collapse a palette of @2^D@ leaves into its tree. Adjacent
 -- leaves @(x,y)@ give parent @(x+y)/2@ and offset @(x−y)/2@; recurse to the root.
 -- Inverse of 'reconstruct' (see 'lawReconstructAnalyzeRoundTrip').
@@ -198,6 +214,36 @@ lawReconstructAnalyzeRoundTrip tol leaves =
      let back = reconstruct (analyze leaves)
      in length back == n && and (zipWith (okClose tol) back leaves)
   where isPow2 m = m > 0 && (m == 2 ^ (round (logBase 2 (fromIntegral m :: Double)) :: Int))
+
+-- | 'levelNodes' has @2^level@ nodes at every level @0..treeDepth@ (for a
+-- well-formed tree). Pins the cascade's shape (256→…→16→…→4→…→1).
+lawLevelNodesCount :: HaarPalette -> Bool
+lawLevelNodesCount hp =
+  not (wellFormed hp) ||
+  and [ length (levelNodes l hp) == 2 ^ l | l <- [0 .. treeDepth hp] ]
+
+-- | The deepest level is the full palette: @levelNodes (treeDepth) == reconstruct@.
+lawLevelNodesFull :: HaarPalette -> Bool
+lawLevelNodesFull hp = levelNodes (treeDepth hp) hp == reconstruct hp
+
+-- | The semantic heart of the abstraction cascade: each level-@l@ node is the
+-- **mean of its @2^(D−l)@ leaf descendants** (a contiguous block in 'reconstruct'
+-- order). So @levelNodes 4@ really is "the palette coarsened to 16 colours", not an
+-- arbitrary reduction — every shutter colour is the average of the 16 palette leaves
+-- beneath it. (Exact up to @tol@: the offsets within each subtree cancel.)
+lawLevelNodesParentMean :: Double -> HaarPalette -> Bool
+lawLevelNodesParentMean tol hp =
+  not (wellFormed hp) || all okLevel [0 .. d]
+  where
+    d      = treeDepth hp
+    leaves = reconstruct hp
+    okLevel l =
+      let nodes = levelNodes l hp
+          blk   = 2 ^ (d - l)
+          mean js = scaleOK (1 / fromIntegral (max 1 (length js)))
+                            (foldl addOK (OKLab 0 0 0) js)
+      in and [ okClose tol (nodes !! i) (mean (take blk (drop (i * blk) leaves)))
+             | i <- [0 .. length nodes - 1] ]
 
 -- | Aggregate balance: the offsets cancel, so the mean of the leaves equals the
 -- root. ("The pairs balance each other.")
