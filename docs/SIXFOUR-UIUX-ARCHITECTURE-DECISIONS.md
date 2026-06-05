@@ -196,3 +196,56 @@ risky refactors are isolated.
 - FSM scope fork → **ADR-2** (per-screen).
 - Cloud-projection constants un-spec'd / orbit divergence → **ADR-3**.
 - Per-byte bake loops / LOOK-LAYOUT coupling → **ADR-4**.
+
+---
+
+## ADR-6 — One ScreenLattice: divide the screen into cells, assign by region
+
+**Context.** A recurring structural bug (audited 2026-06-05 via the
+`sixfour-screen-lattice-audit` workflow, grounded in an on-device screenshot): the capture screen
+was **two spatial systems** — a fixed centred `CellField` background + a floating `VStack`+`Spacer`
+column of widgets — running **four pitches** (field 6 pt, palette 12 pt, shutter 24 pt, spacing
+2 pt) with **no safe-area awareness**. Result: the preview bled under the Dynamic Island and content
+floated off-grid with dead black gaps. The doc's own geometry was contradictory (v2.0 §0.0.4 67×145
+vs leftover v1.0 §2.3/§2.5 437-row @2 pt) — the recurrence vector.
+
+**Decision (owner-aligned).**
+1. **One pitch** — `gifPx = 6 pt`, no exceptions (the 2 pt `subPt` is retired; a region's cell is
+   N atoms, the atom is always 6 pt).
+2. **Fixed safe margins** — reserve top 11 rows (62 pt, clears the Island) / bottom 6 rows (34 pt)
+   on the fixed iPhone 17 Pro geometry (402×874; *not* Pro Max). No runtime inset read.
+3. **One assigned grid** — a single `ScreenLattice` (`SixFour/UI/ScreenLattice.swift`) owns the
+   67×145 @6 pt grid; every region (preview / palette / shutter / gear / ground) is pinned to
+   **absolute cell coordinates** via `.latticeRegion(_:)`. No `VStack`/`Spacer` for content.
+4. **One geometry** — §0.0.4 v2.0 is canonical; the v1.0 §2.1/§2.3/§2.5/§3.2 numbers were
+   reconciled inline (this pass) so the doc no longer contradicts itself.
+
+**Status.** Implemented on `CaptureView.latticeScene` (legacy floating HUD kept behind
+`gridFirstCapture`); device build + GRID lint green. The screenshot's three defects map to the three
+removed causes: island-bleed ← no safe rows; float/gaps ← VStack+Spacers; off-grid sizes ← four
+pitches.
+
+**Regression guard (planned, ADR-6a).** Make the structure un-regressable: (a) a CI lint failing on
+`Spacer(`/`maxHeight: .infinity` for content positioning; (b) a one-pitch lint failing on numeric
+`cellPt:` literals or `GlobalLattice.pt(...)` used for widget SIZE; (c) a coverage unit test that
+every one of the 67×145 cells maps to exactly one `ScreenLattice` region (the divide→assign
+contract); (d) a codegen/doc check that §2.x numbers equal the §0.0.4 band-map. Because the lattice
+is generated from `Spec.Lattice` and gated by `cabal test`, re-introducing a second pitch or a
+floating layout fails before merge.
+
+**Root anti-pattern to avoid forever:** *widget-composition* (additive VStack that stacks views and
+hopes they fit) instead of *lattice-assignment* (every region claims specific cells from one grid
+that already accounts for the safe area). The latter is the law.
+
+---
+
+## Phase 6+ implementation status (this session)
+
+- **Haar level-nodes (ADR-5a):** DONE — `Spec.PairTree.levelNodes` / `PairTreeFixed.levelNodesFixed`
+  → Zig `s4_haar_level_nodes` (golden byte-exact) → Swift `SixFourNative.haarLevelColors`. Used by
+  the 4×4 shutter (`HaarShutterView`) in review + capture.
+- **Capture live-frame fix:** DONE — `burstFrameCallback` streams each frame to the preview at the
+  ~20 fps burst cadence (no more frozen screen).
+- **Grid-first cascade:** DONE on review + capture (GIF → 16×16 palette → 4×4 Haar shutter); legacy
+  explorer/HUD suspended behind flags.
+- **ScreenLattice (ADR-6):** DONE on capture; review screen + the regression guards are the next step.

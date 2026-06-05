@@ -4,7 +4,18 @@
 **Scope:** the whole app (capture + Review/palette) on **one atom**. Named exemptions in §9.7.
 **Maturity flag (read this first):** the *numbers* in this document are locked and enforceable; the *enforcement machinery* (`Spec.Lattice`/`Spec.CellShapes`/`Spec.CellFont`, the `setCell` primitive, the single-pitch lint) is **specified here but not yet built**. Every place this matters is marked **[PLANNED]**. Do not read any "is golden-pinned" sentence as "already passes a test today" unless it lacks the [PLANNED] tag.
 
-> **⚠ v2.0 AMENDMENT GOVERNS (read §0.0 first).** v1.0 made the **2 pt** screen cell the atom and the 64×64 GIF a 128 pt *sub-grid instance* of it. The owner's call (2026-06-04): that is "pixelated but not first-class" — the GIF is the product, so **the GIF pixel must BE the atom, not a derived size.** §0.0 inverts the hierarchy: `gifPx = 6 pt` is now THE atom; the old 2 pt cell survives only as `subPx`, a thrice-finer **text-density sub-pixel exception**. **Where any number or law in the body below (§1–§10) conflicts with §0.0, §0.0 wins.** A full line-by-line body reconciliation is tracked in §0.0's supersession map; the cardinal laws, foundations §2, the band map §7.1, and the touch rule §8.4 are reconciled inline already.
+> **⚠ ONE GEOMETRY, ONE PITCH — the single source of truth (updated 2026-06-05).**
+> `gifPx = 6 pt` is THE atom; the screen is **67 × 145 atoms** (iPhone 17 Pro 402×874, *not* Pro
+> Max); the preview is a **full-width 384 pt** (64²) hero. **Code truth = `SixFour/UI/ScreenLattice.swift`**
+> (the single screen lattice that divides the screen into cells and assigns each by region), gated by
+> `Spec.Lattice`. **One pitch, no exceptions** (owner decision 2026-06-05, ADR-6 / Q1): the old 2 pt
+> `cellPt`/`subPx` is **RETIRED — there is no sub-pixel text exception**; text renders on 6 pt cells.
+> **Every v1.0 number still quoted in the body below (§1–§10) — `2 pt cellPt`, `201 × 437`, preview
+> `rows 143–206`, `128 pt preview`, `subPx` — is RETIRED and illustrative-only; read it as its v2.0
+> equivalent. It is NOT a second spec.** Where the body conflicts with this banner / §0.0, this wins.
+> (Earlier drafts claimed §2 was "reconciled inline"; §2.1/§2.3/§2.5/§3.2 are now actually rewritten
+> to v2.0 — the remaining §6/§7 v1.0 numbers are governed by this banner until the codegen band-map
+> from `Spec.Lattice` replaces them, the durable fix per ADR-6a.)
 
 ---
 
@@ -146,19 +157,30 @@ Every cell text/icon carries a real `accessibilityLabel`; decorative cells are `
 These are derived facts, not choices.
 
 ### 2.1 The atom: the cell
-`cellPt = 2 pt = 6 device-px @3x` (`scale = 3`, `cellPx = 6`). The GIF's fat-pixel pitch and every widget's pitch, identically. Nothing on a governed surface is smaller than one cell or measured in anything but cells.
+**v2.0 (authoritative — see §0.0.1):** `gifPx = 6 pt = 18 device-px @3x` (`scale = 3`). The GIF's fat-pixel pitch and **every widget's pitch, identically — the ONE atom** (decision 2026-06-05: no sub-pixel; the retired 2 pt `cellPt` is gone). A region's cell may be N atoms (palette cell = 2×2 atoms, shutter cell = 4×4), but the atom is always `gifPx`. Nothing on a governed surface is smaller than one atom or measured in anything else. **Code owner: `SixFour/UI/ScreenLattice.swift`** (the single screen lattice) + `GlobalLattice`.
 
 ### 2.2 The global lattice — `gifPx`-derived *(v2.0 — see §0.0.2)*
 The atom is `gifPx = 6 pt` (the product's pixel, §0.0.1), so the lattice is **67 columns (x 0…66) × 145 rows (y 0…144)**: `402 / 6 = 67` exactly (no horizontal remainder), `874 / 6 = 145.67` → 145 rows (870 pt) + a **4 pt bleed** absorbed into the bottom safe band. (v1.0 chose 2 pt *because* `gcd(402,874)=2` is the unique zero-remainder pitch and "6 pt can't tile 874" — v2.0 accepts a sub-atom vertical bleed as the price of making the GIF pixel the atom; the bleed lands off-lattice in the home-indicator band, so no governed cell is split.) The lattice is owned by `GlobalLattice`.
 
 ### 2.3 The golden-section vertical layout
-The 64-cell preview is the primary **anchor**, LOCKED at **rows 143–206, cols 68–131**. Of the 373 non-preview rows, the split is **143 above : 64 preview : 230 below**, where `230 / 143 ≈ 1.608 ≈ φ`. The golden split is a *consequence* of the anchor, asserted by `Spec.Lattice` (`lawGoldenSplit` + `lawPreviewRect`), not eyeballed. **Parity note (corrected):** the COLUMN start is even (68) and the rect is centered on the col-99.5 centerline (`68 + 131 = 199 = cols − 2`); the ROW anchor (143) is **odd on purpose** — fixed by the golden section, not by parity. (An earlier draft claimed "even-start on both axes"; `lawPreviewRect` proves that false for the row, so the over-claim is retired — only the horizontal axis is even/centered.) A full-width 384 pt preview would require a 6 pt pitch the lattice forbids; the 384→128 pt shrink is a **decisions-gate** item (§9.5), not a free parameter.
+**RETIRED v1.0 — superseded by §0.0.4 (v2.0) + `SixFour/UI/ScreenLattice.swift`.** The v1.0
+numbers in this paragraph (rows 143–206, 201×437 @2 pt field, 128 pt preview) are the very
+geometry whose contradiction with §0.0.4 kept re-seeding the structural bug (audit 2026-06-05);
+they are kept only as history. **The v2.0 truth:** at `gifPx = 6 pt` the lattice is 67×145; the
+preview is a **full-width 384 pt** (64²) hero, and the screen is the grid-first cascade
+(preview → palette → shutter) pinned to **absolute lattice rows** by `ScreenLattice` (preview 13,
+palette 84, shutter 123), golden-spaced inside the safe band — no floating layout, one pitch.
 
 ### 2.4 The Fibonacci size ladder
 Widget *sizes* are drawn from a φ ladder. **v2.0 pinned floors (in `gifPx`):** interactive ≥ **8 gifPx** (48 pt); **shutter = 12 gifPx** (72 pt); **secondary control = 8 gifPx** (48 pt); **preview = 64 gifPx** (384 pt); **ring = Ø 20 gifPx** (120 pt). *(v1.0 expressed these as 22/34/24/64/60 two-pt cells; §0.0.3 is the conversion of record.)* **Ladder exemption registry** (counts and HIG/OS constants are *not* sizes and are exempt by definition): `touchFloorCells = 22` (HIG 44 pt floor), `controlCells = 24` (HIG-derived, 8 pt-grid-aligned), `ring.tick.countCells = 64` (a count = `previewCells`), `digit.glyphBoxCells = 10×18`, `title.glyph.advanceCells` (glyph metrics). Anything off-ladder that is *not* in this registry requires a new documented exemption.
 
 ### 2.5 Runtime safe-area band shift
-Bands are authored against the nominal 437-row field and shifted at runtime by whole cells: `safeTopRows = ceil(insets.top / cellPt)`, `safeBottomRows = floor(insets.bottom / cellPt)`, owned by `GlobalLattice`. Dynamic Island ≈ 31 rows (top), home indicator ≈ 17 rows (bottom) — field-only; no interactive cell in a corner.
+**Safe-area = FIXED margins (decision 2026-06-05, Q2), implemented in `ScreenLattice.swift`.** On
+the fixed iPhone 17 Pro geometry (402×874, NOT Pro Max), reserve **top 11 rows (62 pt — clears the
+Dynamic Island)** and **bottom 6 rows (34 pt — home indicator)** at the 6 pt atom; content bands
+live in rows 11–138. The earlier *runtime* whole-cell inset shift (`ceil(insets/cellPt)` against a
+437-row 2 pt field) is RETIRED in favour of these fixed margins — simpler and fully testable. No
+interactive cell in a corner. (If a non-17-Pro device is ever targeted, revisit with a runtime read.)
 
 ### 2.6 Colour, `sceneTint`, and the luminance model
 Field and chrome tint derive from `sceneTint` (the quantized live-scene palette), darkened and clamped. Contrast uses linearized-sRGB relative luminance `Y = 0.2126·R_lin + 0.7152·G_lin + 0.0722·B_lin` (**NOT** OKLab L). The brightest *allowed* `sceneTint` is the worst case and the chrome outline is luminance-flipped against it. Anchors: `ledGhost = (40,40,40)` opaque (the only off-segment fill, never `white.opacity`); `Color(srgb8:)` is the one sRGB8→Color conversion (explicit `.sRGB`).
@@ -189,8 +211,8 @@ Three tiers (Material 3 / Carbon / Polaris): **reference → system/semantic →
 |---|---|---|---|
 | `cellPt` | 2 | pt | the one pitch (6 device-px @3x) |
 | `scale` | 3 | — | pt → device-px |
-| `lattice.colsCells` | 201 | cells | full-screen width |
-| `lattice.rowsCells` | 437 | cells | full-screen height |
+| `lattice.colsCells` | 67 | atoms | full-screen width (v2.0; was 201 @2 pt) |
+| `lattice.rowsCells` | 145 | atoms | full-screen height +4 pt bleed (v2.0; was 437 @2 pt) |
 | `fib.ladderCells` | [8,13,21,34,55,89] | cells | the φ size scale |
 | `previewCells` | 64 | cells | cube law (1 cell = 1 GIF px) |
 | `touchFloorCells` | 22 | cells (HIG) | 44 pt minimum hit |
