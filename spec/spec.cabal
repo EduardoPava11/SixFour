@@ -42,6 +42,7 @@ library
         SixFour.Spec.Lattice
         SixFour.Spec.CellFiber
         SixFour.Spec.CellGrid
+        SixFour.Spec.Display
         SixFour.Spec.CellShapes
         SixFour.Spec.SevenSeg
         SixFour.Spec.CloudProjection
@@ -260,6 +261,7 @@ test-suite spec-tests
         Properties.Lattice
         Properties.CellFiber
         Properties.CellGrid
+        Properties.Display
         Properties.CellShapes
         Properties.SevenSeg
         Properties.CloudProjection

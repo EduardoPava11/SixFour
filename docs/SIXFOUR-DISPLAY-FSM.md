@@ -401,8 +401,8 @@ and finite, dissolving any unbounded-carrier worry about `gridJoin`.)
 | gauge quotient / T6 | `Spec.Gauge` (`gaugeAction`, `gather`) | **proven** |
 | `δ_capture` (quantize+dither) | `Spec.QuantFixed`, `Spec.Dither` | **proven** |
 | observation `λ` (OKLab→sRGB8) | `Spec.ColorFixed` | **proven** |
-| grid bundle / fibre join / T9 | `Spec.CellFiber` (fibre + join law) `+` `Spec.CellGrid` (finite-`Place` base) | **to write** |
-| **NEW: T1, T2, T4-ext, T5, T7, T8, T9 + the composition** | **`Spec.Display`** (this map) | **to write** |
+| grid bundle / fibre join / T9 | `Spec.CellFiber` (fibre + join law) `+` `Spec.CellGrid` (finite-`Place` base) | **proven** |
+| **NEW: T1, T2, T4-ext, T5, T7, T8, T9 + the composition** | **`Spec.Display`** (this map) | **proven** (T1–T9 + composition + golden trace, 12 props green) |
 
 `Spec.Display` imports the modules above and proves T1–T9. Most reduce to a
 one-line citation of an imported law; the genuinely new content is **T1, T5, T7,
@@ -419,7 +419,7 @@ it the spatial sibling of T5's temporal totality.
 
 ## 6. The new module + codegen target
 
-### 6.1 `spec/src/SixFour/Spec/Display.hs` (signature only — to implement)
+### 6.1 `spec/src/SixFour/Spec/Display.hs` (IMPLEMENTED — T1–T9 + composition proven, `cabal test` green)
 ```haskell
 module SixFour.Spec.Display
   ( -- * Mode + state
@@ -448,7 +448,7 @@ Swift `PlaybackClock`/capture path must reproduce bit-for-bit. Emitted from
 `Spec/Codegen/Swift.hs`; `cabal test` is the gate (CLAUDE.md build/test).
 
 ### 6.3 Order of work (spec-first, per `SIXFOUR-SPEC-METHODOLOGY.md`)
-1. Write `Spec.Display` + `Properties.Display` (T1–T8), `cabal test` green.
+1. ✅ DONE — `Spec.Display` + `Properties.Display` (T1–T9 + composition + golden trace), `cabal test` green (512 tests).
 2. `cabal run spec-codegen` → `DisplayContract.swift`.
 3. Swift: swap `PlaybackClock`'s `Timer` → `CADisplayLink(20,20,20)`; advance off
    `targetTimestamp`; retire the `VoxelCubeView` 60 Hz timer (T1, T2).
