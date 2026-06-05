@@ -14,7 +14,6 @@ struct HaarShutterView: View {
     /// Optional tap action (capture screen). Nil ⇒ a static display (review).
     var onTap: (() -> Void)? = nil
 
-    private static let frameInk = SIMD3<UInt8>(78, 78, 92)
     private static let empty = SIMD3<UInt8>(20, 20, 24)
 
     /// The 16 level-4 colours, via the Zig Haar kernel. Computed once per palette
@@ -25,14 +24,11 @@ struct HaarShutterView: View {
 
     var body: some View {
         let c = colors
+        // Frame is a cell-ring (exact-geometry pass), not a vector stroke (GRID law).
         let grid = CellSprite(cols: 4, rows: 4, cellPt: cellPt) { col, row in
             let i = row * 4 + col
             return i < c.count ? c[i] : Self.empty
         }
-        .overlay(
-            Rectangle()
-                .stroke(Color(srgb8: Self.frameInk), lineWidth: 1.5)
-        )
         if let onTap {
             Button(action: onTap) { grid }
                 .buttonStyle(.plain)

@@ -6,6 +6,11 @@ struct CaptureView: View {
     @State private var reticle: ReticleHit? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// GRID-FIRST capture (ADR-5): the screen is the GIF → palette → shutter cascade.
+    /// Flip to `false` to restore the legacy HUD (title + diversity ring + readout +
+    /// CellShutter), which is kept in-tree below.
+    private let gridFirstCapture = true
+
     var body: some View {
         rootContent
             .task { await vm.bootstrap() }
@@ -55,30 +60,38 @@ struct CaptureView: View {
             CellFieldView(tint: vm.sceneGroundTint)
                 .ignoresSafeArea()
 
-            // Top-weighted GRID band map (§0.0.4): title + 384 pt hero ride HIGH; the
-            // flexible Spacer pushes the shutter/ring/readout into the bottom thumb arc.
+            // GRID-FIRST cascade (ADR-5): GIF 64² hero → 16×16 palette → 4×4 Haar
+            // shutter, each a coarser abstraction of the one above. No title, no ring,
+            // no readout — just the cascade. (Legacy chrome kept behind the flag.)
             VStack(spacing: 0) {
                 topBar
                     .padding(.horizontal, GlobalLattice.pt(4))
-                Spacer(minLength: GlobalLattice.pt(6))
-                previewBlock                 // the 384 pt anchor, near the top
-                // Honesty note when the hero can't show the exact export look (#2).
-                if let note = vm.previewSamplerNote {
-                    CellText(note, rows: 7, ink: Color(srgb8: SIMD3(130, 130, 130)))
-                        .padding(.top, GlobalLattice.pt(2))
+                if gridFirstCapture {
+                    Spacer(minLength: GlobalLattice.pt(6))
+                    previewBlock              // GIF 64² — 384 pt
+                    Spacer(minLength: GlobalLattice.pt(6))
+                    livePaletteGrid           // 256 colours — 16×16
+                    Spacer(minLength: GlobalLattice.pt(6))
+                    captureShutter            // 4×4 Haar level-4 — the capture button
+                    Spacer(minLength: 0)
+                } else {
+                    Spacer(minLength: GlobalLattice.pt(6))
+                    previewBlock              // the 384 pt anchor, near the top
+                    if let note = vm.previewSamplerNote {
+                        CellText(note, rows: 7, ink: Color(srgb8: SIMD3(130, 130, 130)))
+                            .padding(.top, GlobalLattice.pt(2))
+                    }
+                    Spacer(minLength: 0)
+                    if let summary = vm.lastTimingSummary {
+                        CellText(summary, rows: 11, ink: .white)
+                            .padding(.horizontal, GlobalLattice.pt(5))
+                            .padding(.vertical, GlobalLattice.pt(3))
+                            .background(Color(srgb8: SFTheme.ledGhost))
+                            .padding(.bottom, GlobalLattice.pt(4))
+                    }
+                    bottomBar
+                        .padding(.horizontal, GlobalLattice.pt(4))
                 }
-                Spacer(minLength: 0)         // flexible — controls fall to the thumb zone
-                if let summary = vm.lastTimingSummary {
-                    // Flat opaque cell strip (GRID §6.10: glass RETIRED on the HUD;
-                    // Law #2: no opacity on a cell). Same vocabulary as `bannerText`.
-                    CellText(summary, rows: 11, ink: .white)
-                        .padding(.horizontal, GlobalLattice.pt(5))
-                        .padding(.vertical, GlobalLattice.pt(3))
-                        .background(Color(srgb8: SFTheme.ledGhost))
-                        .padding(.bottom, GlobalLattice.pt(4))
-                }
-                bottomBar
-                    .padding(.horizontal, GlobalLattice.pt(4))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.vertical, GlobalLattice.pt(6))
@@ -121,6 +134,30 @@ struct CaptureView: View {
         }
         .frame(width: side, height: side)
         .clipped()
+    }
+
+    /// The live 256-colour palette as a 16×16 grid (192 pt) — the GIF's first
+    /// abstraction, recomputed ~3 fps from the preview tile.
+    private var livePaletteGrid: some View {
+        let pal = vm.livePalette
+        // Frame is a cell-ring (added in the exact-geometry pass), not a vector stroke
+        // (GRID: no raw primitives on the HUD).
+        return CellSprite(cols: 16, rows: 16, cellPt: 12) { c, r in
+            let i = r * 16 + c
+            return i < pal.count ? pal[i] : SIMD3<UInt8>(20, 20, 24)
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// The capture button = the 4×4 Haar level-4 abstraction of the live palette
+    /// (the third rung of the cascade). Tap to shoot; inert while busy.
+    private var captureShutter: some View {
+        let busy = isCurrentlyBusy
+        let disabled = vm.phase == .configuring || vm.phase == .unauthorized
+        return HaarShutterView(
+            palette: vm.livePalette.count == 256 ? vm.livePalette : [],
+            onTap: (busy || disabled) ? nil : { Task { await vm.capture() } }
+        )
     }
 
     private var topBar: some View {

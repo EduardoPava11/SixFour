@@ -112,6 +112,14 @@ final class CaptureViewModel {
     /// and this downsampled view. Nil until the first frame arrives.
     var previewTile: UIImage?
 
+    /// The live 256-colour palette of the current scene (sRGB8), recomputed from the
+    /// preview tile at ~3 fps (maximin, off the delegate queue). Drives the capture
+    /// screen's 16×16 palette grid + the 4×4 Haar shutter (the abstraction cascade,
+    /// ADR-5). Empty until the first throttled compute lands.
+    var livePalette: [SIMD3<UInt8>] = []
+    /// Throttle for `livePalette` (~3 fps; the maximin-256 is cheap but not free).
+    @ObservationIgnored nonisolated(unsafe) private var lastLivePaletteNanos: UInt64 = 0
+
     /// Snapshot of `settings.useDeterministicCore` read off the delegate queue
     /// by the preview callback, so the live 64×64 canvas shows the deterministic
     /// quantized look (vs the raw downsample). Updated on bootstrap and capture.
@@ -231,6 +239,16 @@ final class CaptureViewModel {
                     guard let self else { return }
                     self.previewTile = image
                     self.ingestSceneReadout(readout)
+                }
+                // Throttled live palette (~3 fps) for the capture-screen cascade
+                // (16×16 grid + 4×4 Haar shutter). Maximin-only (lloydIters 0) keeps
+                // it cheap; the real capture re-quantizes per frame at full quality.
+                let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+                if now &- self.lastLivePaletteNanos > 330_000_000 {
+                    self.lastLivePaletteNanos = now
+                    if let pal = Self.computeLivePalette(from: tile) {
+                        Task { @MainActor [weak self] in self?.livePalette = pal }
+                    }
                 }
             }
 
@@ -688,6 +706,17 @@ final class CaptureViewModel {
             UInt8(min(255, max(0, b.z.rounded())))
         )
         scene = SceneReadout(occupiedBins: bins, gauge: g, tint: tint, accents: r.accents)
+    }
+
+    /// The live 256-colour palette of one preview tile: OKLab → Q16 → maximin (no
+    /// Lloyd) → sRGB8. Runs on the delegate queue, throttled by the caller. Mirrors
+    /// the capture path's quantizer at preview speed for the on-screen cascade.
+    nonisolated private static func computeLivePalette(from tile: OKLabTile) -> [SIMD3<UInt8>]? {
+        guard tile.pixels.count == tile.side * tile.side, tile.pixels.count >= 256 else { return nil }
+        let q16 = SixFourNative.oklabToQ16(tile.pixels)
+        guard let q = SixFourNative.quantizeFrame(oklabQ16: q16, k: 256, lloydIters: 0),
+              let srgb = SixFourNative.paletteToSRGB8(centroidsQ16: q.centroids, k: 256) else { return nil }
+        return (0 ..< 256).map { SIMD3<UInt8>(srgb[$0 * 3], srgb[$0 * 3 + 1], srgb[$0 * 3 + 2]) }
     }
 
     /// Convert one 64×64 OKLab tile into a UIImage in the sRGB color
