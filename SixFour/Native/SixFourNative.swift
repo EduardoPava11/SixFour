@@ -338,6 +338,30 @@ enum SixFourNative {
         return (0 ..< n).map { SIMD3<Int32>(leaves[$0 * 3], leaves[$0 * 3 + 1], leaves[$0 * 3 + 2]) }
     }
 
+    /// The node colours at Haar pairing `level` (`s4_haar_level_nodes`) — the
+    /// abstraction cascade. `level 0` = `[root]`; `level i` = `2^i` nodes; `level
+    /// log2(n)` = the full leaf palette. SixFour surfaces `level 4` (16 colours) as
+    /// the capture shutter. `n` = total leaves (a power of two), `0 <= level <=
+    /// log2(n)`. Byte-exact vs `SixFour.Spec.PairTreeFixed.levelNodesFixed`.
+    static func haarLevelNodes(level: Int, root: SIMD3<Int32>, offsets: [SIMD3<Int32>]) -> [SIMD3<Int32>]? {
+        let n = offsets.count + 1
+        guard n > 0, (n & (n - 1)) == 0, level >= 0, (1 << level) <= n else { return nil }
+        let count = 1 << level
+        var rootFlat = [root.x, root.y, root.z]
+        var offFlat = [Int32](); offFlat.reserveCapacity(offsets.count * 3)
+        for o in offsets { offFlat.append(o.x); offFlat.append(o.y); offFlat.append(o.z) }
+        var nodes = [Int32](repeating: 0, count: count * 3)
+        let rc = rootFlat.withUnsafeBufferPointer { rp in
+            offFlat.withUnsafeBufferPointer { op in
+                nodes.withUnsafeMutableBufferPointer { np in
+                    s4_haar_level_nodes(Int32(level), rp.baseAddress, op.baseAddress, Int32(n), np.baseAddress)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_haar_level_nodes rc=\(rc)"); return nil }
+        return (0 ..< count).map { SIMD3<Int32>(nodes[$0 * 3], nodes[$0 * 3 + 1], nodes[$0 * 3 + 2]) }
+    }
+
     struct SignificanceResult { let indices: [UInt8]; let cellStats: [Int32] }  // cellStats: k×7
 
     /// Rebalance indices to ≥ minPopulation per slot; emit k×7 cell stats
