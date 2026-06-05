@@ -86,6 +86,6 @@ The UX surfaces (cloud, address-picker, treemap, grid, voxel-cube) are the **opt
 ---
 
 ## References
-- GRID `docs/SIXFOUR-DESIGN-LANGUAGE.md` · pixelation `docs/SIXFOUR-TOTAL-PIXELATION.md` (glass retired; `docs/archive/SIXFOUR-GLASS-LANGUAGE.md`) · high-D `docs/SIXFOUR-HIGHDIM-UIUX.md` · palette/volume `docs/palette-explorer-2d-3d-4d-design.md` (umbrella; cube shelved → `docs/archive/SIXFOUR-VOXEL-CUBE.md`).
+- UI/UX map (dimensions-first, 20 fps) `docs/SIXFOUR-UIUX-DIMENSIONAL-MAP.md` · GRID `docs/SIXFOUR-DESIGN-LANGUAGE.md` · pixelation `docs/SIXFOUR-TOTAL-PIXELATION.md` (glass retired; `docs/archive/SIXFOUR-GLASS-LANGUAGE.md`) · high-D `docs/SIXFOUR-HIGHDIM-UIUX.md` · palette/volume `docs/palette-explorer-2d-3d-4d-design.md` (umbrella; cube shelved → `docs/archive/SIXFOUR-VOXEL-CUBE.md`).
 - Look-NN: `docs/GIFA-GIFB-COLLAPSE-REDESIGN.md` (forward brief), `docs/L-NN-MASTER-DESIGN.md`, `docs/L-NN-FUNCTION-DESIGN.md` (research lineage in `docs/archive/`); `spec/src/SixFour/Spec/{LookNet*,Collapse,Bures,Preference,Diversity,PairTree,SplitTree,AddressPicker,CloudProjection,GridAxis}.hs`.
 - Precedent: AlphaGo/AlphaZero (policy+value+MCTS), KataGo (uncertainty-weighted playouts, optimistic policy), MAP-Elites / DPP quality-diversity.
