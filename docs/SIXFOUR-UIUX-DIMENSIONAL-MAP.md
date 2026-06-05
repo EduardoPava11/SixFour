@@ -10,7 +10,7 @@
 
 1. **Dimensional law (2D, pixels = I/O in time).** Every governed UI dimension is an integer count of the GIF pixel atom `gifPx`, and each visual axis projects exactly one data axis of the cube `(x, y, t)` or the palette `(L, a, b, t)`. Nothing on screen is free; everything traces to data.
 
-2. **One-clock law (20 fps = GIF rate).** A single `PlaybackClock` `Timer` fires at `1.0 / SFTheme.gifFrameRate` with `gifFrameRate = 20` (`SixFour/UI/Theme.swift:28`; `SixFour/UI/Components/PlaybackClock.swift:62`). The same `20` parametrises the encoder (`CaptureViewModel.swift:385`) and the burst capture (`CaptureViewModel.swift:197`). Screen refresh ≡ GIF frame rate ≡ the one timer.
+2. **One-clock law (hardened 20 fps = GIF rate).** A single clock at `gifFrameRate = 20` (`SixFour/UI/Theme.swift:28`) drives content advance, UI refresh, AND cube orientation: **one tick = one GIF frame = one render**, no phase divisor. The same `20` parametrises the encoder (`CaptureViewModel.swift:385`) and burst capture (`CaptureViewModel.swift:197`). The 50 ms tick IS the state machine's compute budget. *Decided 2026-06-05 (ADR-1, `SIXFOUR-UIUX-ARCHITECTURE-DECISIONS.md`): harden to one `CADisplayLink` @ 20 fps (a clean divisor of 60/120 Hz panels) replacing the Foundation `Timer` (`PlaybackClock.swift:62`) and the cube's 60 Hz timer (`VoxelCubeView.swift:232`); derive the cursor from `targetTimestamp`. Until implemented, the code still uses the 20 Hz `Timer` + a separate cube clock (see §6).*
 
 ---
 
@@ -111,9 +111,9 @@ The Review screen orchestrates three modes plus drill tools, all reading the *sa
 
 ## §6 — Open questions + gaps (where the maps flag drift/contradictions)
 
-**Clock-law violations / motion sources beyond the one clock.**
-- **VoxelCube 60 Hz auto-rotate is a second motion source.** `rotateClock = Timer.publish(every: 1.0/displayHz …)` (`VoxelCubeView.swift:232`) drives orientation only; the *frame* cursor is correctly the shared `PlaybackClock`. Doc-acknowledged but a literal violation of GRID Law #4 ("Exactly one motion source"). The law needs refining to "frame/playback clock = 20 fps (singular); orientation/camera animation may be higher-Hz" — not yet written into the design language (dimension-clock map §Gaps).
-- **`MTKView.preferredFramesPerSecond = 60`** (`VoxelCubeView.swift:468`) is a GPU presentation cadence above the 20 fps conceptual clock — under-explained in `docs/SIXFOUR-VOXEL-CUBE.md`.
+**Clock-law violations / motion sources beyond the one clock.** *(RESOLVED in principle 2026-06-05 — ADR-1 in `SIXFOUR-UIUX-ARCHITECTURE-DECISIONS.md`: harden to one `CADisplayLink` @ 20 fps; the cube's orientation quantizes to that tick. Implementation pending — the items below describe the current pre-ADR code.)*
+- **VoxelCube 60 Hz auto-rotate is a second motion source.** `rotateClock = Timer.publish(every: 1.0/displayHz …)` (`VoxelCubeView.swift:232`) drives orientation only; the *frame* cursor is correctly the shared `PlaybackClock`. → ADR-1 collapses this onto the one 20 fps tick (resolves the Law #4 violation by quantizing down, not by adopting 60 Hz).
+- **`MTKView.preferredFramesPerSecond = 60`** (`VoxelCubeView.swift:468`) is a GPU presentation cadence above the 20 fps conceptual clock — under-explained in `docs/archive/SIXFOUR-VOXEL-CUBE.md`. → ADR-1: drop to the 20 fps tick.
 - **Residual-drift evidence.** `PaletteCloudView.swift:203` comment "60 Hz `Timer` was removed" confirms a removed second clock; verify no remnants linger.
 - **No `GATE-PERF` lint** to catch an analyzer accidentally rebuilding on the 20 fps tick (`settledFrame` is convention, not enforced) — `[PLANNED]` per `docs/SIXFOUR-DESIGN-LANGUAGE.md §4`.
 
