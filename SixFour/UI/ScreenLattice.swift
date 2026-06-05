@@ -32,7 +32,7 @@ enum ScreenLattice {
     static let preview = centered(row: 13, w: 64, h: 64)   // 384×384
     static let palette = centered(row: 84, w: 32, h: 32)   // 192×192
     static let shutter = centered(row: 123, w: 16, h: 16)  // 96×96
-    static let gear    = Region(col: cols - 6, row: 12, w: 4, h: 4)  // 24×24, top-right
+    static let gear    = Region(col: cols - 9, row: 12, w: 8, h: 8)  // 48×48 (touch floor), top-right
 
     /// Region → points (top-left origin, screen-absolute).
     static func rect(_ r: Region) -> CGRect {
@@ -46,8 +46,12 @@ extension View {
     /// `ZStack(alignment: .topLeading)` that fills the screen). No Spacer, no flow.
     func latticeRegion(_ region: ScreenLattice.Region) -> some View {
         let r = ScreenLattice.rect(region)
+        // .position (sets the CENTER in the parent's coords) is the absolute-placement
+        // API — robust even when a child's intrinsic size differs from the region;
+        // .offset is render-only and silently mis-centres a smaller child. The parent
+        // ZStack fills the screen (402×874), so these are device-absolute coordinates.
         return self
             .frame(width: r.width, height: r.height)
-            .offset(x: r.minX, y: r.minY)
+            .position(x: r.midX, y: r.midY)
     }
 }

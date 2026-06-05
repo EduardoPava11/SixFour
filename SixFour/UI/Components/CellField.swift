@@ -122,8 +122,11 @@ struct CellFieldView: View {
                 Color.black
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)   // centre the anchored field
-        .background(Color.black)                            // any sub-anchor edge sliver = black
+        // PIN TOP-LEFT (not centred): the field's cell (0,0) MUST coincide with the
+        // widgets' (0,0) or every widget sits ~2 pt off the background grid (the
+        // render-correctness bug, audit 2026-06-05). The 4 pt slack is a BOTTOM bleed.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color.black)                            // bottom bleed = black
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }
