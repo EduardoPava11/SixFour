@@ -37,7 +37,7 @@ import SixFour.Spec.QuantFixed        (quantizeFrameQ16)
 import SixFour.Spec.Collapse
   ( globalCollapseQ16, reindexFrameQ16, pooledCandidatesQ16 )
 import SixFour.Spec.PairTreeFixed
-  ( HaarPaletteI(..), analyzeFixed, reconstructFixed )
+  ( HaarPaletteI(..), analyzeFixed, reconstructFixed, levelNodesFixed, treeDepthI )
 import SixFour.Gen.GifWire            (assembleGifRGB8)
 
 main :: IO ()
@@ -376,11 +376,16 @@ emitHaarGolden =
     , "  \"n\": " <> show (length haarLeaves) <> ","
     , "  \"leaves\": " <> triples haarLeaves <> ","
     , "  \"root\": " <> triple (rootI hp) <> ","
-    , "  \"offsets\": " <> triples (concat (levelsI hp))
+    , "  \"offsets\": " <> triples (concat (levelsI hp)) <> ","
+    , "  \"level_nodes\": " <> nested
     , "}"
     ]
   where
     hp = analyzeFixed haarLeaves
+    -- level_nodes[l] = the 2^l node colours at pairing level l (l = 0..depth);
+    -- level depth == leaves. The Zig s4_haar_level_nodes must match each byte-exact.
+    nested = "[" <> intercalate ", "
+               [ triples (levelNodesFixed l hp) | l <- [0 .. treeDepthI hp] ] <> "]"
     triple (l, a, b) = "[" <> intercalate "," (map show [l, a, b]) <> "]"
     triples ts = "[" <> intercalate ", " (map triple ts) <> "]"
 

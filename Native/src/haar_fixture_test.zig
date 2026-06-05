@@ -85,4 +85,24 @@ test "cross-language: s4_haar_analyze/reconstruct match the Haskell integer-Haar
     const rc_r = kernels.s4_haar_reconstruct(got_root.ptr, got_offsets.ptr, n, got_leaves.ptr);
     try std.testing.expectEqual(kernels.RC_OK, rc_r);
     try std.testing.expectEqualSlices(i32, leaves, got_leaves);
+
+    // level_nodes: the abstraction cascade. For each level l (2^l nodes), the Zig
+    // s4_haar_level_nodes must match the Haskell levelNodesFixed golden byte-exact.
+    const level_nodes = root.get("level_nodes").?.array;
+    for (level_nodes.items, 0..) |lvl_val, l| {
+        const exp = try flattenTriples(alloc, lvl_val);
+        defer alloc.free(exp);
+        const count: usize = exp.len / 3; // = 2^l
+        const got = try alloc.alloc(i32, count * 3);
+        defer alloc.free(got);
+        const rc_l = kernels.s4_haar_level_nodes(@intCast(l), got_root.ptr, got_offsets.ptr, n, got.ptr);
+        try std.testing.expectEqual(kernels.RC_OK, rc_l);
+        try std.testing.expectEqualSlices(i32, exp, got);
+    }
+    // Deepest level == the full reconstruction (the leaves).
+    const depth: usize = level_nodes.items.len - 1;
+    const got_full = try alloc.alloc(i32, nn * 3);
+    defer alloc.free(got_full);
+    _ = kernels.s4_haar_level_nodes(@intCast(depth), got_root.ptr, got_offsets.ptr, n, got_full.ptr);
+    try std.testing.expectEqualSlices(i32, leaves, got_full);
 }

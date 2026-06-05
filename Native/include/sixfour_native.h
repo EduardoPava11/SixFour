@@ -153,6 +153,14 @@ int32_t s4_haar_analyze(const int32_t *leaves_q16, int32_t n,
 int32_t s4_haar_reconstruct(const int32_t *root_q16, const int32_t *offsets_q16,
                             int32_t n, int32_t *out_leaves_q16);
 
+// The node colours at Haar pairing `level` — the abstraction cascade (256 leaves →
+// 16 level-4 → 4 level-2 → 1 root). Writes 2^level Q16 triples to out_nodes_q16;
+// requires 0 <= level <= log2(n). Byte-exact vs PairTreeFixed.levelNodesFixed.
+// SixFour surfaces level 4 (16 colours) as the capture shutter. No scratch.
+int32_t s4_haar_level_nodes(int32_t level, const int32_t *root_q16,
+                            const int32_t *offsets_q16, int32_t n,
+                            int32_t *out_nodes_q16);
+
 int32_t s4_dither_frame(const int32_t *oklab_q16, const int32_t *centroids_q16,
                         int32_t p, int32_t k, int32_t dither_mode, int32_t serpentine,
                         const uint8_t *stbn_slice, uint8_t *out_indices,

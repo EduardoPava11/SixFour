@@ -571,6 +571,53 @@ pub export fn s4_haar_reconstruct(
     return RC_OK;
 }
 
+/// The node colours at a given Haar pairing `level` — the abstraction cascade
+/// (256 leaves → 16 level-4 → 4 level-2 → 1 root). Identical to `s4_haar_reconstruct`
+/// stopped after `level` expansions, so it is BYTE-EXACT vs
+/// `SixFour.Spec.PairTreeFixed.levelNodesFixed`. Writes `2^level` nodes (Q16, L,a,b
+/// interleaved) into `out_nodes_q16`. `n` = total leaves (2^D); requires
+/// `0 ≤ level ≤ D`. In-place expansion (no scratch). SixFour surfaces level 4 (16
+/// colours) as the capture shutter.
+pub export fn s4_haar_level_nodes(
+    level: i32,
+    root_q16: [*c]const i32,
+    offsets_q16: [*c]const i32,
+    n: i32,
+    out_nodes_q16: [*c]i32,
+) i32 {
+    if (root_q16 == null or offsets_q16 == null or out_nodes_q16 == null) return RC_NULL_PTR;
+    if (!isPow2(n) or level < 0) return RC_BAD_SHAPE;
+    const nn: usize = @intCast(n);
+    var target: usize = 1; // 2^level
+    var k: i32 = 0;
+    while (k < level) : (k += 1) target *= 2;
+    if (target > nn) return RC_BAD_SHAPE; // level must not exceed tree depth
+
+    out_nodes_q16[0] = root_q16[0];
+    out_nodes_q16[1] = root_q16[1];
+    out_nodes_q16[2] = root_q16[2];
+
+    var cur: usize = 1;
+    while (cur < target) {
+        const out_start = cur - 1; // 2^ℓ − 1
+        var i: usize = cur;
+        while (i > 0) {
+            i -= 1;
+            var c: usize = 0;
+            while (c < 3) : (c += 1) {
+                const node = out_nodes_q16[i * 3 + c];
+                const d = offsets_q16[(out_start + i) * 3 + c];
+                const y = node - @divFloor(d, 2);
+                out_nodes_q16[(2 * i) * 3 + c] = y + d; // x
+                out_nodes_q16[(2 * i + 1) * 3 + c] = y; // y
+            }
+        }
+        cur *= 2;
+    }
+    s4log("haar_lvl  level={d} nodes={d}", .{ level, target });
+    return RC_OK;
+}
+
 // Error-diffusion taps: (dx, dy, num, den). FS = 7/3/5/1 ÷ 16; Atkinson = 6 × 1/8.
 const FS_TAPS = [4][4]i32{ .{ 1, 0, 7, 16 }, .{ -1, 1, 3, 16 }, .{ 0, 1, 5, 16 }, .{ 1, 1, 1, 16 } };
 const ATKINSON_TAPS = [6][4]i32{ .{ 1, 0, 1, 8 }, .{ 2, 0, 1, 8 }, .{ -1, 1, 1, 8 }, .{ 0, 1, 1, 8 }, .{ 1, 1, 1, 8 }, .{ 0, 2, 1, 8 } };
