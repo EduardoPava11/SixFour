@@ -4,7 +4,9 @@ struct CaptureView: View {
     @State private var vm = CaptureViewModel()
     @State private var showSettings = false
     @State private var reticle: ReticleHit? = nil
+    @State private var heartbeat = GridHeartbeatClock()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         rootContent
@@ -49,14 +51,37 @@ struct CaptureView: View {
     /// the 64×64 hero, and the 16×16 live palette — which IS the capture button.
     private var latticeScene: some View {
         ZStack(alignment: .topLeading) {
-            CellFieldView(tint: vm.sceneGroundTint)   // ground cells fill the screen
+            // The black ground IS the live grid: a B/W checkerboard of the ONE atom (6 pt
+            // — the same cell as a preview pixel and a palette swatch) that inverts at
+            // 20 fps, proving the canvas is live. The heroes are EXCLUDED, so the checker
+            // frames them without ever crossing; they draw on top via `.latticeRegion`.
+            GridRefreshFieldView(phase: heartbeat.phase,
+                                 exclude: [ScreenLattice.preview,
+                                           ScreenLattice.palette,
+                                           ScreenLattice.gear])
                 .ignoresSafeArea()
-            previewBlock.latticeRegion(ScreenLattice.preview)    // GIF 64² hero
-            paletteButton.latticeRegion(ScreenLattice.palette)   // 16×16 = THE capture button
+            previewBlock.latticeRegion(ScreenLattice.preview)    // GIF 64² hero (1 atom/cell)
+            paletteButton.latticeRegion(ScreenLattice.palette)   // 16×16 @ 1 atom = THE capture button
             gearButton.latticeRegion(ScreenLattice.gear)         // settings — 48 pt
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
+        // The heartbeat clock: copy PlaybackClock's reduce-motion + lifecycle contract.
+        // Under reduce-motion the clock never starts → a STATIC opaque B/W checker (grid
+        // visibly rendered, no flashing). scenePhase != .active pauses it for zero idle
+        // battery.
+        .onAppear {
+            heartbeat.reduceMotion = reduceMotion
+            if scenePhase == .active { heartbeat.start() }
+        }
+        .onDisappear { heartbeat.stop() }
+        .onChange(of: reduceMotion) { _, newValue in
+            heartbeat.reduceMotion = newValue
+            if !newValue, scenePhase == .active { heartbeat.start() }
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            if newValue == .active { heartbeat.start() } else { heartbeat.stop() }
+        }
         // Build stamp: the running commit + time, so a stale build is visible (SixFour
         // gitignores the .xcodeproj — a pull without `xcodegen generate` ships the old
         // file set). Top-left, below the Dynamic Island.
@@ -116,7 +141,7 @@ struct CaptureView: View {
         .clipped()
     }
 
-    /// The 256-colour live palette as a 16×16 grid (192 pt) — the GIF's first abstraction
+    /// The 256-colour live palette as a 16×16 grid (96 pt, 1 atom/cell) — the GIF's first abstraction
     /// AND the capture button itself: tap the palette to shoot the 64-frame burst. Colour
     /// + position ARE the button; there is no separate shutter glyph. Inert while the
     /// pipeline is busy or the camera is unavailable (a state is a cell transform, never
@@ -125,7 +150,7 @@ struct CaptureView: View {
         let pal = vm.livePalette
         let busy = isCurrentlyBusy
         let disabled = vm.phase == .configuring || vm.phase == .unauthorized
-        let grid = CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gif(2)) { c, r in
+        let grid = CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gif(1)) { c, r in
             let i = r * 16 + c
             return i < pal.count ? pal[i] : SIMD3<UInt8>(20, 20, 24)
         }

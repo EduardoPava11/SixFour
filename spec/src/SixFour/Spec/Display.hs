@@ -138,11 +138,14 @@ frameCount = previewCells
 atomPt :: Int
 atomPt = gifPx
 
--- | The integer block factor @b_i@ per view: GIF = 1 atom/cell, palette = 2, shutter
--- = 4 (the 64→16→4 Haar cascade, ADR-5). @cellPitch(i) = atom × b_i@.
+-- | The integer block factor @b_i@ per view. GIF and palette BOTH render at the ONE
+-- atom (GRID Law #1: grow by more cells, never a bigger cell — the 64→16 cascade is a
+-- cell-COUNT relation, not a cell-SIZE one; this supersedes ADR-5's ×2-per-level cells).
+-- Shutter keeps b=4 as the dormant Review abstraction tile (EXEMPT-REVIEW-PITCH).
+-- @cellPitch(i) = atom × b_i@.
 blockFactor :: View -> Int
 blockFactor GifView     = 1
-blockFactor PaletteView = 2
+blockFactor PaletteView = 1
 blockFactor ShutterView = 4
 
 -- | The grid dimension (cells per side) per view: 64 / 16 / 4.

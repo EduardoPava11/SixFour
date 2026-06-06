@@ -9,8 +9,9 @@ import SwiftUI
 /// preview can never bleed under the island. Sizes are atom-multiples only (Q1: one
 /// 6 pt pitch — a palette cell is 2×2 atoms, a shutter cell 4×4 atoms).
 ///
-/// Cascade band-map (atoms, v2.0 geometry): preview 64² (384 pt) → palette 32²
-/// (192 pt, 16 cells × 2 atoms) → shutter 16² (96 pt, 4 cells × 4 atoms).
+/// Band-map (atoms): preview 64² (384 pt, 1 atom/cell) → palette 16² (96 pt, 1 atom/cell
+/// — ONE size with the preview pixel, GRID Law #1; supersedes ADR-5's ×2 cells). The 4×4
+/// shutter is retired from the scene; the 16×16 palette grid IS the capture button.
 enum ScreenLattice {
     static let atom: CGFloat = 6                  // gifPx — the ONE pitch
     static let cols = 67
@@ -30,7 +31,7 @@ enum ScreenLattice {
 
     // The grid-first cascade, pinned to rows inside the safe band (11…138).
     static let preview = centered(row: 13, w: 64, h: 64)   // 384×384
-    static let palette = centered(row: 84, w: 32, h: 32)   // 192×192
+    static let palette = centered(row: 92, w: 16, h: 16)   // 96×96 — 16 cells × 1 atom (6 pt), same cell as a preview pixel
     static let shutter = centered(row: 123, w: 16, h: 16)  // 96×96
     static let gear    = Region(col: cols - 9, row: 12, w: 8, h: 8)  // 48×48 (touch floor), top-right
 

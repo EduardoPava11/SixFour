@@ -24,7 +24,7 @@ public enum SixFourDisplay {
 
     /// The three governed views, ordered [gif, palette, shutter].
     /// T4 — per-view block factor b_i (cells grow by MORE atoms, never bigger).
-    public static let blockFactors: [Int] = [1, 2, 4]
+    public static let blockFactors: [Int] = [1, 1, 4]
     /// Per-view grid dimension (cells/side): the 64→16→4 Haar cascade.
     public static let gridDims: [Int] = [64, 16, 4]
 

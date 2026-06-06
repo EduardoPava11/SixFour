@@ -43,6 +43,15 @@ deterministic Zig collapse, not a learned genome.
   AppSettings keys for representation + grid axes exist.
 - **Total pixelation / no glass.** HUD de-glassed app-wide; **zero live `.glassEffect` calls**.
   Cell-rendered chrome.
+- **One cell size everywhere (capture scene).** The preview pixel, the 16×16 palette
+  swatch, and the background grid are all the ONE atom (gifPx = 6 pt) — GRID Law #1.
+  Palette `blockFactor` 2→1 in `Spec.Display` (the 64→16→4 cascade is a cell-COUNT
+  relation, not a cell-size one; supersedes ADR-5's ×2 cells); the 16×16 palette renders
+  at 96 pt and IS the capture button.
+- **Grid refresh heartbeat (capture ground).** The black ground is a full B/W
+  checkerboard of 6 pt cells that inverts at 20 fps (`GridHeartbeatClock` / `GridChecker` /
+  `GridRefreshFieldView`) — heroes excluded, two-phase image swap (O(1) flip), freezes
+  static under reduce-motion. Pure UI off the deterministic path.
 - **Look-NN forward path proven in Haskell** (LookNetE/R/D, 384-DOF SigmaPairTree decoder,
   Obfuscation keystone, PairTree round-trip) — proven, but **nothing runs it on device**.
 - **Trained grayscale-L deploy blob** `trainer/out/look_net_trained.s4ln` (133,923 B) exists

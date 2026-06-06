@@ -20,9 +20,10 @@ struct DisplayContractTests {
         #expect(SixFourDisplay.logicRateHz == 20)
         #expect(SixFourDisplay.panelRates == [60, 120])
         #expect(SixFourDisplay.holdCounts == [3, 6])
-        // T4 — the atom and the 64→16→4 block-factor cascade.
+        // T4 — the atom; GIF + palette at ONE atom (Law #1), shutter (Review) at 4.
+        // The 64→16→4 cascade lives in the cell COUNTS, not the cell sizes.
         #expect(SixFourDisplay.atomPt == 6)
-        #expect(SixFourDisplay.blockFactors == [1, 2, 4])
+        #expect(SixFourDisplay.blockFactors == [1, 1, 4])
         #expect(SixFourDisplay.gridDims == [64, 16, 4])
         // T5 — the full lattice δ_capture writes each tick.
         #expect(SixFourDisplay.fullLatticeCount == 4096)
@@ -59,20 +60,22 @@ struct DisplayContractTests {
     /// eye on a camera-less simulator.
     @Test func cellPitchMatchesShippedLattice() {
         #expect(SixFourDisplay.cellPitchPt(0) == 6)                       // GIF: 1 atom/cell
-        #expect(SixFourDisplay.cellPitchPt(1) == Int(GlobalLattice.gif(2)))  // palette: 12 pt
-        #expect(SixFourDisplay.cellPitchPt(2) == Int(GlobalLattice.gif(4)))  // shutter: 24 pt
+        #expect(SixFourDisplay.cellPitchPt(1) == Int(GlobalLattice.gif(1)))  // palette: 6 pt — ONE atom (Law #1)
+        #expect(SixFourDisplay.cellPitchPt(2) == Int(GlobalLattice.gif(4)))  // shutter: 24 pt (dormant Review tile)
     }
 
-    /// The framed extents are `gridDim × blockFactor × atom = [384, 192, 96]` — the
-    /// GIF / palette / shutter cascade (ADR-5 / capture-screen geometry), each level
-    /// exactly half the one above it. Pins the contract to the self-similar layout.
-    @Test func cascadeExtentsHalveEachLevel() {
+    /// The Haar cascade is a cell-COUNT relation (64 → 16 → 4), NOT a cell-size one
+    /// (GRID Law #1 — one atom; supersedes ADR-5's ×2-per-level cells). The two
+    /// capture-scene views render at the ONE atom, so GIF = 384 (64 cells) and palette =
+    /// 96 (16 cells); the dormant Review shutter (b=4) is 96 (4 cells × 4 atoms).
+    @Test func cascadeIsACellCountRelation() {
         let ext = (0..<3).map {
             SixFourDisplay.gridDims[$0] * SixFourDisplay.blockFactors[$0] * SixFourDisplay.atomPt
         }
-        #expect(ext == [384, 192, 96])
-        #expect(ext[1] * 2 == ext[0])
-        #expect(ext[2] * 2 == ext[1])
+        #expect(ext == [384, 96, 96])
+        // GIF and palette both render at one atom; the cascade lives in the cell COUNTS.
+        #expect(SixFourDisplay.blockFactors[0] == 1 && SixFourDisplay.blockFactors[1] == 1)
+        #expect(SixFourDisplay.gridDims == [64, 16, 4])
         // T5 — the GIF field squared is the full lattice δ_capture writes.
         #expect(SixFourDisplay.gridDims[0] * SixFourDisplay.gridDims[0]
                 == SixFourDisplay.fullLatticeCount)
