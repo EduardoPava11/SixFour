@@ -15,49 +15,13 @@ import simd
 /// upscaled by the integer cell size. Opaque sRGB8 only; no `Path`/`.stroke`/`.opacity`.
 /// Off the deterministic GIF path → pure Layers 0–2.
 
-// MARK: - The 20 fps phase clock
-
-/// The heartbeat clock — owns ONLY the phase bit. Toggles `phase` each
-/// `1 / SFTheme.gifFrameRate` s (the canonical 20-token) on a Foundation `Timer`,
-/// mirroring `PlaybackClock`'s reduce-motion + lifecycle contract. (FUTURE: share the one
-/// `CADisplayLink` at 20 — the tick source can swap without touching the checker logic.)
-@MainActor
-@Observable
-final class GridHeartbeatClock {
-    /// The checker inversion bit (`0`/`1`); flipping it inverts the whole checker in O(1)
-    /// at the view layer (a pre-baked texture swap).
-    private(set) var phase: Int = 0
-
-    /// Auto-flip suppressed (reduce-motion): phase pinned to 0 → a STATIC opaque checker
-    /// (still visibly rendered, never flashing/strobing).
-    var reduceMotion: Bool {
-        didSet { if reduceMotion { stop(); phase = 0 } }
-    }
-
-    private(set) var beating: Bool = false
-    @ObservationIgnored private var timer: Timer?
-
-    init(reduceMotion: Bool = false) { self.reduceMotion = reduceMotion }
-
-    func start() {
-        stop()
-        guard !reduceMotion else { phase = 0; return }
-        beating = true
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / Double(SFTheme.gifFrameRate),
-                                     repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.flip() }
-        }
-    }
-
-    func stop() { timer?.invalidate(); timer = nil; beating = false }
-
-    func flip() {
-        guard !reduceMotion else { return }
-        phase ^= 1
-    }
-}
-
 // MARK: - The uniform checker
+//
+// The 20 fps heartbeat is owned by the ONE κ clock (`SurfaceClock`). `GridHeartbeatClock`
+// (a private Foundation `Timer`) was removed when the one-surface spine collapsed every
+// clock onto the single `CADisplayLink`. The checker view below now reads κ's `heartbeat`
+// bit directly. `GridChecker` (the parity math) + `GridRefreshFieldView` (the O(1)-flip
+// texture-swap view) are reused by the live / capturing / rendering phase fields.
 
 enum GridChecker {
     /// Opaque white, slightly under 255 so it reads as *cells*, not a flat field.

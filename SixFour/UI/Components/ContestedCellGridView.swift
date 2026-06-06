@@ -107,6 +107,7 @@ struct ContestedCellGridView: View {
     .pixelFrame()
     .frame(width: 256, height: 256)
     .padding()
-    .onAppear { clock.start() }
+    // Auto-advance is driven by κ on the real surface; the preview is static (the
+    // PlaybackClock Timer was removed in the one-surface collapse).
 }
 #endif

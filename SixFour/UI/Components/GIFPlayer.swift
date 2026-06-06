@@ -36,9 +36,9 @@ struct GIFPlayer: View {
         .onAppear {
             clock.reduceMotion = reduceMotion
             if let s = settings, cubeData != nil { mode = s.playerMode }
-            clock.start()
+            // Auto-advance is owned by κ (`SurfaceClock`) on the one surface; this player
+            // is a reused component and no longer starts its own clock (the Timer is gone).
         }
-        .onDisappear { clock.stop() }
         .onChange(of: mode) { _, m in settings?.playerMode = m }
         .onChange(of: reduceMotion) { _, rm in clock.reduceMotion = rm }
     }

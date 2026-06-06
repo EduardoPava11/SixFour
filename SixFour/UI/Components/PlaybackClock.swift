@@ -1,17 +1,20 @@
 import Foundation
 import Observation
 
-/// THE single playback clock for the Review screen — the one source of truth that
-/// the unified 2D/3D player (`GIFPlayer`), the status line, and every palette
-/// analyzer read "the current frame" through. It replaces the four uncoordinated
-/// clocks that used to drift (the 2D `GIFCanvas` `Timer`, the status-line
-/// `TimelineView`, and the cloud / voxel 60 Hz publishers). See
-/// `docs/SIXFOUR-UNIFIED-PLAYER.md`.
+/// The Z₆₄ playback-cursor value type, retained for the Review component family
+/// (`VoxelCubeView` / `PaletteCloudView` / `ContestedCellGridView` / their previews).
+///
+/// ONE-SURFACE NOTE: the surface itself no longer drives auto-advance through this class
+/// — κ (`SurfaceClock`, the single `CADisplayLink`) owns the only 20 fps tick and writes
+/// `σ.cursor`. So this class's private Foundation `Timer` + `start()` / `stop()` are GONE
+/// (T1/T7: one δ per 1/f s). What remains is the spec-pinned cursor MATH
+/// (`SixFourPlaybackClock.frameAfter` / `.clampFrame`) plus discrete transport
+/// (`togglePlay` / `scrub` / `advance`) — input, not motion — so the reused components
+/// keep their `clock.frame` / `clock.scrub` / `clock.togglePlay` surface.
 ///
 /// All cyclic arithmetic is delegated to `SixFourPlaybackClock` (generated from
-/// `SixFour.Spec.PlaybackClock`, gated by `cabal test`), so this class owns only
-/// state + the 20 fps timer, never the math. Mutation goes through `togglePlay` /
-/// `scrub`; consumers read `frame` (live) or `settledFrame` (pause/scrub-only).
+/// `SixFour.Spec.PlaybackClock`, gated by `cabal test`), so this class owns only state,
+/// never the math. Consumers read `frame` (live) or `settledFrame` (pause/scrub-only).
 ///
 /// Tier-2 pure: Foundation + Observation only.
 @MainActor
@@ -23,7 +26,7 @@ final class PlaybackClock {
     /// Auto-advance suppressed (reduce-motion): the cursor is pinned to frame 0 and
     /// only discrete `scrub` may move it (motion is suppressed, input is not).
     var reduceMotion: Bool {
-        didSet { if reduceMotion { stop(); frame = 0; settledFrame = 0 } }
+        didSet { if reduceMotion { frame = 0; settledFrame = 0 } }
     }
 
     /// The live cursor `0..<count` — the frame every continuous consumer (the 2D
@@ -31,7 +34,9 @@ final class PlaybackClock {
     /// renders as "now".
     private(set) var frame: Int = 0
 
-    /// Whether the clock is auto-advancing at 20 fps.
+    /// Whether the cursor is in the play (vs paused) transport state. The actual
+    /// auto-advance is driven externally by κ; this is the discrete intent flag the
+    /// reused components read to label the transport.
     private(set) var playing: Bool = true
 
     /// The cursor that EXPENSIVE analyzers follow — the median-cut rebuilders
@@ -40,53 +45,31 @@ final class PlaybackClock {
     /// settles on a frame, never mid-playback (docs decision 2).
     private(set) var settledFrame: Int = 0
 
-    @ObservationIgnored private var timer: Timer?
-
     init(count: Int = SixFourPlaybackClock.frameCount, reduceMotion: Bool = false) {
         self.count = max(1, count)
         self.reduceMotion = reduceMotion
     }
 
-    // The owning view invalidates the timer via `stop()` in `.onDisappear` (the
-    // `GIFCanvas` pattern); a `@MainActor` class can't touch `timer` in its
-    // nonisolated `deinit`, and there is nothing else to clean up.
+    // MARK: Transport (discrete cursor math — no Timer; κ drives auto-advance)
 
-    // MARK: Lifecycle (the view starts/stops the single timer)
-
-    /// Begin auto-advance at `SFTheme.gifFrameRate`. No-op under reduce-motion or
-    /// when paused, so freeze-on-frame-0 is enforced in exactly one place and
-    /// propagates to every consumer.
-    func start() {
-        stop()
-        guard !reduceMotion, playing else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / Double(SFTheme.gifFrameRate),
-                                     repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.advance() }
-        }
-    }
-
-    func stop() { timer?.invalidate(); timer = nil }
-
-    // MARK: Transport
-
-    /// Advance exactly one frame, mod N — routed through the spec-pinned contract.
+    /// Advance exactly one frame, mod N — routed through the spec-pinned contract. Kept
+    /// for any external tick source that still drives this cursor (the surface uses
+    /// `σ.cursor` directly via κ; this stays for the reused component family).
     func advance() {
         guard !reduceMotion, playing else { return }
         frame = SixFourPlaybackClock.frameAfter(frame, count: count)
     }
 
-    /// Toggle play/pause. Pausing settles the expensive analyzers on the current
-    /// frame; playing restarts the single timer.
+    /// Toggle play/pause. Pausing settles the expensive analyzers on the current frame.
     func togglePlay() {
         playing.toggle()
-        if playing { start() } else { stop(); settle() }
+        if !playing { settle() }
     }
 
     /// Scrub to an arbitrary (e.g. drag) index, clamped into `[0, count)`. Pauses and
     /// settles. Allowed under reduce-motion — a scrub is discrete input, not motion.
     func scrub(to i: Int) {
         playing = false
-        stop()
         frame = SixFourPlaybackClock.clampFrame(i, count: count)
         settle()
     }
