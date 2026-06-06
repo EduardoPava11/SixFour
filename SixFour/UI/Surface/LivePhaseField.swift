@@ -131,24 +131,55 @@ struct LivePhaseField: View {
 /// GIF path → pure cell bitmap, no `Path`/`.stroke`/`.opacity`. When the palette is empty
 /// (pre-bootstrap) it falls back to the canonical near-B/W `GridChecker` inks so the
 /// ground is always visibly live.
+///
+/// Perf: both parities are pre-baked into TWO `UIImage`s (re-baked only when the palette's
+/// chosen inks change), so each 20 fps tick is a texture SWAP, not a per-cell re-bake —
+/// the same O(1)-flip discipline as `GridRefreshFieldView`.
 private struct TintedCheckerField: View {
     let palette: [SIMD3<UInt8>]
     /// The 20 fps heartbeat bit from κ; selects the checker parity.
     let phase: Int
 
+    /// Cache: the inks the current pair was baked for, and the (parity-0, parity-1) images.
+    @State private var baked: (dark: SIMD3<UInt8>, light: SIMD3<UInt8>, p0: UIImage?, p1: UIImage?)? = nil
+
     var body: some View {
         let (dark, light) = Self.inks(palette)
-        // Render at the lattice resolution (1 cell = 1 px), nearest-neighbour upscaled by
-        // the atom — the same discipline as `GridChecker`, just tinted.
-        return CellSprite(cols: SixFourLattice.cols, rows: SixFourLattice.rows,
-                          cellPt: GlobalLattice.gifPx) { c, r in
-            let lit = ((c + r) & 1) == 1
-            return (lit != ((phase & 1) == 1)) ? light : dark
+        let pair = ensure(dark: dark, light: light)
+        let img = (phase & 1) == 1 ? pair.1 : pair.0
+        return Group {
+            if let img {
+                Image(uiImage: img)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: GlobalLattice.gif(SixFourLattice.cols),
+                           height: GlobalLattice.gif(SixFourLattice.rows))
+            } else {
+                Color.black
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.black)
         .ignoresSafeArea()
         .accessibilityHidden(true)
+    }
+
+    /// Return the cached (parity-0, parity-1) pair, re-baking only when the inks change.
+    private func ensure(dark: SIMD3<UInt8>, light: SIMD3<UInt8>) -> (UIImage?, UIImage?) {
+        if let b = baked, b.dark == dark, b.light == light { return (b.p0, b.p1) }
+        let p0 = Self.image(dark: dark, light: light, phase: 0)
+        let p1 = Self.image(dark: dark, light: light, phase: 1)
+        DispatchQueue.main.async { baked = (dark, light, p0, p1) }
+        return (p0, p1)
+    }
+
+    /// Bake one parity of the tinted checker as a `cols × rows` indexed bitmap (1 px == 1
+    /// cell). Mirrors `GridChecker.image`, but with palette-derived inks.
+    private static func image(dark: SIMD3<UInt8>, light: SIMD3<UInt8>, phase: Int) -> UIImage? {
+        CellBitmap.image(cols: SixFourLattice.cols, rows: SixFourLattice.rows) { c, r in
+            let lit = ((c + r) & 1) == 1
+            return (lit != ((phase & 1) == 1)) ? light : dark
+        }
     }
 
     /// Pick the two checker inks from the live palette: the darkest and the lightest
