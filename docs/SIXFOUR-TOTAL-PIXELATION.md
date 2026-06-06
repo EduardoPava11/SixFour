@@ -4,21 +4,23 @@
 > that grid is the UI surface. No anti-aliased system text, no glass, no SF Symbols on
 > our chrome. Source: `sixfour-total-pixelation` workflow (audit → design → critique), 2026-06-04.
 
-## The grid (already exists)
+## The grid (v3.0 — ONE 4pt atom)
 
-`Spec.Lattice` maps the iPhone 17 Pro: 402×874 pt, `cellPt = gcd(402,874) = 2pt` → a
-**201×437 cell lattice** (mirrored in `GlobalLattice.swift` ← `Generated/LatticeContract.swift`).
-Every widget is an integer cell-rect on it.
+> **v3.0 amendment (2026-06-06, commit `9a8d319`).** The 2pt-master / 6pt-content two-pitch
+> model originally described here was unified away. There is now ONE atom. The text below is
+> corrected; the structure and narrative of the document are unchanged.
 
-**Pitch decision (resolves the critic's legibility tension).** Two zoom levels of the ONE
-master 2pt grid, and they may share the Review screen because they are commensurate
-(`6 = 3·2`, so a 6pt cell = a 3×3 block of 2pt cells):
-- **Content** (the GIF hero, frame counter, 2D/3D toggle) = **6pt** chunky pixels.
-- **Chrome text** (selector labels, action labels, status) = **2pt** master pitch — because a
-  word at 6pt is illegibly huge ("structure" ≈ 360pt wide). 2pt keeps words legible AND
-  pixel-hard, on the same master grid. This relaxes "one pitch per screen" to "one master
-  grid; commensurate sub-grids may coexist" — which is what the GIF+chrome relationship
-  actually is.
+`Spec.Lattice` maps the iPhone 17 Pro and emits `Generated/LatticeContract.swift` (mirrored in
+`GlobalLattice.swift`). THE ATOM is `gifPx = 4 pt = 12 device-px @3x` — chosen (not `gcd`-forced)
+because it lands on integer device pixels AND expresses the 44 pt HIG touch floor exactly
+(`11·4 = 44`). The screen tiles to a **100 col × 218 row** lattice, with a 2 pt per-axis bleed
+absorbed off-lattice at the safe edges. Every widget is an integer cell-rect on this ONE grid.
+
+**One pitch, one atom (the v2.0 two-pitch tension is retired).** Content and chrome both live on
+the single 4pt atom; widgets grow by using MORE atoms, never a bigger atom. The half-atom
+`subPt = 2 pt = gifPx/2` is a commensurate sub-atom used only for fine spacing/gutters and text
+legibility — it is NOT a second master grid. `scripts/lint-grid.sh` hard-fails any element that
+introduces its own point size ("one pitch").
 
 ## The rule
 
@@ -37,7 +39,7 @@ sentence-length prose per §6.8 — but their trigger labels are still `CellText
   touch floor pinned in **points (≥44pt)**, not cells×pitch.
 - `CellIcon.share / .grid3x3 / .retake` (NEW masks). `.seal / .warn` pending (Phase 2).
 
-## STATUS: Phases 0–5 COMPLETE (2026-06-04) — build + 149 Swift + 463 Haskell tests green
+## STATUS: Phases 0–2 COMPLETE; Phases 3–5 PENDING (2026-06-06) — build + GRID lint + 547 Haskell tests green
 
 Coverage grep confirms: **zero `glassEffect` / `.buttonStyle(.glass)` / `Slider` / `Picker` /
 `Stepper` calls remain on our chrome** (only doc-comments mention them); the only
@@ -53,9 +55,10 @@ cell stepper), `CellIcon.share/.grid3x3/.retake/.seal/.warn`.
 
 ## Build phases
 
-- **Phase 0 — spec (pending):** add `reviewPitchPt = 3*cellPt` + `lawReviewPitchCommensurate`
-  to `Spec.Lattice`, emit into `LatticeContract.swift`, set `SFTheme.gifCellPt =
-  CGFloat(SixFourLattice.reviewPitchPt)` (kill the free `6` literal). Makes the 3× a theorem.
+- **Phase 0 — spec (DONE 2026-06-06, commit `9a8d319` — GRID v3.0):** unified on ONE 4pt atom.
+  `Spec.Lattice` emits `gifPx = reviewPitchPt = 4` into `LatticeContract.swift`; the old 3×
+  commensurate pitch (`reviewPitchPt = 3*cellPt`) is RETIRED in favour of single-pitch. `subPt
+  = 2` is the half-atom for text/spacing only. The Lattice law gates the geometry as a theorem.
 - **Phase 1 — the screenshot fix (DONE 2026-06-04, build+149 tests green):**
   `CellText` cache; `CellIcon` `cellPt` + share/grid3x3/retake masks; `CellActionButton`;
   converted `RepresentationSelector`, `ScopeSelector`, `BranchingSelector` → `CellSelector`;
@@ -69,11 +72,14 @@ cell stepper), `CellIcon.share/.grid3x3/.retake/.seal/.warn`.
 - **Phase 3 — status bar + capture residuals:** `.statusBarHidden(true)` + Info.plist
   `UIStatusBarHidden=YES` on every root; convert `GlassControls` (GlassIconButton/Chip) +
   `StatsFooterView`.
-- **Phase 4 — the missed Review subviews (critic's coverage gaps):** `AddressPickerView`
-  native `Picker(.wheel)` → a cell wheel/stepper (+ its 7 `Text` + glass); `Quad4DrillView`
-  (`Text` + `.glass`); `GlobalPaletteEditorView` (glass cluster + `Text`); the omitted
-  `PaletteCloudView` (247/499/504/525) and `VoxelCubeView` (300/310/315/343/347/354/398) glass
-  buttons. These are ON Review — "100% pixelated" is only true once they're done.
+- **Phase 4 — the missed Review subviews:** `AddressPickerView`, `Quad4DrillView`, and
+  `GlobalPaletteEditorView` were **DELETED** (not converted) in the cell-field cleanup
+  (`cleanup/cell-field-law`, 2026-06-06) — they were non-cell chrome reachable only from the
+  suspended palette-explorer scaffold (`gridFirstReview = true`). The remaining work is on the
+  render-mode views that ARE kept: `PaletteCloudView` still carries glass buttons
+  (`GlassIconButton`/`GlassToolbarCluster`) → convert to `CellActionButton`/`CellSelector`
+  before reactivation; `VoxelCubeView` (the 3D iso GIF mode) needs its iso-angle control
+  surfaced as `CellSlider`s. Tracked as §3b of the cell-field demolition plan.
 - **Phase 5 — State screens + cleanup:** `StateScreens` (Image systemName/Text/.glassProminent);
   cell sliders/steppers for the cube/cloud study panels; retire `SFTheme.footnoteSelector/
   captionMono/dimText/hairline/glass*` + the `Glass*` components; add a grep-lint (no
