@@ -47,7 +47,7 @@ struct GIFReviewView: View {
         // A plain stack — nothing floats over the GIF, so no overlap.
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: GlobalLattice.pt(7)) {
                     // The unified player: the GIF renders + plays in 2D and 3D as ONE
                     // tool set, on the shared clock, with a GRID transport. Replaces
                     // the old bare GIFCanvas (which owned a private drifting timer).
@@ -116,7 +116,7 @@ struct GIFReviewView: View {
         let settledPalette: [SIMD3<UInt8>] = o.palettesForDisplay.isEmpty
             ? []
             : o.palettesForDisplay[min(clock.settledFrame, o.palettesForDisplay.count - 1)]
-        VStack(spacing: 10) {
+        VStack(spacing: GlobalLattice.pt(5)) {
             // Full collapse (#5): voxel3D is no longer a palette-explorer PEER — the
             // 64³ cube is the hero's own 3D pose (GIFPlayer), so the selector offers only
             // the three palette analyzers. A persisted .voxel3D selection self-heals to

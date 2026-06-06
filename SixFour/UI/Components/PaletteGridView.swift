@@ -129,7 +129,7 @@ struct GridAxisSelector: View {
         } label: {
             CellText("\(prefix): \(current.label)", rows: 9, ink: .white)
                 .padding(.horizontal, GlobalLattice.pt(4))
-                .frame(minHeight: 44)
+                .frame(minHeight: GlobalLattice.gif(GlobalLattice.touchFloorCells))   // 44 pt (the exact touch floor at 4 pt)
                 .background(Color(srgb8: SFTheme.ledGhost))
         }
         .buttonStyle(.plain)

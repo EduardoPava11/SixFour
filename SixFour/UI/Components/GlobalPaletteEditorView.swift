@@ -29,7 +29,7 @@ struct GlobalPaletteEditorView: View {
     private let stepAB: Float = 0.04
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: GlobalLattice.pt(5)) {
             BranchingSelector(selection: $branching)
 
             GeometryReader { geo in

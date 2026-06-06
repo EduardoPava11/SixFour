@@ -101,23 +101,40 @@ if grep -nE '\bRoundedRectangle\b|\bCircle\(\)|\.stroke\(|\bText\(' "$HUD" | gre
   grep -nE '\bRoundedRectangle\b|\bCircle\(\)|\.stroke\(|\bText\(' "$HUD" | sed 's/^/      /'
 else ok "no raw vector primitives"; fi
 
-# ── LINT-SINGLE-PITCH (capture HUD hard; other screens WARN) ───────────────
-echo "GRID lint — LINT-SINGLE-PITCH"
-PITCH='(spacing|padding|frame|minLength)[[:space:]]*[(:][^)]*[0-9]'
-ZERO='[(:,][[:space:]]*0(\.0)?[[:space:]]*[),]'
-hud_hits=$(grep -nE "$PITCH" "$HUD" | grep -vE 'GlobalLattice\.(pt|gif)' | grep -vE "$ZERO")
-if [ -n "$hud_hits" ]; then
-  note "HUD: bare point literal bypassing GlobalLattice.pt()/.gif():"
-  printf '%s\n' "$hud_hits" | sed 's/^/      /'
-else ok "HUD: no bare-point bypass (single owner)"; fi
-# Other composition screens: report legacy bare-literal debt (non-failing, tracked).
-legacy=0
+# ── LINT-SINGLE-PITCH (all composition sites, HARD) ────────────────────────
+# Every dimension goes through GlobalLattice.pt()/.gif(). The check matches the
+# SwiftUI layout MODIFIERS (`.frame(` / `.padding(`) and the `spacing:` / `minLength:`
+# labels with a literal digit INSIDE the call — so a data field like `var frame: Int`
+# (the GIF frame index) never trips it. `#Preview` blocks are debug-only scaffolding
+# (raw SwiftUI is legitimate there) and are skipped. A literal 0 ("no gutter") is exempt.
+echo "GRID lint — LINT-SINGLE-PITCH (all of $UI_DIR, #Preview excluded)"
+pitch_scan() {   # prints "file:line:text" for each SHIPPED bare-pitch literal in $1
+  awk '
+    BEGIN { inprev = 0; depth = 0 }
+    {
+      if ($0 ~ /#Preview/) { inprev = 1; depth = 0 }
+      if (inprev) {
+        d = $0; o = gsub(/{/, "", d); c = gsub(/}/, "", d); depth += o - c
+        if (depth <= 0 && (o > 0 || c > 0)) inprev = 0
+        next
+      }
+      if ($0 ~ /(\.frame\(|\.padding\(|spacing:|minLength:)[^)]*[0-9]/) {
+        if ($0 ~ /GlobalLattice\.(pt|gif)/) next
+        if ($0 ~ /[(:,][ \t]*0(\.0)?[ \t]*[),]/) next
+        printf "%s:%d:%s\n", FILENAME, NR, $0
+      }
+    }' "$1"
+}
+pitch_hits=""
 for f in "${COMP[@]}"; do
-  [ "$f" = "$HUD" ] && continue
-  n=$(grep -nE "$PITCH" "$f" | grep -vE 'GlobalLattice\.(pt|gif)' | grep -vE "$ZERO" | wc -l | tr -d ' ')
-  if [ "$n" -gt 0 ]; then warn "legacy bare-pitch literals (tracked, not yet failed): $n in $f"; legacy=$((legacy+n)); fi
+  h=$(pitch_scan "$f")
+  [ -n "$h" ] && pitch_hits="${pitch_hits}${h}
+"
 done
-[ "$legacy" -eq 0 ] && ok "no legacy bare-pitch literals anywhere" || warn "TOTAL legacy bare-pitch debt: $legacy (migrate to GlobalLattice.pt()/.gif())"
+if [ -n "$(printf '%s' "$pitch_hits" | tr -d '[:space:]')" ]; then
+  note "bare point literal bypassing GlobalLattice.pt()/.gif() (shipped, non-preview):"
+  printf '%s' "$pitch_hits" | sed 's/^/      /'
+else ok "every shipped dimension goes through GlobalLattice.pt()/.gif() (single pitch)"; fi
 
 # ── LINT-GOLDEN ────────────────────────────────────────────────────────────
 echo "GRID lint — golden sources of truth"

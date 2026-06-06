@@ -25,7 +25,7 @@ struct AddressPickerView: View {
     @State private var wheelLabels: [String] = []
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: GlobalLattice.pt(4)) {
             if splitTree != nil, !selectedDigits.isEmpty {
                 // Flat cell container — the wheels are now pixelated cell steppers.
                 HStack(spacing: GlobalLattice.pt(GlobalLattice.gutterCells)) {

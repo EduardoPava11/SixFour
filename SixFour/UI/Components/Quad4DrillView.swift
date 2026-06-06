@@ -19,7 +19,7 @@ struct Quad4DrillView: View {
     private static let signs = ["+ +", "+ −", "− +", "− −"]
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: GlobalLattice.pt(5)) {
             breadcrumb
             grid
             footer
@@ -78,7 +78,7 @@ struct Quad4DrillView: View {
             Color(srgb8: border)                 // opaque border ground (no AA stroke)
             Color(srgb8: rgb).padding(bw)        // the data colour, inset to expose the border
             CellText(Self.signs[q], rows: 6, ink: Color(srgb8: SIMD3(235, 235, 235)))   // pixelated sign
-                .padding(3)
+                .padding(GlobalLattice.pt(2))   // 4 pt (3 pt was off the 2 pt sub-grid)
         }
         .frame(width: cell, height: cell)
         .contentShape(Rectangle())
@@ -121,7 +121,7 @@ struct Quad4DrillView: View {
                         CellText("up", rows: 7, ink: .white)
                     }
                     .padding(.horizontal, GlobalLattice.pt(4))
-                    .frame(minHeight: 44)
+                    .frame(minHeight: GlobalLattice.gif(GlobalLattice.touchFloorCells))   // 44 pt (the exact touch floor at 4 pt)
                     .background(Color(srgb8: SFTheme.ledGhost))
                     .contentShape(Rectangle())
                 }

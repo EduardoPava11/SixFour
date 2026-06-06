@@ -7,7 +7,7 @@ import simd
 /// app's mental model.
 struct UnauthorizedView: View {
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: GlobalLattice.pt(9)) {
             CellSymbol(systemName: "camera.metering.unknown", box: 28, ink: Color(srgb8: SIMD3(180, 180, 180)))
             CellText("Camera access denied", rows: 11, ink: .white)
             // Prose paragraph kept as system Text (it must wrap) — §6.8 prose exemption.
@@ -15,14 +15,14 @@ struct UnauthorizedView: View {
                 .font(.callout)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.7))
-                .padding(.horizontal, 32)
+                .padding(.horizontal, GlobalLattice.pt(16))
             Button { openSettings() } label: {
                 HStack(spacing: GlobalLattice.pt(2)) {
                     CellSymbol(systemName: "gear", box: 8, ink: .white)
                     CellText("Open Settings", rows: 11, ink: .white)
                 }
                 .padding(.horizontal, GlobalLattice.pt(6))
-                .frame(minHeight: 44)
+                .frame(minHeight: GlobalLattice.gif(GlobalLattice.touchFloorCells))   // 44 pt (the exact touch floor at 4 pt)
                 .background(Color(srgb8: SFTheme.ledGhost))
                 .contentShape(Rectangle())
             }
@@ -47,7 +47,7 @@ struct FailureView: View {
     let onRetry: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: GlobalLattice.pt(9)) {
             CellSymbol(systemName: "exclamationmark.triangle", box: 24, ink: Color(srgb8: SIMD3(225, 200, 70)))
             CellText("Something went wrong", rows: 11, ink: .white)
             // Prose error message kept as system Text (must wrap) — §6.8 prose exemption.
@@ -55,12 +55,12 @@ struct FailureView: View {
                 .font(.system(.callout, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.75))
-                .padding(.horizontal, 32)
+                .padding(.horizontal, GlobalLattice.pt(16))
                 .lineLimit(6)
             Button(action: onRetry) {
                 CellText("Try again", rows: 11, ink: Color(srgb8: SIMD3(20, 20, 20)))
                     .padding(.horizontal, GlobalLattice.pt(6))
-                    .frame(minHeight: 44)
+                    .frame(minHeight: GlobalLattice.gif(GlobalLattice.touchFloorCells))   // 44 pt (the exact touch floor at 4 pt)
                     .background(Color(srgb8: SIMD3(245, 245, 245)))
                     .contentShape(Rectangle())
             }
@@ -80,14 +80,14 @@ struct BootstrapSkeleton: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 12) {
+            VStack(spacing: GlobalLattice.pt(6)) {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(.white.opacity(animate ? 0.10 : 0.04))
                     .aspectRatio(1, contentMode: .fit)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, GlobalLattice.pt(12))
                 CellText("Configuring camera…", rows: 8, ink: Color(srgb8: SIMD3(150, 150, 150)))
             }
-            .padding(.vertical, 60)
+            .padding(.vertical, GlobalLattice.pt(30))
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
