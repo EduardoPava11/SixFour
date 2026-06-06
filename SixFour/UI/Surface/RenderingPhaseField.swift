@@ -40,12 +40,12 @@ struct RenderingPhaseField: View {
             // The resolve hero, placed by the same proven GridLayoutContract region as
             // the live preview (capture→render→review share the one surface geometry).
             resolveHero.place("preview")
-
-            // The deterministic stage token, as cells.
-            stageBanner.place("palette")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
+        // The deterministic stage banner rides the top edge (the legacy `phaseBanner`
+        // position) — a cell strip, not a constrained lattice region, so its width is free.
+        .overlay(alignment: .top) { stageBanner }
         .overlay(alignment: .topLeading) { buildStamp }
     }
 
@@ -102,6 +102,7 @@ struct RenderingPhaseField: View {
         .padding(.horizontal, GlobalLattice.pt(3))
         .padding(.vertical, GlobalLattice.pt(2))
         .background(Color(srgb8: SIMD3<UInt8>(20, 20, 24)))
+        .padding(.top, GlobalLattice.pt(36))   // below the Dynamic Island
         .allowsHitTesting(false)
     }
 
