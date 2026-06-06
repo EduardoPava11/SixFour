@@ -2,32 +2,42 @@ import Testing
 import Foundation
 @testable import SixFour
 
-/// Pins the GRID Law #5 lattice invariants (interim, until the Haskell `Spec.Lattice`
-/// golden ships). The capture HUD is the single 2 pt lattice that tiles the iPhone 17
-/// Pro screen exactly, and every interactive widget clears the 22-cell touch floor.
+/// Pins the GRID Law #5 lattice invariants. The capture screen is the single `gifPx`
+/// (6 pt atom) lattice that tiles the iPhone 17 Pro screen, and every interactive widget
+/// clears the 44 pt HIG touch floor (8 atoms = 48 pt). These mirror the generated
+/// `SixFourLattice` contract (source of truth: Haskell `Spec.Lattice`, cabal-gated);
+/// they assert the relationships the `GlobalLattice` Swift facade must preserve.
 struct GlobalLatticeTests {
 
-    /// 2 pt is the unique pitch that tiles 402 × 874 with no remainder (gcd = 2):
-    /// 201 cols × 437 rows. If any of these drift, the field resamples to blurry cells.
+    /// v2.0 gifPx inversion: the atom is the GIF pixel = 6 pt; `subPt = 2 pt = gifPx/3`
+    /// is the commensurate sub-pixel for fine spacing/text. The screen tiles in ATOMS —
+    /// `cols·gifPx = 402` exactly — NOT in subPt. (Was 201×437 @ 2 pt pre-inversion.)
     @Test func latticeTilesTheScreenExactly() {
-        #expect(GlobalLattice.cellPt == 2)
-        #expect(GlobalLattice.cols == 201 && GlobalLattice.rows == 437)
-        #expect(GlobalLattice.pt(GlobalLattice.cols) == 402)   // screen width  @ anchor
-        #expect(GlobalLattice.pt(GlobalLattice.rows) == 874)   // screen height @ anchor
+        #expect(GlobalLattice.gifPx == 6)
+        #expect(GlobalLattice.subPt == 2 && GlobalLattice.cellPt == 2)
+        #expect(GlobalLattice.cols == 67 && GlobalLattice.rows == 145)
+        #expect(GlobalLattice.gif(GlobalLattice.cols) == 402)   // width tiles exactly
+        #expect(GlobalLattice.gif(GlobalLattice.rows) == 870)   // 145·6; + 4 pt bleed = 874
+        // The generated contract re-asserts every geometry law (defense-in-depth); tying
+        // the test to it means a future Spec.Lattice change can't silently drift past here.
+        #expect(SixFourLattice.selfCheck())
     }
 
-    /// `pt(_:)` is the one conversion: cells × cellPt.
-    @Test func ptConversionIsCellsTimesPitch() {
-        for n in [0, 1, 22, 34, 64, 201] {
+    /// The two conversions: `pt(_:)` is sub-pixels × subPt (2 pt); `gif(_:)` is atoms ×
+    /// gifPx (6 pt). Fine spacing uses `pt`, content/instrument sizes use `gif`.
+    @Test func conversionsAreCellsTimesPitch() {
+        for n in [0, 1, 8, 22, 34, 64, 67] {
             #expect(GlobalLattice.pt(n) == CGFloat(n) * GlobalLattice.cellPt)
+            #expect(GlobalLattice.gif(n) == CGFloat(n) * GlobalLattice.gifPx)
         }
     }
 
-    /// Every interactive widget is ≥ 22 cells (44 pt HIG floor); widgets grow by more
-    /// cells, never a bigger cell (Law #1 / RULE-A11Y-VISIBLEISHIT).
+    /// Every interactive widget is ≥ the touch floor (8 atoms = 48 pt ≥ 44 pt HIG);
+    /// widgets grow by more atoms, never a bigger atom (Law #1 / RULE-A11Y-VISIBLEISHIT).
     @Test func interactiveWidgetsClearTheTouchFloor() {
-        #expect(GlobalLattice.shutterCells >= 22)   // 34 = 68 pt
-        #expect(GlobalLattice.controlCells >= 22)   // 24 = 48 pt
+        #expect(GlobalLattice.gif(GlobalLattice.touchFloorCells) >= 44)      // 8·6 = 48 ≥ 44
+        #expect(GlobalLattice.shutterCells >= GlobalLattice.touchFloorCells) // 12 ≥ 8
+        #expect(GlobalLattice.controlCells >= GlobalLattice.touchFloorCells) // 8 ≥ 8
         // The diversity ring is decorative, but its tick count is the GIF's frame count.
         #expect(GlobalLattice.ringTicks == 64)
     }
