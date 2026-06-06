@@ -12,7 +12,7 @@ import simd
 /// the whole palette is always visible. Shows the palette of the frame the shared
 /// `PlaybackClock` is on (caller passes `frame: clock.frame`); the old internal
 /// `TimelineView` was removed so it stays locked to the player. Content layer only —
-/// no glass (glass is chrome; see `GridAxisSelector`).
+/// no glass, no chrome (the axis picker is a separate render-mode-rewire concern, §3b).
 struct PaletteGridView: View {
     let palettes: [[SIMD3<UInt8>]]
     let xAxis: GridAxis
@@ -102,47 +102,8 @@ struct RepresentationSelector: View {
     }
 }
 
-/// Glass chrome for assigning the grid's two axes. Two `Menu` capsules ("X:" / "Y:").
-/// If the user picks the axis already on the other axis, the two **swap** (so the
-/// grid never collapses to one dimension).
-struct GridAxisSelector: View {
-    @Binding var xAxis: GridAxis
-    @Binding var yAxis: GridAxis
-
-    var body: some View {
-        HStack(spacing: GlobalLattice.pt(GlobalLattice.gutterCells)) {
-            axisMenu(prefix: "X", current: xAxis) { picked in assign(picked, toX: true) }
-            axisMenu(prefix: "Y", current: yAxis) { picked in assign(picked, toX: false) }
-        }
-    }
-
-    // The axis VALUE list is a system Menu (a transient popover, not persistent chrome
-    // — the §6.8 prose-fallback exemption); but the menu's LABEL is pixelated CellText
-    // on a flat cell ground, so nothing anti-aliased sits on the Review surface.
-    private func axisMenu(prefix: String, current: GridAxis, onPick: @escaping (GridAxis) -> Void) -> some View {
-        Menu {
-            ForEach(GridAxis.allCases, id: \.self) { axis in
-                Button { withAnimation(.snappy) { onPick(axis) } } label: {
-                    if axis == current { Label(axis.label, systemImage: "checkmark") } else { Text(axis.label) }
-                }
-            }
-        } label: {
-            CellText("\(prefix): \(current.label)", rows: 9, ink: .white)
-                .padding(.horizontal, GlobalLattice.pt(4))
-                .frame(minHeight: GlobalLattice.gif(GlobalLattice.touchFloorCells))   // 44 pt (the exact touch floor at 4 pt)
-                .background(Color(srgb8: SFTheme.ledGhost))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("\(prefix) axis, \(current.label)"))
-    }
-
-    private func assign(_ picked: GridAxis, toX: Bool) {
-        if toX {
-            if picked == yAxis { yAxis = xAxis }   // swap to keep axes distinct
-            xAxis = picked
-        } else {
-            if picked == xAxis { xAxis = yAxis }
-            yAxis = picked
-        }
-    }
-}
+// GridAxisSelector (the Menu-based "X:" / "Y:" axis chrome) was deleted in the
+// cell-field conformance cleanup (cleanup/cell-field-law): it used a system `Menu`
+// with `Label(systemImage:)` / `Text` — forbidden non-cell chrome — and was reachable
+// only from the suspended palette-explorer scaffold. User-assignable grid axes return
+// as a `CellSelector` over `GridAxis.allCases` in the render-mode rewire (§3b).

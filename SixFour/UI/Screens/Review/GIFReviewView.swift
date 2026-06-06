@@ -109,13 +109,6 @@ struct GIFReviewView: View {
             get: { vm.settings.paletteBranching },
             set: { vm.settings.paletteBranching = $0 }
         )
-        // The palette of the SETTLED frame — used by the median-cut rebuilders
-        // (AddressPicker / Quad4), which re-sync only on pause/scrub, never at 20 fps
-        // (docs/SIXFOUR-UNIFIED-PLAYER.md decision 2). Continuous analyzers below read
-        // the live `clock.frame` instead.
-        let settledPalette: [SIMD3<UInt8>] = o.palettesForDisplay.isEmpty
-            ? []
-            : o.palettesForDisplay[min(clock.settledFrame, o.palettesForDisplay.count - 1)]
         VStack(spacing: GlobalLattice.pt(5)) {
             // Full collapse (#5): voxel3D is no longer a palette-explorer PEER — the
             // 64³ cube is the hero's own 3D pose (GIFPlayer), so the selector offers only
@@ -139,22 +132,13 @@ struct GIFReviewView: View {
                                     branching: vm.settings.paletteBranching,
                                     frame: clock.frame)
                     BranchingSelector(selection: branching)
-                    // Operable address for the SAME tree: N wheels = the 16²/4⁴/2⁸
-                    // digits, each labelled with its real axis@pos split; turning one
-                    // brushes that subtree across the views (shared brushedIndex). The
-                    // tree rebuilds on the SETTLED frame (pause/scrub), not at 20 fps.
-                    AddressPickerView(
-                        splitTree: PaletteTreeView.tree(for: settledPalette),
-                        branching: vm.settings.paletteBranching,
-                        brushedIndex: $brushedIndex)
                 case .global:
-                    // 4⁴ gets its honest opponent-quadrant drill; 16²/2⁸ use the editor.
-                    if vm.settings.paletteBranching == .b4 {
-                        Quad4DrillView(palette: settledPalette,
-                                       brushedIndex: $brushedIndex)
-                    } else {
-                        GlobalPaletteEditorView(palettes: o.palettesForDisplay, branching: branching)
-                    }
+                    // The global-scope editors (Quad4DrillView / GlobalPaletteEditorView)
+                    // were deleted in the cell-field cleanup (cleanup/cell-field-law): they
+                    // were non-cell chrome reachable only from this suspended scaffold. The
+                    // global collapse re-surfaces through the render-mode selector rewire
+                    // (§3b), not a bespoke editor. No global-scope analyzer renders here now.
+                    EmptyView()
                 }
             case .grid:
                 // The coordinate view: 256 colours on two user-assigned axes, synced
@@ -164,10 +148,10 @@ struct GIFReviewView: View {
                                 yAxis: vm.settings.gridAxisY,
                                 frame: clock.frame,
                                 brushedIndex: brushedIndex)
-                GridAxisSelector(
-                    xAxis: Binding(get: { vm.settings.gridAxisX }, set: { vm.settings.gridAxisX = $0 }),
-                    yAxis: Binding(get: { vm.settings.gridAxisY }, set: { vm.settings.gridAxisY = $0 })
-                )
+                // GridAxisSelector (Menu-based axis chrome — forbidden non-cell control)
+                // deleted in the cell-field cleanup; user-assignable axes return as a
+                // CellSelector in the render-mode rewire (§3b). Grid uses the settings'
+                // fixed axes meanwhile.
             case .cloud:
                 // P4 — the OKLab Temporal Cloud: 256 colours at true OKLab coords,
                 // orbited (3-D projection) + scrubbed (shared clock time projection).
