@@ -4,7 +4,7 @@ import SwiftUI
 struct SixFourApp: App {
     var body: some Scene {
         WindowGroup {
-            CaptureView()
+            SurfaceView()
                 .preferredColorScheme(.dark)
                 .statusBarHidden()
         }
