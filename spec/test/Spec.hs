@@ -24,6 +24,7 @@ import qualified Properties.Lattice      as Lattice
 import qualified Properties.CellFiber    as CellFiber
 import qualified Properties.CellGrid     as CellGrid
 import qualified Properties.Display      as Display
+import qualified Properties.FrontProjection as FrontProjection
 import qualified Properties.CellShapes   as CellShapes
 import qualified Properties.SevenSeg     as SevenSeg
 import qualified Properties.CloudProjection as CloudProjection
@@ -86,6 +87,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , CellFiber.tests
   , CellGrid.tests
   , Display.tests
+  , FrontProjection.tests
   , CellShapes.tests
   , SevenSeg.tests
   , CloudProjection.tests
