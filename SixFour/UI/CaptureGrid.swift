@@ -3,7 +3,7 @@ import SwiftUI
 /// THE CAPTURE SCENE'S ONE UNIFORM CELL.
 ///
 /// The entire capture screen is a single grid of identical cells — every preview pixel,
-/// every palette swatch, every background-checker cell, and the gear are **the same size**.
+/// every palette swatch, and every background-checker cell are **the same size**.
 /// That is the product law for this screen ("all cells one size"). Because the preview is
 /// 64 cells wide and must still fit with margin to clear the rounded corners and to rotate
 /// into the 64³ cube for analysis, the capture cell is **finer than the 6 pt `GlobalLattice`
@@ -14,7 +14,7 @@ import SwiftUI
 /// palette. One `cell` sets all three at once.
 enum CaptureGrid {
     /// The one cell: 4 pt = 12 device-px @3x. Preview = 64 cells (256 pt), palette = 16
-    /// cells (64 pt), gear = 12 cells (48 pt, the HIG tap floor).
+    /// cells (64 pt). (The palette IS the shutter — 16² ≥ the HIG tap floor.)
     static let cell: CGFloat = 4
 
     static let screenW: CGFloat = ScreenLattice.screenW   // 402 (iPhone 17 Pro)
@@ -30,7 +30,6 @@ enum CaptureGrid {
     // Element sizes, in cells (uniform — every element is whole cells of `cell`).
     static let previewCells = 64
     static let paletteCells = 16
-    static let gearCells = 12
 
     /// Cell-aligned centred X for an element `widthCells` wide (so it sits ON the grid).
     static func centeredX(_ widthCells: Int) -> CGFloat {
@@ -45,7 +44,4 @@ enum CaptureGrid {
     static let paletteTopCells = 145                                 // lower third (thumb-reachable)
     static let paletteCenter = CGPoint(x: centeredX(paletteCells),
                                        y: pt(paletteTopCells) + pt(paletteCells) / 2)   // ≈(200, 612)
-
-    static let gearCenter = CGPoint(x: pt(cols - gearCells - 1) + pt(gearCells) / 2,    // top-right, 1-cell margin
-                                    y: pt(12) + pt(gearCells) / 2)                       // ≈(376, 72)
 }

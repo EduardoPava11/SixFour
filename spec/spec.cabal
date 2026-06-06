@@ -39,6 +39,9 @@ library
         SixFour.Spec.GlobalVolume
         SixFour.Spec.SplitTree
         SixFour.Spec.GridAxis
+        SixFour.Spec.Order
+        SixFour.Spec.GridScript
+        SixFour.Spec.Export
         SixFour.Spec.Lattice
         SixFour.Spec.CellFiber
         SixFour.Spec.CellGrid
@@ -259,6 +262,9 @@ test-suite spec-tests
         Properties.GlobalVolume
         Properties.SplitTree
         Properties.GridAxis
+        Properties.Order
+        Properties.GridScript
+        Properties.Export
         Properties.Lattice
         Properties.CellFiber
         Properties.CellGrid

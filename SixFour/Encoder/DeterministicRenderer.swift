@@ -205,10 +205,16 @@ struct DeterministicRenderer {
 
         // ── Stage 5: LZW / GIF89a ─────────────────────────────────────────────
         onStage(.encode)
-        let flatIndices = indicesPerFrame.flatMap { $0 }
+        // Export at 256² via 1→4×4 index replication (SixFourExport). Brand/gates ran
+        // on the 64² source above; replication is index-domain (palette untouched, no
+        // transparency). Pass the upscaled side to the side-parametrized assembler.
+        let outSide = side * SixFourExport.upscaleFactor
+        let flatIndices = indicesPerFrame.flatMap {
+            SixFourExport.replicate($0, side: side, factor: SixFourExport.upscaleFactor)
+        }
         guard let gif = SixFourNative.gifAssemble(
             indices: flatIndices, palettesRGB: palettesRGBFlat,
-            frameCount: tiles.count, side: side, k: k, delayCs: 5, comment: comment
+            frameCount: tiles.count, side: outSide, k: k, delayCs: 5, comment: comment
         ) else { throw DetError.stageFailed("encode") }
 
         let sha = SHA256.hash(data: gif).map { String(format: "%02x", $0) }.joined()
@@ -391,13 +397,18 @@ struct DeterministicRenderer {
 
         // Stage 5: assemble — the global table is fed to every frame.
         onStage(.encode)
-        let flatIndices = indicesPerFrame.flatMap { $0 }
+        // Export at 256² via 1→4×4 index replication (SixFourExport); index-domain, so
+        // the single global palette is byte-identical and every pixel opaque.
+        let outSide = side * SixFourExport.upscaleFactor
+        let flatIndices = indicesPerFrame.flatMap {
+            SixFourExport.replicate($0, side: side, factor: SixFourExport.upscaleFactor)
+        }
         var palettesRGBFlat: [UInt8] = []
         palettesRGBFlat.reserveCapacity(tiles.count * k * 3)
         for _ in 0..<tiles.count { palettesRGBFlat.append(contentsOf: rgb) }
         guard let gif = SixFourNative.gifAssemble(
             indices: flatIndices, palettesRGB: palettesRGBFlat,
-            frameCount: tiles.count, side: side, k: k, delayCs: 5, comment: comment
+            frameCount: tiles.count, side: outSide, k: k, delayCs: 5, comment: comment
         ) else { throw DetError.stageFailed("encode") }
         let sha = SHA256.hash(data: gif).map { String(format: "%02x", $0) }.joined()
         let eMs = lap()

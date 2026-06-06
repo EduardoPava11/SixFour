@@ -30,13 +30,21 @@ enum GIFEncoderError: Error {
 /// Disposal method 1 (do not dispose) — every frame fully overwrites the
 /// canvas, so no transparency tricks are needed.
 struct GIFEncoder {
+    /// SOURCE frame dimensions (the working cube face, 64). Frames are validated +
+    /// brand-gated at this size; the emitted GIF is `width·upscale` (see `upscale`).
     let width: Int
     let height: Int
+    /// Export index-replication factor (`SixFourExport.upscaleFactor` = 4 → a 256²
+    /// GIF). 1 = no upscale. Replication is nearest-neighbour in the INDEX domain at
+    /// emit time, so the per-frame palette / colour tables are byte-identical and no
+    /// transparency is introduced (`Spec.Export.lawReplicatePreservesUsedSet`).
+    let upscale: Int
     let frameDelayCentiseconds: UInt16
 
-    init(width: Int = 64, height: Int = 64, fps: Int = 20) {
+    init(width: Int = 64, height: Int = 64, fps: Int = 20, upscale: Int = 1) {
         self.width = width
         self.height = height
+        self.upscale = max(1, upscale)
         let cs = max(1, 100 / fps)
         self.frameDelayCentiseconds = UInt16(cs)
     }
@@ -67,6 +75,11 @@ struct GIFEncoder {
         for f in frames where f.count != pixelCount {
             throw GIFEncoderError.wrongFrameSize(expected: pixelCount, got: f.count)
         }
+        // Emitted dimensions: the source frame replicated `upscale`× per axis. Frames
+        // stay SOURCE-sized (so the completeness/significance brand holds on the 64²
+        // source); replication happens per frame just before LZW (below).
+        let outW = width * upscale
+        let outH = height * upscale
         for p in perFramePalettes where p.count != 256 {
             throw GIFEncoderError.paletteWrongSize(expected: 256, got: p.count)
         }
@@ -77,8 +90,8 @@ struct GIFEncoder {
         // Logical screen descriptor: NO global color table.
         // Packed: bit 7 = GCT flag (0), bits 4-6 = color resolution (7 → 8 bits/primary),
         // bit 3 = sort (0), bits 0-2 = GCT size (ignored when flag is 0).
-        data.append(contentsOf: u16(width))
-        data.append(contentsOf: u16(height))
+        data.append(contentsOf: u16(outW))
+        data.append(contentsOf: u16(outH))
         data.append(0x70)
         data.append(0x00)  // background color index (irrelevant w/o GCT)
         data.append(0x00)  // pixel aspect ratio
@@ -94,10 +107,15 @@ struct GIFEncoder {
 
         for (i, frame) in frames.enumerated() {
             let palette = perFramePalettes[i]
+            // 1→upscale² index replication (nearest, palette untouched). At upscale=1
+            // this is the identity. `SixFourExport.replicate` is golden-pinned.
+            let emitted = upscale > 1
+                ? SixFourExport.replicate(frame, side: width, factor: upscale)
+                : frame
             data.append(contentsOf: graphicsControl(delay: frameDelayCentiseconds))
-            data.append(contentsOf: imageDescriptorWithLCT(width: width, height: height))
+            data.append(contentsOf: imageDescriptorWithLCT(width: outW, height: outH))
             data.append(contentsOf: localColorTable(palette))
-            data.append(lzwEncode(frame, minCodeSize: 8))
+            data.append(lzwEncode(emitted, minCodeSize: 8))
         }
 
         data.append(0x3B)

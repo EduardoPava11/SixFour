@@ -71,6 +71,54 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     func hash(into hasher: inout Hasher) { hasher.combine(gifURL) }
 }
 
+/// Serial off-camera-queue renderer with a **coalescing latch**: only the NEWEST
+/// submitted tile is rendered; intermediate tiles are dropped if the renderer
+/// falls behind. A preview wants the latest frame, not a backlog — so this keeps
+/// the heavy quantize + CGImage build OFF the camera intake (delegate) queue,
+/// which is what lets a burst run without dropping RECORDED frames to
+/// `alwaysDiscardsLateVideoFrames` back-pressure. `submit` is O(1) and
+/// non-blocking, safe to call from the delegate queue.
+private final class CoalescingFrameRenderer: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "com.sixfour.preview.render", qos: .userInitiated)
+    private let lock = NSLock()
+    private var pending: OKLabTile?
+    private var draining = false
+    private let render: @Sendable (OKLabTile) -> UIImage?
+    private let onImage: @Sendable (UIImage) -> Void
+
+    init(render: @escaping @Sendable (OKLabTile) -> UIImage?,
+         onImage: @escaping @Sendable (UIImage) -> Void) {
+        self.render = render
+        self.onImage = onImage
+    }
+
+    /// Stash the newest tile and kick the drain if idle. Never blocks the caller.
+    func submit(_ tile: OKLabTile) {
+        lock.lock()
+        pending = tile
+        let kick = !draining
+        if kick { draining = true }
+        lock.unlock()
+        guard kick else { return }            // a drain is already running; it will pick this up
+        queue.async { [weak self] in self?.drain() }
+    }
+
+    /// Render newest-available tiles until the latch is empty. `pending` and
+    /// `draining` are only ever touched under `lock`, so there is no lost wakeup:
+    /// a `submit` racing the empty check either lands before the read (rendered
+    /// this pass) or after `draining=false` (kicks a fresh drain).
+    private func drain() {
+        while true {
+            lock.lock()
+            let tile = pending
+            pending = nil
+            if tile == nil { draining = false; lock.unlock(); return }
+            lock.unlock()
+            if let tile, let image = render(tile) { onImage(image) }
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class CaptureViewModel {
@@ -97,6 +145,22 @@ final class CaptureViewModel {
     /// significance → palette → encode), or nil when not rendering deterministically.
     /// Surfaces the verified Zig pipeline as the thing the user watches run.
     var deterministicStage: String? = nil
+
+    /// GIFA-build progress in [0,1], driving the on-grid serpentine "resolve sweep"
+    /// loading state (no spinner). Monotonic across the real build stages; reset to 0
+    /// at capture start. The 5 deterministic kernels map to fifths; the GPU fallback
+    /// degrades to two bands (stageA, encode).
+    var loadingProgress: Double = 0
+
+    /// Set the deterministic stage label + advance `loadingProgress` to that stage's
+    /// fraction (stage k of n complete = k/n). One place so every render path stays
+    /// consistent.
+    private func surfaceDeterministicStage(_ stage: DeterministicRenderer.Stage) {
+        deterministicStage = stage.rawValue
+        let all = DeterministicRenderer.Stage.allCases
+        let i = all.firstIndex(of: stage) ?? 0
+        loadingProgress = Double(i + 1) / Double(all.count)
+    }
 
     /// Persisted user preferences (default extractor today, plus
     /// Settings-screen seams). A future SettingsView binds to this; the
@@ -132,6 +196,11 @@ final class CaptureViewModel {
     /// hero WYSIWYG for the common error-diffusion case (#2).
     @ObservationIgnored nonisolated(unsafe) private var previewDitherMode = 0
     @ObservationIgnored nonisolated(unsafe) private var previewSerpentine = false
+
+    /// Off-delegate-queue preview renderer for the burst (built per capture, torn
+    /// down in the `capture()` defer). The camera intake queue only `submit`s the
+    /// newest tile here; the heavy render runs on this renderer's own queue.
+    @ObservationIgnored private var previewRenderer: CoalescingFrameRenderer?
 
     /// Re-snapshot the preview engine + dither from the current settings. Called on
     /// bootstrap, on capture, and on any live Settings change (CaptureView `.onChange`)
@@ -305,6 +374,7 @@ final class CaptureViewModel {
         guard let session, let pipeline, let engines else { return }
         syncPreviewDither()  // keep the live look in sync with the engine + sampler
         Haptics.impact(.medium)
+        loadingProgress = 0      // fresh resolve sweep for this capture
         phase = .locking
         let lockResult = await session.lockExposureAndWhiteBalance(timeoutMs: 400)
         Self.logger.info("[viewmodel] AE/AWB lock: \(String(describing: lockResult), privacy: .public)")
@@ -314,22 +384,38 @@ final class CaptureViewModel {
         // the screen animates the burst (≈20 fps) instead of freezing, and advance
         // the progress 0→1. Runs on the Metal completion queue; marshal to main.
         let burstTotal = session.targetFrameCount
+        // Snapshot the preview look ONCE (constant for the burst) so the renderer's
+        // @Sendable closure doesn't reach back into main-actor state per frame.
+        let quantized = previewQuantized
+        let mode = previewDitherMode
+        let serpentine = previewSerpentine
+        let renderer = CoalescingFrameRenderer(
+            render: { tile in
+                quantized
+                    ? Self.makeQuantizedPreviewImage(from: tile, mode: mode, serpentine: serpentine)
+                    : Self.makePreviewImage(from: tile)
+            },
+            onImage: { [weak self] image in
+                Task { @MainActor in self?.previewTile = image }
+            }
+        )
+        previewRenderer = renderer
         session.burstFrameCallback = { [weak self] tile, n in
-            guard let self else { return }
-            let image = self.previewQuantized
-                ? Self.makeQuantizedPreviewImage(from: tile, mode: self.previewDitherMode,
-                                                 serpentine: self.previewSerpentine)
-                : Self.makePreviewImage(from: tile)
+            guard self != nil else { return }
+            // The delegate (camera intake) queue does only this: hand the newest
+            // tile to the off-queue renderer (O(1), non-blocking) and tick progress.
+            // The heavy quantize+CGImage build never runs here, so back-pressure
+            // can't drop recorded burst frames.
+            renderer.submit(tile)
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                if let image { self.previewTile = image }
-                self.phase = .capturing(progress: Double(n) / Double(max(1, burstTotal)))
+                self?.phase = .capturing(progress: Double(n) / Double(max(1, burstTotal)))
             }
         }
         do {
             defer {
                 session.unlockExposureAndWhiteBalance()
                 session.burstFrameCallback = nil
+                previewRenderer = nil
             }
             let result = try await session.captureBurst(into: pipeline)
             lastTimingSummary = result.timing.summary
@@ -411,8 +497,8 @@ final class CaptureViewModel {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 switch stage {
-                case .stageA: self.phase = .renderingStageA
-                case .encode: self.phase = .renderingEncode
+                case .stageA: self.phase = .renderingStageA; self.loadingProgress = 0.5
+                case .encode: self.phase = .renderingEncode; self.loadingProgress = 0.9
                 }
             }
         }
@@ -488,7 +574,7 @@ final class CaptureViewModel {
 
         let result = try await Task.detached(priority: .userInitiated) {
             try renderer.render(tiles: tiles, comment: comment) { stage in
-                Task { @MainActor [weak self] in self?.deterministicStage = stage.rawValue }
+                Task { @MainActor [weak self] in self?.surfaceDeterministicStage(stage) }
             }
         }.value
         deterministicStage = nil
@@ -567,7 +653,7 @@ final class CaptureViewModel {
         let branching = settings.paletteBranching   // the radix = the NN genome
         let g = try await Task.detached(priority: .userInitiated) {
             try renderer.renderGlobalPalette(tiles: tiles, comment: comment, branching: branching) { stage in
-                Task { @MainActor [weak self] in self?.deterministicStage = stage.rawValue }
+                Task { @MainActor [weak self] in self?.surfaceDeterministicStage(stage) }
             }
         }.value
         deterministicStage = nil
@@ -749,7 +835,9 @@ final class CaptureViewModel {
     /// spine (maximin quantize → dither → palette), so the canvas shows the
     /// ACTUAL 256-colour output look while you compose — not a smooth downsample.
     /// ~3–4 ms/frame at the 10 fps preview rate; falls back to the raw image if a
-    /// kernel ever declines. Runs on the session's delegate queue (nonisolated).
+    /// kernel ever declines. Pure/nonisolated — called from the live preview
+    /// callback and, during a burst, from `CoalescingFrameRenderer`'s own queue
+    /// (NOT the camera delegate queue, so it can't back-pressure recorded frames).
     nonisolated private static func makeQuantizedPreviewImage(from tile: OKLabTile,
                                                                mode: Int, serpentine: Bool) -> UIImage? {
         let side = tile.side

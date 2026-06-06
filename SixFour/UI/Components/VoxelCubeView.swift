@@ -447,6 +447,26 @@ struct VoxelCubeView: View {
 // MARK: - Metal host (MTKView via UIViewRepresentable, the CameraPreview pattern)
 
 @MainActor
+/// A chrome-free cube surface for hosts that own the pose externally (the lean
+/// `ReviewScene` and its X/Y sliders): the raw orthographic raymarcher posed by
+/// `yaw`/`pitch`, with none of `VoxelCubeView`'s glass chrome / study panel (brief:
+/// "nothing else"). At (0,0) the front face is the 2D GIF (RULE-CUBE-2D-IDENTITY).
+/// `some View` hides the private `VoxelMetalView` from the module boundary.
+struct CubeSurface: View {
+    let data: VoxelCubeData
+    let yaw: Float
+    let pitch: Float
+    let frame: Int
+
+    var body: some View {
+        var state = VoxelCubeState()
+        state.yaw = yaw
+        state.pitch = pitch
+        return VoxelMetalView(data: data, state: state, frame: frame,
+                              brushedIndex: nil, brushMode: 0)
+    }
+}
+
 private struct VoxelMetalView: UIViewRepresentable {
     let data: VoxelCubeData
     let state: VoxelCubeState

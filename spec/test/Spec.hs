@@ -20,6 +20,9 @@ import qualified Properties.Quad4Fixed   as Quad4Fixed
 import qualified Properties.GlobalVolume as GlobalVolume
 import qualified Properties.SplitTree    as SplitTree
 import qualified Properties.GridAxis     as GridAxis
+import qualified Properties.Order        as Order
+import qualified Properties.GridScript   as GridScript
+import qualified Properties.Export       as Export
 import qualified Properties.Lattice      as Lattice
 import qualified Properties.CellFiber    as CellFiber
 import qualified Properties.CellGrid     as CellGrid
@@ -83,6 +86,9 @@ main = defaultMain $ testGroup "sixfour-spec"
   , GlobalVolume.tests
   , SplitTree.tests
   , GridAxis.tests
+  , Order.tests
+  , GridScript.tests
+  , Export.tests
   , Lattice.tests
   , CellFiber.tests
   , CellGrid.tests

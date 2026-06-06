@@ -157,7 +157,11 @@ struct GIFRenderer {
 
         onPhase?(.encode)
         let encodeStart = ContinuousClock().now
-        let encoder = GIFEncoder(width: tiles[0].side, height: tiles[0].side, fps: fps)
+        // Export at 256² via 1→4×4 index replication (SixFourExport): the in-app
+        // representation stays 64², only the written GIF is upscaled. Palette/timing
+        // unchanged (index-domain), every pixel opaque.
+        let encoder = GIFEncoder(width: tiles[0].side, height: tiles[0].side, fps: fps,
+                                 upscale: SixFourExport.upscaleFactor)
 
         let srgbPalettes: [[SIMD3<UInt8>]] = output.perFramePalettes.map { palette in
             palette.map { ColorScience.okLabToSRGB8(OKLab($0)) }
