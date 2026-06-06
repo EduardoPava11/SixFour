@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import Foundation
 import simd
 
 /// Π for the `live` family of phases (`.live`, `.locking`, `.capturing`) — the capture
