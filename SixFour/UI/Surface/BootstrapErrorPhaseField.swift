@@ -1,0 +1,143 @@
+import SwiftUI
+import UIKit
+import simd
+
+/// Π — the per-phase cell-field renderers for the *non-instrument* lifecycle phases:
+/// `bootstrap`, `unauthorized`, and `error`. These are the phases where there is no
+/// live camera / GIF surface to paint, only a status field. Each is a CELL REGION on
+/// the one surface (`SixFour.Spec.Display.lawPhaseIsCellGrid`), NOT a screen — they are
+/// reached by `surfaceStep` flipping σ.phase, and `PhaseField.field(for:_:_:)` routes
+/// to them. A phase change is a cell update, never a view swap.
+///
+/// Ported from `Screens/State/StateScreens.swift` (BootstrapSkeleton / UnauthorizedView
+/// / FailureView), with the GRID cell-only law applied: every glyph is a `CellSymbol`,
+/// every word is `CellText`, the buttons are `CellActionButton`-style flat cell grounds,
+/// and the bootstrap pulse is driven by the ONE κ clock's `tick` (no private
+/// `withAnimation`/`Timer`). No `Text`, no glass, no SF-Symbol-as-chrome, no UIKit
+/// `Slider`/`Picker`.
+///
+/// Tier-2: SwiftUI + UIKit + simd only.
+
+// MARK: - bootstrap
+
+/// `bootstrap` — the pre-session skeleton. A single square cell region at screen centre
+/// breathes between two ink levels, paced by κ (`clock.tick`) so it shares the one 20 fps
+/// heartbeat instead of spawning its own animation. A status word sits below it.
+struct BootstrapPhaseField: View {
+    let surface: Surface
+    let clock: SurfaceClock
+
+    /// A slow triangle wave 0…1 over the κ tick (period ≈ 2 s at 20 fps), so the pulse
+    /// reads as a calm breath, not a strobe. Pinned to mid when reduce-motion holds the
+    /// heartbeat (the field still draws, just static).
+    private var breath: Double {
+        if clock.reduceMotion { return 0.5 }
+        let period = 40                                  // 2 s at logicRateHz = 20
+        let p = clock.tick % period
+        let up = Double(p) / Double(period / 2)
+        return p < period / 2 ? up : 2 - up              // 0→1→0 triangle
+    }
+
+    var body: some View {
+        let lo = 10.0, hi = 26.0
+        let v = UInt8(lo + (hi - lo) * breath)
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: GlobalLattice.pt(6)) {
+                // The breathing square — a flat cell ground, square corners (GRID Law #2).
+                Color(srgb8: SIMD3(v, v, v))
+                    .frame(width: GlobalLattice.gif(GlobalLattice.previewCells),
+                           height: GlobalLattice.gif(GlobalLattice.previewCells))
+                CellText("CONFIGURING CAMERA", rows: 8, ink: Color(srgb8: SIMD3(150, 150, 150)))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Configuring the camera")
+    }
+}
+
+// MARK: - unauthorized
+
+/// `unauthorized` — camera access denied. A cell-rendered camera-deny glyph, the title +
+/// prose (as `CellText`, not `Text`), and an Open-Settings cell button that deep-links to
+/// iOS Settings so the user can grant access. This is a terminal field in the FSM (no
+/// recovery event); the deep link is the only action.
+struct UnauthorizedPhaseField: View {
+    let surface: Surface
+    let clock: SurfaceClock
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: GlobalLattice.pt(9)) {
+                CellSymbol(systemName: "camera.metering.unknown",
+                           box: 28, ink: Color(srgb8: SIMD3(180, 180, 180)))
+                CellText("CAMERA ACCESS DENIED", rows: 11, ink: .white)
+
+                // Prose as CELLS (GRID §6.8 cell-only law) — fixed short lines, not wrapped.
+                VStack(spacing: GlobalLattice.pt(2)) {
+                    CellText("SIXFOUR NEEDS THE CAMERA", rows: 8,
+                             ink: Color(srgb8: SIMD3(170, 170, 170)))
+                    CellText("TO CAPTURE 64 FRAMES INTO", rows: 8,
+                             ink: Color(srgb8: SIMD3(170, 170, 170)))
+                    CellText("A 64x64 GIF. ENABLE IT IN", rows: 8,
+                             ink: Color(srgb8: SIMD3(170, 170, 170)))
+                    CellText("SETTINGS TO CONTINUE.", rows: 8,
+                             ink: Color(srgb8: SIMD3(170, 170, 170)))
+                }
+
+                Button { openSettings() } label: {
+                    CellActionButton(icon: .none, title: "OPEN SETTINGS",
+                                     prominent: false, fillWidth: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open Settings")
+            }
+            .padding(.horizontal, GlobalLattice.pt(8))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+// MARK: - error
+
+/// `error` — a fault dropped the surface here (`surfaceStep`: `.fault` from any phase →
+/// `.error`). A warning glyph + the fault token (read from σ) + a Try-Again cell button.
+/// δ has no modelled recovery event out of `.error`, so Try-Again dispatches
+/// `.sessionReady` — the natural re-initialise intent. From `.error` that is currently a
+/// no-op (δ default), which keeps this renderer honest to the committed FSM; when the
+/// spec adds an error→bootstrap reset event the wiring already points at it. The button
+/// only emits an event; it never reaches around σ.
+struct ErrorPhaseField: View {
+    let surface: Surface
+    let clock: SurfaceClock
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: GlobalLattice.pt(9)) {
+                CellSymbol(systemName: "exclamationmark.triangle",
+                           box: 24, ink: Color(srgb8: SIMD3(225, 200, 70)))
+                CellText("SOMETHING WENT WRONG", rows: 11, ink: .white)
+                CellText("THE SURFACE HIT A FAULT.", rows: 8,
+                         ink: Color(srgb8: SIMD3(190, 190, 190)))
+
+                Button { surface.step(.sessionReady) } label: {
+                    CellActionButton(icon: .none, title: "TRY AGAIN",
+                                     prominent: true, fillWidth: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Try again")
+            }
+            .padding(.horizontal, GlobalLattice.pt(8))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
