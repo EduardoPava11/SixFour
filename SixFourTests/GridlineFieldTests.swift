@@ -3,21 +3,22 @@ import Foundation
 import simd
 @testable import SixFour
 
-/// Guards for the uniform 4 pt capture grid + the 20 fps refresh checker (Layer 1, no
-/// codegen — UI off the deterministic GIF path). The whole capture scene is ONE cell size.
+/// Guards for the 20 fps refresh checker (`GridChecker` / `GridRefreshFieldView`) and the
+/// uniform 4 pt atom it tiles. Layer 1 (no codegen — UI off the deterministic GIF path).
+///
+/// NOTE (one-surface unification, 2026-06-06): the old `CaptureGrid` layout enum these
+/// tests once guarded was removed — the capture screen is now the `.live` / `.capturing`
+/// phases of the single `SurfaceView`, laid out via `GlobalLattice` + the proven
+/// `GridLayoutContract` (whose disjointness is gated by `Spec.GridLayout` / `GridLayoutTests`).
+/// What still lives here and needs guarding is the checker itself and the atom.
 struct GridlineFieldTests {
 
-    /// Every capture element is a whole number of the ONE capture cell — uniform size.
-    @Test func everyElementIsWholeCaptureCells() {
-        #expect(CaptureGrid.cell == 4)
-        #expect(CaptureGrid.previewCells == 64)   // 256 pt
-        #expect(CaptureGrid.paletteCells == 16)   // 64 pt
-        #expect(CaptureGrid.gearCells == 12)      // 48 pt (HIG tap floor)
-        // The preview is exactly 4× the palette — cell-count locked, the core geometry.
-        #expect(CaptureGrid.previewCells == 4 * CaptureGrid.paletteCells)
-        #expect(CaptureGrid.pt(CaptureGrid.previewCells) == 256)
-        #expect(CaptureGrid.pt(CaptureGrid.paletteCells) == 64)
-        #expect(CaptureGrid.pt(CaptureGrid.gearCells) == 48)
+    /// The ONE atom is 4 pt, and the live preview hero is 64 cells = 256 pt — a whole
+    /// number of atoms (widgets grow by cell COUNT, never a bigger cell).
+    @Test func previewIsWholeAtoms() {
+        #expect(GlobalLattice.gifPx == 4)
+        #expect(GlobalLattice.previewCells == 64)
+        #expect(GlobalLattice.gif(GlobalLattice.previewCells) == 256)
     }
 
     /// True `(c + r)` parity checker that inverts on phase, opaque B/W only.
@@ -30,23 +31,10 @@ struct GridlineFieldTests {
         #expect(v == GridChecker.white || v == GridChecker.dark)
     }
 
-    /// Elements are CELL-ALIGNED — centred on whole-cell offsets, so the preview, palette
-    /// and checker share one grid phase (no sub-cell drift between surfaces).
-    @Test func elementsAreCellAligned() {
-        let previewOff = (CaptureGrid.cols - CaptureGrid.previewCells) / 2
-        #expect(CaptureGrid.previewCenter.x
-                == CaptureGrid.pt(previewOff) + CaptureGrid.pt(CaptureGrid.previewCells) / 2)
-        let paletteOff = (CaptureGrid.cols - CaptureGrid.paletteCells) / 2
-        #expect(CaptureGrid.paletteCenter.x
-                == CaptureGrid.pt(paletteOff) + CaptureGrid.pt(CaptureGrid.paletteCells) / 2)
-        // Preview and palette are both horizontally centred ⇒ share the same column axis.
-        #expect(CaptureGrid.previewCenter.x == CaptureGrid.paletteCenter.x)
-    }
-
-    /// The checker bitmap covers the whole screen (ceil to whole cells, ≥ screen size).
-    @Test func checkerCoversScreen() {
-        #expect(CaptureGrid.pt(CaptureGrid.cols) >= CaptureGrid.screenW)
-        #expect(CaptureGrid.pt(CaptureGrid.rows) >= CaptureGrid.screenH)
+    /// Both phase bitmaps bake to a non-nil full-lattice image (the O(1)-flip pair the
+    /// `GridRefreshFieldView` swaps between at 20 fps).
+    @Test func checkerBakesBothPhases() {
         #expect(GridChecker.image(phase: 0) != nil)
+        #expect(GridChecker.image(phase: 1) != nil)
     }
 }

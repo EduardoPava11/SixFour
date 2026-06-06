@@ -22,7 +22,7 @@ struct DisplayContractTests {
         #expect(SixFourDisplay.holdCounts == [3, 6])
         // T4 — the atom; GIF + palette at ONE atom (Law #1), shutter (Review) at 4.
         // The 64→16→4 cascade lives in the cell COUNTS, not the cell sizes.
-        #expect(SixFourDisplay.atomPt == 6)
+        #expect(SixFourDisplay.atomPt == 4)   // GRID v3.0 (was 6 pt in v2.0)
         #expect(SixFourDisplay.blockFactors == [1, 1, 4])
         #expect(SixFourDisplay.gridDims == [64, 16, 4])
         // T5 — the full lattice δ_capture writes each tick.
@@ -59,20 +59,20 @@ struct DisplayContractTests {
     /// this test guarantees no view silently changes size — verification I cannot do by
     /// eye on a camera-less simulator.
     @Test func cellPitchMatchesShippedLattice() {
-        #expect(SixFourDisplay.cellPitchPt(0) == 6)                       // GIF: 1 atom/cell
-        #expect(SixFourDisplay.cellPitchPt(1) == Int(GlobalLattice.gif(1)))  // palette: 6 pt — ONE atom (Law #1)
-        #expect(SixFourDisplay.cellPitchPt(2) == Int(GlobalLattice.gif(4)))  // shutter: 24 pt (dormant Review tile)
+        #expect(SixFourDisplay.cellPitchPt(0) == 4)                       // GIF: 1 atom/cell (v3.0: 4 pt)
+        #expect(SixFourDisplay.cellPitchPt(1) == Int(GlobalLattice.gif(1)))  // palette: 4 pt — ONE atom (Law #1)
+        #expect(SixFourDisplay.cellPitchPt(2) == Int(GlobalLattice.gif(4)))  // shutter: 16 pt (dormant Review tile)
     }
 
     /// The Haar cascade is a cell-COUNT relation (64 → 16 → 4), NOT a cell-size one
     /// (GRID Law #1 — one atom; supersedes ADR-5's ×2-per-level cells). The two
-    /// capture-scene views render at the ONE atom, so GIF = 384 (64 cells) and palette =
-    /// 96 (16 cells); the dormant Review shutter (b=4) is 96 (4 cells × 4 atoms).
+    /// capture-scene views render at the ONE atom, so GIF = 256 (64 cells) and palette =
+    /// 64 (16 cells); the dormant Review shutter (b=4) is 64 (4 cells × 4 atoms).
     @Test func cascadeIsACellCountRelation() {
         let ext = (0..<3).map {
             SixFourDisplay.gridDims[$0] * SixFourDisplay.blockFactors[$0] * SixFourDisplay.atomPt
         }
-        #expect(ext == [384, 96, 96])
+        #expect(ext == [256, 64, 64])   // v3.0 4 pt atom: 64·4, 16·4, 4·4·4
         // GIF and palette both render at one atom; the cascade lives in the cell COUNTS.
         #expect(SixFourDisplay.blockFactors[0] == 1 && SixFourDisplay.blockFactors[1] == 1)
         #expect(SixFourDisplay.gridDims == [64, 16, 4])

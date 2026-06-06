@@ -9,15 +9,16 @@ import Foundation
 /// they assert the relationships the `GlobalLattice` Swift facade must preserve.
 struct GlobalLatticeTests {
 
-    /// v2.0 gifPx inversion: the atom is the GIF pixel = 6 pt; `subPt = 2 pt = gifPx/3`
-    /// is the commensurate sub-pixel for fine spacing/text. The screen tiles in ATOMS —
-    /// `cols·gifPx = 402` exactly — NOT in subPt. (Was 201×437 @ 2 pt pre-inversion.)
+    /// v3.0 atom (commit 9a8d319): the atom is the GIF pixel = 4 pt; `subPt = 2 pt =
+    /// gifPx/2` is the commensurate half-atom for fine spacing/text. The screen tiles in
+    /// ATOMS — `cols·gifPx = 400` with a 2 pt per-axis bleed absorbed off-lattice (402×874
+    /// screen). (Was 67×145 @ 6 pt in v2.0, 201×437 @ 2 pt pre-inversion.)
     @Test func latticeTilesTheScreenExactly() {
-        #expect(GlobalLattice.gifPx == 6)
+        #expect(GlobalLattice.gifPx == 4)
         #expect(GlobalLattice.subPt == 2 && GlobalLattice.cellPt == 2)
-        #expect(GlobalLattice.cols == 67 && GlobalLattice.rows == 145)
-        #expect(GlobalLattice.gif(GlobalLattice.cols) == 402)   // width tiles exactly
-        #expect(GlobalLattice.gif(GlobalLattice.rows) == 870)   // 145·6; + 4 pt bleed = 874
+        #expect(GlobalLattice.cols == 100 && GlobalLattice.rows == 218)
+        #expect(GlobalLattice.gif(GlobalLattice.cols) == 400)   // 100·4; + 2 pt bleed = 402
+        #expect(GlobalLattice.gif(GlobalLattice.rows) == 872)   // 218·4; + 2 pt bleed = 874
         // The generated contract re-asserts every geometry law (defense-in-depth); tying
         // the test to it means a future Spec.Lattice change can't silently drift past here.
         #expect(SixFourLattice.selfCheck())
