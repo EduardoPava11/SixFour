@@ -3,6 +3,26 @@
 _Reconciled cleanup plan — 2026-06-05. Glass retired app-wide today; total pixelation won._
 _Produced by the `sixfour-ethos-debt-audit` workflow (46 agents): 33 findings → 18 live, 15 dismissed, each adversarially verified against current state._
 
+## 0. Resolution log (live updates)
+
+| Debt | Status | Where |
+|------|--------|-------|
+| INV-ATOM-ONLY-GIFPX-1/2, LAW-ATOM-FORCED-* (bare point dims) | ✅ fixed | `81dadd2` (Tier 1) |
+| INV-T4-UNIFORM-ATOM (HaarShutterView free `cellPt`) | ✅ fixed | `81dadd2` |
+| GLASSOVERCONTENT-DEAD-CODE | ✅ deleted | `81dadd2` |
+| INV-CONTRADICTION-LAW2-GLASS + 3 siblings (§2.4.2 stale-doc) | ✅ rewritten | `81dadd2` |
+| (bonus) `CellContract.Golden` Swift 6 `Sendable` break | ✅ codegen fix | `81dadd2` |
+| SPEC-DISPLAY-UNBUILT / INV-SPEC-DISPLAY-MODULE / INV-UNIF-SPEC-DISPLAY-UNBUILT (T1–T9) | ✅ proven | `a4532a8` + `6dabded` (contract) |
+| INV-UNIF-FRONT-PROJECTION-SPEC-GAP | ✅ closed (spec+golden+test+log) | `176186d` + `8c560e7` |
+| INV-T2-ONE-CLOCK (CADisplayLink swap) | 🧪 test-gated, refactor pending | `98a032a` (gate) |
+| DATAKIND-UNJUSTIFIED-AXISNET | ⏸ deferred (misclassified — load-bearing σ-equivariance) | — |
+| INV-ZIG-BYTE-EXACT-MISSING-GOLDENS (items 9/12) | ☐ open (needs test-fixture bundling) | — |
+| VISION-SEARCH-KEYSTONE-GAP | ☐ open (Phase-2 SEARCH) | — |
+
+The runtime refactors (FSM steps 3–5) are each **test-gated** now (see `DisplayContractTests`,
+`FrontProjectionGoldenTests`, `Spec.FrontProjection`), so they can be done safely on a
+camera-less simulator and confirmed by tests; a final device A/B remains for the visuals.
+
 ## 1. Ethos Restatement
 
 - **One cube, projected honestly.** The 64³ index cube is the single source of truth; the 2D GIF hero, the palette grid, and the shutter are all Haar projections of that one state — never independent representations.
