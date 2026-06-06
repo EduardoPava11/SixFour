@@ -45,24 +45,24 @@ struct CaptureView: View {
         }
     }
 
-    /// The capture screen is ONE screen-grid (`ScreenLattice`): the whole iPhone is a
-    /// lattice of `gifPx` cells and every region is pinned to absolute cell coordinates —
-    /// no floating `VStack`/`Spacer`, no second pitch. The scene is the GIFA projected:
-    /// the 64×64 hero, and the 16×16 live palette — which IS the capture button.
+    /// The capture screen is ONE uniform grid (`CaptureGrid`, 4 pt cell): every cell —
+    /// preview pixel, palette swatch, background checker, gear — is the SAME size. No
+    /// `VStack`/`Spacer`; each element is `.position`-placed on the cell grid. The scene is
+    /// the GIFA projected: the 64-cell hero (256 pt) and the 16-cell live palette (64 pt) —
+    /// which IS the capture button — floating on the live checker.
     private var latticeScene: some View {
         ZStack(alignment: .topLeading) {
-            // The black ground IS the live grid: a B/W checkerboard of the ONE atom (6 pt
-            // — the same cell as a preview pixel and a palette swatch) that inverts at
-            // 20 fps, proving the canvas is live. The heroes are EXCLUDED, so the checker
-            // frames them without ever crossing; they draw on top via `.latticeRegion`.
-            GridRefreshFieldView(phase: heartbeat.phase,
-                                 exclude: [ScreenLattice.preview,
-                                           ScreenLattice.palette,
-                                           ScreenLattice.gear])
+            // The black ground IS the live grid: a full B/W checkerboard of the ONE 4 pt
+            // capture cell that inverts at 20 fps, proving the canvas is live. The opaque
+            // heroes draw ON TOP, so the checker simply tiles the whole screen behind them.
+            GridRefreshFieldView(phase: heartbeat.phase)
                 .ignoresSafeArea()
-            previewBlock.latticeRegion(ScreenLattice.preview)    // GIF 64² hero (1 atom/cell)
-            paletteButton.latticeRegion(ScreenLattice.palette)   // 16×16 @ 1 atom = THE capture button
-            gearButton.latticeRegion(ScreenLattice.gear)         // settings — 48 pt
+            previewBlock.position(CaptureGrid.previewCenter)     // 64 cells = 256 pt
+            paletteButton.position(CaptureGrid.paletteCenter)    // 16 cells = 64 pt = THE capture button
+            gearButton
+                .frame(width: CaptureGrid.pt(CaptureGrid.gearCells),
+                       height: CaptureGrid.pt(CaptureGrid.gearCells))
+                .position(CaptureGrid.gearCenter)                // 12 cells = 48 pt (tap floor)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
@@ -108,13 +108,11 @@ struct CaptureView: View {
     /// on top with hit-testing off. The focus reticle is overlaid in the preview's OWN
     /// coordinate space, so it needs no global-offset math.
     ///
-    /// FUTURE (UI/UX direction 2026-06-05): the 64² hero must shrink off full-width so it
-    /// can rotate to reveal the 64³ cube. Sizing is deferred to its own geometry pass —
-    /// it collides with the cube law (1 GIF px = 1 atom = 6 pt) and needs a real decision.
+    /// The 64² hero renders at the uniform capture cell (4 pt/pixel = 256 pt) — small
+    /// enough to clear the rounded corners and to rotate into the 64³ cube for analysis.
+    /// Every pixel is the SAME 4 pt cell as a palette swatch and a checker cell.
     private var previewBlock: some View {
-        // The 64×64 GIF at the gifPx ATOM — the full-width 384 pt hero. Each GIF pixel is
-        // 6 pt / 18 device-px: first-class, byte-and-size-identical to Review.
-        let side = GlobalLattice.gif(SFTheme.gifSideCells)   // 64 × 6 = 384 pt
+        let side = CaptureGrid.pt(CaptureGrid.previewCells)   // 64 × 4 = 256 pt
         return ZStack {
             if let session = vm.session?.session {
                 CameraPreview(session: session) { devicePoint, localPoint in
@@ -141,7 +139,7 @@ struct CaptureView: View {
         .clipped()
     }
 
-    /// The 256-colour live palette as a 16×16 grid (96 pt, 1 atom/cell) — the GIF's first abstraction
+    /// The 256-colour live palette as a 16×16 grid (64 pt, 4 pt/cell — the uniform capture cell) — the GIF's first abstraction
     /// AND the capture button itself: tap the palette to shoot the 64-frame burst. Colour
     /// + position ARE the button; there is no separate shutter glyph. Inert while the
     /// pipeline is busy or the camera is unavailable (a state is a cell transform, never
@@ -150,7 +148,7 @@ struct CaptureView: View {
         let pal = vm.livePalette
         let busy = isCurrentlyBusy
         let disabled = vm.phase == .configuring || vm.phase == .unauthorized
-        let grid = CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gif(1)) { c, r in
+        let grid = CellSprite(cols: 16, rows: 16, cellPt: CaptureGrid.cell) { c, r in
             let i = r * 16 + c
             return i < pal.count ? pal[i] : SIMD3<UInt8>(20, 20, 24)
         }

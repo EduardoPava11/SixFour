@@ -3,70 +3,50 @@ import Foundation
 import simd
 @testable import SixFour
 
-/// Cheap pure-function guards for the 20 fps B/W refresh checker (Layer 1, no codegen —
-/// UI off the deterministic GIF path). ONE cell size: every non-hero atom is a 6 pt
-/// checker cell, the heroes are excluded, and flipping the phase inverts every cell.
+/// Guards for the uniform 4 pt capture grid + the 20 fps refresh checker (Layer 1, no
+/// codegen — UI off the deterministic GIF path). The whole capture scene is ONE cell size.
 struct GridlineFieldTests {
 
-    private let heroes: [ScreenLattice.Region] = [
-        ScreenLattice.preview, ScreenLattice.palette, ScreenLattice.gear,
-    ]
-
-    /// The chrome mask returns nil for EVERY cell inside an excluded hero region.
-    @Test func maskIsNilInsideEveryHero() {
-        for phase in 0...1 {
-            let mask = GridChecker.chrome(phase: phase, exclude: heroes)
-            for reg in heroes {
-                for r in reg.row ..< (reg.row + reg.h) {
-                    for c in reg.col ..< (reg.col + reg.w) {
-                        #expect(mask.cell(c, r) == nil, "cell (\(c),\(r)) inside hero must be nil")
-                    }
-                }
-            }
-        }
+    /// Every capture element is a whole number of the ONE capture cell — uniform size.
+    @Test func everyElementIsWholeCaptureCells() {
+        #expect(CaptureGrid.cell == 4)
+        #expect(CaptureGrid.previewCells == 64)   // 256 pt
+        #expect(CaptureGrid.paletteCells == 16)   // 64 pt
+        #expect(CaptureGrid.gearCells == 12)      // 48 pt (HIG tap floor)
+        // The preview is exactly 4× the palette — cell-count locked, the core geometry.
+        #expect(CaptureGrid.previewCells == 4 * CaptureGrid.paletteCells)
+        #expect(CaptureGrid.pt(CaptureGrid.previewCells) == 256)
+        #expect(CaptureGrid.pt(CaptureGrid.paletteCells) == 64)
+        #expect(CaptureGrid.pt(CaptureGrid.gearCells) == 48)
     }
 
-    /// EVERY non-hero atom is a checker cell (white or dark) — one size, no gaps.
-    @Test func everyNonHeroAtomIsACheckerCell() {
-        let mask = GridChecker.chrome(phase: 0, exclude: heroes)
-        for r in 0 ..< GlobalLattice.rows {
-            for c in 0 ..< GlobalLattice.cols {
-                if GridChecker.excluded(c, r, heroes) {
-                    #expect(mask.cell(c, r) == nil)
-                } else {
-                    let v = mask.cell(c, r)
-                    #expect(v == GridChecker.white || v == GridChecker.dark,
-                            "non-hero cell (\(c),\(r)) must be an opaque checker cell")
-                }
-            }
-        }
-    }
-
-    /// Flipping the phase inverts EVERY non-hero cell (white ↔ dark) and leaves hero cells
-    /// nil in both phases.
-    @Test func phaseFlipInvertsEveryCheckerCell() {
-        let m0 = GridChecker.chrome(phase: 0, exclude: heroes)
-        let m1 = GridChecker.chrome(phase: 1, exclude: heroes)
-        for r in 0 ..< GlobalLattice.rows {
-            for c in 0 ..< GlobalLattice.cols {
-                let a = m0.cell(c, r), b = m1.cell(c, r)
-                if a == nil {
-                    #expect(b == nil, "hero cell (\(c),\(r)) changed across phase")
-                } else {
-                    #expect(b != nil && b != a, "checker cell (\(c),\(r)) did not invert")
-                    if a == GridChecker.white { #expect(b == GridChecker.dark) }
-                    else { #expect(b == GridChecker.white) }
-                }
-            }
-        }
-    }
-
-    /// True `(c + r)` parity checker: orthogonally-adjacent cells are opposite colours,
-    /// and a phase flip swaps the whole field.
-    @Test func adjacentCellsAlternateAndPhaseSwaps() {
+    /// True `(c + r)` parity checker that inverts on phase, opaque B/W only.
+    @Test func checkerAlternatesAndInvertsOnPhase() {
         #expect(GridChecker.color(0, 0, phase: 0) != GridChecker.color(1, 0, phase: 0))
         #expect(GridChecker.color(0, 0, phase: 0) != GridChecker.color(0, 1, phase: 0))
         #expect(GridChecker.color(5, 7, phase: 0) != GridChecker.color(5, 7, phase: 1))
         #expect(GridChecker.color(5, 7, phase: 0) == GridChecker.color(6, 7, phase: 1))
+        let v = GridChecker.color(3, 4, phase: 0)
+        #expect(v == GridChecker.white || v == GridChecker.dark)
+    }
+
+    /// Elements are CELL-ALIGNED — centred on whole-cell offsets, so the preview, palette
+    /// and checker share one grid phase (no sub-cell drift between surfaces).
+    @Test func elementsAreCellAligned() {
+        let previewOff = (CaptureGrid.cols - CaptureGrid.previewCells) / 2
+        #expect(CaptureGrid.previewCenter.x
+                == CaptureGrid.pt(previewOff) + CaptureGrid.pt(CaptureGrid.previewCells) / 2)
+        let paletteOff = (CaptureGrid.cols - CaptureGrid.paletteCells) / 2
+        #expect(CaptureGrid.paletteCenter.x
+                == CaptureGrid.pt(paletteOff) + CaptureGrid.pt(CaptureGrid.paletteCells) / 2)
+        // Preview and palette are both horizontally centred ⇒ share the same column axis.
+        #expect(CaptureGrid.previewCenter.x == CaptureGrid.paletteCenter.x)
+    }
+
+    /// The checker bitmap covers the whole screen (ceil to whole cells, ≥ screen size).
+    @Test func checkerCoversScreen() {
+        #expect(CaptureGrid.pt(CaptureGrid.cols) >= CaptureGrid.screenW)
+        #expect(CaptureGrid.pt(CaptureGrid.rows) >= CaptureGrid.screenH)
+        #expect(GridChecker.image(phase: 0) != nil)
     }
 }
