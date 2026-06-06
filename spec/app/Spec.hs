@@ -35,7 +35,8 @@ import SixFour.Codegen.Swift
   ( emitStageContract, emitNetContract, emitSTBN3DContract, emitSignificanceContract
   , emitGlobalVolumeContract, emitLatticeContract, emitCellShapesContract
   , emitSevenSegContract, emitPlaybackClockContract, emitCellContract
-  , emitDisplayContract, emitFrontProjectionGolden, emitOrderContract, emitExportContract )
+  , emitDisplayContract, emitFrontProjectionGolden, emitOrderContract, emitExportContract
+  , emitGridLayoutContract )
 import SixFour.Codegen.Shapes (emitStagesPy,      emitNetShapePy)
 import SixFour.Codegen.Burn   (emitBurnContract)
 import SixFour.Codegen.CoreML (emitLookNetTorch,  emitBuildMlpackage)
@@ -71,6 +72,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "FrontProjectionGolden.swift") emitFrontProjectionGolden
   writeUtf8 (swiftOutDir   </> "OrderContract.swift")         emitOrderContract
   writeUtf8 (swiftOutDir   </> "ExportContract.swift")        emitExportContract
+  writeUtf8 (swiftOutDir   </> "GridLayoutContract.swift")    emitGridLayoutContract
   writeUtf8 (swiftOutDir   </> "CollapseGolden.swift")       emitCollapseGolden
   writeUtf8 (swiftOutDir   </> "PairTreeGolden.swift")       emitPairTreeGolden
   writeUtf8 (swiftOutDir   </> "PaletteValueGolden.swift")   emitPaletteValueGolden

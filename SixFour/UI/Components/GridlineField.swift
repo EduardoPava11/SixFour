@@ -4,14 +4,14 @@ import Foundation
 import Observation
 import simd
 
-/// THE 20 fps REFRESH HEARTBEAT — a full-screen B/W checkerboard of the ONE capture cell
-/// (`CaptureGrid.cell` = 4 pt) that inverts every frame at 20 fps, proving the canvas is
+/// THE 20 fps REFRESH HEARTBEAT — a full-screen B/W checkerboard of the ONE atom
+/// (`gifPx` = 4 pt) that inverts every frame at 20 fps, proving the canvas is
 /// live. Every checker cell is the SAME size as a preview pixel and a palette swatch — one
 /// uniform grid. The preview / palette / gear are opaque and drawn ON TOP, so the checker
 /// simply tiles the whole screen behind them.
 ///
 /// RENDERING: the checker is CELLS, never vector strokes — one indexed bitmap baked at the
-/// cell resolution (`CaptureGrid.cols × rows`) and drawn once `.interpolation(.none)`,
+/// lattice resolution (`SixFourLattice.cols × rows`) and drawn once `.interpolation(.none)`,
 /// upscaled by the integer cell size. Opaque sRGB8 only; no `Path`/`.stroke`/`.opacity`.
 /// Off the deterministic GIF path → pure Layers 0–2.
 
@@ -75,7 +75,7 @@ enum GridChecker {
 
     /// Bake the full-screen checker as one `cols × rows` indexed bitmap (1 px == 1 cell).
     static func image(phase: Int) -> UIImage? {
-        let cols = CaptureGrid.cols, rows = CaptureGrid.rows
+        let cols = SixFourLattice.cols, rows = SixFourLattice.rows
         var px = [UInt8](repeating: 0, count: cols * rows * 4)
         for y in 0 ..< rows {
             for x in 0 ..< cols {
@@ -122,8 +122,8 @@ struct GridRefreshFieldView: View {
                 Image(uiImage: img)
                     .interpolation(.none)
                     .resizable()
-                    .frame(width: CaptureGrid.pt(CaptureGrid.cols),
-                           height: CaptureGrid.pt(CaptureGrid.rows))
+                    .frame(width: GlobalLattice.gif(SixFourLattice.cols),
+                           height: GlobalLattice.gif(SixFourLattice.rows))
             } else {
                 Color.black
             }

@@ -16,7 +16,7 @@ public enum SixFourDisplay {
     /// N — frames per burst (the cube depth / Z_N modulus).
     public static let frameCount: Int = 64
     /// T4 — THE ATOM (gifPx, pt). Every governed pitch is atomPt × blockFactor.
-    public static let atomPt: Int = 6
+    public static let atomPt: Int = 4
     /// T1 — panel refresh rates the clock must divide (ProMotion 60/120).
     public static let panelRates: [Int] = [60, 120]
     /// T1 — integer scan-outs per logic tick (panelRates ./ logicRateHz).

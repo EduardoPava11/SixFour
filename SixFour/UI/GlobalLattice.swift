@@ -1,19 +1,24 @@
 import SwiftUI
 
-/// GRID **Law #5 — the SOLE owner of cell↔point math** (v2.0 gifPx inversion).
+/// GRID **Law #5 — the SOLE owner of cell↔point math** (v3.0, the 4 pt atom).
 ///
-/// **The atom is the GIF pixel: `gifPx = 6 pt = 18 device-px @3x`** (the product's
-/// pixel IS the unit the app is built from, docs/SIXFOUR-DESIGN-LANGUAGE.md §0.0). It
-/// tiles the iPhone 17 Pro width exactly (`402 / 6 = 67` cols) and the height to the
-/// safe-area (`145` rows + a 4 pt bleed). Every governed widget is a square block of
-/// atoms and grows by using **more atoms, never a bigger atom** (Law #1). Use
-/// `gif(_:)` for content/instrument sizes.
+/// **The atom is the GIF pixel: `gifPx = 4 pt = 12 device-px @3x`** (the product's
+/// pixel IS the unit the app is built from, docs/SIXFOUR-DESIGN-LANGUAGE.md). It is
+/// *chosen* (not forced): integer device-px AND it expresses the 44 pt HIG touch floor
+/// EXACTLY (`11·4 = 44`), which 6 pt could not. Each axis tiles to the safe-area with a
+/// 2 pt sub-atom bleed (`402/4 = 100` cols, `874/4 = 218` rows). Every governed widget
+/// is a square block of atoms and grows by using **more atoms, never a bigger atom**
+/// (Law #1). Use `gif(_:)` for content/instrument sizes.
 ///
-/// **`subPt = 2 pt = gifPx / 3`** is the commensurate sub-pixel for fine spacing /
+/// **`subPt = 2 pt = gifPx / 2`** is the commensurate HALF-atom for fine spacing /
 /// gutters and text legibility (a glyph cannot be one atom wide). Use `pt(_:)` for
-/// spacing — it is `subPt`-based, so the app's existing gutters are unchanged. The two
-/// snap to one grid (`3·subPt = gifPx`). `cellPt` is kept as the name of this
-/// sub-pixel substrate for the spacing call-sites.
+/// spacing — it is `subPt`-based and `subPt` is still 2 pt, so the app's existing
+/// gutters are physically unchanged across the v2.0→v3.0 re-base. The two snap to one
+/// grid (`2·subPt = gifPx`). `cellPt` names this sub-pixel substrate for spacing call-sites.
+///
+/// **Where a widget GOES is not here.** This type owns the atom + per-widget sizes;
+/// the capture-scene LAYOUT (which cells each widget claims) is `GridLayoutContract`
+/// (the contention proof). There is no golden-split anchor in the lattice anymore.
 ///
 /// **Verified mirror (Law #8).** Every number below is sourced from `SixFourLattice`
 /// in `Generated/LatticeContract.swift`, emitted byte-for-byte from the Haskell
@@ -36,18 +41,18 @@ struct GlobalLattice {
 
     // MARK: Widget cell-counts (square blocks; grow by more cells, never bigger cells)
 
-    /// The hero preview: 64 cells = 1 GIF pixel per cell (the cube law).
+    /// The hero preview: 64 cells = 1 GIF pixel per cell (the cube law); 256 pt at 4 pt.
     static let previewCells = SixFourLattice.previewCells
-    /// HIG 44 pt minimum hit target, in cells. The floor every interactive widget clears.
+    /// HIG 44 pt minimum hit target = 11 cells (exact at 4 pt). The interactive floor.
     static let touchFloorCells = SixFourLattice.touchFloorCells
-    /// Secondary square controls (gear, selector segments): 24 cells = 48 pt.
+    /// Secondary square controls (gear, selector segments): 12 cells = 48 pt.
     static let controlCells = SixFourLattice.controlCells
-    /// The shutter: 34 cells = 68 pt. Clears the 22-cell (44 pt) touch floor.
+    /// The shutter / palette-as-shutter footprint: 16 cells = 64 pt. Clears the floor.
     static let shutterCells = SixFourLattice.shutterCells
-    /// Shutter filled-disc radius (Ø30) + ring-band thickness — the closure `15·2 + 2·2 = 34`.
+    /// Shutter filled-disc radius (Ø12) + ring-band thickness — the closure `6·2 + 2·2 = 16`.
     static let shutterDiscRadiusCells = SixFourLattice.shutterDiscRadiusCells
     static let shutterRingThicknessCells = SixFourLattice.shutterRingThicknessCells
-    /// The diversity gauge ring: 60 cells = 120 pt.
+    /// The diversity gauge ring: 20 cells = 80 pt (radius fixed in cells for gap-free ticks).
     static let ringCells = SixFourLattice.ringCells
     /// Radial ticks on the gauge — one per GIF frame.
     static let ringTicks = SixFourLattice.ringTicks
@@ -59,13 +64,6 @@ struct GlobalLattice {
     static let segmentCells = SixFourLattice.segmentCells
     /// The Swiss gutter: one cell.
     static let gutterCells = SixFourLattice.gutterCells
-
-    // MARK: The golden vertical layout (preview anchor)
-
-    static let previewStartRow = SixFourLattice.previewStartRow
-    static let previewEndRow = SixFourLattice.previewEndRow
-    static let previewStartCol = SixFourLattice.previewStartCol
-    static let previewEndCol = SixFourLattice.previewEndCol
 
     // MARK: The conversions
 

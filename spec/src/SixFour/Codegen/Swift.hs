@@ -30,6 +30,7 @@ module SixFour.Codegen.Swift
   , emitFrontProjectionGolden
   , emitOrderContract
   , emitExportContract
+  , emitGridLayoutContract
   ) where
 
 import qualified Data.Text    as T
@@ -42,6 +43,7 @@ import SixFour.Spec.Coverage (coverageBinsPerAxis)
 import SixFour.Spec.Significance (confidenceZ, minPopulation, chiSquare3Critical)
 import SixFour.Spec.Net
 import qualified SixFour.Spec.Lattice as L
+import qualified SixFour.Spec.GridLayout as GL
 import qualified SixFour.Spec.CellShapes as CS
 import qualified SixFour.Spec.SevenSeg as SS
 import qualified SixFour.Spec.PlaybackClock as PC
@@ -114,30 +116,34 @@ emitLatticeContract = T.unlines
   , ""
   , "import Foundation"
   , ""
-  , "/// The GRID lattice — every governed dimension, in `gifPx` atoms (v2.0 inversion)."
-  , "/// The atom is the GIF pixel: `gifPx = 6 pt = 18 device-px @3x` — the largest"
-  , "/// pitch at which a 64-wide preview fits portrait width (64·6=384 ≤ 402) and lands"
-  , "/// on integer device-px. It tiles the width exactly (402/6 = 67 cols) and the"
-  , "/// height to the safe-area (145 rows + a 4 pt bleed). `subPt = 2 pt = gifPx/3` is"
-  , "/// the commensurate sub-pixel for fine spacing/gutters + text. `GlobalLattice` is"
-  , "/// the typed `CGFloat` facade over these constants, NOT an independent authority"
-  , "/// (GRID Law #5). Mirrors `SixFour.Spec.Lattice`; `cabal test` proves the laws."
+  , "/// The GRID lattice — every governed dimension, in `gifPx` atoms (v3.0, 4 pt)."
+  , "/// The atom is `gifPx = 4 pt = 12 device-px @3x` — chosen (not forced) because it"
+  , "/// is integer device-px AND expresses the 44 pt HIG touch floor exactly (11·4=44),"
+  , "/// which 6 pt could not. The preview is 64·4 = 256 pt with margin. Each axis tiles"
+  , "/// to the safe-area with a 2 pt sub-atom bleed (100 cols + 218 rows). `subPt = 2 pt"
+  , "/// = gifPx/2` is the commensurate half-atom for fine spacing/gutters + text."
+  , "/// `GlobalLattice` is the typed `CGFloat` facade over these constants, NOT an"
+  , "/// independent authority (GRID Law #5). The capture-scene LAYOUT lives in"
+  , "/// `GridLayoutContract` (the contention proof), not here. Mirrors"
+  , "/// `SixFour.Spec.Lattice`; `cabal test` proves the laws."
   , "public enum SixFourLattice {"
   , "    /// Reference anchor: iPhone 17 Pro portrait logical size + @3x scale."
   , "    public static let screenWidthPt: Int = "  <> tshow L.screenWidthPt
   , "    public static let screenHeightPt: Int = " <> tshow L.screenHeightPt
   , "    public static let scale: Int = "          <> tshow L.scale
   , ""
-  , "    /// THE ATOM: one GIF pixel = 6 pt = 18 device-px @3x."
+  , "    /// THE ATOM: one GIF pixel = 4 pt = 12 device-px @3x."
   , "    public static let gifPx: Int = " <> tshow L.gifPx
   , "    public static let gifDevicePx: Int = " <> tshow L.gifDevicePx
-  , "    /// The sub-pixel: gifPx/3 = 2 pt (fine spacing/gutters + text legibility)."
+  , "    /// The sub-pixel: gifPx/2 = 2 pt (fine spacing/gutters + text legibility)."
   , "    public static let subPt: Int = " <> tshow L.subPt
   , "    /// Content pitch = the atom (Review folds in; EXEMPT-REVIEW-PITCH retired)."
   , "    public static let reviewPitchPt: Int = " <> tshow L.reviewPitchPt
-  , "    /// The full-screen lattice in atoms (67 cols × 145 rows) + the vertical bleed."
+  , "    /// The full-screen lattice in atoms (100 cols × 218 rows) + per-axis bleed."
   , "    public static let cols: Int = " <> tshow L.cols
   , "    public static let rows: Int = " <> tshow L.rows
+  , "    /// Sub-atom bleed absorbed off-lattice at each safe edge (2 pt per axis)."
+  , "    public static let hBleedPt: Int = " <> tshow L.hBleedPt
   , "    public static let bleedPt: Int = " <> tshow L.bleedPt
   , ""
   , "    /// OS safe-area insets (iPhone 17 Pro portrait, iOS 26+; web-verified)."
@@ -161,39 +167,27 @@ emitLatticeContract = T.unlines
   , "    public static let shutterDiscRadiusCells: Int = "    <> tshow L.shutterDiscRadiusCells
   , "    public static let shutterRingThicknessCells: Int = " <> tshow L.shutterRingThicknessCells
   , ""
-  , "    /// The golden vertical layout (preview anchor + above/below split, below/above ≈ φ)."
-  , "    public static let previewStartRow: Int = " <> tshow L.previewStartRow
-  , "    public static let previewEndRow: Int = "   <> tshow L.previewEndRow
-  , "    public static let previewStartCol: Int = " <> tshow L.previewStartCol
-  , "    public static let previewEndCol: Int = "   <> tshow L.previewEndCol
-  , "    public static let aboveRows: Int = " <> tshow L.aboveRows
-  , "    public static let belowRows: Int = " <> tshow L.belowRows
-  , ""
   , "    /// Atoms → points. The single place an atom count becomes a point size."
   , "    @inline(__always) public static func cellsToPt(_ cells: Int) -> Int { cells * gifPx }"
   , ""
   , "    /// Re-asserts the Haskell laws at runtime (defense-in-depth). True iff the"
   , "    /// emitted constants satisfy every GRID geometry invariant (v2.0 gifPx atom)."
   , "    public static func selfCheck() -> Bool {"
-  , "        gifPx == 6 && gifDevicePx == 18 && subPt == 2"
-  , "        && gifPx % subPt == 0 && gifPx / subPt == 3 && reviewPitchPt == gifPx"
-  , "        && previewCells * gifPx <= screenWidthPt"
-  , "        && previewCells * (gifPx + 1) > screenWidthPt"
-  , "        && cols * gifPx == screenWidthPt && rows * gifPx <= screenHeightPt"
-  , "        && cols == 67 && rows == 145"
+  , "        gifPx == 4 && gifDevicePx == 12 && subPt == 2"
+  , "        && gifPx % subPt == 0 && gifPx / subPt == 2 && reviewPitchPt == gifPx"
+  , "        && gifDevicePx == gifPx * scale"
+  , "        && previewCells * gifPx <= screenWidthPt && 44 % gifPx == 0"
+  , "        && cols * gifPx <= screenWidthPt && screenWidthPt - cols * gifPx < gifPx"
+  , "        && rows * gifPx <= screenHeightPt && screenHeightPt - rows * gifPx < gifPx"
+  , "        && cols == 100 && rows == 218"
+  , "        && hBleedPt == screenWidthPt - cols * gifPx && hBleedPt >= 0 && hBleedPt < gifPx"
   , "        && bleedPt == screenHeightPt - rows * gifPx && bleedPt >= 0 && bleedPt < gifPx"
   , "        && shutterDiscRadiusCells * 2 + shutterRingThicknessCells * 2 == shutterCells"
   , "        && shutterCells >= touchFloorCells && controlCells >= touchFloorCells"
-  , "        && segmentCells >= touchFloorCells && cellsToPt(touchFloorCells) == 48"
+  , "        && segmentCells >= touchFloorCells && cellsToPt(touchFloorCells) == 44"
   , "        && cellsToPt(touchFloorCells) >= 44"
-  , "        && controlCells == touchFloorCells && fibLadder.contains(controlCells)"
-  , "        && shutterCells * 2 == controlCells * 3"
-  , "        && aboveRows + previewCells + belowRows == rows && aboveRows < belowRows"
-  , "        && (previewEndCol - previewStartCol + 1) == previewCells"
-  , "        && (previewEndRow - previewStartRow + 1) == previewCells"
-  , "        && previewStartCol + previewEndCol == cols - 2 && previewStartRow == aboveRows"
-  , "        && wordmarkCols <= previewCells && wordmarkRows == controlCells"
-  , "        && aboveRows * gifPx >= safeTopPt && belowRows * gifPx >= safeBottomPt + bleedPt"
+  , "        && shutterCells >= controlCells && controlCells >= touchFloorCells"
+  , "        && wordmarkCols <= previewCells"
   , "    }"
   , "}"
   ]
@@ -1035,3 +1029,92 @@ emitCellContract = T.unlines $
          , ", shimmer: ", simd3List sh
          , "),"
          ]
+
+-- | Generate @GridLayoutContract.swift@ — the capture-scene LAYOUT as a proven,
+-- contention-free claim set. Byte-faithful port of 'SixFour.Spec.GridLayout':
+-- @captureScene@ is the list of widget regions (col/row/w/h in 4 pt atoms), and
+-- @selfCheck()@ re-asserts disjointness (no two widgets share a cell), in-bounds,
+-- the touch floor on interactive regions, and distinct priorities. @cabal test@
+-- (@Properties.GridLayout@) proves the laws; this mirror is golden-pinned so the
+-- Swift @place(_:)@ composer cannot drift. It is the ONE place a screen asks
+-- "which cells does this widget claim?".
+emitGridLayoutContract :: Text
+emitGridLayoutContract = T.unlines $
+  [ "// GENERATED by sixfour-spec / Codegen.Swift — do not edit by hand."
+  , "// Source of truth: ~/SixFour/spec/src/SixFour/Spec/GridLayout.hs"
+  , "// Regenerate with: cabal run spec-codegen"
+  , ""
+  , "import Foundation"
+  , ""
+  , "/// One widget's rectangular claim on the screen lattice (top-left origin, in"
+  , "/// `SixFourLattice.gifPx` atoms). The ONLY input to the `place(_:)` modifier —"
+  , "/// a widget is placed by claiming cells, never by a raw point `.position`."
+  , "public struct GridRegion: Equatable, Sendable {"
+  , "    public let name: String"
+  , "    public let col: Int"
+  , "    public let row: Int"
+  , "    public let w: Int"
+  , "    public let h: Int"
+  , "    public let widget: Int"
+  , "    public let priority: Int"
+  , "    public let interactive: Bool"
+  , "}"
+  , ""
+  , "/// The capture-scene layout, mirrored from `SixFour.Spec.GridLayout.captureScene`."
+  , "/// Disjoint + in-bounds + touch-floor-legal + safe-area-clearing — proven by"
+  , "/// `cabal test`; `selfCheck()` re-asserts the geometric core at runtime."
+  , "public enum GridLayoutContract {"
+  , "    public static let cols: Int = SixFourLattice.cols"
+  , "    public static let rows: Int = SixFourLattice.rows"
+  , ""
+  , "    /// The widget regions composing the capture screen."
+  , "    public static let captureScene: [GridRegion] = ["
+  ]
+  ++ map regionLine GL.captureScene
+  ++ [ "    ]"
+  , ""
+  , "    /// Look up a region by name (the composer asks for \"preview\", \"palette\", …)."
+  , "    public static func region(_ name: String, in scene: [GridRegion] = captureScene) -> GridRegion? {"
+  , "        scene.first { $0.name == name }"
+  , "    }"
+  , ""
+  , "    /// AABB overlap: two regions share a cell iff their col AND row ranges overlap."
+  , "    public static func overlaps(_ a: GridRegion, _ b: GridRegion) -> Bool {"
+  , "        a.col < b.col + b.w && b.col < a.col + a.w"
+  , "        && a.row < b.row + b.h && b.row < a.row + a.h"
+  , "    }"
+  , ""
+  , "    /// No two regions overlap — the disjointness contract (contention-free)."
+  , "    public static func isDisjoint(_ scene: [GridRegion]) -> Bool {"
+  , "        for i in 0 ..< scene.count {"
+  , "            for j in (i + 1) ..< scene.count where overlaps(scene[i], scene[j]) {"
+  , "                return false"
+  , "            }"
+  , "        }"
+  , "        return true"
+  , "    }"
+  , ""
+  , "    /// Re-asserts the Haskell laws at runtime (defense-in-depth): disjoint,"
+  , "    /// in-bounds, interactive regions clear the touch floor, priorities distinct."
+  , "    public static func selfCheck() -> Bool {"
+  , "        let s = captureScene"
+  , "        let touch = SixFourLattice.touchFloorCells"
+  , "        let inBounds = s.allSatisfy {"
+  , "            $0.col >= 0 && $0.col + $0.w <= cols && $0.row >= 0 && $0.row + $0.h <= rows"
+  , "        }"
+  , "        let floorOK = s.filter { $0.interactive }.allSatisfy { $0.w >= touch && $0.h >= touch }"
+  , "        let prios = s.map { $0.priority }"
+  , "        let distinct = Set(prios).count == prios.count"
+  , "        return isDisjoint(s) && inBounds && floorOK && distinct"
+  , "    }"
+  , "}"
+  ]
+  where
+    regionLine :: (String, GL.LRegion) -> Text
+    regionLine (nm, r) = T.concat
+      [ "        GridRegion(name: \"", T.pack nm, "\""
+      , ", col: ", tshow (GL.lrCol r), ", row: ", tshow (GL.lrRow r)
+      , ", w: ",   tshow (GL.lrW r),   ", h: ",   tshow (GL.lrH r)
+      , ", widget: ", tshow (GL.lrWidget r), ", priority: ", tshow (GL.lrPriority r)
+      , ", interactive: ", if GL.lrInteractive r then "true" else "false", "),"
+      ]

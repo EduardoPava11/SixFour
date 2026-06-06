@@ -33,9 +33,9 @@ enum SFTheme {
     /// the `6` is a theorem, not a free literal. See `docs/SIXFOUR-TOTAL-PIXELATION.md`.
     static let gifCellPt: CGFloat = CGFloat(SixFourLattice.reviewPitchPt)
     /// The shared content canvas edge = `gifSideCells × gifCellPt` (the GIF's cell
-    /// count drives it, not a literal). The palette grid uses the SAME 384pt edge
-    /// (16 × 24), so a palette cell is exactly a 4×4 block of GIF cells.
-    static let gifCanvasPt: CGFloat = gifCellPt * CGFloat(gifSideCells)   // 384
+    /// count drives it, not a literal). At the 4 pt atom this is 64 × 4 = 256 pt; the
+    /// palette swatch is the SAME 4 pt cell as a GIF pixel (GRID Law #1, one cell size).
+    static let gifCanvasPt: CGFloat = gifCellPt * CGFloat(gifSideCells)   // 256 at 4 pt
     /// The one grid-frame border — OPAQUE (GRID Law #2: opacity is shading, forbidden on
     /// a content surface). `(128,128,128)` reads as the old white@0.5-on-black hairline but
     /// is a flat opaque ink; applied as an INSET `.border` (not an edge-centred AA stroke).
@@ -47,9 +47,9 @@ enum SFTheme {
     // 24 (= 3×8, so the cube and Apple's 8pt grid already agree).
     // No chrome size may be a free point value.
     //
-    // The 2pt CAPTURE lattice (cellPt, 201×437, widget cell-counts) is owned by
-    // `GlobalLattice` (GRID Law #5). `gifCellPt`/`gifCanvasPt` here are the 6pt
-    // Review/palette pitch (EXEMPT-REVIEW-PITCH); the two pitches never share a screen.
+    // v3.0: ONE atom app-wide = `gifPx = 4 pt` (GlobalLattice, GRID Law #5). The old
+    // capture/Review pitch split is dissolved — `gifCellPt` == the atom == 4 pt. These
+    // tokens are the typed facade over `SixFourLattice`; no second pitch exists.
 
     /// Opaque "off-segment" dim for unlit LED/cell elements (never opacity — the
     /// flat-cell contract; ~1.6:1 on black so it reads without reflow).
@@ -88,7 +88,7 @@ enum SFTheme {
     /// Diameter of a circular glass icon button. 44pt is Apple's minimum
     /// comfortable hit target — keep new toolbar buttons on this size so
     /// the floating control cluster stays visually + tonally uniform.
-    static let glassIconButtonSize: CGFloat = gifCellPt * 8   // 48 = 2 palette cells
+    static let glassIconButtonSize: CGFloat = gifCellPt * CGFloat(SixFourLattice.touchFloorCells)   // 11·4 = 44 pt (the exact HIG floor)
 
     /// Spacing passed to `GlassEffectContainer`. It is the distance within
     /// which sibling glass shapes share one sampling region and morph into

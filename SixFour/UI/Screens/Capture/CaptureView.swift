@@ -55,11 +55,12 @@ struct CaptureView: View {
         }
     }
 
-    /// The capture screen is exactly TWO elements on ONE uniform grid (`CaptureGrid`,
-    /// 4 pt cell): the 64-cell preview hero (256 pt) and the 16-cell live palette (64 pt)
-    /// — which IS the capture button — floating on the live checker. Every cell (preview
-    /// pixel, palette swatch, background checker) is the SAME size. No `VStack`/`Spacer`;
-    /// each element is `.position`-placed on the cell grid. Settings/other widgets are
+    /// The capture screen is exactly TWO elements on ONE uniform grid (the 4 pt
+    /// `gifPx` atom): the 64-cell preview hero (256 pt) and the 16-cell live palette
+    /// (64 pt) — which IS the capture button — floating on the live checker. Every cell
+    /// (preview pixel, palette swatch, background checker) is the SAME size. No
+    /// `VStack`/`Spacer`; each element is `.place(_:)`-d by its `GridLayoutContract`
+    /// region (the scene `Spec.GridLayout` proves disjoint). Settings/other widgets are
     /// deferred (brief: "nothing else"); there is no chrome here but the two heroes.
     private var latticeScene: some View {
         ZStack(alignment: .topLeading) {
@@ -68,8 +69,8 @@ struct CaptureView: View {
             // heroes draw ON TOP, so the checker simply tiles the whole screen behind them.
             GridRefreshFieldView(phase: heartbeat.phase)
                 .ignoresSafeArea()
-            previewBlock.position(CaptureGrid.previewCenter)     // 64 cells = 256 pt
-            paletteButton.position(CaptureGrid.paletteCenter)    // 16 cells = 64 pt = THE capture button
+            previewBlock.place("preview")     // 64-cell hero, placed by the proven GridLayoutContract scene
+            paletteButton.place("palette")    // 16-cell palette = THE capture button, placed by the contract
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
@@ -111,7 +112,7 @@ struct CaptureView: View {
     /// enough to clear the rounded corners and to rotate into the 64³ cube for analysis.
     /// Every pixel is the SAME 4 pt cell as a palette swatch and a checker cell.
     private var previewBlock: some View {
-        let side = CaptureGrid.pt(CaptureGrid.previewCells)   // 64 × 4 = 256 pt
+        let side = GlobalLattice.gif(GlobalLattice.previewCells)   // 64 × 4 = 256 pt
         return ZStack {
             if let session = vm.session?.session {
                 CameraPreview(session: session) { devicePoint, localPoint in
@@ -166,7 +167,7 @@ struct CaptureView: View {
             if case let .capturing(progress) = vm.phase { return Int((progress * 256).rounded()) }
             return 256
         }()
-        let grid = CellSprite(cols: 16, rows: 16, cellPt: CaptureGrid.cell) { c, r in
+        let grid = CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gif(1)) { c, r in
             let rank = r * 16 + c
             guard rank < ordered.count else { return ghost }
             return rank < captured ? ordered[rank] : ghost
@@ -280,7 +281,7 @@ private struct FocusReticle: View {
             let d = CellGeom.dist(c, r, cx, cy)
             return (d >= 12 && d <= 14) ? SIMD3<UInt8>(255, 204, 0) : nil   // opaque yellow ring band
         }
-        .position(point)
+        .position(point)   // LINT-ALLOW-POSITION: a live tap location in the preview's own coords, not a lattice cell
         .accessibilityHidden(true)
     }
 }

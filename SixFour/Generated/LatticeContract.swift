@@ -4,31 +4,35 @@
 
 import Foundation
 
-/// The GRID lattice — every governed dimension, in `gifPx` atoms (v2.0 inversion).
-/// The atom is the GIF pixel: `gifPx = 6 pt = 18 device-px @3x` — the largest
-/// pitch at which a 64-wide preview fits portrait width (64·6=384 ≤ 402) and lands
-/// on integer device-px. It tiles the width exactly (402/6 = 67 cols) and the
-/// height to the safe-area (145 rows + a 4 pt bleed). `subPt = 2 pt = gifPx/3` is
-/// the commensurate sub-pixel for fine spacing/gutters + text. `GlobalLattice` is
-/// the typed `CGFloat` facade over these constants, NOT an independent authority
-/// (GRID Law #5). Mirrors `SixFour.Spec.Lattice`; `cabal test` proves the laws.
+/// The GRID lattice — every governed dimension, in `gifPx` atoms (v3.0, 4 pt).
+/// The atom is `gifPx = 4 pt = 12 device-px @3x` — chosen (not forced) because it
+/// is integer device-px AND expresses the 44 pt HIG touch floor exactly (11·4=44),
+/// which 6 pt could not. The preview is 64·4 = 256 pt with margin. Each axis tiles
+/// to the safe-area with a 2 pt sub-atom bleed (100 cols + 218 rows). `subPt = 2 pt
+/// = gifPx/2` is the commensurate half-atom for fine spacing/gutters + text.
+/// `GlobalLattice` is the typed `CGFloat` facade over these constants, NOT an
+/// independent authority (GRID Law #5). The capture-scene LAYOUT lives in
+/// `GridLayoutContract` (the contention proof), not here. Mirrors
+/// `SixFour.Spec.Lattice`; `cabal test` proves the laws.
 public enum SixFourLattice {
     /// Reference anchor: iPhone 17 Pro portrait logical size + @3x scale.
     public static let screenWidthPt: Int = 402
     public static let screenHeightPt: Int = 874
     public static let scale: Int = 3
 
-    /// THE ATOM: one GIF pixel = 6 pt = 18 device-px @3x.
-    public static let gifPx: Int = 6
-    public static let gifDevicePx: Int = 18
-    /// The sub-pixel: gifPx/3 = 2 pt (fine spacing/gutters + text legibility).
+    /// THE ATOM: one GIF pixel = 4 pt = 12 device-px @3x.
+    public static let gifPx: Int = 4
+    public static let gifDevicePx: Int = 12
+    /// The sub-pixel: gifPx/2 = 2 pt (fine spacing/gutters + text legibility).
     public static let subPt: Int = 2
     /// Content pitch = the atom (Review folds in; EXEMPT-REVIEW-PITCH retired).
-    public static let reviewPitchPt: Int = 6
-    /// The full-screen lattice in atoms (67 cols × 145 rows) + the vertical bleed.
-    public static let cols: Int = 67
-    public static let rows: Int = 145
-    public static let bleedPt: Int = 4
+    public static let reviewPitchPt: Int = 4
+    /// The full-screen lattice in atoms (100 cols × 218 rows) + per-axis bleed.
+    public static let cols: Int = 100
+    public static let rows: Int = 218
+    /// Sub-atom bleed absorbed off-lattice at each safe edge (2 pt per axis).
+    public static let hBleedPt: Int = 2
+    public static let bleedPt: Int = 2
 
     /// OS safe-area insets (iPhone 17 Pro portrait, iOS 26+; web-verified).
     public static let safeTopPt: Int = 62
@@ -39,25 +43,17 @@ public enum SixFourLattice {
 
     /// Widget atom-counts (square blocks; grow by more atoms, never bigger atoms).
     public static let previewCells: Int = 64
-    public static let touchFloorCells: Int = 8
-    public static let controlCells: Int = 8
-    public static let shutterCells: Int = 12
+    public static let touchFloorCells: Int = 11
+    public static let controlCells: Int = 12
+    public static let shutterCells: Int = 16
     public static let ringCells: Int = 20
     public static let ringTicks: Int = 64
-    public static let wordmarkRows: Int = 8
+    public static let wordmarkRows: Int = 11
     public static let wordmarkCols: Int = 60
-    public static let segmentCells: Int = 8
+    public static let segmentCells: Int = 11
     public static let gutterCells: Int = 1
-    public static let shutterDiscRadiusCells: Int = 5
-    public static let shutterRingThicknessCells: Int = 1
-
-    /// The golden vertical layout (preview anchor + above/below split, below/above ≈ φ).
-    public static let previewStartRow: Int = 31
-    public static let previewEndRow: Int = 94
-    public static let previewStartCol: Int = 1
-    public static let previewEndCol: Int = 64
-    public static let aboveRows: Int = 31
-    public static let belowRows: Int = 50
+    public static let shutterDiscRadiusCells: Int = 6
+    public static let shutterRingThicknessCells: Int = 2
 
     /// Atoms → points. The single place an atom count becomes a point size.
     @inline(__always) public static func cellsToPt(_ cells: Int) -> Int { cells * gifPx }
@@ -65,24 +61,20 @@ public enum SixFourLattice {
     /// Re-asserts the Haskell laws at runtime (defense-in-depth). True iff the
     /// emitted constants satisfy every GRID geometry invariant (v2.0 gifPx atom).
     public static func selfCheck() -> Bool {
-        gifPx == 6 && gifDevicePx == 18 && subPt == 2
-        && gifPx % subPt == 0 && gifPx / subPt == 3 && reviewPitchPt == gifPx
-        && previewCells * gifPx <= screenWidthPt
-        && previewCells * (gifPx + 1) > screenWidthPt
-        && cols * gifPx == screenWidthPt && rows * gifPx <= screenHeightPt
-        && cols == 67 && rows == 145
+        gifPx == 4 && gifDevicePx == 12 && subPt == 2
+        && gifPx % subPt == 0 && gifPx / subPt == 2 && reviewPitchPt == gifPx
+        && gifDevicePx == gifPx * scale
+        && previewCells * gifPx <= screenWidthPt && 44 % gifPx == 0
+        && cols * gifPx <= screenWidthPt && screenWidthPt - cols * gifPx < gifPx
+        && rows * gifPx <= screenHeightPt && screenHeightPt - rows * gifPx < gifPx
+        && cols == 100 && rows == 218
+        && hBleedPt == screenWidthPt - cols * gifPx && hBleedPt >= 0 && hBleedPt < gifPx
         && bleedPt == screenHeightPt - rows * gifPx && bleedPt >= 0 && bleedPt < gifPx
         && shutterDiscRadiusCells * 2 + shutterRingThicknessCells * 2 == shutterCells
         && shutterCells >= touchFloorCells && controlCells >= touchFloorCells
-        && segmentCells >= touchFloorCells && cellsToPt(touchFloorCells) == 48
+        && segmentCells >= touchFloorCells && cellsToPt(touchFloorCells) == 44
         && cellsToPt(touchFloorCells) >= 44
-        && controlCells == touchFloorCells && fibLadder.contains(controlCells)
-        && shutterCells * 2 == controlCells * 3
-        && aboveRows + previewCells + belowRows == rows && aboveRows < belowRows
-        && (previewEndCol - previewStartCol + 1) == previewCells
-        && (previewEndRow - previewStartRow + 1) == previewCells
-        && previewStartCol + previewEndCol == cols - 2 && previewStartRow == aboveRows
-        && wordmarkCols <= previewCells && wordmarkRows == controlCells
-        && aboveRows * gifPx >= safeTopPt && belowRows * gifPx >= safeBottomPt + bleedPt
+        && shutterCells >= controlCells && controlCells >= touchFloorCells
+        && wordmarkCols <= previewCells
     }
 }

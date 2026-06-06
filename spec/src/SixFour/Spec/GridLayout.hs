@@ -1,0 +1,171 @@
+{- |
+Module      : SixFour.Spec.GridLayout
+Description : The capture-scene LAYOUT as a contention-free claim set (the keystone).
+
+The GRID design language says every widget is a rectangular block of cells on the
+ONE 4 pt lattice ('SixFour.Spec.Lattice'). This module makes the WHOLE SCENE — not
+just one widget — a proven object: a 'Scene' is a list of named 'LRegion's, and the
+laws below prove they are pairwise DISJOINT (no two widgets claim the same cell),
+in-bounds, touch-floor-legal, and safe-area-clearing. So "operations follow the
+grid" is not a convention — it is a theorem @cabal test@ re-checks.
+
+== Reuse, not reinvention (the F-4 factoring)
+
+Contention is detected with the SAME no-blend algebra the palette uses
+('SixFour.Spec.CellFiber.join' / 'isContested') — but keyed by SCREEN cells
+@(col,row)@, NOT the 64×64 GIF field ('SixFour.Spec.CellGrid.Place' is GIF-sized,
+4096 cells; the screen is @cols × rows = 100 × 218@, a different base, so its
+@allPlaces@/@contestedPlaces@ cannot be reused). Each region claims a distinct
+per-widget 'Color'; folding the claims with 'join' makes a contested cell a
+2-element 'Set' ('isContested'), exactly as a double-claimed palette cell would be.
+'lawDisjointMatchesRects' bridges this algebraic view to the plain AABB rectangle
+test, so the two notions of "overlap" are provably identical.
+
+== The capture scene is the AS-BUILT WIP layout
+
+'captureScene' encodes the actual shipped capture screen: a 64×64 (256 pt) preview
+hero riding high, and the 16×16 (64 pt) live palette that IS the capture button in
+the thumb zone. (This is why the v2.0 golden-split anchor was removed from
+'SixFour.Spec.Lattice' — the real layout is not a golden section; it is this, and it
+is proven here.) Emitted to @SixFour/Generated/GridLayoutContract.swift@; the Swift
+@place(_:)@ modifier consumes each region so @CaptureView@ hand-places nothing.
+
+GHC-boot-only: base, containers, plus 'SixFour.Spec.CellFiber' / '.Lattice'.
+-}
+module SixFour.Spec.GridLayout
+  ( -- * The region + the scene
+    LRegion(..)
+  , Scene
+  , captureScene
+    -- * Helpers
+  , regionCells
+  , regionsOverlap
+  , sceneContested
+  , sceneInteractive
+    -- * Laws (predicates; QuickCheck'd in Properties.GridLayout)
+  , lawSceneDisjoint
+  , lawSceneInBounds
+  , lawInteractiveTouchFloor
+  , lawSafeAreaClearance
+  , lawPriorityDistinct
+  , lawDisjointMatchesRects
+  ) where
+
+import           Data.List       (nub)
+import           Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+
+import SixFour.Spec.CellFiber (Color(..), Cell, singletonCell, join, isContested)
+import SixFour.Spec.Lattice
+  ( cols, rows, gifPx, touchFloorCells, screenHeightPt, safeTopPt, safeBottomPt )
+
+-- | A widget's rectangular claim on the screen lattice (top-left origin, atoms).
+-- @lrWidget@ is the owner id (distinct per widget); @lrPriority@ is the deterministic
+-- tiebreak surfaced if a (proven-impossible) collision occurs; @lrInteractive@ marks
+-- touch targets (which must clear the floor).
+data LRegion = LRegion
+  { lrCol        :: !Int
+  , lrRow        :: !Int
+  , lrW          :: !Int
+  , lrH          :: !Int
+  , lrWidget     :: !Int
+  , lrPriority   :: !Int
+  , lrInteractive :: !Bool
+  } deriving (Eq, Show)
+
+-- | A named set of widget regions composing one screen.
+type Scene = [(String, LRegion)]
+
+-- | THE capture scene — the as-built WIP layout in 4 pt cells (100 × 218 field):
+--
+--   * @preview@ : 64×64 (256 pt) hero, centered (@(100-64)/2 = 18@), top row 22
+--     (88 pt — clears the 62 pt Dynamic Island). Non-interactive.
+--   * @palette@ : 16×16 (64 pt) live palette = the capture button, centered
+--     (@(100-16)/2 = 42@), top row 145 (thumb zone). Interactive (64 ≥ 44 floor).
+--
+-- Disjoint (preview rows 22–85, palette rows 145–160), in-bounds, and safe-area
+-- clearing — all proven below.
+captureScene :: Scene
+captureScene =
+  [ ("preview", LRegion { lrCol = 18, lrRow = 22,  lrW = 64, lrH = 64
+                        , lrWidget = 0, lrPriority = 0, lrInteractive = False })
+  , ("palette", LRegion { lrCol = 42, lrRow = 145, lrW = 16, lrH = 16
+                        , lrWidget = 1, lrPriority = 1, lrInteractive = True })
+  ]
+
+-- | The screen cells @(col,row)@ a region claims.
+regionCells :: LRegion -> [(Int, Int)]
+regionCells r =
+  [ (c, rr) | c  <- [lrCol r .. lrCol r + lrW r - 1]
+            , rr <- [lrRow r .. lrRow r + lrH r - 1] ]
+
+-- | AABB overlap: two regions share at least one cell iff their col ranges AND row
+-- ranges both overlap (the standard separating-axis test).
+regionsOverlap :: LRegion -> LRegion -> Bool
+regionsOverlap a b =
+     lrCol a < lrCol b + lrW b && lrCol b < lrCol a + lrW a
+  && lrRow a < lrRow b + lrH b && lrRow b < lrRow a + lrH a
+
+-- | Fold every region's claim into a screen-cell grid using the fiber 'join'
+-- (REUSE: the same no-blend algebra as the palette). A cell claimed by two widgets
+-- holds both distinct per-widget 'Color's, so it is 'isContested'.
+sceneGrid :: Scene -> Map (Int, Int) Cell
+sceneGrid scene = Map.fromListWith join
+  [ (cell, singletonCell (Color (lrWidget r, 0, 0)))
+  | (_, r) <- scene, cell <- regionCells r ]
+
+-- | Every screen cell where two+ widgets collided (the total "I want to know"
+-- report; empty for a well-formed scene). Mirrors 'CellGrid.contestedPlaces' but
+-- over the screen base.
+sceneContested :: Scene -> [(Int, Int)]
+sceneContested = Map.keys . Map.filter isContested . sceneGrid
+
+-- | The interactive (touch-target) regions of a scene.
+sceneInteractive :: Scene -> [LRegion]
+sceneInteractive scene = [ r | (_, r) <- scene, lrInteractive r ]
+
+-- LAWS ----------------------------------------------------------------------
+
+-- | DISJOINT: no two widgets claim the same cell — @sceneContested@ is empty. This
+-- is the keystone: the scene blends nothing and surfaces no sentinel. Discharge:
+-- reuse 'CellFiber.isContested' over the folded screen grid.
+lawSceneDisjoint :: Scene -> Bool
+lawSceneDisjoint = null . sceneContested
+
+-- | Every claimed cell lies inside the @100 × 218@ screen lattice.
+lawSceneInBounds :: Scene -> Bool
+lawSceneInBounds scene =
+  all inb [ cell | (_, r) <- scene, cell <- regionCells r ]
+  where inb (c, rr) = c >= 0 && c < cols && rr >= 0 && rr < rows
+
+-- | Every interactive region clears the HIG touch floor in BOTH dimensions
+-- (@≥ touchFloorCells = 11@ atoms = 44 pt).
+lawInteractiveTouchFloor :: Scene -> Bool
+lawInteractiveTouchFloor scene =
+  all (\r -> lrW r >= touchFloorCells && lrH r >= touchFloorCells)
+      (sceneInteractive scene)
+
+-- | Every region clears BOTH OS safe areas: its top ≥ the Dynamic Island inset and
+-- its bottom ≤ the screen minus the home-indicator inset.
+lawSafeAreaClearance :: Scene -> Bool
+lawSafeAreaClearance scene = all clears [ r | (_, r) <- scene ]
+  where
+    clears r =  lrRow r * gifPx >= safeTopPt
+             && (lrRow r + lrH r) * gifPx <= screenHeightPt - safeBottomPt
+
+-- | Priorities are pairwise distinct ⇒ a (proven-impossible) collision still has a
+-- single deterministic winner; never an ambiguous tie.
+lawPriorityDistinct :: Scene -> Bool
+lawPriorityDistinct scene =
+  let ps = map (lrPriority . snd) scene in length (nub ps) == length ps
+
+-- | BRIDGE: the algebraic "no contested cell" view agrees exactly with the geometric
+-- AABB "no rectangles overlap" view — so the fiber proof and the rectangle test are
+-- the same theorem.
+lawDisjointMatchesRects :: Scene -> Bool
+lawDisjointMatchesRects scene =
+  null (sceneContested scene) == not (any (uncurry regionsOverlap) (distinctPairs (map snd scene)))
+  where
+    distinctPairs xs = [ (a, b) | (a : rest) <- tails1 xs, b <- rest ]
+    tails1 []          = []
+    tails1 l@(_ : t)   = l : tails1 t

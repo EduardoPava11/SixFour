@@ -45,6 +45,7 @@ library
         SixFour.Spec.Lattice
         SixFour.Spec.CellFiber
         SixFour.Spec.CellGrid
+        SixFour.Spec.GridLayout
         SixFour.Spec.Display
         SixFour.Spec.FrontProjection
         SixFour.Spec.CellShapes
@@ -268,6 +269,7 @@ test-suite spec-tests
         Properties.Lattice
         Properties.CellFiber
         Properties.CellGrid
+        Properties.GridLayout
         Properties.Display
         Properties.FrontProjection
         Properties.CellShapes

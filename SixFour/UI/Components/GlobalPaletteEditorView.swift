@@ -89,7 +89,7 @@ struct GlobalPaletteEditorView: View {
     private func grainButton(_ systemName: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             CellSymbol(systemName: systemName, box: 8, ink: .white)
-                .frame(width: GlobalLattice.gif(8), height: GlobalLattice.gif(5))
+                .frame(width: GlobalLattice.gif(12), height: GlobalLattice.gif(8))   // 48×32 at 4 pt (width clears the 44 pt floor; preserves the v2.0 footprint)
                 .background(Color(srgb8: SIMD3(55, 55, 55)))
                 .contentShape(Rectangle())
         }

@@ -26,6 +26,7 @@ import qualified Properties.Export       as Export
 import qualified Properties.Lattice      as Lattice
 import qualified Properties.CellFiber    as CellFiber
 import qualified Properties.CellGrid     as CellGrid
+import qualified Properties.GridLayout   as GridLayout
 import qualified Properties.Display      as Display
 import qualified Properties.FrontProjection as FrontProjection
 import qualified Properties.CellShapes   as CellShapes
@@ -92,6 +93,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Lattice.tests
   , CellFiber.tests
   , CellGrid.tests
+  , GridLayout.tests
   , Display.tests
   , FrontProjection.tests
   , CellShapes.tests
