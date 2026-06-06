@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import ImageIO
+import os
 
 /// The unified GIF player — the Review hero. The GIF renders and plays as **one
 /// tool set** in 2D (`GIFCanvas`) or 3D (`VoxelCubeView`), switched by a GRID
@@ -142,6 +143,15 @@ struct GIFCanvas: View {
             guard let img = pixelImage(fromRGBA: bytes, side: side) else { return nil }
             imgs.append(img)
         }
+        #if DEBUG
+        // RULE-CUBE-2D-IDENTITY behaving correctly: the deterministic front-projection
+        // path ran, produced one slice per frame, and the spec golden (the near-face
+        // depth→frame map) self-checks and is the identity over the frames we built.
+        let identityOK = SixFourFrontProjection.selfCheck()
+            && SixFourFrontProjection.goldenFrontFaceFrame == Array(0..<imgs.count)
+        Logger(subsystem: "com.sixfour.SixFour", category: "frontprojection")
+            .debug("RULE-CUBE-2D-IDENTITY: \(imgs.count, privacy: .public) front slices @\(side, privacy: .public)px, spec-golden OK=\(identityOK, privacy: .public)")
+        #endif
         return imgs
     }
 
