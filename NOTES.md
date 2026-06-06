@@ -5,6 +5,60 @@ newest first.
 
 ---
 
+## 2026-06-05 — SUNSET / handoff: ethos-debt cleanup + display-FSM proven
+
+> **Entry point for the next session.** This session ran a workflow-audited ethos &
+> technical-debt sweep, then fixed/proved the high-value items. Everything is committed
+> and pushed to `origin/master` (HEAD `73c530f`); working tree clean; `cabal test` =
+> **517 green**, iOS **BUILD/TEST SUCCEEDED**, drift gate + GRID lint pass.
+
+### What shipped (6 commits, newest first)
+- `73c530f` — resolution log in `docs/SIXFOUR-DEBT-RECONCILIATION.md` **§0** (the live
+  status table — read this first; it maps each of the 18 live findings → fixed/open).
+- `8c560e7` — FrontProjection **golden** (`SixFourFrontProjection`) + `FrontProjectionGoldenTests`
+  + a **runtime DEBUG log** in `GIFPlayer.frontProjectedFrames` (os.Logger category
+  `frontprojection`) that checks RULE-CUBE-2D-IDENTITY on device.
+- `176186d` — `Spec.FrontProjection` proves the 2D-GIF == cube-near-face identity
+  (reuses `PlaybackClock threeDFrontFace == twoDFrame`).
+- `98a032a` — `DisplayContractTests`: **cross-contract** parity (Display ↔ PlaybackClock ↔
+  Lattice agree — the seam per-file selfCheck/drift-gate miss).
+- `6dabded` — `DisplayContract.swift` codegen (FSM constants + `goldenCursorTrace`).
+- `a4532a8` — **`Spec.Display`** proves the FSM `M=(Σ,ι,δ,λ,Π,κ)`, **T1–T9 + composition**
+  (`spec/src/SixFour/Spec/Display.hs`, `spec/test/Properties/Display.hs`).
+- `81dadd2` — Tier 1 cleanup: lattice-govern bare point dims, delete dead
+  `GlassOverContent.swift`, rewrite DISPLAY-FSM §2.4.2 (glass retired), and a **codegen
+  Sendable fix** (`CellContract.Golden`) that unblocked the contested-cell build.
+
+### Hard constraint learned (do not forget)
+- **The simulator has NO camera**, so the capture flow can't be driven there. Verify via
+  **unit tests** (they run fine — contract tests don't touch the capture path) and
+  **logs** (os.Logger / `print` in tests). A final **device A/B** is the only way to
+  confirm visuals.
+
+### Open / next steps (priority order)
+1. **INV-ZIG-BYTE-EXACT-MISSING-GOLDENS** (audit Band 4 items 9/12) — *the next real piece.*
+   `s4_gif_assemble` has no Swift byte-equality test; `s4_srgb8_to_oklab_q16` has no golden.
+   The `gif_golden.gif` + `gif_golden_{indices,palettes}.bin` exist but live in `trainer/out/`
+   (gitignored). Plan: commit them as **test fixtures**, bundle into `SixFourTests` via
+   `project.yml`, assert `SixFourNative.gifAssemble(...) bytes == golden`; add a Haskell
+   `sRGB8→OKLab` round-trip property in `Properties.ColorFixed`.
+2. **FSM runtime steps 3–5** (camera-gated but **already test-gated** — safe to do, then
+   device A/B): (3) swap `PlaybackClock` Timer → `CADisplayLink(20,20,20)` and retire the
+   `VoxelCubeView` 60 Hz Timer (closes live `INV-T2-ONE-CLOCK`; gated by
+   `DisplayContractTests.deltaReviewIsThePlaybackClock`); (4) delete the `cellPt` param from
+   `CellSprite`/`PaletteGridView` and render at `atom × blockFactor` (gated by
+   `cellPitchMatchesShippedLattice`); (5) replace `GIFCanvas`'s 64-`UIImage` cache with a
+   reactive per-cell `Canvas` (gated by `Spec.FrontProjection` + `FrontProjectionGoldenTests`).
+3. **AxisNet DataKinds** (`DATAKIND-UNJUSTIFIED-AXISNET`) — **DEFERRED, needs a design call.**
+   The audit called it "mechanical-safe" but its phantom `ColorAxis` carries **load-bearing
+   σ-equivariance instances** (`Stage`/`SigmaEquivariant`). Do NOT blindly de-promote.
+4. **VISION-SEARCH-KEYSTONE-GAP** — Phase-2 SEARCH (MCTS over Haar folds). Largest new work.
+
+The full audit (ethos restatement, all 18 live + 15 dismissed findings, exact fixes) is in
+`docs/SIXFOUR-DEBT-RECONCILIATION.md`; the audit workflow is `scripts/wf-ethos-debt-audit.js`.
+
+---
+
 ## 2026-05-29 — Next session: FULL GIF creation in Zig (per-frame LAB palette, 20 fps)
 
 > **Entry point for the next session.** The owned Zig core (`Native/`) currently ships
