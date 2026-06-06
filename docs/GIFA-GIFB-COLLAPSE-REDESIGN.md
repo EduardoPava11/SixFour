@@ -1,3 +1,5 @@
+> **Status/built-state:** see [docs/STATUS.md](STATUS.md) (canonical, gated by `scripts/verify-doc-claims.sh`). This document is design rationale, not a status ledger.
+
 # GIFA → GIFB collapse — redesign brief (the per-frame → global palette move)
 
 > **Status: OPEN DESIGN BRIEF (2026-06-05).** This is the forward design surface for the

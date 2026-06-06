@@ -1,3 +1,5 @@
+> **Status/built-state:** see [docs/STATUS.md](STATUS.md) (canonical, gated by `scripts/verify-doc-claims.sh`). This document is design rationale, not a status ledger.
+
 # Handoff — wiring the L-NN into the app (I/O + UI surfacing)
 
 **Purpose of next session:** take the trained L-NN nucleus and (1) wire it into the app's

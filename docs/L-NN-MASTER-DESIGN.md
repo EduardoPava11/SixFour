@@ -1,3 +1,5 @@
+> **Status/built-state:** see [docs/STATUS.md](STATUS.md) (canonical, gated by `scripts/verify-doc-claims.sh`). This document is design rationale, not a status ledger.
+
 # The L→A→B Look-NN — Authoritative Master Design
 
 **Status of record: 2026-05-30. This document supersedes and reconciles**
