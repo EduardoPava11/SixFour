@@ -29,8 +29,10 @@ type signature of 'observe': @DisplayState -> [Pixel]@ with NO 'Input' argument.
 GHC-boot-only: base + the listed Spec modules.
 -}
 module SixFour.Spec.Display
-  ( -- * Mode + state
-    Mode(..)
+  ( -- * The UI-lifecycle phase FSM (one surface, no screens)
+    Phase(..), RenderStage(..), Event(..)
+  , allPhases, allEvents, step, nextStage, phaseField
+  , phaseName, eventName, stageName, goldenHappyPath
   , DisplayState(..)
   , Input(..)
   , Pixel
@@ -56,11 +58,17 @@ module SixFour.Spec.Display
   , lawMoore                   -- T8
   , lawGridJoinTotal           -- T9 (cited from CellGrid)
   , lawComposition             -- the colimit: Π all factor through the one Σ
+    -- * The phase-FSM laws (one surface, no screens)
+  , lawPhaseTotal              -- step is total over every (phase, event)
+  , lawNoOrphanPhase           -- every phase reachable from Bootstrap
+  , lawPhaseIsCellGrid         -- every phase IS a full cell-field configuration
+  , lawReviewExplicit          -- Review ⟸ only Committed (no implicit predicate)
     -- * Golden gate (N = 64)
   , goldenTickTrace
+  , goldenPhaseTrace
   ) where
 
-import Data.List (sort)
+import Data.List (nub, sort)
 
 import SixFour.Spec.PlaybackClock (FrameCount, frameAfter)
 import SixFour.Spec.PairTreeFixed
@@ -70,14 +78,8 @@ import SixFour.Spec.Lattice      (gifPx, previewCells)
 import SixFour.Spec.CellGrid     (Grid, allPlaces, lawInheritedTotality)
 
 -- =============================================================================
--- Mode, state, alphabet
+-- State, alphabet
 -- =============================================================================
-
--- | The two display modes share the ONE state Σ and the ONE clock κ; they differ
--- only in which δ fires (T2). @Capture@ ingests frames (δ_capture); @Review@ scrubs
--- the committed cube (δ_review).
-data Mode = Capture | Review
-  deriving (Eq, Show, Enum, Bounded)
 
 -- | A displayed pixel: sRGB8 (the byte-exact output of the Zig observation). With
 -- glass retired, this is also exactly what is shown (λ = identity on cells, T8).
@@ -104,6 +106,145 @@ newtype Input = Input { inFrame :: [OKLabI] }
 -- | The three governed grids — the views whose pitch must be @atom × ℤ@ (T4).
 data View = GifView | PaletteView | ShutterView
   deriving (Eq, Show, Enum, Bounded)
+
+-- =============================================================================
+-- The UI-lifecycle phase FSM (the long-pending Spec.Display gap, 2026-06-06)
+--
+-- This is the contract for the ONE-SURFACE app: there is one persistent cell field,
+-- and capture → render → review are STATE TRANSITIONS expressed as cell updates on it,
+-- never screen swaps. 'lawPhaseIsCellGrid' is the formal "no screens" statement.
+-- =============================================================================
+
+-- | The deterministic render stages the Zig core flows through (the @Rendering@ phase's
+-- banner data, formalized into the FSM per the one-surface plan).
+data RenderStage = Quantize | Dither | Significance | Palette | Encode
+  deriving (Eq, Show, Enum, Bounded)
+
+-- | @Phase@ — the UI lifecycle. EVERY phase is a configuration of the one cell field
+-- (a full-lattice 'phaseField'), NOT a screen ('lawPhaseIsCellGrid'). The Swift router's
+-- @switch over vm.phase@ + the @primaryOutput != nil@ review predicate collapse into
+-- this one FSM.
+data Phase
+  = Bootstrap              -- ^ AVCaptureSession initialising
+  | Unauthorized           -- ^ camera permission denied
+  | Live                   -- ^ live capture (preview + palette = shutter)
+  | Settings               -- ^ in-surface settings (a phase, not a screen)
+  | Locking                -- ^ exposure / focus / white-balance locking
+  | Capturing              -- ^ the 64-frame burst in flight
+  | Rendering RenderStage  -- ^ the Zig kernels emitting bytes, stage by stage
+  | Review                 -- ^ the committed GIF / cube, scrubbing on κ
+  | Error                  -- ^ a faulted kernel / session
+  deriving (Eq, Show)
+
+-- | The FSM alphabet — only the transition TRIGGERS. Out-of-band data (error text, the
+-- progress fraction, the captured cube bytes) is carried in Σ / 'CaptureViewModel', not
+-- the alphabet, so @step@ stays a small total function.
+data Event
+  = SessionReady | AuthDenied
+  | ShutterTap | OpenSettings | CloseSettings
+  | LockComplete | BurstComplete
+  | StageDone RenderStage | Committed
+  | Retake | Fault
+  deriving (Eq, Show)
+
+-- | Every phase (finite — 'Rendering' expands over the 5 stages). For the totality
+-- and reachability laws + the codegen contract.
+allPhases :: [Phase]
+allPhases =
+  [ Bootstrap, Unauthorized, Live, Settings, Locking, Capturing, Review, Error ]
+  ++ [ Rendering st | st <- [minBound .. maxBound] ]
+
+-- | Every event (finite — 'StageDone' expands over the 5 stages).
+allEvents :: [Event]
+allEvents =
+  [ SessionReady, AuthDenied, ShutterTap, OpenSettings, CloseSettings
+  , LockComplete, BurstComplete, Committed, Retake, Fault ]
+  ++ [ StageDone st | st <- [minBound .. maxBound] ]
+
+-- | The successor render stage, or @Nothing@ at the last (@Encode@).
+nextStage :: RenderStage -> Maybe RenderStage
+nextStage st | st == maxBound = Nothing
+             | otherwise      = Just (succ st)
+
+-- | @δ_phase@ — the TOTAL transition function ('lawPhaseTotal'). Unhandled
+-- (phase, event) pairs are self-loops (the event is ignored), so @step@ is defined
+-- everywhere with no ⊥. @Review@ is entered ONLY via @Committed@ ('lawReviewExplicit').
+step :: Phase -> Event -> Phase
+step ph ev = case (ph, ev) of
+  (Bootstrap,   SessionReady)  -> Live
+  (Bootstrap,   AuthDenied)    -> Unauthorized
+  (Live,        ShutterTap)    -> Locking
+  (Live,        OpenSettings)  -> Settings
+  (Settings,    CloseSettings) -> Live
+  (Locking,     LockComplete)  -> Capturing
+  (Capturing,   BurstComplete) -> Rendering minBound               -- → Quantize
+  (Rendering s, StageDone s')
+    | s == s'                  -> maybe ph Rendering (nextStage s)  -- advance; hold at Encode
+  (Rendering _, Committed)     -> Review                           -- the ONLY edge into Review
+  (Review,      Retake)        -> Live
+  (Error,       Retake)        -> Bootstrap
+  (_,           Fault)         -> Error
+  _                            -> ph                                -- TOTAL: ignore irrelevant events
+
+-- | @λ_phase@ — every phase observed as a FULL cell-field configuration (length
+-- 'allPlaces'), padded with the neutral cell. The witness for 'lawPhaseIsCellGrid':
+-- a phase is a grid of cells, never a screen. Live/Settings/Locking/Capturing/Rendering/
+-- Review show the front projection of Σ; Bootstrap/Unauthorized/Error are neutral fills
+-- (their decorative cells are layout, out of this totality witness's scope).
+phaseField :: Phase -> DisplayState -> [Pixel]
+phaseField ph s = take n (content ++ repeat neutral)
+  where
+    n       = length allPlaces
+    neutral = (0, 0, 0)
+    content = case ph of
+      Bootstrap    -> []
+      Unauthorized -> []
+      Error        -> []
+      _            -> projGif s
+
+-- | Stable string name of a render stage (the cross-language contract token).
+stageName :: RenderStage -> String
+stageName Quantize     = "quantize"
+stageName Dither       = "dither"
+stageName Significance = "significance"
+stageName Palette      = "palette"
+stageName Encode       = "encode"
+
+-- | Stable string name of a phase (emitted into @DisplayContract.swift@; the Swift
+-- @Phase@ port must use the same tokens so 'goldenPhaseTrace' gates cross-language).
+phaseName :: Phase -> String
+phaseName Bootstrap      = "bootstrap"
+phaseName Unauthorized   = "unauthorized"
+phaseName Live           = "live"
+phaseName Settings       = "settings"
+phaseName Locking        = "locking"
+phaseName Capturing      = "capturing"
+phaseName (Rendering st) = "rendering:" ++ stageName st
+phaseName Review         = "review"
+phaseName Error          = "error"
+
+-- | Stable string name of an event.
+eventName :: Event -> String
+eventName SessionReady   = "sessionReady"
+eventName AuthDenied     = "authDenied"
+eventName ShutterTap     = "shutterTap"
+eventName OpenSettings   = "openSettings"
+eventName CloseSettings  = "closeSettings"
+eventName LockComplete   = "lockComplete"
+eventName BurstComplete  = "burstComplete"
+eventName (StageDone st) = "stageDone:" ++ stageName st
+eventName Committed      = "committed"
+eventName Retake         = "retake"
+eventName Fault          = "fault"
+
+-- | The canonical happy-path event sequence: bootstrap → live → lock → burst →
+-- render(5 stages) → commit → review → retake. Emitted as 'goldenPhaseTrace' for the
+-- cross-language @step@ pin.
+goldenHappyPath :: [Event]
+goldenHappyPath =
+  [ SessionReady, ShutterTap, LockComplete, BurstComplete
+  , StageDone Quantize, StageDone Dither, StageDone Significance
+  , StageDone Palette, StageDone Encode, Committed, Retake ]
 
 -- =============================================================================
 -- Clock arithmetic (NEW: no existing module owns the wall-clock↔panel relation)
@@ -133,8 +274,8 @@ frameCount = previewCells
 -- The spatial atom + per-view block factors (T4 — "kill cellPt")
 -- =============================================================================
 
--- | THE ATOM: @gifPx = 6 pt@ ('SixFour.Spec.Lattice'). Every governed pitch is an
--- integer multiple of it; there is no free @cellPt@.
+-- | THE ATOM: @gifPx = 4 pt@ ('SixFour.Spec.Lattice', GRID v3.0). Every governed pitch
+-- is an integer multiple of it; there is no free @cellPt@.
 atomPt :: Int
 atomPt = gifPx
 
@@ -338,6 +479,42 @@ lawComposition s s' =
   where implies a b = not a || b
 
 -- =============================================================================
+-- The phase-FSM laws (one surface, no screens)
+-- =============================================================================
+
+-- | PHASE-T1 — @step@ is TOTAL: defined (no ⊥) for every (phase, event). The catch-all
+-- self-loop makes this hold by construction; the law forces evaluation to witness it.
+lawPhaseTotal :: Bool
+lawPhaseTotal = all (\(p, e) -> step p e `seq` True) [ (p, e) | p <- allPhases, e <- allEvents ]
+
+-- | PHASE-T2 — no orphan phase: every phase is reachable from @Bootstrap@ by some event
+-- sequence (a BFS fixpoint over @allEvents@). A phase no path reaches would be dead UI.
+lawNoOrphanPhase :: Bool
+lawNoOrphanPhase = all (`elem` reached) allPhases
+  where
+    reached = fixpoint [Bootstrap]
+    fixpoint seen =
+      let next = nub (seen ++ [ step p e | p <- seen, e <- allEvents ])
+      in if length next == length seen then seen else fixpoint next
+
+-- | PHASE-T3 — THE CELL-FIELD LAW: every phase observes as a full cell-field
+-- configuration (@|phaseField p s| == |allPlaces|@), so a phase is a grid of cells on
+-- the one surface, never a screen. This is the formal content of "one surface, no
+-- screen swaps" — the keystone of the one-surface unification.
+lawPhaseIsCellGrid :: DisplayState -> Bool
+lawPhaseIsCellGrid s = all (\p -> length (phaseField p s) == length allPlaces) allPhases
+
+-- | PHASE-T4 — @Review@ is ENTERED (from another phase) ONLY by @Committed@: no
+-- non-@Review@ phase transitions into @Review@ on any other event. (Self-loops from
+-- @Review@ are excluded — staying in @Review@ is not entering it.) Retires the implicit
+-- @primaryOutput != nil@ review predicate in the Swift router — review becomes an
+-- explicit, single-edge phase transition.
+lawReviewExplicit :: Bool
+lawReviewExplicit =
+  all (\(p, e) -> p == Review || step p e /= Review || e == Committed)
+      [ (p, e) | p <- allPhases, e <- allEvents ]
+
+-- =============================================================================
 -- The golden tick-trace (the cross-language gate, N = 64)
 -- =============================================================================
 
@@ -346,3 +523,9 @@ lawComposition s s' =
 -- cursor (δ_review). Emitted to @DisplayContract.swift@ and gated by @cabal test@.
 goldenTickTrace :: [(DisplayState, Input)] -> [DisplayState]
 goldenTickTrace = map (\(s, i) -> deltaReview (deltaCapture s i))
+
+-- | The phase trace from @Bootstrap@ for an event list (@scanl step@). Emitted to
+-- @DisplayContract.swift@ (over 'goldenHappyPath') and gated by @cabal test@, so the
+-- Swift @step@ port reproduces the FSM bit-for-bit.
+goldenPhaseTrace :: [Event] -> [Phase]
+goldenPhaseTrace = scanl step Bootstrap

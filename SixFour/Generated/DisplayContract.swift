@@ -37,6 +37,18 @@ public enum SixFourDisplay {
     /// Equals `SixFourPlaybackClock.frameAfter` (the ONE κ) — the cross-language pin.
     public static let goldenCursorTrace: [Int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 0]
 
+    /// The UI-lifecycle phases. EVERY phase is a cell-field configuration, NOT a
+    /// screen (`SixFour.Spec.Display.lawPhaseIsCellGrid`): capture → render → review
+    /// are cell updates on the ONE surface. The Swift `Surface.phase` port uses these
+    /// exact tokens.
+    public static let phases: [String] = ["bootstrap", "unauthorized", "live", "settings", "locking", "capturing", "review", "error", "rendering:quantize", "rendering:dither", "rendering:significance", "rendering:palette", "rendering:encode"]
+    /// The FSM events (transition triggers only; out-of-band data lives in Σ).
+    public static let events: [String] = ["sessionReady", "authDenied", "shutterTap", "openSettings", "closeSettings", "lockComplete", "burstComplete", "committed", "retake", "fault", "stageDone:quantize", "stageDone:dither", "stageDone:significance", "stageDone:palette", "stageDone:encode"]
+    /// The canonical happy-path event sequence + its phase trace (scanl step
+    /// Bootstrap). The cross-language pin: the Swift `step` port must reproduce it.
+    public static let goldenHappyPathEvents: [String] = ["sessionReady", "shutterTap", "lockComplete", "burstComplete", "stageDone:quantize", "stageDone:dither", "stageDone:significance", "stageDone:palette", "stageDone:encode", "committed", "retake"]
+    public static let goldenHappyPathTrace: [String] = ["bootstrap", "live", "locking", "capturing", "rendering:quantize", "rendering:dither", "rendering:significance", "rendering:palette", "rendering:encode", "rendering:encode", "review", "live"]
+
     /// T4 — the pitch of a governed view = atomPt × b_i (there is no free cellPt).
     @inline(__always)
     public static func cellPitchPt(_ view: Int) -> Int { atomPt * blockFactors[view] }
@@ -61,6 +73,12 @@ public enum SixFourDisplay {
         // T2 — δ_review parity: one advance from c lands on (c+1) mod N.
         guard goldenCursorTrace.count == frameCount else { return false }
         for c in 0..<frameCount where goldenCursorTrace[c] != (c + 1) % frameCount { return false }
+        // Phase FSM — the trace is one longer than its event list, starts at
+        // bootstrap, and the happy path ends at live (review → retake → live).
+        guard goldenHappyPathTrace.count == goldenHappyPathEvents.count + 1 else { return false }
+        if goldenHappyPathTrace.first != "bootstrap" { return false }
+        if goldenHappyPathTrace.last != "live" { return false }
+        if phases.isEmpty || events.isEmpty { return false }
         return true
     }
 }

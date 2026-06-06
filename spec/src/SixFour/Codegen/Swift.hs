@@ -555,6 +555,18 @@ emitDisplayContract = T.unlines
   , "    /// Equals `SixFourPlaybackClock.frameAfter` (the ONE κ) — the cross-language pin."
   , "    public static let goldenCursorTrace: [Int] = " <> intListLiteral goldenCursorTrace
   , ""
+  , "    /// The UI-lifecycle phases. EVERY phase is a cell-field configuration, NOT a"
+  , "    /// screen (`SixFour.Spec.Display.lawPhaseIsCellGrid`): capture → render → review"
+  , "    /// are cell updates on the ONE surface. The Swift `Surface.phase` port uses these"
+  , "    /// exact tokens."
+  , "    public static let phases: [String] = " <> strList (map D.phaseName D.allPhases)
+  , "    /// The FSM events (transition triggers only; out-of-band data lives in Σ)."
+  , "    public static let events: [String] = " <> strList (map D.eventName D.allEvents)
+  , "    /// The canonical happy-path event sequence + its phase trace (scanl step"
+  , "    /// Bootstrap). The cross-language pin: the Swift `step` port must reproduce it."
+  , "    public static let goldenHappyPathEvents: [String] = " <> strList (map D.eventName D.goldenHappyPath)
+  , "    public static let goldenHappyPathTrace: [String] = " <> strList (map D.phaseName goldenPhaseNames)
+  , ""
   , "    /// T4 — the pitch of a governed view = atomPt × b_i (there is no free cellPt)."
   , "    @inline(__always)"
   , "    public static func cellPitchPt(_ view: Int) -> Int { atomPt * blockFactors[view] }"
@@ -579,6 +591,12 @@ emitDisplayContract = T.unlines
   , "        // T2 — δ_review parity: one advance from c lands on (c+1) mod N."
   , "        guard goldenCursorTrace.count == frameCount else { return false }"
   , "        for c in 0..<frameCount where goldenCursorTrace[c] != (c + 1) % frameCount { return false }"
+  , "        // Phase FSM — the trace is one longer than its event list, starts at"
+  , "        // bootstrap, and the happy path ends at live (review → retake → live)."
+  , "        guard goldenHappyPathTrace.count == goldenHappyPathEvents.count + 1 else { return false }"
+  , "        if goldenHappyPathTrace.first != \"bootstrap\" { return false }"
+  , "        if goldenHappyPathTrace.last != \"live\" { return false }"
+  , "        if phases.isEmpty || events.isEmpty { return false }"
   , "        return true"
   , "    }"
   , "}"
@@ -586,6 +604,8 @@ emitDisplayContract = T.unlines
   where
     goldenCursorTrace =
       [ D.dsCursor (D.deltaReview (D.DisplayState [] [] c)) | c <- [0 .. D.frameCount - 1] ]
+    goldenPhaseNames = D.goldenPhaseTrace D.goldenHappyPath
+    strList xs = "[" <> T.intercalate ", " [ "\"" <> T.pack s <> "\"" | s <- xs ] <> "]"
 
 -- | Generate @FrontProjectionGolden.swift@ — RULE-CUBE-2D-IDENTITY, pinned to
 -- 'SixFour.Spec.FrontProjection': the cube's near face (z = N-1) shows frame == cursor.
