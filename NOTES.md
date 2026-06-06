@@ -1,5 +1,7 @@
 # NOTES — design decisions, session log
 
+> NOTES.md is a chronological session log (history), NOT current status. For current build-state see docs/STATUS.md (canonical), gated by scripts/verify-doc-claims.sh.
+
 Running notes on architectural pivots and their tensor evidence. Entries are
 newest first.
 
@@ -36,26 +38,11 @@ newest first.
   confirm visuals.
 
 ### Open / next steps (priority order)
-1. **INV-ZIG-BYTE-EXACT-MISSING-GOLDENS** (audit Band 4 items 9/12) — *the next real piece.*
-   `s4_gif_assemble` has no Swift byte-equality test; `s4_srgb8_to_oklab_q16` has no golden.
-   The `gif_golden.gif` + `gif_golden_{indices,palettes}.bin` exist but live in `trainer/out/`
-   (gitignored). Plan: commit them as **test fixtures**, bundle into `SixFourTests` via
-   `project.yml`, assert `SixFourNative.gifAssemble(...) bytes == golden`; add a Haskell
-   `sRGB8→OKLab` round-trip property in `Properties.ColorFixed`.
-2. **FSM runtime steps 3–5** (camera-gated but **already test-gated** — safe to do, then
-   device A/B): (3) swap `PlaybackClock` Timer → `CADisplayLink(20,20,20)` and retire the
-   `VoxelCubeView` 60 Hz Timer (closes live `INV-T2-ONE-CLOCK`; gated by
-   `DisplayContractTests.deltaReviewIsThePlaybackClock`); (4) delete the `cellPt` param from
-   `CellSprite`/`PaletteGridView` and render at `atom × blockFactor` (gated by
-   `cellPitchMatchesShippedLattice`); (5) replace `GIFCanvas`'s 64-`UIImage` cache with a
-   reactive per-cell `Canvas` (gated by `Spec.FrontProjection` + `FrontProjectionGoldenTests`).
-3. **AxisNet DataKinds** (`DATAKIND-UNJUSTIFIED-AXISNET`) — **DEFERRED, needs a design call.**
-   The audit called it "mechanical-safe" but its phantom `ColorAxis` carries **load-bearing
-   σ-equivariance instances** (`Stage`/`SigmaEquivariant`). Do NOT blindly de-promote.
-4. **VISION-SEARCH-KEYSTONE-GAP** — Phase-2 SEARCH (MCTS over Haar folds). Largest new work.
+Open/next-steps are tracked in docs/STATUS.md (Open debt table) as of 2026-06-05.
 
 The full audit (ethos restatement, all 18 live + 15 dismissed findings, exact fixes) is in
-`docs/SIXFOUR-DEBT-RECONCILIATION.md`; the audit workflow is `scripts/wf-ethos-debt-audit.js`.
+`docs/SIXFOUR-DEBT-RECONCILIATION.md` (now archived under `docs/archive/`); the audit workflow
+is `scripts/wf-ethos-debt-audit.js`.
 
 ---
 

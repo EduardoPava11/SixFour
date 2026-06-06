@@ -1,3 +1,9 @@
+> **ARCHIVED 2026-06-05 — superseded by [docs/STATUS.md](STATUS.md).**
+> This document is retained for history only. Do NOT use it for current build-state: its
+> figures, line numbers, and "zero callers / GIFB never produced" claim are stale and were
+> corrected when its content was merged into the canonical STATUS.md. For current truth, read
+> docs/STATUS.md and run scripts/verify-doc-claims.sh.
+
 # SixFour — Architecture Map
 
 > **Canonical status ledger (2026-06-05).** This doc owns the **built / design / missing**

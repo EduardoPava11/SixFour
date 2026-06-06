@@ -1,3 +1,5 @@
+> **Status/built-state:** see [docs/STATUS.md](STATUS.md) (canonical, gated by `scripts/verify-doc-claims.sh`). This document is design rationale, not a status ledger.
+
 # SixFour Palette Explorer — Unified 2D / 3D / 4D Visualisation Design
 
 **Status:** Design (spec-first). Supersedes the ad-hoc PaletteSphereView spike and the stale "palette globe" framing.

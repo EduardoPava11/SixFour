@@ -1,3 +1,5 @@
+> **Status/built-state:** see [docs/STATUS.md](STATUS.md) (canonical, gated by `scripts/verify-doc-claims.sh`). This document is design rationale, not a status ledger.
+
 # SixFour: Rendering a LAB/OKLab Color Volume as Geometry on iPhone 17 Pro (iOS 26, A19 Pro)
 
 > Source: verified fan-out survey (2026-05-30). 41 candidates discovered, 33 confirmed,

@@ -1,3 +1,5 @@
+> **Status/built-state:** see [docs/STATUS.md](STATUS.md) (canonical, gated by `scripts/verify-doc-claims.sh`). This document is design rationale, not a status ledger.
+
 # What the L-NN Is FOR — and How Its Three Forms of 256 Serve the User
 
 > **Status of record: 2026-05-30.** This is the authoritative *function-design* document. It defines the look-NN by what it DOES FOR THE USER and lets the three forms of 256 (16² / 4⁴ / 2⁸) follow. It is orthogonal to the decoder-shape decision. Ground truth: `spec/BLEED_LOOP.md` (obfuscate/reveal, Def 45–57, Thm 14–18), `spec/LOOK_NN.md` (collapse, Def 30/Thm 9), `spec/src/SixFour/Spec/Obfuscation.hs` (landed keystone), `spec/src/SixFour/Spec/{PairTree,SigmaPairHead,Collapse,Bures,Preference,Significance}.hs`. Where a function depends on un-landed math it is marked **[SPEC]** (contract-first, dormant) versus **[LANDED]**. Companion to `docs/L-NN-MASTER-DESIGN.md` (the design of record); this doc is the *function* layer beneath it.

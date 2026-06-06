@@ -1,3 +1,5 @@
+> **Status/built-state:** see [docs/STATUS.md](STATUS.md) (canonical, gated by `scripts/verify-doc-claims.sh`). This document is design rationale, not a status ledger.
+
 # SixFour — Interactive Control Audit
 
 > Generated 2026-06-02 by the `sixfour-button-audit` workflow (18 UI files inventoried in parallel, then synthesized). Re-run that workflow to refresh.
