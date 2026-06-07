@@ -300,3 +300,8 @@ struct CellDiversityRing: View {
     var tint: SIMD3<UInt8>
     var body: some View { CellRing(gauge: gauge, tint: tint) }
 }
+
+// The `DiversityRing` ColorWidget (the on-surface gauge) was removed — it read poorly on
+// the surface. `CellRing`/`CellDiversityRing` remain as components for any future use; the
+// `ColorIdentity.diversityRing` spec member is kept reserved (its dock is held but nothing
+// renders) until a better diversity affordance is designed.

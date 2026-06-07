@@ -29,6 +29,12 @@ import simd
 struct LivePhaseField: View {
     let surface: Surface
     let clock: SurfaceClock
+    /// The ONE shared widget layout (the three global ColorWidget positions) + persistence.
+    @Bindable var settings: AppSettings
+
+    /// The current shared placement (identity → position). Re-read every body so a move in
+    /// any phase is visible here (one global position across phases).
+    private var placement: [ColorIdentity: (col: Int, row: Int)] { settings.widgetPlacement }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -39,13 +45,19 @@ struct LivePhaseField: View {
             TintedCheckerField(palette: surface.palette, phase: clock.heartbeat)
                 .ignoresSafeArea()
 
-            // The 64-cell hero, placed by the proven contention-free region.
+            // Field64 — the 64-cell preview hero, placed at its SHARED global position and
+            // movable (long-press to lift). The data source is the live camera tile; the
+            // POSITION is the same `field64Position` review/render read.
             previewHero
-                .place("preview")
+                .place(region(for: .field64, at: placement))
+                .movable(.field64, settings: settings, surface: surface)
 
-            // The 16-cell live palette = THE capture button, placed by the contract.
+            // Palette16 — the 16-cell live palette = THE capture button, at its shared
+            // position. The tap (`onTap`) and the long-press lift are ONE composed gesture
+            // (no Button wrapper) so they don't fight: a clean tap fires the burst, a hold
+            // lifts it to move. Both gated to `.live` (a busy palette is inert).
             paletteShutter
-                .place("palette")
+                .place(region(for: .palette16, at: placement))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
@@ -103,23 +115,19 @@ struct LivePhaseField: View {
         let padded: [SIMD3<UInt8>] = (0 ..< 256).map { $0 < surface.palette.count ? surface.palette[$0] : ghost }
         let ordered = GridScript.capture(side: 16).surfaceColors(palette: padded)
 
-        let grid = CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gif(1)) { c, r in
+        // ONE composed gesture (no Button): a clean TAP fires `.shutterTap`, a long-press
+        // LIFTS it to move. `.movable` composes them with `.exclusively` so they never fight
+        // — the prior Button-wrapping swallowed the tap. Both gated to `.live` via `enabled`
+        // (a busy palette is inert: no capture, no move).
+        return CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gif(1)) { c, r in
             let rank = r * 16 + c
             return rank < ordered.count ? ordered[rank] : ghost
         }
-
-        return Group {
-            if surface.phase == .live {
-                Button { surface.step(.shutterTap) } label: { grid }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-            } else {
-                // Busy/locking/capturing (or any non-live phase routed here): inert cells.
-                grid
-            }
-        }
+        .movable(.palette16, settings: settings, surface: surface,
+                 enabled: surface.phase == .live,
+                 onTap: { surface.step(.shutterTap) })
         .accessibilityLabel("Capture 64-frame burst")
-        .accessibilityHint("Holds focus and exposure, captures sixty-four frames at twenty fps")
+        .accessibilityHint("Tap to capture sixty-four frames; long-press to move the palette")
     }
 }
 

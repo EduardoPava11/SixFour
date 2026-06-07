@@ -37,7 +37,7 @@ deterministic Zig collapse, not a learned genome.
   per-stage kernels, returns `s4_gif_assemble`); `s4_widen_half_to_q16` and
   `s4_linear_to_oklab_q16` are implemented with golden anchors. (NOT stubs.)
 - **Cross-language parity gates.** Collapse, value head, color, quantize, dither, GridAxis,
-  CloudProjection, VoxelFit goldens green; spec suite **584 tests pass**.
+  CloudProjection, VoxelFit goldens green; spec suite **595 tests pass**.
 - **Capture→GIFA morph on the one surface (2026-06-07).** The live hero paints the REAL
   camera (`σ.previewTile` index cells, not a synthetic scroll); the loading sweep streams the
   REAL deterministic partials (`raw→quantize→dither→palette`) in true colour via
@@ -55,6 +55,20 @@ deterministic Zig collapse, not a learned genome.
   shrinking-to-fit at integer pitch. **DELETED:** `VoxelCubeView.swift` (708 lines),
   `GIFPlayer`/`PlayerTransport` (dead legacy player), the `voxel_raymarch` Metal kernel
   (~200 lines), AppSettings `voxel*`/`playerMode` keys, `VoxelRestPoseIdentityTests`.
+- **Movable ColorWidgets — three identities, ONE shared layout (2026-06-07).** A ColorWidget
+  is a widget whose cells project the one cube; movability is a property of being one (chrome
+  has no placement state → immovable by construction). The closed alphabet `ColorIdentity =
+  Field64 | Palette16 | DiversityRing` is the only movable set. Each holds ONE global,
+  phase-independent position (`AppSettings.widgetPlacement`, three versioned `*Position.v1`
+  keys) that SLIDES across every phase dock (live / rendering / review all `.place(region(for:
+  at:))`). Long-press LIFTS, drag moves, release SNAPS to the 4 pt atom via
+  `MoveContract.move` — accepted iff in-bounds AND `GridLayoutContract.isDisjoint`, else exact
+  snap-back; a clean tap still fires the shutter (`.movable` on the inner grid, not the
+  Button). Source of truth `Spec.MovableLayout` (8 laws: disjoint-preservation, bounds-clamp,
+  snap-idempotence, reject-is-identity, …) golden-pinned in `MoveContract.goldenAfter` and
+  re-folded in `Surface.assertSpecParity` (DEBUG). **DiversityRing re-introduced** (the
+  `CellRing` gauge had no caller) fed by `Surface.diversityGauge`. 595 Haskell tests + 11
+  Swift `MovableLayoutTests` (move laws + persistence round-trip + corrupt-store fallback).
 - **Palette explorer surfaces.** `.grid2D` (`GridLayout` + `PaletteGridView`, default review
   view), treemap (`PaletteTreeView`), AddressPicker, Quad4 drill, `PaletteCloudView`. Versioned
   AppSettings keys for representation + grid axes exist.

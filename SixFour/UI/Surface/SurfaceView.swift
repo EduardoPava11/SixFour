@@ -25,7 +25,7 @@ struct SurfaceView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        PhaseField.field(for: surface.phase, surface, clock)
+        PhaseField.field(for: surface.phase, surface, clock, engine.settings)
             // The shutter (a σ event) kicks the engine. σ moves to `.locking` on
             // `.shutterTap`; here we observe that edge and start the real burst.
             .environment(surface)
