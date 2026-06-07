@@ -35,7 +35,12 @@ struct ReviewPhaseField: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            // The live cell-field ground (κ heartbeat) — the whole screen is ONE cell
+            // field in EVERY phase (cell-field-law); review is not an exception. Matches
+            // RenderingPhaseField's ground so the grid is continuous capture → review
+            // (was a flat Color.black, which made the grid vanish at review).
+            GridRefreshFieldView(phase: clock.heartbeat)
+                .ignoresSafeArea()
 
             if let cube = cubeData {
                 VStack(spacing: SFTheme.gifCellPt) {
