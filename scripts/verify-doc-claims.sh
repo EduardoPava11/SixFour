@@ -40,6 +40,8 @@ GREP_TARGETS=(
   trainer/train_look_net_mlx.py
   spec/src/SixFour/Spec/Quad4.hs
   spec/src/SixFour/Spec/PairTree.hs
+  SixFour/UI/MovableColorWidget.swift
+  SixFour/Generated/MoveContract.swift
 )
 for f in "${GREP_TARGETS[@]}"; do
   if [ ! -e "$f" ]; then
@@ -134,6 +136,20 @@ check "quad4Analyze exists in spec (skeleton-design 'TO ADD' is stale)" \
   grep -q 'quad4Analyze' spec/src/SixFour/Spec/Quad4.hs
 check "AppSettings has the three versioned representation/grid-axis keys" \
   bash -c "grep -q 'sixfour.paletteRepresentation.v1' SixFour/Settings/AppSettings.swift && grep -q 'sixfour.gridAxisX.v1' SixFour/Settings/AppSettings.swift && grep -q 'sixfour.gridAxisY.v1' SixFour/Settings/AppSettings.swift"
+
+# --- BUILT: movable ColorWidgets (Field64/Palette16/DiversityRing share ONE layout) ---
+check "Spec.MovableLayout is the source of truth (move operator + laws)" \
+  test -f spec/src/SixFour/Spec/MovableLayout.hs
+check "Properties.MovableLayout registered in the spec test suite" \
+  grep -q 'MovableLayout.tests' spec/test/Spec.hs
+check "the move operator mirror reuses GridLayoutContract.isDisjoint (no reinvented AABB)" \
+  grep -q 'GridLayoutContract.isDisjoint' SixFour/Generated/MoveContract.swift
+check "MovableColorWidget calls the generated MoveContract.move" \
+  grep -q 'MoveContract.move' SixFour/UI/MovableColorWidget.swift
+check "the .movable gesture modifier exists (long-press lift → drag → snap)" \
+  grep -q 'func movable' SixFour/UI/MovableColorWidget.swift
+check "AppSettings has the three versioned ColorWidget position keys" \
+  bash -c "grep -q 'sixfour.field64Position.v1' SixFour/Settings/AppSettings.swift && grep -q 'sixfour.palette16Position.v1' SixFour/Settings/AppSettings.swift && grep -q 'sixfour.diversityRingPosition.v1' SixFour/Settings/AppSettings.swift"
 
 # --- INVARIANTS that must NOT regress ---
 check "PairTree uses Euclidean okLabDistanceSquared ([4,2,1] weighting gone)" \

@@ -160,12 +160,6 @@ final class Surface {
     /// The Z₆₄ playback cursor — the current frame `0..<64`. Advanced by κ each tick.
     var cursor: Int = 0
 
-    /// The cube pose for the 3D review hero, packed integers (yaw, pitch) in degrees.
-    var pose: SIMD2<Int32> = .zero
-
-    /// 0 = flat (2D GIF hero), 1 = cube (3D voxel hero). The review render mode.
-    var playerMode: Int = 0
-
     /// The surface settings (dither / deterministic-core toggles), integer-encoded.
     var settings: SurfaceSettings = .init()
 
@@ -211,81 +205,28 @@ extension Surface {
         guard i >= 0, i < palette.count else { return nil }
         return palette[i]
     }
-}
 
-// MARK: - The cube AS cells (per-cell rasterizer — replaces the Metal raymarch)
-
-/// A baked `N×N` cell raster of the 64³ GIFA cube at one (cursor, rung) pose — produced by
-/// `Surface.bakeCube` via FORWARD SCATTER (the cheap byte-identical equivalent of the proven
-/// inverse z-buffer, `SixFour.Spec.VoxelFit.cubeRasterMap`). It is a plain value: the review
-/// hero bakes one per body eval and reads it through the SAME `CellSprite` the preview uses.
-/// `nil` cells = silhouette gaps where the live ground shows through (cell-field law).
-struct CubeRaster {
-    let n: Int
-    let colors: [SIMD3<UInt8>]   // n·n, row-major; valid where `mask`
-    let mask: [Bool]             // n·n; emptiness = false (NOT colour==0; 0 is a real index)
-
-    /// The colour of output cell `(c, r)`, or `nil` if empty (ground shows through).
-    func color(_ c: Int, _ r: Int) -> SIMD3<UInt8>? {
-        guard n > 0, c >= 0, c < n, r >= 0, r < n else { return nil }
-        let cell = r * n + c
-        return mask[cell] ? colors[cell] : nil
-    }
-
-    static let empty = CubeRaster(n: 0, colors: [], mask: [])
-}
-
-extension Surface {
-    /// Rasterize the GIFA cube to an `N×N` cell raster at rung `(xRung, yRung)`, played at the
-    /// current `cursor` (the near face shows the cursor frame; deeper slices show trailing
-    /// frames — the proven `frontFaceFrame` depth→frame map). FORWARD SCATTER, near→far, with a
-    /// depth z-test so the nearest opaque voxel wins each cell. Reads the TRUE per-frame GIFA
-    /// (`palettesPerFrame[f]`). Geometry pinned by `SixFourVoxelFit` (`cubeBox` + `project`);
-    /// the front face (d=0) is byte-identical to the 2D GIF cell (`lawRasterizeFrontIsGif`).
-    func bakeCube(xRung: Int, yRung: Int) -> CubeRaster {
-        let side = cubeSide                         // 64
-        let frames = SixFourShape.T                 // 64
-        let pixels = side * side                    // 4096
-        guard indexCube.count == pixels * frames,
-              palettesPerFrame.count == frames else { return .empty }
-
-        let box = SixFourVoxelFit.cubeBox(xRung: xRung, yRung: yRung)
-        let h = box.h, cu = box.cu, cv = box.cv
-        let n = 2 * h + 1
-        let rx = min(max(xRung, 0), SixFourVoxelFit.maxRung)
-        let ry = min(max(yRung, 0), SixFourVoxelFit.maxRung)
-        let pivot = SixFourVoxelFit.voxelPivot      // 32 — CELL scale (1 voxel = 1 cell)
-
-        var colors = [SIMD3<UInt8>](repeating: .zero, count: n * n)
-        var mask = [Bool](repeating: false, count: n * n)
-        var depth = [Int](repeating: Int.max, count: n * n)
-
-        // Near (t = frames-1, d = 0) first → smallest d wins each cell (opaque occlusion).
-        for t in stride(from: frames - 1, through: 0, by: -1) {
-            let d = (side - 1) - t
-            let f = ((cursor - d) % frames + frames) % frames   // displayed frame; near = cursor
-            let pal = palettesPerFrame[f]
-            let fbase = f * pixels
-            for y in 0..<side {
-                let vbase = (y - pivot) + ry * d - cv + h
-                if vbase < 0 || vbase >= n { continue }
-                let rowBase = vbase * n
-                for x in 0..<side {
-                    let cuu = (x - pivot) + rx * d - cu + h
-                    if cuu < 0 || cuu >= n { continue }
-                    let cell = rowBase + cuu
-                    if d < depth[cell] {
-                        depth[cell] = d
-                        let idx = Int(indexCube[fbase + y * side + x])
-                        colors[cell] = idx < pal.count ? pal[idx] : .zero
-                        mask[cell] = true
-                    }
-                }
-            }
-        }
-        return CubeRaster(n: n, colors: colors, mask: mask)
+    /// THE 2D GIFA reader — the colour of pixel `(x, y)` in frame `t` of the committed
+    /// GIFA, read through the TRUE per-frame palette (`palettesPerFrame[t]`), one cell per
+    /// GIF pixel. This is the flat 2D animation the review hero plays (the cube reveal is
+    /// retired): a pure projection of σ's `indexCube` at the cursor frame. Returns `nil`
+    /// until a GIFA commits (the live ground shows through), so no flat fill is ever drawn.
+    func gifCell(_ x: Int, _ y: Int, _ t: Int) -> SIMD3<UInt8>? {
+        let side = cubeSide
+        guard x >= 0, x < side, y >= 0, y < side, t >= 0, t < palettesPerFrame.count else { return nil }
+        let offset = t * side * side + y * side + x
+        guard offset >= 0, offset < indexCube.count else { return nil }
+        let pal = palettesPerFrame[t]
+        let i = Int(indexCube[offset])
+        guard i >= 0, i < pal.count else { return nil }
+        return pal[i]
     }
 }
+
+// The 3D cube reveal (`CubeRaster` + `Surface.bakeCube`, the x/y rung-shear rasterizer)
+// is RETIRED — the review hero is now the flat 2D GIFA animation (`gifCell`). The cube
+// geometry remains proven in `SixFour.Spec.VoxelFit` for the (deferred) authoring tool;
+// the live render path no longer consumes it. (Simplify the 2D animation; harden the flow.)
 
 /// Integer-encoded surface settings (no floats on the state spine). Expanded as
 /// the per-phase renderers wire real options through.
@@ -319,6 +260,21 @@ extension Surface {
         }
         assert(trace == SixFourDisplay.goldenHappyPathTrace,
                "Surface.step trace \(trace) != golden \(SixFourDisplay.goldenHappyPathTrace)")
+
+        // Movable ColorWidget parity: re-fold the generated `move` over `goldenScript`
+        // from `defaultPlacement` and assert it reproduces `goldenAfter` — the live
+        // Swift↔Haskell bit-pin of the move operator (mirrors the Display golden trace
+        // fold above). `MoveContract.selfCheck()` re-asserts the seed laws + the fold.
+        assert(MoveContract.selfCheck(), "MoveContract.selfCheck() failed")
+        var placement = MoveContract.defaultPlacement
+        for step in MoveContract.goldenScript {
+            placement = MoveContract.move(placement, step.id, dCol: step.dCol, dRow: step.dRow)
+        }
+        let goldenParity = ColorIdentity.allCases.allSatisfy { i in
+            placement[i]?.col == MoveContract.goldenAfter[i]?.col
+                && placement[i]?.row == MoveContract.goldenAfter[i]?.row
+        }
+        assert(goldenParity, "MoveContract.move fold != goldenAfter")
         #endif
     }
 }

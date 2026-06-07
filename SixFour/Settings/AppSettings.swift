@@ -38,6 +38,10 @@ final class AppSettings {
         // Unified player (Review GIF hero): which render mode the 2D/3D toggle shows.
         // Debug-only ownership overlay (full-lattice identity-badge bitmap). Default OFF.
         static let debugOwnershipOverlay  = "sixfour.debugOwnershipOverlay.v1"
+        // Movable ColorWidget positions (col,row in atoms). Defaults = the spec docks.
+        static let field64Position        = "sixfour.field64Position.v1"
+        static let palette16Position      = "sixfour.palette16Position.v1"
+        static let diversityRingPosition  = "sixfour.diversityRingPosition.v1"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -140,6 +144,61 @@ final class AppSettings {
         didSet { defaults.set(debugOwnershipOverlay, forKey: Key.debugOwnershipOverlay) }
     }
 
+    // MARK: - Movable ColorWidget positions (the ONE shared layout)
+
+    /// A user-set widget position, in lattice atoms (col,row). Stored as a small
+    /// `Equatable` struct (cleaner than a tuple for `@Observable`/round-trip tests).
+    /// Persisted as a human-readable `"col,row"` String per the design.
+    struct GridPoint: Equatable, Sendable {
+        var col: Int
+        var row: Int
+    }
+
+    /// `Field64`'s global position (preview ≡ gif-render ≡ review hero). Persisted on
+    /// change; defaults to the generated spec dock (`MoveContract.defaultCol/Row`).
+    var field64Position: GridPoint {
+        didSet { defaults.set("\(field64Position.col),\(field64Position.row)", forKey: Key.field64Position) }
+    }
+
+    /// `Palette16`'s global position (the 256-colour palette ≡ the capture shutter).
+    var palette16Position: GridPoint {
+        didSet { defaults.set("\(palette16Position.col),\(palette16Position.row)", forKey: Key.palette16Position) }
+    }
+
+    /// `DiversityRing`'s global position (the re-introduced diversity gauge).
+    var diversityRingPosition: GridPoint {
+        didSet { defaults.set("\(diversityRingPosition.col),\(diversityRingPosition.row)", forKey: Key.diversityRingPosition) }
+    }
+
+    /// The ONE shared movable layout: identity → position, the same `Placement` shape
+    /// the spec uses. Reading assembles the three stored properties; writing fans a
+    /// whole `Placement` back out to them (the `didSet`s persist each). Callers move a
+    /// single widget by reading this, calling `MoveContract.move`, and writing it back.
+    var widgetPlacement: [ColorIdentity: (col: Int, row: Int)] {
+        get {
+            [.field64: (field64Position.col, field64Position.row),
+             .palette16: (palette16Position.col, palette16Position.row),
+             .diversityRing: (diversityRingPosition.col, diversityRingPosition.row)]
+        }
+        set {
+            if let p = newValue[.field64] { field64Position = GridPoint(col: p.col, row: p.row) }
+            if let p = newValue[.palette16] { palette16Position = GridPoint(col: p.col, row: p.row) }
+            if let p = newValue[.diversityRing] { diversityRingPosition = GridPoint(col: p.col, row: p.row) }
+        }
+    }
+
+    /// Parse a stored `"col,row"` String into a `GridPoint`; absent/garbage → the spec
+    /// default (the existing fallback discipline — defaults are the generated dock, never
+    /// hand-typed literals).
+    private static func parsePosition(_ stored: String?, _ identity: ColorIdentity) -> GridPoint {
+        let fallback = GridPoint(col: MoveContract.defaultCol(identity),
+                                 row: MoveContract.defaultRow(identity))
+        guard let stored else { return fallback }
+        let parts = stored.split(separator: ",")
+        guard parts.count == 2, let c = Int(parts[0]), let r = Int(parts[1]) else { return fallback }
+        return GridPoint(col: c, row: r)
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // `didSet` does not fire during init, so these reads don't write back.
@@ -173,5 +232,30 @@ final class AppSettings {
         self.gridAxisY = GridAxis(rawValue: defaults.string(forKey: Key.gridAxisY) ?? "") ?? .L
         // Absent key → false ⇒ overlay OFF (shipping UI byte-identical).
         self.debugOwnershipOverlay = defaults.bool(forKey: Key.debugOwnershipOverlay)
+
+        // Movable ColorWidget positions: parse each stored "col,row" (absent/garbage →
+        // the generated spec dock).
+        var parsed: [ColorIdentity: GridPoint] = [
+            .field64: Self.parsePosition(defaults.string(forKey: Key.field64Position), .field64),
+            .palette16: Self.parsePosition(defaults.string(forKey: Key.palette16Position), .palette16),
+            .diversityRing: Self.parsePosition(defaults.string(forKey: Key.diversityRingPosition), .diversityRing),
+        ]
+        // Defense-in-depth: a corrupt store can never yield an overlapping live scene.
+        // Re-validate the parsed Placement through the generated MoveContract; if it is
+        // out-of-bounds or overlapping, fall back to the proven default placement.
+        let scene = MoveContract.placementScene(parsed.mapValues { ($0.col, $0.row) })
+        let inBounds = scene.allSatisfy {
+            $0.col >= 0 && $0.col + $0.w <= MoveContract.cols
+                && $0.row >= 0 && $0.row + $0.h <= MoveContract.rows
+        }
+        if !inBounds || !GridLayoutContract.isDisjoint(scene) {
+            for (i, pos) in MoveContract.defaultPlacement {
+                parsed[i] = GridPoint(col: pos.col, row: pos.row)
+            }
+        }
+        // `didSet` does not fire during init — so these reads do not write back.
+        self.field64Position = parsed[.field64]!
+        self.palette16Position = parsed[.palette16]!
+        self.diversityRingPosition = parsed[.diversityRing]!
     }
 }

@@ -16,14 +16,15 @@ enum PhaseField {
     /// branches produce heterogeneous renderers.
     @MainActor
     @ViewBuilder
-    static func field(for phase: SurfacePhase, _ surface: Surface, _ clock: SurfaceClock) -> some View {
+    static func field(for phase: SurfacePhase, _ surface: Surface, _ clock: SurfaceClock,
+                      _ settings: AppSettings) -> some View {
         switch phase {
         case .bootstrap:
             BootstrapPhaseField(surface: surface, clock: clock)
         case .unauthorized:
             UnauthorizedPhaseField(surface: surface, clock: clock)
         case .live:
-            LivePhaseField(surface: surface, clock: clock)
+            LivePhaseField(surface: surface, clock: clock, settings: settings)
         case .settings:
             SettingsPhaseField(surface: surface, clock: clock)
         case .locking:
@@ -33,9 +34,9 @@ enum PhaseField {
         case .capturing:
             CapturingPhaseField(surface: surface, clock: clock)
         case .rendering(let stage):
-            RenderingPhaseField(stage: stage, surface: surface, clock: clock)
+            RenderingPhaseField(stage: stage, surface: surface, clock: clock, settings: settings)
         case .review:
-            ReviewPhaseField(surface: surface, clock: clock)
+            ReviewPhaseField(surface: surface, clock: clock, settings: settings)
         case .error:
             ErrorPhaseField(surface: surface, clock: clock)
         }

@@ -21,6 +21,12 @@ struct RenderingPhaseField: View {
     let surface: Surface
     /// κ — the ONE 20 fps clock (heartbeat for the live checker ground).
     let clock: SurfaceClock
+    /// The ONE shared widget layout (the three global ColorWidget positions) + persistence.
+    @Bindable var settings: AppSettings
+
+    /// The current shared placement — Field64 + DiversityRing slide here at the SAME global
+    /// positions set in any other phase.
+    private var placement: [ColorIdentity: (col: Int, row: Int)] { settings.widgetPlacement }
 
     /// The 64-side serpentine resolve order (slot → sweep rank), computed once. Same
     /// `Spec.Order.serpentine` permutation the legacy `GIFAResolveOverlay` used.
@@ -37,9 +43,11 @@ struct RenderingPhaseField: View {
             GridRefreshFieldView(phase: clock.heartbeat)
                 .ignoresSafeArea()
 
-            // The resolve hero, placed by the same proven GridLayoutContract region as
-            // the live preview (capture→render→review share the one surface geometry).
-            resolveHero.place("preview")
+            // Field64 — the resolve hero, placed at the SHARED global position + movable
+            // (capture→render→review share the one surface geometry AND one position).
+            resolveHero
+                .place(region(for: .field64, at: placement))
+                .movable(.field64, settings: settings, surface: surface)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()

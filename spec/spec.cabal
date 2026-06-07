@@ -46,6 +46,7 @@ library
         SixFour.Spec.CellFiber
         SixFour.Spec.CellGrid
         SixFour.Spec.GridLayout
+        SixFour.Spec.MovableLayout
         SixFour.Spec.Ownership
         SixFour.Spec.Display
         SixFour.Spec.FrontProjection
@@ -272,6 +273,7 @@ test-suite spec-tests
         Properties.CellFiber
         Properties.CellGrid
         Properties.GridLayout
+        Properties.MovableLayout
         Properties.Ownership
         Properties.Display
         Properties.FrontProjection
