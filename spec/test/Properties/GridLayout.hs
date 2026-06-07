@@ -25,6 +25,9 @@ tests = testGroup "GridLayout (the capture-scene contention proof — every widg
   , testProperty "algebraic no-contest == geometric AABB no-overlap (bridge)" $
       once (lawDisjointMatchesRects captureScene)
 
+  , testProperty "TOTAL: disjoint claims + complement partition the 100×218 lattice (cover groundwork)" $
+      once (lawCoverPartitions captureScene)
+
   -- The laws are robust on arbitrary scenes too: an overlapping pair is BOTH
   -- contested and AABB-overlapping (the bridge holds off the canonical scene).
   , testProperty "bridge holds on an overlapping 2-region scene" $

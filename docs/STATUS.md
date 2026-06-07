@@ -78,7 +78,9 @@ deterministic Zig collapse, not a learned genome.
 - **Training data** — `trainer/data/captured_frames` and `trainer/data/reference_gifs` are
   empty/absent (gitignored). Eval is synthetic-seed only (`eval_l_quality.py`); the
   "beats baseline 5/6 / ~3×" figure is unpinned synthetic runtime output, not a contract.
-- **`Spec.Lattice` Cardinal-Law enforcement** — `[PLANNED]` only.
+- **`Spec.Lattice` call-site enforcement** — the *module* is BUILT and law-bearing (10 laws,
+  gated by `Properties.Lattice`, emits `LatticeContract.swift`); what is still `[PLANNED]` is the
+  **lint that forbids off-atom point literals at call sites** — tracked as `atom-pitch-violations` below.
 - **Direct LZW parity gate** (`s4_gif_assemble` ≡ `GIFEncoder.swift`) and Swift golden gates
   for dither / palette→sRGB8 / sRGB8→OKLab.
 
@@ -88,7 +90,7 @@ deterministic Zig collapse, not a learned genome.
 |----|------|-------------------|-----|--------|
 | empty-training-data | No committed training data; trainer is synthetic-only | `trainer/data/` (absent) | high | open |
 | looknet-load-unused | `loadLookNet` declared, zero production callers (NN spine unwired) | `SixFour/Native/SixFourNative.swift:82` | high | open |
-| spec-lattice-unbuilt | `Spec.Lattice` Cardinal-Law enforcement `[PLANNED]` only | `docs/SIXFOUR-DESIGN-LANGUAGE.md:5` | high | open |
+| spec-lattice-callsite-enforce | `Spec.Lattice` module BUILT & gated (10 laws, `Properties.Lattice`, emits `LatticeContract.swift`); remaining gap = lint forbidding off-atom point literals at call sites | `spec/src/SixFour/Spec/Lattice.hs` + `scripts/lint-grid.sh` | med | open (was mis-filed "unbuilt") |
 | reveal-axis-unbuilt | ColorBleed/ChromaAllocation reveal modules spec'd, not on disk | `spec/BLEED_LOOP.md:235` | med | open |
 | palette-search-design-only | `PaletteSearch` MCTS spec-complete, no iOS consumer | `spec/src/SixFour/Spec/PaletteSearch.hs` (336 LOC) | med | open |
 | gifencoder-lzw-parity | No direct `s4_gif_assemble` ≡ `GIFEncoder.swift` LZW parity gate | `Native/src/kernels.zig` | med | open |

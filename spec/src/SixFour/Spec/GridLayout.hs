@@ -42,6 +42,8 @@ module SixFour.Spec.GridLayout
   , regionsOverlap
   , sceneContested
   , sceneInteractive
+  , screenCells
+  , coverComplement
     -- * Laws (predicates; QuickCheck'd in Properties.GridLayout)
   , lawSceneDisjoint
   , lawSceneInBounds
@@ -49,11 +51,13 @@ module SixFour.Spec.GridLayout
   , lawSafeAreaClearance
   , lawPriorityDistinct
   , lawDisjointMatchesRects
+  , lawCoverPartitions
   ) where
 
 import           Data.List       (nub)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import qualified Data.Set        as Set
 
 import SixFour.Spec.CellFiber (Color(..), Cell, singletonCell, join, isContested)
 import SixFour.Spec.Lattice
@@ -169,3 +173,41 @@ lawDisjointMatchesRects scene =
     distinctPairs xs = [ (a, b) | (a : rest) <- tails1 xs, b <- rest ]
     tails1 []          = []
     tails1 l@(_ : t)   = l : tails1 t
+
+-- TOTALITY (the cover groundwork SixFour.Spec.Ownership composes) --------------
+
+-- | Every cell on the @100 × 218@ screen lattice — the full domain a TOTAL cover
+-- must account for. (The capture scene's foreground widgets claim only a few
+-- thousand of these 21800 cells; the rest are the 'coverComplement'.)
+screenCells :: [(Int, Int)]
+screenCells = [ (c, r) | r <- [0 .. rows - 1], c <- [0 .. cols - 1] ]
+
+-- | The cells NO foreground region claims — the COMPLEMENT a background owner
+-- (Ownership's @Field@) absorbs to make the cover TOTAL. By construction it is
+-- disjoint from every claim and is kept OUTSIDE the disjoint claim set: the
+-- complement never enters 'sceneGrid', so it can never contest a foreground widget.
+-- The ground is a separate layer — exactly as the Swift @TintedCheckerField@ already
+-- is — so totality needs no priority resolver and no grafted full-screen rectangle.
+coverComplement :: Scene -> [(Int, Int)]
+coverComplement scene =
+  [ cell | cell <- screenCells, not (cell `Set.member` claimed) ]
+  where claimed = Set.fromList [ cell | (_, r) <- scene, cell <- regionCells r ]
+
+-- | TOTAL COVER: for a well-formed (disjoint) scene, the foreground claims plus the
+-- 'coverComplement' PARTITION the @100 × 218@ lattice — every cell is covered exactly
+-- once. Stated as: the scene is disjoint, its claimed cells carry no duplicate, the
+-- claims and the complement are disjoint, and their union is the whole lattice. So a
+-- background @Field@ owner that takes the complement makes the cover total WITHOUT
+-- ever joining the disjoint claim set. The complement-side companion of
+-- 'lawSceneDisjoint': disjointness says "no cell claimed twice"; this says "and none
+-- left unaccounted-for."
+lawCoverPartitions :: Scene -> Bool
+lawCoverPartitions scene =
+     lawSceneDisjoint scene                                  -- foreground claims disjoint…
+  && length claimed == Set.size claimedSet                   -- …so no cell is claimed twice
+  && Set.null (Set.intersection claimedSet complementSet)    -- claims ∩ complement = ∅ (by construction)
+  && Set.union claimedSet complementSet == Set.fromList screenCells  -- claims ⊎ complement = whole lattice
+  where
+    claimed       = [ cell | (_, r) <- scene, cell <- regionCells r ]
+    claimedSet    = Set.fromList claimed
+    complementSet = Set.fromList (coverComplement scene)

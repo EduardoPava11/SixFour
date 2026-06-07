@@ -20,6 +20,34 @@ check() {
   fi
 }
 
+# --- META-GUARD: every source file a grep-based check reads MUST exist ---
+# A grep against a MISSING file silently FAILs (false-fail) or, under `! grep`, silently
+# PASSes (false-green) — so a deleted/renamed path can masquerade as a doc-claim result
+# (this is exactly how the GIFReviewView.swift checks rotted). This pre-flight makes a
+# missing grep target a distinct, loud GATE BUG, not a fake pass/fail. (Design doc D2.)
+# Existence/absence checks (`test ! -e`, `test -z "$(find …)"`, `stat`) are NOT listed
+# here — for those a missing path is the point, not a bug.
+GREP_TARGETS=(
+  SixFour/UI/Screens/Capture/CaptureViewModel.swift
+  SixFour/Encoder/DeterministicRenderer.swift
+  SixFour/Native/SixFourNative.swift
+  SixFour/Settings/AppSettings.swift
+  SixFour/UI/Surface/ReviewPhaseField.swift
+  Native/src/kernels.zig
+  Native/src/fixture_test.zig
+  Native/include/sixfour_native.h
+  trainer/generated/look_net_mlx.py
+  trainer/train_look_net_mlx.py
+  spec/src/SixFour/Spec/Quad4.hs
+  spec/src/SixFour/Spec/PairTree.hs
+)
+for f in "${GREP_TARGETS[@]}"; do
+  if [ ! -e "$f" ]; then
+    echo "GATE BUG: grep target missing: $f (a check below reads it; fix the path, do not delete the check)"
+    FAILS=$((FAILS + 1))
+  fi
+done
+
 # --- ANCHOR 1: GIFA->GIFB global collapse keystone is WIRED (>=1 production caller) ---
 check "renderDeterministicGlobal exists (CaptureViewModel routes to global path)" \
   grep -q 'renderDeterministicGlobal' SixFour/UI/Screens/Capture/CaptureViewModel.swift
@@ -71,8 +99,11 @@ check "no live SwiftUI .glassEffect calls (HUD de-glassed)" \
   test "$(grep -rn '\.glassEffect' SixFour/ --include='*.swift' | grep -v '///' | wc -l | tr -d ' ')" -eq 0
 
 # --- BUILT: explorer surfaces shipped; stale components gone ---
-check "PaletteGridView (.grid2D) shipped and wired into review" \
-  grep -q 'PaletteGridView(' SixFour/UI/Screens/Review/GIFReviewView.swift
+# NOTE: the former GIFReviewView.swift review screen was replaced by the one-surface
+# ReviewPhaseField (Surface/). The stale "PaletteGridView wired into review" claim is
+# reconciled separately (design doc D3); here we assert the LIVE review surface exists.
+check "live review surface (ReviewPhaseField) is present" \
+  test -f SixFour/UI/Surface/ReviewPhaseField.swift
 check "GridLayout shipped" \
   test -f SixFour/Palette/GridLayout.swift
 check "PaletteCloudView shipped" \
@@ -85,8 +116,8 @@ check "PaletteStripView absent from current source" \
   test -z "$(find SixFour -name 'PaletteStripView*' 2>/dev/null)"
 check "PaletteSphereView absent from current source" \
   test -z "$(grep -rln 'PaletteSphereView' SixFour/ --include='*.swift')"
-check "review docstring no longer says 'globe'" \
-  bash -c "! grep -qi 'globe' SixFour/UI/Screens/Review/GIFReviewView.swift"
+check "review renderer docstring has no stale 'globe' reference" \
+  bash -c "! grep -qi 'globe' SixFour/UI/Surface/ReviewPhaseField.swift"
 
 # --- DESIGN-ONLY: REVEAL modules not on disk ---
 check "ColorBleed.hs not yet on disk (reveal axis dormant)" \
