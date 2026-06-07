@@ -41,6 +41,8 @@ final class AppSettings {
         static let voxelAutoRotate        = "sixfour.voxelAutoRotate.v1"
         // Unified player (Review GIF hero): which render mode the 2D/3D toggle shows.
         static let playerMode             = "sixfour.playerMode.v1"
+        // Debug-only ownership overlay (full-lattice identity-badge bitmap). Default OFF.
+        static let debugOwnershipOverlay  = "sixfour.debugOwnershipOverlay.v1"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -158,6 +160,13 @@ final class AppSettings {
         didSet { defaults.set(playerMode.rawValue, forKey: Key.playerMode) }
     }
 
+    /// Debug-only: paint the full 100×218 ownership identity-badge bitmap as the
+    /// outermost overlay on the surface. Defaults **OFF** — shipping UI is byte-
+    /// identical with this false (the `.overlay` branch yields `EmptyView`).
+    var debugOwnershipOverlay: Bool {
+        didSet { defaults.set(debugOwnershipOverlay, forKey: Key.debugOwnershipOverlay) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // `didSet` does not fire during init, so these reads don't write back.
@@ -195,5 +204,7 @@ final class AppSettings {
         self.voxelAutoRotate = defaults.bool(forKey: Key.voxelAutoRotate)
         // Absent key → flat (the 2D GIF is the default hero view).
         self.playerMode = PlayerMode(rawValue: defaults.string(forKey: Key.playerMode) ?? "") ?? .flat
+        // Absent key → false ⇒ overlay OFF (shipping UI byte-identical).
+        self.debugOwnershipOverlay = defaults.bool(forKey: Key.debugOwnershipOverlay)
     }
 }

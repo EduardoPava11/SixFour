@@ -73,6 +73,13 @@ struct SurfaceView: View {
             .onChange(of: engine.primaryOutput) { _, out in
                 if let out { commit(out) }
             }
+            // Debug-only ownership overlay (full-lattice identity-badge bitmap). The
+            // outermost slot, above every phase; off by default ⇒ the branch is
+            // EmptyView and the shipping chain is byte-identical. `engine.settings`
+            // is the one live AppSettings (@Observable read tracks the toggle).
+            .overlay(alignment: .topLeading) {
+                if engine.settings.debugOwnershipOverlay { CellOwnershipOverlay() }
+            }
             .preferredColorScheme(.dark)
             .statusBarHidden()
     }
