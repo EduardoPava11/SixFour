@@ -49,6 +49,7 @@ library
         SixFour.Spec.Ownership
         SixFour.Spec.Display
         SixFour.Spec.FrontProjection
+        SixFour.Spec.VoxelFit
         SixFour.Spec.CellShapes
         SixFour.Spec.SevenSeg
         SixFour.Spec.CloudProjection
@@ -274,6 +275,7 @@ test-suite spec-tests
         Properties.Ownership
         Properties.Display
         Properties.FrontProjection
+        Properties.VoxelFit
         Properties.CellShapes
         Properties.SevenSeg
         Properties.CloudProjection

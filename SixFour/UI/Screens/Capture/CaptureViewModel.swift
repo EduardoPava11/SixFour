@@ -152,6 +152,13 @@ final class CaptureViewModel {
     /// degrades to two bands (stageA, encode).
     var loadingProgress: Double = 0
 
+    /// The latest streamed render PARTIAL — the real in-progress GIFA cube + its frame-0
+    /// palette, surfaced per deterministic stage so the loading sweep paints the actual
+    /// `raw→quantize→dither→palette` process in TRUE colours (not a synthetic placeholder).
+    /// `SurfaceView` folds these into σ while the surface is `.rendering`.
+    var renderPartialCube: [UInt8] = []
+    var renderPartialPalette: [SIMD3<UInt8>] = []
+
     /// Set the deterministic stage label + advance `loadingProgress` to that stage's
     /// fraction (stage k of n complete = k/n). One place so every render path stays
     /// consistent.
@@ -160,6 +167,13 @@ final class CaptureViewModel {
         let all = DeterministicRenderer.Stage.allCases
         let i = all.firstIndex(of: stage) ?? 0
         loadingProgress = Double(i + 1) / Double(all.count)
+    }
+
+    /// Publish a streamed render partial onto the observable spine (MainActor). Read by
+    /// `SurfaceView`'s `renderPartialCube` observer and folded into σ.
+    private func surfaceRenderPartial(_ p: DeterministicRenderer.StagePartial) {
+        renderPartialPalette = p.palette
+        renderPartialCube = p.indicesFlat   // set the cube LAST so its observer sees both
     }
 
     /// Persisted user preferences (default extractor today, plus
@@ -175,6 +189,14 @@ final class CaptureViewModel {
     /// the top bar switches between the full-res AVCaptureVideoPreview
     /// and this downsampled view. Nil until the first frame arrives.
     var previewTile: UIImage?
+
+    /// The live 64×64 camera tile as INDEXED cells (row-major `y*64 + x`) + its paired
+    /// sRGB palette — the σ-pure form of `previewTile` (no `UIImage` on the state spine).
+    /// `SurfaceView` folds these into σ so `LivePhaseField` paints the REAL camera through
+    /// the cell grid (replacing the synthetic palette scroll). Empty until the first
+    /// quantized frame; empty also on the raw-downsample fallback path.
+    var previewIndexTile: [UInt8] = []
+    var previewPalette: [SIMD3<UInt8>] = []
 
     /// The live 256-colour palette of the current scene (sRGB8), recomputed from the
     /// preview tile at ~3 fps (maximin, off the delegate queue). Drives the capture
@@ -294,19 +316,24 @@ final class CaptureViewModel {
                 // The "well done" 64×64: show the deterministic quantized look
                 // live (the actual GIF aesthetic), or the raw downsample if the
                 // deterministic engine is off.
-                let image = self.previewQuantized
+                let frame: PreviewFrame = self.previewQuantized
                     ? Self.makeQuantizedPreviewImage(from: tile, mode: self.previewDitherMode,
                                                      serpentine: self.previewSerpentine)
-                    : Self.makePreviewImage(from: tile)
-                guard let image else { return }
+                    : PreviewFrame(image: Self.makePreviewImage(from: tile), indices: [], palette: [])
+                guard frame.image != nil else { return }
                 // Analyse on the Metal completion queue (cheap, ~0.1 ms) so we
                 // don't hop to the main actor twice; publish both together. The
                 // diversity gauge reads the RAW tile (true scene colour), not the
                 // quantized preview.
                 let readout = LivePreviewAnalysis.analyze(tile)
+                // Capture the value parts (the index tile + palette are Sendable; the
+                // UIImage matches the existing main-actor hop pattern).
+                let img = frame.image, idx = frame.indices, pal = frame.palette
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    self.previewTile = image
+                    self.previewTile = img
+                    self.previewIndexTile = idx          // the REAL camera cells for the live hero
+                    self.previewPalette = pal
                     self.ingestSceneReadout(readout)
                 }
                 // Throttled live palette (~3 fps) for the capture-screen cascade
@@ -392,7 +419,7 @@ final class CaptureViewModel {
         let renderer = CoalescingFrameRenderer(
             render: { tile in
                 quantized
-                    ? Self.makeQuantizedPreviewImage(from: tile, mode: mode, serpentine: serpentine)
+                    ? Self.makeQuantizedPreviewImage(from: tile, mode: mode, serpentine: serpentine).image
                     : Self.makePreviewImage(from: tile)
             },
             onImage: { [weak self] image in
@@ -573,9 +600,12 @@ final class CaptureViewModel {
         let renderer = DeterministicRenderer(dither: dither)
 
         let result = try await Task.detached(priority: .userInitiated) {
-            try renderer.render(tiles: tiles, comment: comment) { stage in
+            try renderer.render(tiles: tiles, comment: comment, onStage: { stage in
                 Task { @MainActor [weak self] in self?.surfaceDeterministicStage(stage) }
-            }
+            }, onPartial: { _, partial in
+                // Stream the real per-stage buffer onto σ so the sweep shows the true process.
+                Task { @MainActor [weak self] in self?.surfaceRenderPartial(partial) }
+            })
         }.value
         deterministicStage = nil
 
@@ -838,12 +868,24 @@ final class CaptureViewModel {
     /// kernel ever declines. Pure/nonisolated — called from the live preview
     /// callback and, during a burst, from `CoalescingFrameRenderer`'s own queue
     /// (NOT the camera delegate queue, so it can't back-pressure recorded frames).
+    /// The deterministic quantized preview as both the drawn image AND the raw index tile +
+    /// palette behind it — so the live hero can paint INDEXED cells (σ-pure, no `UIImage` on
+    /// the state spine) while the burst path still gets a `UIImage`. `indices` empty ⇒ the
+    /// raw fallback ran (no quantized tile available).
+    struct PreviewFrame {
+        let image: UIImage?
+        let indices: [UInt8]              // 64×64 nearest-centroid+dither map (row-major y*64+x)
+        let palette: [SIMD3<UInt8>]       // the tile's own sRGB palette (paired with `indices`)
+    }
+
     nonisolated private static func makeQuantizedPreviewImage(from tile: OKLabTile,
-                                                               mode: Int, serpentine: Bool) -> UIImage? {
+                                                               mode: Int, serpentine: Bool) -> PreviewFrame {
         let side = tile.side
         let pixelCount = side * side
-        guard tile.pixels.count == pixelCount else { return nil }
         let k = SixFourShape.K
+        guard tile.pixels.count == pixelCount else {
+            return PreviewFrame(image: nil, indices: [], palette: [])
+        }
 
         let q16 = SixFourNative.oklabToQ16(tile.pixels)
         // Suppress the per-kernel Zig logs for this ~10 fps preview frame so they
@@ -855,7 +897,8 @@ final class CaptureViewModel {
                       mode: mode, serpentine: serpentine, stbnSlice: nil),  // configured cheap dither (#2)
                   let palette = SixFourNative.paletteToSRGB8(centroidsQ16: quant.centroids, k: k)
             else {
-                return makePreviewImage(from: tile)  // graceful fallback to the raw look
+                // Graceful fallback to the raw look — no index tile in this branch.
+                return PreviewFrame(image: makePreviewImage(from: tile), indices: [], palette: [])
             }
 
             var bytes = [UInt8](repeating: 255, count: pixelCount * 4)
@@ -866,7 +909,10 @@ final class CaptureViewModel {
                 bytes[base + 1] = palette[c + 1]
                 bytes[base + 2] = palette[c + 2]
             }
-            return image(fromRGBA: bytes, side: side)
+            var pal: [SIMD3<UInt8>] = []
+            pal.reserveCapacity(k)
+            for j in 0..<k { pal.append(SIMD3(palette[j * 3], palette[j * 3 + 1], palette[j * 3 + 2])) }
+            return PreviewFrame(image: image(fromRGBA: bytes, side: side), indices: indices, palette: pal)
         }
     }
 

@@ -136,12 +136,26 @@ final class Surface {
     // MARK: the field's data (out-of-band Σ)
 
     /// The current 256-colour palette (sRGB8) the surface paints — the live per-frame
-    /// palette during capture, the global palette in review.
+    /// palette during capture, frame-0's palette in review (the `cellGlobal` accessor).
     var palette: [SIMD3<UInt8>] = []
+
+    /// The full PER-FRAME palette series (64 × 256 sRGB8) of the GIFA, populated at commit.
+    /// Review renders the cube through THIS (not a single global palette replicated 64×), so
+    /// the hero is the true per-frame GIFA the app produces — each frame its own 256 colours.
+    /// Empty until a GIFA commits.
+    var palettesPerFrame: [[SIMD3<UInt8>]] = []
 
     /// The 64×64×64 index cube (row-major `t,y,x`), populated once a GIFA exists.
     /// Empty until review. A flat buffer keeps the value type cheap to carry.
     var indexCube: [UInt8] = []
+
+    /// The LIVE camera tile as 64×64 indexed cells (row-major `y·64 + x`) + its paired
+    /// sRGB palette — the live hero paints the REAL camera through these (the cube law:
+    /// 1 GIF pixel per cell). Distinct from `palette` (the throttled shutter/ground palette)
+    /// because the preview uses its own full quantize→dither palette. Empty until the first
+    /// quantized frame; the hero then falls back to the ghost ink.
+    var previewTile: [UInt8] = []
+    var previewPalette: [SIMD3<UInt8>] = []
 
     /// The Z₆₄ playback cursor — the current frame `0..<64`. Advanced by κ each tick.
     var cursor: Int = 0
@@ -169,6 +183,107 @@ final class Surface {
     /// `SixFourPlaybackClock.frameAfter` (the ONE κ math). Called by `SurfaceClock`.
     func advanceCursor() {
         cursor = SixFourPlaybackClock.frameAfter(cursor, count: SixFourPlaybackClock.frameCount)
+    }
+}
+
+// MARK: - The ONE addressing function (cells × frames)
+
+extension Surface {
+    /// The volume side — the spec-pinned 64 (`SixFourShape.W`). One definition for the
+    /// row-major `t·side² + y·side + x` layout every reader of the cube shares.
+    var cubeSide: Int { SixFourShape.W }
+
+    /// THE addressing function: the colour of voxel `(x, y, t)` in the review/loading
+    /// cube — a WHERE `(x,y)` at a WHEN `t`. Reads `indexCube` (row-major `t,y,x`) through
+    /// the global `palette`. Returns `nil` when the cube isn't populated at `(x,y,t)` yet,
+    /// so the caller lets the live ground show through (no flat fill).
+    ///
+    /// Named `cellGlobal` because `palette` is the single REVIEW palette; the per-frame
+    /// live tile and the per-frame palette series carry their own bytes. This is the one
+    /// place the cube's index layout lives — `RenderingPhaseField` (loading) and the
+    /// review-flat path read through it, not their own inline `t*4096+y*64+x`.
+    func cellGlobal(_ x: Int, _ y: Int, _ t: Int) -> SIMD3<UInt8>? {
+        let side = cubeSide
+        guard x >= 0, x < side, y >= 0, y < side, t >= 0 else { return nil }
+        let offset = t * side * side + y * side + x
+        guard offset >= 0, offset < indexCube.count else { return nil }
+        let i = Int(indexCube[offset])
+        guard i >= 0, i < palette.count else { return nil }
+        return palette[i]
+    }
+}
+
+// MARK: - The cube AS cells (per-cell rasterizer — replaces the Metal raymarch)
+
+/// A baked `N×N` cell raster of the 64³ GIFA cube at one (cursor, rung) pose — produced by
+/// `Surface.bakeCube` via FORWARD SCATTER (the cheap byte-identical equivalent of the proven
+/// inverse z-buffer, `SixFour.Spec.VoxelFit.cubeRasterMap`). It is a plain value: the review
+/// hero bakes one per body eval and reads it through the SAME `CellSprite` the preview uses.
+/// `nil` cells = silhouette gaps where the live ground shows through (cell-field law).
+struct CubeRaster {
+    let n: Int
+    let colors: [SIMD3<UInt8>]   // n·n, row-major; valid where `mask`
+    let mask: [Bool]             // n·n; emptiness = false (NOT colour==0; 0 is a real index)
+
+    /// The colour of output cell `(c, r)`, or `nil` if empty (ground shows through).
+    func color(_ c: Int, _ r: Int) -> SIMD3<UInt8>? {
+        guard n > 0, c >= 0, c < n, r >= 0, r < n else { return nil }
+        let cell = r * n + c
+        return mask[cell] ? colors[cell] : nil
+    }
+
+    static let empty = CubeRaster(n: 0, colors: [], mask: [])
+}
+
+extension Surface {
+    /// Rasterize the GIFA cube to an `N×N` cell raster at rung `(xRung, yRung)`, played at the
+    /// current `cursor` (the near face shows the cursor frame; deeper slices show trailing
+    /// frames — the proven `frontFaceFrame` depth→frame map). FORWARD SCATTER, near→far, with a
+    /// depth z-test so the nearest opaque voxel wins each cell. Reads the TRUE per-frame GIFA
+    /// (`palettesPerFrame[f]`). Geometry pinned by `SixFourVoxelFit` (`cubeBox` + `project`);
+    /// the front face (d=0) is byte-identical to the 2D GIF cell (`lawRasterizeFrontIsGif`).
+    func bakeCube(xRung: Int, yRung: Int) -> CubeRaster {
+        let side = cubeSide                         // 64
+        let frames = SixFourShape.T                 // 64
+        let pixels = side * side                    // 4096
+        guard indexCube.count == pixels * frames,
+              palettesPerFrame.count == frames else { return .empty }
+
+        let box = SixFourVoxelFit.cubeBox(xRung: xRung, yRung: yRung)
+        let h = box.h, cu = box.cu, cv = box.cv
+        let n = 2 * h + 1
+        let rx = min(max(xRung, 0), SixFourVoxelFit.maxRung)
+        let ry = min(max(yRung, 0), SixFourVoxelFit.maxRung)
+        let pivot = SixFourVoxelFit.voxelPivot      // 32 — CELL scale (1 voxel = 1 cell)
+
+        var colors = [SIMD3<UInt8>](repeating: .zero, count: n * n)
+        var mask = [Bool](repeating: false, count: n * n)
+        var depth = [Int](repeating: Int.max, count: n * n)
+
+        // Near (t = frames-1, d = 0) first → smallest d wins each cell (opaque occlusion).
+        for t in stride(from: frames - 1, through: 0, by: -1) {
+            let d = (side - 1) - t
+            let f = ((cursor - d) % frames + frames) % frames   // displayed frame; near = cursor
+            let pal = palettesPerFrame[f]
+            let fbase = f * pixels
+            for y in 0..<side {
+                let vbase = (y - pivot) + ry * d - cv + h
+                if vbase < 0 || vbase >= n { continue }
+                let rowBase = vbase * n
+                for x in 0..<side {
+                    let cuu = (x - pivot) + rx * d - cu + h
+                    if cuu < 0 || cuu >= n { continue }
+                    let cell = rowBase + cuu
+                    if d < depth[cell] {
+                        depth[cell] = d
+                        let idx = Int(indexCube[fbase + y * side + x])
+                        colors[cell] = idx < pal.count ? pal[idx] : .zero
+                        mask[cell] = true
+                    }
+                }
+            }
+        }
+        return CubeRaster(n: n, colors: colors, mask: mask)
     }
 }
 

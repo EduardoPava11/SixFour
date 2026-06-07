@@ -30,6 +30,7 @@ import qualified Properties.GridLayout   as GridLayout
 import qualified Properties.Ownership    as Ownership
 import qualified Properties.Display      as Display
 import qualified Properties.FrontProjection as FrontProjection
+import qualified Properties.VoxelFit     as VoxelFit
 import qualified Properties.CellShapes   as CellShapes
 import qualified Properties.SevenSeg     as SevenSeg
 import qualified Properties.CloudProjection as CloudProjection
@@ -98,6 +99,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Ownership.tests
   , Display.tests
   , FrontProjection.tests
+  , VoxelFit.tests
   , CellShapes.tests
   , SevenSeg.tests
   , CloudProjection.tests

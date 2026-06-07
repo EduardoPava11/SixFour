@@ -68,6 +68,24 @@ struct SurfaceView: View {
                     surface.palette = pal
                 }
             }
+            // Live camera tile → σ (indexed cells + paired palette). The live hero paints
+            // the REAL camera through the cell grid, replacing the synthetic palette scroll.
+            .onChange(of: engine.previewIndexTile) { _, tile in
+                if surface.phase == .live || surface.phase == .locking || surface.phase == .capturing {
+                    surface.previewTile = tile
+                    surface.previewPalette = engine.previewPalette
+                }
+            }
+            // Streamed render partials → σ. The deterministic core surfaces the REAL
+            // per-stage buffers (quantize→dither→significance→palette) in true colour; fold
+            // them into σ so `RenderingPhaseField`'s serpentine sweep reveals the actual
+            // GIFA-in-progress, not an empty placeholder. Only while `.rendering`.
+            .onChange(of: engine.renderPartialCube) { _, cube in
+                if case .rendering = surface.phase {
+                    surface.palette = engine.renderPartialPalette
+                    surface.indexCube = cube
+                }
+            }
             // The finished GIFA → σ (palette + index cube), then the explicit commit
             // (`lawReviewExplicit`: review is reached ONLY via `.committed`).
             .onChange(of: engine.primaryOutput) { _, out in
@@ -150,6 +168,9 @@ struct SurfaceView: View {
     /// the per-frame path uses frame 0 as the representative) and pack the indices into
     /// the flat `t,y,x` cube `ReviewPhaseField` reads.
     private func commit(_ out: CaptureOutput) {
+        // Carry the FULL per-frame palette series so review shows the real per-frame GIFA;
+        // keep frame-0 on `surface.palette` for the `cellGlobal` accessor / loading reads.
+        surface.palettesPerFrame = out.palettesForDisplay
         if let pal = out.palettesForDisplay.first {
             surface.palette = pal
         }

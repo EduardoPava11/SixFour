@@ -35,7 +35,7 @@ import SixFour.Codegen.Swift
   ( emitStageContract, emitNetContract, emitSTBN3DContract, emitSignificanceContract
   , emitGlobalVolumeContract, emitLatticeContract, emitCellShapesContract
   , emitSevenSegContract, emitPlaybackClockContract, emitCellContract
-  , emitDisplayContract, emitFrontProjectionGolden, emitOrderContract, emitExportContract
+  , emitDisplayContract, emitFrontProjectionGolden, emitVoxelFitContract, emitOrderContract, emitExportContract
   , emitGridLayoutContract, emitOwnershipContract )
 import SixFour.Codegen.Shapes (emitStagesPy,      emitNetShapePy)
 import SixFour.Codegen.Burn   (emitBurnContract)
@@ -70,6 +70,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "CellContract.swift")          emitCellContract
   writeUtf8 (swiftOutDir   </> "DisplayContract.swift")       emitDisplayContract
   writeUtf8 (swiftOutDir   </> "FrontProjectionGolden.swift") emitFrontProjectionGolden
+  writeUtf8 (swiftOutDir   </> "VoxelFitContract.swift")     emitVoxelFitContract
   writeUtf8 (swiftOutDir   </> "OrderContract.swift")         emitOrderContract
   writeUtf8 (swiftOutDir   </> "ExportContract.swift")        emitExportContract
   writeUtf8 (swiftOutDir   </> "GridLayoutContract.swift")    emitGridLayoutContract

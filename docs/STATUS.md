@@ -37,7 +37,24 @@ deterministic Zig collapse, not a learned genome.
   per-stage kernels, returns `s4_gif_assemble`); `s4_widen_half_to_q16` and
   `s4_linear_to_oklab_q16` are implemented with golden anchors. (NOT stubs.)
 - **Cross-language parity gates.** Collapse, value head, color, quantize, dither, GridAxis,
-  CloudProjection goldens green; spec suite **517 tests pass**.
+  CloudProjection, VoxelFit goldens green; spec suite **584 tests pass**.
+- **Capture→GIFA morph on the one surface (2026-06-07).** The live hero paints the REAL
+  camera (`σ.previewTile` index cells, not a synthetic scroll); the loading sweep streams the
+  REAL deterministic partials (`raw→quantize→dither→palette`) in true colour via
+  `DeterministicRenderer.onPartial` → `σ.indexCube`; review renders the TRUE per-frame GIFA
+  (`σ.palettesPerFrame`, 64×256, not one global palette replicated). One addressing function
+  `Surface.cellGlobal(x,y,t)` backs every cube reader. Review tilt is DISCRETE rung sliders
+  (`SixFourVoxelFit` ladder, flat = the GIF).
+- **The GIFA review cube is RENDERED AS CELLS — the Metal raymarcher is DELETED (2026-06-07).**
+  Per-cell rasterizer `Surface.bakeCube` (forward-scatter z-buffer, 1 voxel = 1 cell) bakes the
+  64³ GIFA to an `N×N` cell raster, drawn through the SAME `CellSprite`/`CellBitmap` as the live
+  preview — pure Swift+simd, no Metal, no AA. Geometry proven in `Spec.VoxelFit`: `cubeBox`
+  (centered box), `lawCubeBoxContainsSilhouette`, `lawRasterizeFrontIsGif` (front face byte ==
+  2D GIF at every rung), golden box + cell-count tables. The near face plays the cursor frame
+  (`frontFaceFrame`); rungs shear depth to reveal the (x,t)/(y,t) side faces, the cube
+  shrinking-to-fit at integer pitch. **DELETED:** `VoxelCubeView.swift` (708 lines),
+  `GIFPlayer`/`PlayerTransport` (dead legacy player), the `voxel_raymarch` Metal kernel
+  (~200 lines), AppSettings `voxel*`/`playerMode` keys, `VoxelRestPoseIdentityTests`.
 - **Palette explorer surfaces.** `.grid2D` (`GridLayout` + `PaletteGridView`, default review
   view), treemap (`PaletteTreeView`), AddressPicker, Quad4 drill, `PaletteCloudView`. Versioned
   AppSettings keys for representation + grid axes exist.

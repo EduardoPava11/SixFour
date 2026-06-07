@@ -1,4 +1,14 @@
 > **Status/built-state:** see [docs/STATUS.md](STATUS.md) (canonical, gated by `scripts/verify-doc-claims.sh`). This document is design rationale, not a status ledger.
+>
+> **⚠️ SUPERSEDED ARCHITECTURE (2026-06-07).** This doc predates the `Surface` phase-field
+> refactor. It names `CaptureView.swift` / `GIFReviewView` / `GIFAResolveView` /
+> `fullScreenCover` as if current — **they no longer exist.** The as-built UI is the ONE-surface
+> FSM in `SixFour/UI/Surface/` (`SurfaceView.swift` + `*PhaseField.swift`, `Surface.swift`
+> `lawPhaseIsCellGrid`). Read this for the *design intent* (form-follows-function, the
+> capture→loading→GIFA morph, the no-freeze/no-transparency/export contracts), but map every
+> `CaptureView`/`GIFReviewView` reference onto the `Surface`/`PhaseField` code. The live
+> review hero is the 64³ voxel cube (`VoxelCubeView.swift`), driven by discrete X/Y projection
+> sliders. (`PixelGrid.swift` *is* still live — only the named *views* are retired.)
 
 # SixFour: Capture → GIFA flow redesign (form-follows-function)
 

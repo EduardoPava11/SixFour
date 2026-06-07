@@ -77,10 +77,21 @@ struct DeterministicRenderer {
     /// the per-frame objective); >0 trades diversity for lower MSE.
     var lloydIters: Int = 0
 
+    /// A TRUE-colour snapshot of the GIFA mid-render — the real per-stage buffers, so the
+    /// loading sweep shows the actual `raw→quantize→dither→palette` process resolving in
+    /// honest pixel colours, never a synthetic placeholder. Streamed into σ during render.
+    struct StagePartial: Sendable {
+        /// Every frame's indices flattened row-major `(t,y,x)` — feeds `σ.indexCube` directly.
+        let indicesFlat: [UInt8]
+        /// The representative (frame-0) sRGB palette at this stage — feeds `σ.palette`.
+        let palette: [SIMD3<UInt8>]
+    }
+
     func render(
         tiles: [OKLabTile],
         comment: String?,
-        onStage: @Sendable (Stage) -> Void
+        onStage: @Sendable (Stage) -> Void,
+        onPartial: @Sendable (Stage, StagePartial) -> Void = { _, _ in }
     ) throws -> Result {
         precondition(!tiles.isEmpty)
         let k = SixFourShape.K
@@ -114,17 +125,36 @@ struct DeterministicRenderer {
         var mark = clk.now
         func lap() -> Int { let ms = Self.milliseconds(clk.now - mark); mark = clk.now; return ms }
 
+        // Build a true-colour partial from the current indices + a stage's centroids, and
+        // stream it out so the loading sweep paints the REAL in-progress GIFA. The palette
+        // is the frame-0 representative; `paletteToSRGB8` is a 256-entry conversion (cheap).
+        func emitPartial(_ stage: Stage, indices idx: [[UInt8]], centroids0 cents: [Int32]) {
+            guard let rgb = SixFourNative.paletteToSRGB8(centroidsQ16: cents, k: k) else { return }
+            var pal: [SIMD3<UInt8>] = []
+            pal.reserveCapacity(k)
+            for j in 0..<k { pal.append(SIMD3(rgb[j * 3], rgb[j * 3 + 1], rgb[j * 3 + 2])) }
+            var flat: [UInt8] = []
+            flat.reserveCapacity(idx.count * perFrame)
+            for f in idx { flat.append(contentsOf: f) }
+            onPartial(stage, StagePartial(indicesFlat: flat, palette: pal))
+        }
+
         // ── Stage 1: quantize (maximin seed + optional Lloyd) ─────────────────
         onStage(.quantize)
         var centroidsPerFrame: [[Int32]] = []
+        var quantIndicesPerFrame: [[UInt8]] = []   // the raw nearest-centroid map (TRUE pre-dither)
         centroidsPerFrame.reserveCapacity(tiles.count)
+        quantIndicesPerFrame.reserveCapacity(tiles.count)
         for q in q16Frames {
             guard let r = SixFourNative.quantizeFrame(oklabQ16: q, k: k, lloydIters: lloydIters) else {
                 throw DetError.stageFailed("quantize")
             }
             centroidsPerFrame.append(r.centroids)
+            quantIndicesPerFrame.append(r.indices)   // was discarded; now streamed as the partial
         }
         let qMs = lap()
+        // The pre-dither image in true colour — the first honest frame of the resolve sweep.
+        if !centroidsPerFrame.isEmpty { emitPartial(.quantize, indices: quantIndicesPerFrame, centroids0: centroidsPerFrame[0]) }
 
         // ── Stage 2: dither ───────────────────────────────────────────────────
         onStage(.dither)
@@ -139,6 +169,8 @@ struct DeterministicRenderer {
             indicesPerFrame.append(idx)
         }
         let dMs = lap()
+        // The dithered image in true colour (same palette, residual now shaped).
+        emitPartial(.dither, indices: indicesPerFrame, centroids0: centroidsPerFrame[0])
 
         // ── Stage 3: significance split-fill ──────────────────────────────────
         onStage(.significance)
@@ -153,6 +185,8 @@ struct DeterministicRenderer {
             cellsPerFrame.append(Self.cells(from: r.cellStats, k: k, minPop: minPop))
         }
         let sMs = lap()
+        // Every degenerate cell now backed by a real colour (split-fill applied).
+        emitPartial(.significance, indices: indicesPerFrame, centroids0: centroidsPerFrame[0])
 
         // ── Stage 4: palette → sRGB8 ──────────────────────────────────────────
         onStage(.palette)
@@ -171,6 +205,8 @@ struct DeterministicRenderer {
             srgbPalettes.append(pal)
         }
         let pMs = lap()
+        // The final look in true colour — byte-identical to GIFA frame 0; the sweep lands here.
+        emitPartial(.palette, indices: indicesPerFrame, centroids0: centroidsPerFrame[0])
 
         // Per-frame diagnostics (quantization MSE + gamut coverage), computed in
         // the same Q16 integer domain so the Review numbers match the bytes.

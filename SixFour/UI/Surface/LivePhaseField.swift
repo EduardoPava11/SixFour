@@ -65,22 +65,20 @@ struct LivePhaseField: View {
 
     /// The canvas: ALWAYS a 64×64 cell tile (the cube law — 1 GIF pixel per cell), never a
     /// raw camera feed; you live inside the 64³ world. Rendered as one `CellSprite` bitmap
-    /// at the gifPx atom (64 × 4 = 256 pt). Source = σ's live palette laid into the tile
-    /// (row-major, the capture script's identity order) with the heartbeat scrolling the
-    /// read so the surface visibly breathes; the engine's real `previewTile` replaces the
-    /// fill here unchanged in dimension. No interpolation, no AA — flat indexed cells.
+    /// at the gifPx atom (64 × 4 = 256 pt). Source = σ's live camera tile (`previewTile`, the
+    /// real quantized 64×64 the engine produces every frame) read through its paired
+    /// `previewPalette`. The camera's own ~10 fps cadence drives the liveness — no synthetic
+    /// scroll, no second clock. Falls back to the ghost ink before the first frame arrives.
+    /// No interpolation, no AA — flat indexed cells.
     private var previewHero: some View {
         let side = GlobalLattice.gif(GlobalLattice.previewCells)   // 64 × 4 = 256 pt
-        let pal = surface.palette
-        let beat = clock.heartbeat
+        let tile = surface.previewTile
+        let pal = surface.previewPalette
         let ghost = SIMD3<UInt8>(20, 20, 24)
         return CellSprite(cols: 64, rows: 64, cellPt: side / 64) { c, r in
-            guard !pal.isEmpty else { return ghost }
-            // A deterministic palette-fill: each cell maps to a palette slot. The heartbeat
-            // shifts the read by one slot so the tile is alive at 20 fps without spawning a
-            // second clock (κ is the only clock).
-            let slot = ((r * 64 + c) + beat) % pal.count
-            return pal[slot]
+            let i = r * 64 + c
+            guard i < tile.count, Int(tile[i]) < pal.count else { return ghost }
+            return pal[Int(tile[i])]
         }
         .frame(width: side, height: side)
         .clipped()

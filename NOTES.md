@@ -7,6 +7,54 @@ newest first.
 
 ---
 
+## 2026-06-07 — The GIFA cube becomes CELLS; capture→GIFA morph wired; raymarcher deleted
+
+> **Session theme:** "render the cell grid EVERY time." The whole capture→GIFA experience now
+> renders through the ONE cell-grid path — live preview, loading sweep, and the GIFA review cube
+> are each a `cellColor(at:)` population function over `CellSprite`/`CellBitmap`. The Metal voxel
+> raymarcher is **deleted**. Spec **584 green**; iOS build SUCCEEDED; 166 Swift tests pass except
+> one **pre-existing** `FrontProjectionTests` ImageIO-decode failure (confirmed failing on the
+> clean branch with this work stashed — not introduced here).
+
+### How it was built (workflow-driven, riskiest-first)
+Three multi-agent workflows (review → broad UI/UX design → cell-grid design), each with an
+adversarial-verify stage that caught load-bearing bugs **before** code:
+- **The orbit raymarcher is only pixel-exact when flat** — its √2/2 basis lands ~1.76 art-px/voxel
+  at the hero. Proven (`Spec.VoxelFit.lawOrbitHeroNotPixelExact`) and retired in favour of an
+  integer shear table. 8-bit cubes are *dimetric* (integer slopes), never rotated cameras.
+- **`halfSpan` is the wrong window divisor** (the shear isn't centred on 0) → a centered `cubeBox`
+  `(cu,cv,h)`, re-verified inverse≡forward-scatter to 0 mismatches across all 9 rungs.
+- **`artPerVoxel=2` would gap the flat face** → the rasterizer is **cell-scale (1 voxel = 1 cell)**,
+  so flat is a solid 64×64 byte-identical to the GIF (`lawRasterizeFrontIsGif`).
+
+### What shipped (on `grid/ownership`, this session)
+- **`Spec.VoxelFit`** (NEW, 584 tests): the discrete integer projection ladder + per-cell rasterizer
+  (`cubeBox`, `cellProject`, `cubeRasterMap`) with laws: front == 2D GIF ∀ rung, box clips nothing,
+  flat = 4096 cells, rotation reveals side faces. Codegen → `VoxelFitContract.swift` (+golden box /
+  cell-count tables, `selfCheck`) + `VoxelFitContractTests`.
+- **The cube AS cells** — `Surface.bakeCube` forward-scatter z-buffer → `CubeRaster` → `CellSprite`
+  (same path as the preview). Near face plays the cursor frame; X/Y **discrete rung sliders** shear
+  depth to reveal the (x,t)/(y,t) faces; integer pitch keeps it crisp as it shrinks-to-fit.
+- **Live hero = the REAL camera** (`σ.previewTile` index cells, replacing a synthetic palette scroll).
+- **Loading = REAL streamed partials** — `DeterministicRenderer.onPartial` surfaces the true
+  `quantize→dither→significance→palette` buffers into `σ.indexCube` (the discarded quantize indices
+  are now retained); the serpentine sweep shows the GIFA actually forming, in true colour.
+- **Review = the TRUE per-frame GIFA** (`σ.palettesPerFrame`, 64×256, not frame-0 replicated).
+- **One addressing function** `Surface.cellGlobal(x,y,t)` backs every cube reader.
+- **DELETED (aggressive cleanup):** `VoxelCubeView.swift` (708L), `GIFPlayer`/`PlayerTransport`
+  (dead legacy player + `GIFCanvas`), the `voxel_raymarch` Metal kernel (~200L), AppSettings
+  `voxel*`/`playerMode` keys, `VoxelRestPoseIdentityTests`. Stale `6pt/384` comments fixed; the
+  `SIXFOUR-CAPTURE-GIFA-FLOW` doc marked superseded by the `Surface` architecture.
+- **Correction to the plans (kept):** the collapse/GIFB path is **NOT** dead — it's the look-NN's
+  output target, reachable via `paletteScope == .global` (STATUS.md already recorded this). Left intact.
+
+### Open / next
+- Flat-cube on-screen size (~195pt) vs preview 256pt — slight morph shrink, easy to tune.
+- Rung-stop count (`flat → quarter → iso`) — confirm the granularity feels right.
+- The review **Share** button is still a placeholder (`accessibilityHidden`); wire `gifURL` through σ.
+
+---
+
 ## 2026-06-05 — SUNSET / handoff: ethos-debt cleanup + display-FSM proven
 
 > **Entry point for the next session.** This session ran a workflow-audited ethos &

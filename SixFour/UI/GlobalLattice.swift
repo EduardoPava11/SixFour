@@ -27,15 +27,15 @@ import SwiftUI
 /// golden split). `GlobalLattice` adds *no* independent authority; it re-types the
 /// spec constants. Change a number in `Spec.Lattice`, regenerate, and it cascades here.
 struct GlobalLattice {
-    /// THE ATOM: one GIF pixel = 6 pt = 18 device-px @3x. The content/instrument unit.
+    /// THE ATOM: one GIF pixel = 4 pt = 12 device-px @3x. The content/instrument unit.
     static let gifPx: CGFloat = CGFloat(SixFourLattice.gifPx)
 
-    /// The sub-pixel substrate = 2 pt = gifPx/3 — fine spacing/gutters + text.
+    /// The sub-pixel substrate = 2 pt = gifPx/2 — fine spacing/gutters + text.
     /// (Kept under the name `cellPt` so the existing spacing call-sites are unchanged.)
     static let subPt: CGFloat = CGFloat(SixFourLattice.subPt)
     static let cellPt: CGFloat = CGFloat(SixFourLattice.subPt)
 
-    /// The full-screen lattice — 67 cols × 145 rows at the `gifPx` atom.
+    /// The full-screen lattice — 100 cols × 218 rows at the `gifPx` atom.
     static let cols = SixFourLattice.cols
     static let rows = SixFourLattice.rows
 
@@ -68,7 +68,7 @@ struct GlobalLattice {
     // MARK: The conversions
 
     /// atoms → points (the GIF-pixel atom). Use for content + instrument sizes:
-    /// the preview, the field, the shutter, the ring. `gif(64) = 384`.
+    /// the preview, the field, the shutter, the ring. `gif(64) = 256`.
     @inline(__always) static func gif(_ cells: Int) -> CGFloat { CGFloat(cells) * gifPx }
 
     /// sub-pixels → points (the 2 pt substrate). Use for fine spacing/gutters + text.

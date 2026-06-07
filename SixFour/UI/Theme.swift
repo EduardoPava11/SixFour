@@ -26,11 +26,11 @@ enum SFTheme {
     /// The SINGLE source for the one `PlaybackClock` timer, the render `fps:`, and the
     /// `PlayerTransport`. (The old per-view `frameIndex(at:)` indexer was removed.)
     static let gifFrameRate: Int = 20
-    /// One GIF fat-pixel, in points. 64 × 6 = 384pt fits the iPhone 17 Pro
-    /// portrait width (393–402pt) crisply. This is the Review/content pitch =
-    /// `3 × cellPt`, proven commensurate with the 2pt master lattice by
+    /// One GIF fat-pixel, in points. 64 × 4 = 256pt fits the iPhone 17 Pro
+    /// portrait width (393–402pt) crisply. This is the content pitch = the 4pt atom
+    /// (`2 × cellPt`), proven commensurate with the 2pt master lattice by
     /// `Spec.Lattice.lawReviewPitchCommensurate` and emitted into the contract — so
-    /// the `6` is a theorem, not a free literal. See `docs/SIXFOUR-TOTAL-PIXELATION.md`.
+    /// the `4` is a theorem, not a free literal. See `docs/SIXFOUR-TOTAL-PIXELATION.md`.
     static let gifCellPt: CGFloat = CGFloat(SixFourLattice.reviewPitchPt)
     /// The shared content canvas edge = `gifSideCells × gifCellPt` (the GIF's cell
     /// count drives it, not a literal). At the 4 pt atom this is 64 × 4 = 256 pt; the

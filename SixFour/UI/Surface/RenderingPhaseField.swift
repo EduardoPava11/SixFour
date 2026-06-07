@@ -73,20 +73,12 @@ struct RenderingPhaseField: View {
         .allowsHitTesting(false)
     }
 
-    /// The colour of cell (col,row) in the current frame of the GIFA being resolved,
-    /// read from σ's `indexCube` (t,y,x row-major) through the `palette`. Returns `nil`
-    /// (transparent) when the cube isn't populated yet, so the live checker ground shows
+    /// The colour of cell (col,row) in the current frame of the GIFA being resolved —
+    /// the ONE addressing function `Surface.cellGlobal(x,y,t)` (no inline `t*4096+y*64+x`).
+    /// Returns `nil` when the cube isn't populated yet, so the live checker ground shows
     /// through the resolved cells instead of a flat fill.
     private func frameColor(col c: Int, row r: Int) -> SIMD3<UInt8>? {
-        let side = GlobalLattice.previewCells
-        let frameStride = side * side
-        let frame = surface.cursor
-        let base = frame * frameStride
-        let offset = base + r * side + c
-        guard offset >= 0, offset < surface.indexCube.count else { return nil }
-        let idx = Int(surface.indexCube[offset])
-        guard idx < surface.palette.count else { return nil }
-        return surface.palette[idx]
+        surface.cellGlobal(c, r, surface.cursor)
     }
 
     // MARK: - The deterministic stage banner (cells)

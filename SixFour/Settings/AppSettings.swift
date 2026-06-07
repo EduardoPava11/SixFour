@@ -35,12 +35,7 @@ final class AppSettings {
         static let paletteRepresentation  = "sixfour.paletteRepresentation.v1"
         static let gridAxisX              = "sixfour.gridAxisX.v1"
         static let gridAxisY              = "sixfour.gridAxisY.v1"
-        // Voxel-cube explorer (Review .voxel3D mode).
-        static let voxelProvenanceMode    = "sixfour.voxelProvenanceMode.v1"
-        static let voxelLumaFloor         = "sixfour.voxelLumaFloor.v1"
-        static let voxelAutoRotate        = "sixfour.voxelAutoRotate.v1"
         // Unified player (Review GIF hero): which render mode the 2D/3D toggle shows.
-        static let playerMode             = "sixfour.playerMode.v1"
         // Debug-only ownership overlay (full-lattice identity-badge bitmap). Default OFF.
         static let debugOwnershipOverlay  = "sixfour.debugOwnershipOverlay.v1"
     }
@@ -138,28 +133,6 @@ final class AppSettings {
         didSet { defaults.set(gridAxisY.rawValue, forKey: Key.gridAxisY) }
     }
 
-    /// Voxel cube provenance filter: 0 = all, 1 = extracted only, 2 = split only.
-    /// Defaults to 0 (the honest all-solid verifier).
-    var voxelProvenanceMode: Int {
-        didSet { defaults.set(voxelProvenanceMode, forKey: Key.voxelProvenanceMode) }
-    }
-
-    /// Voxel cube luminance air floor (0…255). Defaults to 0 (fully solid cube).
-    var voxelLumaFloor: Int {
-        didSet { defaults.set(voxelLumaFloor, forKey: Key.voxelLumaFloor) }
-    }
-
-    /// Whether the voxel cube auto-rotates. Defaults off (rest = flat 2D view).
-    var voxelAutoRotate: Bool {
-        didSet { defaults.set(voxelAutoRotate, forKey: Key.voxelAutoRotate) }
-    }
-
-    /// Which render mode the unified player's 2D/3D toggle shows. Persists per the
-    /// `voxelAutoRotate` precedent; defaults to `.flat` (the GIF hero is the rest view).
-    var playerMode: PlayerMode {
-        didSet { defaults.set(playerMode.rawValue, forKey: Key.playerMode) }
-    }
-
     /// Debug-only: paint the full 100×218 ownership identity-badge bitmap as the
     /// outermost overlay on the surface. Defaults **OFF** — shipping UI is byte-
     /// identical with this false (the `.overlay` branch yields `EmptyView`).
@@ -198,12 +171,6 @@ final class AppSettings {
         ) ?? .structure
         self.gridAxisX = GridAxis(rawValue: defaults.string(forKey: Key.gridAxisX) ?? "") ?? .a
         self.gridAxisY = GridAxis(rawValue: defaults.string(forKey: Key.gridAxisY) ?? "") ?? .L
-        // Absent keys → 0 / 0 / false (all-solid, no air, no auto-rotate).
-        self.voxelProvenanceMode = defaults.integer(forKey: Key.voxelProvenanceMode)
-        self.voxelLumaFloor = defaults.integer(forKey: Key.voxelLumaFloor)
-        self.voxelAutoRotate = defaults.bool(forKey: Key.voxelAutoRotate)
-        // Absent key → flat (the 2D GIF is the default hero view).
-        self.playerMode = PlayerMode(rawValue: defaults.string(forKey: Key.playerMode) ?? "") ?? .flat
         // Absent key → false ⇒ overlay OFF (shipping UI byte-identical).
         self.debugOwnershipOverlay = defaults.bool(forKey: Key.debugOwnershipOverlay)
     }
