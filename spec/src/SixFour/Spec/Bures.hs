@@ -68,26 +68,32 @@ fromCov3 (sll, sla, slb, saa, sab, sbb) =
 toCov3 :: Mat3 -> Cov3
 toCov3 (Mat3 m00 m01 m02 _ m11 m12 _ _ m22) = (m00, m01, m02, m11, m12, m22)
 
+-- | The 3×3 identity matrix.
 matId :: Mat3
 matId = Mat3 1 0 0 0 1 0 0 0 1
 
+-- | Elementwise sum of two 3×3 matrices.
 matAdd :: Mat3 -> Mat3 -> Mat3
 matAdd (Mat3 a b c d e f g h i) (Mat3 a' b' c' d' e' f' g' h' i') =
   Mat3 (a+a') (b+b') (c+c') (d+d') (e+e') (f+f') (g+g') (h+h') (i+i')
 
+-- | Scale every entry of a 3×3 matrix by a scalar.
 matScale :: Double -> Mat3 -> Mat3
 matScale s (Mat3 a b c d e f g h i) =
   Mat3 (s*a) (s*b) (s*c) (s*d) (s*e) (s*f) (s*g) (s*h) (s*i)
 
+-- | Standard 3×3 matrix product.
 matMul :: Mat3 -> Mat3 -> Mat3
 matMul (Mat3 a b c d e f g h i) (Mat3 j k l m n o p q r) =
   Mat3 (a*j + b*m + c*p) (a*k + b*n + c*q) (a*l + b*o + c*r)
        (d*j + e*m + f*p) (d*k + e*n + f*q) (d*l + e*o + f*r)
        (g*j + h*m + i*p) (g*k + h*n + i*q) (g*l + h*o + i*r)
 
+-- | Matrix transpose.
 matTranspose :: Mat3 -> Mat3
 matTranspose (Mat3 a b c d e f g h i) = Mat3 a d g b e h c f i
 
+-- | Trace — the sum of the diagonal entries.
 matTrace :: Mat3 -> Double
 matTrace (Mat3 a _ _ _ e _ _ _ i) = a + e + i
 

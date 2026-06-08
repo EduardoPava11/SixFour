@@ -132,12 +132,15 @@ data Vec3 = Vec3 !Double !Double !Double
 data Screen = Screen !Double !Double
   deriving (Eq, Show)
 
+-- | Vector subtraction in 3-D.
 vsub :: Vec3 -> Vec3 -> Vec3
 vsub (Vec3 x y z) (Vec3 x' y' z') = Vec3 (x - x') (y - y') (z - z')
 
+-- | Euclidean norm of a 3-D vector.
 vnorm :: Vec3 -> Double
 vnorm (Vec3 x y z) = sqrt (x * x + y * y + z * z)
 
+-- | Euclidean distance between two 3-D points.
 vdist :: Vec3 -> Vec3 -> Double
 vdist a b = vnorm (vsub a b)
 
@@ -371,14 +374,17 @@ lawGhostZeroOnSubspace tol qp =
 
 -- internal ----------------------------------------------------------------
 
+-- | Euclidean distance between two OKLab colours.
 okDist :: OKLab -> OKLab -> Double
 okDist (OKLab l a b) (OKLab l' a' b') =
   sqrt ((l - l') ** 2 + (a - a') ** 2 + (b - b') ** 2)
 
+-- | Two OKLab colours within @tol@ on every channel (L∞ ball).
 okClose :: Double -> OKLab -> OKLab -> Bool
 okClose tol (OKLab l a b) (OKLab l' a' b') =
   abs (l - l') <= tol && abs (a - a') <= tol && abs (b - b') <= tol
 
+-- | Two 3-D vectors within @tol@ on every component (L∞ ball).
 vclose :: Double -> Vec3 -> Vec3 -> Bool
 vclose tol (Vec3 x y z) (Vec3 x' y' z') =
   abs (x - x') <= tol && abs (y - y') <= tol && abs (z - z') <= tol

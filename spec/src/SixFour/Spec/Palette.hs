@@ -35,14 +35,18 @@ mkPalette xs =
        then Just (Palette v)
        else Nothing
 
+-- | Build a 'Palette' from a list, length-checked against the type-level @k@ (@Nothing@ on mismatch).
 paletteFromList :: forall k. KnownNat k => [OKLab] -> Maybe (Palette k)
 paletteFromList = mkPalette
 
+-- | The palette's colours as a list, in slot order.
 paletteToList :: Palette k -> [OKLab]
 paletteToList (Palette v) = V.toList v
 
+-- | The palette's length, read from its type-level size @k@.
 paletteLength :: forall k. KnownNat k => Palette k -> Int
 paletteLength _ = fromIntegral (natVal (Proxy :: Proxy k))
 
+-- | Look up the colour at a slot index; @Nothing@ if out of range.
 paletteIndex :: Palette k -> Int -> Maybe OKLab
 paletteIndex (Palette v) i = v V.!? i

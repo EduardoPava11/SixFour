@@ -73,6 +73,7 @@ data HaarPaletteI = HaarPaletteI
   , levelsI :: [[OKLabI]]   -- ^ top-down; @levelsI !! i@ has @2^i@ offsets
   } deriving (Eq, Show)
 
+-- | Depth of an integer Haar palette tree (number of offset levels).
 treeDepthI :: HaarPaletteI -> Int
 treeDepthI = length . levelsI
 
@@ -169,10 +170,12 @@ modifyAt i f xs
   | i < 0 || i >= length xs = xs
   | otherwise = [ if j == i then f x else x | (j, x) <- zip [0 ..] xs ]
 
+-- | Apply an integer 'MoveI' (add @d@ to the offset at level @lv@, index @ix@) to a Haar palette.
 applyMoveI :: MoveI -> HaarPaletteI -> HaarPaletteI
 applyMoveI (MoveI lv ix d) (HaarPaletteI rt lvls) =
   HaarPaletteI rt (modifyAt lv (modifyAt ix (addI d)) lvls)
 
+-- | The exact inverse move (negate the delta): @applyMoveI (invertMoveI m) . applyMoveI m = id@.
 invertMoveI :: MoveI -> MoveI
 invertMoveI m = m { mvDeltaI = negI (mvDeltaI m) }
 

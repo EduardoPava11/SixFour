@@ -68,3 +68,27 @@ xcodebuild -scheme SixFour -destination 'platform=iOS Simulator,name=iPhone 17 P
 Never hand-edit generated files (`SixFour/Generated/`, `trainer/generated/`,
 `studio/look-nn-baseline/src/generated/`) — change `spec/src/SixFour/Codegen/`
 and regenerate.
+
+## The spec is browsable — use it, keep it that way
+
+The Haskell spec is the source of truth AND a browsable reference. Its module
+doc-comments (`{- | … -}`) and per-function `-- |` comments ARE the spec pages.
+Tooling: **Haddock** (hyperlinked HTML + quickjump search), **Hoogle** (name/type
+search), **ghcid** (live typecheck), **graphviz** (module import graph). One
+driver: `spec/scripts/spec-docs.sh` (`--serve` for Hoogle on :8080). See
+`docs/SIXFOUR-SPEC-BROWSABLE-WORKFLOW.md`.
+
+**Start any spec exploration at module `SixFour.Spec.Map`** — the categorised
+index (NN design is the ★ core category). Browse before grepping.
+
+**Maintenance contract (every session):**
+- Adding a `Spec.*`/`Codegen.*` module → (1) wire it in `spec.cabal`
+  `exposed-modules`, (2) give it a `{- | Module / Description / … -}` header,
+  (3) add ONE line in `SixFour.Spec.Map` under its category. A module with no
+  `Map` entry is the lint failure.
+- Every exported function gets a `-- |` doc — no blank Haddock rows.
+- The iterate loop after any spec change: `ghcid` (live) → `cabal test`
+  (laws + golden gate) → `cabal run spec-codegen` (regen app contracts) →
+  `spec/scripts/spec-docs.sh` (regen Haddock + Hoogle + import graph).
+- `cabal haddock sixfour-spec` must stay warning-clean (missing docs surface
+  there). Treat a Haddock warning like a build warning.

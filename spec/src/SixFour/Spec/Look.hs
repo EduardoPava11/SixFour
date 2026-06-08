@@ -49,7 +49,9 @@ lookDim = 4
 
 -- | A bounded control vector in @[-1,1]^lookDim@. The neutral code is the
 -- origin (the faithful, un-stylised baseline).
-newtype LookCode = LookCode { unLookCode :: V.Vector Double }
+newtype LookCode = LookCode
+  { unLookCode :: V.Vector Double  -- ^ the raw @[-1,1]^lookDim@ control vector
+  }
   deriving (Eq, Show)
 
 -- | Build a code; rejects wrong length or out-of-box values.
@@ -58,6 +60,7 @@ mkLookCode xs
   | length xs == lookDim && all (\x -> x >= -1 && x <= 1) xs = Just (LookCode (V.fromList xs))
   | otherwise = Nothing
 
+-- | The neutral code: the origin of the box — the faithful, un-stylised baseline.
 neutralLookCode :: LookCode
 neutralLookCode = LookCode (V.replicate lookDim 0)
 

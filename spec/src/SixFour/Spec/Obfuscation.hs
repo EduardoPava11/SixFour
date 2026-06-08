@@ -59,9 +59,11 @@ import SixFour.Spec.AxisNet (ColorAxis(..), projectAxis)
 zeroLab :: OKLab
 zeroLab = OKLab 0 0 0
 
+-- | Componentwise sum of two OKLab triples.
 labAdd :: OKLab -> OKLab -> OKLab
 labAdd (OKLab l1 a1 b1) (OKLab l2 a2 b2) = OKLab (l1 + l2) (a1 + a2) (b1 + b2)
 
+-- | Componentwise difference of two OKLab triples.
 labSub :: OKLab -> OKLab -> OKLab
 labSub (OKLab l1 a1 b1) (OKLab l2 a2 b2) = OKLab (l1 - l2) (a1 - a2) (b1 - b2)
 

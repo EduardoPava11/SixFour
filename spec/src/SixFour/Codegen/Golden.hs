@@ -127,6 +127,7 @@ emitAxisNetGolden = T.unlines $
 -- The emitter
 -- =============================================================================
 
+-- | Emit the Swift golden vectors for the look-NN forward pass (pins the hand-written inference).
 emitLookNetGolden :: Text
 emitLookNetGolden = T.unlines $
   [ "{"

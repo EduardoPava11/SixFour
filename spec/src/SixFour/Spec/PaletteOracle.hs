@@ -46,6 +46,7 @@ data RewardWeights = RewardWeights
   , rwDiversity :: Double   -- ^ weight on OKLab Gaussian colour entropy
   } deriving (Eq, Show)
 
+-- | Default reward weights — beauty and entropy weighted equally (0.5 each).
 defaultWeights :: RewardWeights
 defaultWeights = RewardWeights 0.5 0.5
 

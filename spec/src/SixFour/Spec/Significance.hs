@@ -148,6 +148,7 @@ data Provenance
 data Sigma6 = Sigma6 !Double !Double !Double !Double !Double !Double
   deriving (Eq, Show)
 
+-- | The zero second-moment accumulator — all six 'Sigma6' entries 0 (an empty cell's stats).
 zeroSigma :: Sigma6
 zeroSigma = Sigma6 0 0 0 0 0 0
 
@@ -365,7 +366,7 @@ rebalance k pv start = go start
 -- unexported — values cannot be forged.
 data SignificantVoxelVolume (t :: Nat) (h :: Nat) (w :: Nat) (k :: Nat) =
   SignificantVoxelVolume
-    { svvComplete :: !(CompleteVoxelVolume t h w k)
+    { svvComplete :: !(CompleteVoxelVolume t h w k)   -- ^ the underlying complete (surjective) volume
     , svvCells    :: !(V.Vector (FrameCells k))   -- ^ length @T@, palette-slot order
     }
 
@@ -424,6 +425,7 @@ buildSignificantVolume frames = do
   it <- mkIndexTensor allIdx
   mkSignificantVoxelVolume it cellsV
 
+-- | Reflect a type-level 'KnownNat' to its 'Int' value (via a 'Proxy').
 natInt :: KnownNat n => Proxy n -> Int
 natInt = fromIntegral . natVal
 

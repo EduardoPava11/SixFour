@@ -178,6 +178,7 @@ index2 (Tensor2 v) i j =
   let m = fromIntegral (natVal (Proxy :: Proxy m)) :: Int
   in v U.! (i * m + j)
 
+-- | Build a 'Tensor3' from an index function @f i j l@ over its type-level shape @(a,b,c)@ (row-major).
 tabulate3
   :: forall a b c s. (KnownNat a, KnownNat b, KnownNat c, U.Unbox s)
   => (Int -> Int -> Int -> s) -> Tensor3 a b c s
@@ -193,6 +194,7 @@ tabulate3 f =
             l =  r `mod` nc
         in f i j l))
 
+-- | Read the element at @(i, j, l)@ of a 'Tensor3' (row-major @(i·b + j)·c + l@).
 index3
   :: forall a b c s. (KnownNat b, KnownNat c, U.Unbox s)
   => Tensor3 a b c s -> Int -> Int -> Int -> s
@@ -205,11 +207,15 @@ index3 (Tensor3 v) i j l =
 -- List conversions (for property tests and codegen fixtures)
 -- =============================================================================
 
+-- | Build a 'Tensor1' from a flat list, length-checked against the type-level @n@: @Just@ iff
+-- @length xs == n@, else @Nothing@. The smart constructor used by codegen fixtures and property tests.
 fromList1 :: forall n s. (KnownNat n, U.Unbox s) => [s] -> Maybe (Tensor1 n s)
 fromList1 xs =
   let n = fromIntegral (natVal (Proxy :: Proxy n)) :: Int
   in if length xs == n then Just (Tensor1 (U.fromList xs)) else Nothing
 
+-- | Build a 'Tensor2' from a list of rows, shape-checked: @Just@ iff there are exactly @n@ rows, each of
+-- length @m@, else @Nothing@. Stored row-major.
 fromList2 :: forall n m s. (KnownNat n, KnownNat m, U.Unbox s) => [[s]] -> Maybe (Tensor2 n m s)
 fromList2 rows =
   let n = fromIntegral (natVal (Proxy :: Proxy n)) :: Int
@@ -218,9 +224,11 @@ fromList2 rows =
        then Just (Tensor2 (U.fromList (concat rows)))
        else Nothing
 
+-- | Flatten a 'Tensor1' to its underlying element list (row-major).
 toList1 :: U.Unbox s => Tensor1 n s -> [s]
 toList1 (Tensor1 v) = U.toList v
 
+-- | Flatten a 'Tensor2' to a list of @n@ rows, each of length @m@ (row-major).
 toList2 :: forall n m s. (KnownNat m, U.Unbox s) => Tensor2 n m s -> [[s]]
 toList2 (Tensor2 v) =
   let m = fromIntegral (natVal (Proxy :: Proxy m)) :: Int
@@ -233,17 +241,21 @@ toList2 (Tensor2 v) =
 -- Functorial / applicative
 -- =============================================================================
 
+-- | Map a function over every element of a 'Tensor1' (shape-preserving functor map).
 mapTensor1 :: (U.Unbox s, U.Unbox t) => (s -> t) -> Tensor1 n s -> Tensor1 n t
 mapTensor1 f (Tensor1 v) = Tensor1 (U.map f v)
 
+-- | Map a function over every element of a 'Tensor2' (shape-preserving).
 mapTensor2 :: (U.Unbox s, U.Unbox t) => (s -> t) -> Tensor2 n m s -> Tensor2 n m t
 mapTensor2 f (Tensor2 v) = Tensor2 (U.map f v)
 
+-- | Combine two same-length 'Tensor1's elementwise with a binary function.
 zipTensor1With
   :: (U.Unbox s, U.Unbox t, U.Unbox u)
   => (s -> t -> u) -> Tensor1 n s -> Tensor1 n t -> Tensor1 n u
 zipTensor1With f (Tensor1 a) (Tensor1 b) = Tensor1 (U.zipWith f a b)
 
+-- | Combine two same-shape 'Tensor2's elementwise with a binary function.
 zipTensor2With
   :: (U.Unbox s, U.Unbox t, U.Unbox u)
   => (s -> t -> u) -> Tensor2 n m s -> Tensor2 n m t -> Tensor2 n m u
@@ -339,13 +351,16 @@ permutationInvariantReduce (Tensor2 v) =
 -- Sizing helpers (used by tests + codegen)
 -- =============================================================================
 
+-- | Runtime length of a 'Tensor1', read from its type-level dimension @n@ (the value is ignored).
 size1 :: forall n s. (KnownNat n) => Tensor1 n s -> Int
 size1 _ = fromIntegral (natVal (Proxy :: Proxy n))
 
+-- | Runtime shape @(n, m)@ of a 'Tensor2', read from its type-level dimensions.
 size2 :: forall n m s. (KnownNat n, KnownNat m) => Tensor2 n m s -> (Int, Int)
 size2 _ = ( fromIntegral (natVal (Proxy :: Proxy n))
           , fromIntegral (natVal (Proxy :: Proxy m)) )
 
+-- | Runtime shape @(a, b, c)@ of a 'Tensor3', read from its type-level dimensions.
 size3 :: forall a b c s. (KnownNat a, KnownNat b, KnownNat c) => Tensor3 a b c s -> (Int, Int, Int)
 size3 _ = ( fromIntegral (natVal (Proxy :: Proxy a))
           , fromIntegral (natVal (Proxy :: Proxy b))

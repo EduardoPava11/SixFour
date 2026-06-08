@@ -266,6 +266,11 @@ extension Surface {
         // Swift↔Haskell bit-pin of the move operator (mirrors the Display golden trace
         // fold above). `MoveContract.selfCheck()` re-asserts the seed laws + the fold.
         assert(MoveContract.selfCheck(), "MoveContract.selfCheck() failed")
+
+        // Cell-mechanics parity: re-fold the golden gesture through the generated FSM,
+        // re-derive the golden haptics + pulse — the live Swift↔Haskell pin of the
+        // interaction algebra (lifetime / detent / haptics / reactive pulse).
+        assert(SixFourCellMechanics.selfCheck(), "SixFourCellMechanics.selfCheck() failed")
         var placement = MoveContract.defaultPlacement
         for step in MoveContract.goldenScript {
             placement = MoveContract.move(placement, step.id, dCol: step.dCol, dRow: step.dRow)
