@@ -281,7 +281,8 @@ instance SigmaEquivariant Quad4ReconAchroma where
 -- | The committed L6 reconstruction: a depth-7 'SigmaPairTree' (the 384-DOF
 -- decoder genome) expands into the 256-leaf σ-pair palette
 -- @[c_0, σ(c_0), c_1, σ(c_1), …]@ ('SixFour.Spec.SigmaPairHead.reconstructPaired').
--- Unlike 'Quad4ReconAchroma' — whose 511-dim image was shown (Quad4Fit) to fit
+-- Unlike 'Quad4ReconAchroma' — whose 511-dim image was shown (by the retired
+-- @Quad4Fit@ experiment) to fit
 -- σ-symmetric palettes no better than random — this stage's image is EXACTLY
 -- the σ-symmetric eigenspace under the lifted action 'sigmaSwapAndReflect'
 -- (pointwise σ then swap adjacent pairs), so it is 'SigmaSymmetricRange' by

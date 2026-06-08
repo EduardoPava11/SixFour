@@ -2,7 +2,7 @@
 Module      : SixFour.Spec.SigmaPairHead
 Description : σ-pair-symmetric decoder — the structural answer the tensor finding demanded.
 
-The 'Spec.Quad4Fit' tensor measurement showed that Quad4's 511-dim image
+The (now-retired) @Quad4Fit@ tensor measurement showed that Quad4's 511-dim image
 does NOT preferentially fit σ-symmetric palettes (median residual ≈ 6 % on
 σ-symmetric synthetic palettes, indistinguishable from random palettes).
 Free-parameter trees (binary or 4-ary) achieve σ-symmetric output only via a
@@ -74,7 +74,7 @@ import SixFour.Spec.Color       (OKLab(..))
 import SixFour.Spec.LinAlg
 import SixFour.Spec.PairTree    (HaarPalette(..), sigmaReflect)
 import qualified SixFour.Spec.PairTree as PT
-import SixFour.Spec.Quad4Fit    (paletteToVec)
+import SixFour.Spec.Quad4        (paletteToVec)
 
 -- =============================================================================
 -- The σ-pair-paired tree

@@ -65,6 +65,7 @@ module SixFour.Spec.Quad4
   , quad4Analyze
   , reconstructFromVector
   , toVector
+  , paletteToVec
     -- * Laws
   , lawLeafCount256
   , lawDOF513
@@ -79,6 +80,13 @@ import           Data.Vector.Unboxed (Vector)
 
 import SixFour.Spec.Color    (OKLab(..))
 import SixFour.Spec.PairTree (sigmaReflect)
+
+-- | Flatten a 256-leaf palette to a flat 768-vector @(L₀, a₀, b₀, L₁, a₁, b₁, …)@.
+-- (Moved here from the retired @Spec.Quad4Fit@ capacity-analysis experiment — this
+-- was its only production reuse; see docs/SIXFOUR-BURES-DISCRETE-CORRECTION.md §0.)
+paletteToVec :: [OKLab] -> Vector Double
+paletteToVec leaves = U.fromList (concatMap okToList leaves)
+  where okToList (OKLab l a b) = [l, a, b]
 
 -- | A depth-4 4-ary palette tree. Each non-leaf node carries two independent OKLab
 -- offsets @(δ₁, δ₂)@; the four children are @parent ± δ₁ ± δ₂@. Levels are top-down;

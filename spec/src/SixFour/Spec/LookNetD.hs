@@ -12,7 +12,8 @@ pyramid generating 128 @c_i@ generators), which the L6 reconstruction step
 @[c_0, σ(c_0), c_1, σ(c_1), …]@.
 
 This is the SigmaPairHead pivot (NOTES 2026-05-28): the tensor measurement
-('SixFour.Spec.Quad4Fit') showed a free 768-coefficient Haar decoder fits
+(the now-retired @Quad4Fit@ experiment; see docs/SIXFOUR-BURES-DISCRETE-CORRECTION.md §0)
+showed a free 768-coefficient Haar decoder fits
 σ-symmetric palettes no better than random ones, so the decoder is reduced to
 the 384-DOF σ-symmetric subspace exactly — the lowest Haar level is dropped
 (depth 8 → depth 7) and the 256 leaves become 128 algebraically-paired
