@@ -53,13 +53,16 @@ struct ReviewPhaseField: View {
                 // All three ColorWidgets are PLACED at the ONE shared global position (no
                 // more VStack-centering) and movable — Field64's gif-render and Palette16's
                 // per-frame palette slide here at the SAME positions the live screen set.
+                // `.movable` BEFORE `.place` so each gesture is footprint-scoped (else the
+                // greedy `.position` in `.place` makes it full-screen and the top widget
+                // eats every touch — the reason the hero would not move after capture).
                 gifaHero
-                    .place(region(for: .field64, at: placement))
                     .movable(.field64, settings: settings, surface: surface)
+                    .place(region(for: .field64, at: placement))
 
                 paletteStrip
-                    .place(region(for: .palette16, at: placement))
                     .movable(.palette16, settings: settings, surface: surface)
+                    .place(region(for: .palette16, at: placement))
 
                 // Immovable bottom chrome (NOT a ColorWidget): the determinism badge over
                 // the action row, VStack-pinned to the bottom edge.

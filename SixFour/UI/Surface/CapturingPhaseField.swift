@@ -37,8 +37,10 @@ struct CapturingPhaseField: View {
             // The 64×64 preview STAYS ALIVE through the burst — the live camera tile keeps
             // feeding it, so the preview does NOT freeze (Act II). It plays backwards once
             // the GIFA cube starts streaming in `.rendering`; during the burst it is the
-            // live camera. Inert (not movable) while busy.
+            // live camera. Movable in every phase that shows it (so it can be repositioned
+            // right after capture) — `.movable` BEFORE `.place` (footprint-scoped gesture).
             previewHero
+                .movable(.field64, settings: settings, surface: surface)
                 .place(region(for: .field64, at: placement))
 
             // The palette-as-progress hero, placed by the proven capture-scene layout

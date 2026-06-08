@@ -83,14 +83,11 @@ private struct MovableModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         guard enabled else { return AnyView(content) }
-        // GREEN-FRAME FIX + DSL: `.overlay` is applied BEFORE `.offset`, so the drop
-        // outline rides the SAME offset as the content and stays frame-locked to the
-        // finger (`.offset` moves visuals but not the layout frame an after-overlay would
-        // anchor to). The outline's colour comes from `SixFourCellMechanics.dropAccepts`,
-        // the SAME verdict `commit` uses (`Spec.CellMechanics.lawDropColorMatchesMove`), so
-        // it can never disagree with what the drop will do.
+        // The lifted widget tracks the finger via `.offset` (auto-resets on release ⇒ the
+        // drop snaps to the committed cell). No drop-outline: with nearest-free snapping a
+        // drop always lands, so a valid/invalid frame served no purpose and the finger-
+        // tracked outline only confused. Feedback is the widget moving + the haptics.
         let base = content
-            .overlay { if lifted { dropOverlay } }
             .offset(drag)   // LINT-ALLOW-POSITION: transient lift-follow (auto-resets)
             // Give the gesture a solid hittable area even if the content opts out of hit
             // testing (the preview hero sets `.allowsHitTesting(false)` for a focus layer).
@@ -175,6 +172,9 @@ private struct MovableModifier: ViewModifier {
                         at c: Int, _ r: Int) -> Bool {
         let clamped = MoveContract.clampInBounds(identity, c, r)
         guard clamped.col == c, clamped.row == r else { return false }   // in-bounds only
+        // Stay inside the ROUNDED boundary — never past the edge or into a rounded corner.
+        let (fw, fh) = identity.footprint
+        guard Boundary.footprintFits(col: c, row: r, w: fw, h: fh) else { return false }
         var scene: [GridRegion] = [MoveContract.placedRegion(identity, col: c, row: r)]
         for other in Self.colliders where other != identity {
             if let p = placement[other] {
@@ -213,40 +213,6 @@ private struct MovableModifier: ViewModifier {
         return nil
     }
 
-    /// Live drop feedback while lifted — a one-cell footprint outline that BREATHES: its
-    /// colour is the spec verdict (`dropAccepts` → green accept / red reject), and it
-    /// pulses via `SixFourCellMechanics.reactivePulse` (faster & wider on reject, faster
-    /// the farther the drag), sampled by the integer `pulseSampleQ16` triangle. So the
-    /// outline visibly tracks the user's intent — calm green when valid, urgent red when not.
-    private var dropOverlay: some View {
-        let cell = snapCells(drag)
-        // Green when the cell under the finger is CLEAR (lands exactly there); amber/red
-        // when over another widget — in which case the drop still SLIDES to the nearest
-        // free cell (commit → snapToNearestFree), so it never bounces back to the origin.
-        let cur = settings.widgetPlacement[identity] ?? (col: 0, row: 0)
-        let target = MoveContract.clampInBounds(identity, cur.col + cell.col, cur.row + cell.row)
-        let accepted = isFree(settings.widgetPlacement, at: target.col, target.row)
-        let dragMag = SixFourCellMechanics.cellsCrossed((col: 0, row: 0), cell)
-        let pulse = SixFourCellMechanics.reactivePulse(identity: identity, accept: accepted, dragMag: dragMag)
-        let accent = accepted ? SixFourCellMechanics.acceptInk : SixFourCellMechanics.rejectInk
-        // The trough: an opaque dim of the accent (GRID Law: step the colour, never alpha).
-        let dim = (r: accent.r * 30 / 100, g: accent.g * 30 / 100, b: accent.b * 30 / 100)
-        let (w, h) = identity.footprint
-        // TimelineView gives the per-frame tick that samples the (spec-pinned) pulse — the
-        // single impure leaf. Spec owns the waveform; this only reads the clock.
-        return TimelineView(.animation) { tl in
-            let tick = Int(tl.date.timeIntervalSinceReferenceDate * 20)   // ~20 fps phase
-            let amp = SixFourCellMechanics.pulseSampleQ16(
-                period: pulse.period, lo: pulse.lo, hi: pulse.hi, tick: tick)
-            let t = SixFourCellMechanics.tintLerpQ16(base: dim, accent: accent, ampQ16: amp)
-            let ink = SIMD3<UInt8>(UInt8(clamping: t.r), UInt8(clamping: t.g), UInt8(clamping: t.b))
-            CellSprite(cols: w, rows: h, cellPt: GlobalLattice.gifPx) { c, r in
-                // A 1-cell border outline — interior transparent so the widget shows through.
-                (c == 0 || r == 0 || c == w - 1 || r == h - 1) ? ink : nil
-            }
-        }
-        .allowsHitTesting(false)
-    }
 }
 
 extension View {

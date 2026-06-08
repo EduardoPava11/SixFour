@@ -45,9 +45,11 @@ struct RenderingPhaseField: View {
 
             // Field64 — the resolve hero, placed at the SHARED global position + movable
             // (capture→render→review share the one surface geometry AND one position).
+            // `.movable` BEFORE `.place` (footprint-scoped gesture — a greedy `.position`
+            // otherwise makes the gesture full-screen and the hero ungrabbable).
             resolveHero
-                .place(region(for: .field64, at: placement))
                 .movable(.field64, settings: settings, surface: surface)
+                .place(region(for: .field64, at: placement))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()

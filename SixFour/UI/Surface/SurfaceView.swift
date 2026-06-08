@@ -26,12 +26,19 @@ struct SurfaceView: View {
 
     var body: some View {
         PhaseField.field(for: surface.phase, surface, clock, engine.settings)
+            // The rounded play boundary is an INVISIBLE constraint (open screen = just the
+            // preview + palette + checker, nothing else): widgets are kept inside it by
+            // `Boundary.footprintFits` (the move's nearest-free search), so the square 64×64
+            // can never be dragged where the curved screen would crop it; any saved position
+            // outside it is re-homed on launch (`normalizePlacement`). No drawn frame.
+            .ignoresSafeArea()
             // The shutter (a σ event) kicks the engine. σ moves to `.locking` on
             // `.shutterTap`; here we observe that edge and start the real burst.
             .environment(surface)
             .task { await engine.bootstrap() }
             .onAppear {
                 Surface.assertSpecParity()
+                normalizePlacement()   // re-home any widget stranded outside the boundary
                 clock.reduceMotion = reduceMotion
                 // The ONE per-tick action: advance the Z₆₄ playback cursor. Per-phase
                 // engine progress is folded into σ via `.onChange` below, not the tick.
@@ -110,6 +117,26 @@ struct SurfaceView: View {
             }
             .preferredColorScheme(.dark)
             .statusBarHidden()
+    }
+
+    // MARK: - boundary re-home
+
+    /// Re-home any widget whose SAVED position no longer fits the play boundary (e.g. a
+    /// position persisted before the boundary existed, leaving it stranded off-screen or in
+    /// a corner) — reset it to its default dock. Runs once on appear; a no-op when every
+    /// widget already fits, so a valid saved layout is preserved verbatim.
+    private func normalizePlacement() {
+        var p = engine.settings.widgetPlacement
+        var changed = false
+        for id in ColorIdentity.allCases {
+            guard let pos = p[id] else { continue }
+            let (w, h) = MoveContract.footprint(id)
+            if !Boundary.footprintFits(col: pos.col, row: pos.row, w: w, h: h) {
+                p[id] = (MoveContract.defaultCol(id), MoveContract.defaultRow(id))
+                changed = true
+            }
+        }
+        if changed { engine.settings.widgetPlacement = p }
     }
 
     // MARK: - engine.phase → σ event

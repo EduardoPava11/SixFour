@@ -65,16 +65,8 @@ struct LivePhaseField: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
-        // Build stamp: the running commit + time, so a stale build is visible (the
-        // .xcodeproj is gitignored — a pull without `xcodegen generate` ships the old file
-        // set). Cells, top-left, below the Dynamic Island.
-        .overlay(alignment: .topLeading) {
-            CellText("\(BuildStamp.gitSHA) \(BuildStamp.buildTime)", rows: 7,
-                     ink: Color(srgb8: SIMD3<UInt8>(120, 120, 132)))
-                .padding(.leading, GlobalLattice.pt(3))
-                .padding(.top, GlobalLattice.pt(36))   // 72 pt — below the Dynamic Island
-                .allowsHitTesting(false)
-        }
+        // The open screen is JUST the preview + palette on the checker ground — no build
+        // stamp / status text (the grey writing read as distracting clutter).
     }
 
     // MARK: - The preview hero (64 × 64 cells)
