@@ -18,6 +18,7 @@ common warnings
 library
     import:           warnings
     exposed-modules:
+        SixFour.Spec.Map
         SixFour.Spec.Shape
         SixFour.Spec.Color
         SixFour.Spec.ColorFixed
@@ -28,6 +29,7 @@ library
         SixFour.Spec.QuantFixed
         SixFour.Spec.Coverage
         SixFour.Spec.Collapse
+        SixFour.Spec.QuartetDelta
         SixFour.Spec.Diversity
         SixFour.Spec.SpatialDither
         SixFour.Spec.GMM
@@ -38,6 +40,7 @@ library
         SixFour.Spec.Quad4Fixed
         SixFour.Spec.GlobalVolume
         SixFour.Spec.SplitTree
+        SixFour.Spec.HaarRibbon
         SixFour.Spec.GridAxis
         SixFour.Spec.Order
         SixFour.Spec.GridScript
@@ -47,6 +50,7 @@ library
         SixFour.Spec.CellGrid
         SixFour.Spec.GridLayout
         SixFour.Spec.MovableLayout
+        SixFour.Spec.CellMechanics
         SixFour.Spec.Ownership
         SixFour.Spec.Display
         SixFour.Spec.FrontProjection
@@ -273,6 +277,7 @@ test-suite spec-tests
         Properties.CellGrid
         Properties.GridLayout
         Properties.MovableLayout
+        Properties.CellMechanics
         Properties.Ownership
         Properties.Display
         Properties.FrontProjection

@@ -98,6 +98,7 @@ withCompleteVoxelVolume
   -> r
 withCompleteVoxelVolume (CompleteVoxelVolume it) k = k it
 
+-- | Number of cells in the index tensor (@t·h·w@).
 indexTensorLength :: IndexTensor t h w k -> Int
 indexTensorLength (IndexTensor v) = U.length v
 

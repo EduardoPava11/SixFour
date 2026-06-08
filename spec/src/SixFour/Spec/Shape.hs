@@ -50,20 +50,26 @@ type CandidatesAfterStageA = 16384
 tVal :: Int
 tVal = fromIntegral (natVal (Proxy :: Proxy T))
 
+-- | GIF frame height in pixels (the type-level @H@ = 64).
 hVal :: Int
 hVal = fromIntegral (natVal (Proxy :: Proxy H))
 
+-- | GIF frame width in pixels (the type-level @W@ = 64).
 wVal :: Int
 wVal = fromIntegral (natVal (Proxy :: Proxy W))
 
+-- | Palette size — colours per frame (the type-level @K@ = 256).
 kVal :: Int
 kVal = fromIntegral (natVal (Proxy :: Proxy K))
 
+-- | Pixels per frame, @H·W@ (= 4096).
 pixelsPerFrame :: Int
 pixelsPerFrame = fromIntegral (natVal (Proxy :: Proxy PixelsPerFrame))
 
+-- | Pixels across the whole GIF, @T·H·W@.
 pixelsPerGIF :: Int
 pixelsPerGIF = fromIntegral (natVal (Proxy :: Proxy PixelsPerGIF))
 
+-- | Size of the pooled candidate cloud after Stage A, @T·K@ (the collapse input).
 candidatesAfterStageA :: Int
 candidatesAfterStageA = fromIntegral (natVal (Proxy :: Proxy CandidatesAfterStageA))

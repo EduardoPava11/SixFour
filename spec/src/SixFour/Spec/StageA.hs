@@ -55,6 +55,7 @@ newtype Frame (h :: Nat) (w :: Nat) =
 newtype StageA (h :: Nat) (w :: Nat) (k :: Nat) =
   StageA { runStage :: Frame h w -> (Palette k, IndexTensor 1 h w k) }
 
+-- | Run a 'StageA' quantizer on one frame → its 256-colour 'Palette' and the 1-frame index tensor.
 runStageA
   :: StageA h w k
   -> Frame h w

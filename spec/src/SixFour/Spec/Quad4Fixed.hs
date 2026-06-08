@@ -45,6 +45,7 @@ data Quad4PaletteI = Quad4PaletteI
 quad4FixedDepth :: Int
 quad4FixedDepth = 4
 
+-- | Well-formedness of an integer Quad4 palette: exactly 'quad4FixedDepth' levels with the right widths.
 quad4FixedWellFormed :: Quad4PaletteI -> Bool
 quad4FixedWellFormed (Quad4PaletteI _ lvls) =
   length lvls == quad4FixedDepth &&

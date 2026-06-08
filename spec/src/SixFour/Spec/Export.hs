@@ -15,19 +15,33 @@ the INDEX domain — each output cell copies a source palette INDEX — so:
 This is a pure, population-preserving 16× scale (4² = 16): the brand/significance
 gate stays on the 64×64 SOURCE volume, and replication is proven not to disturb it,
 so re-proving at 256² is unnecessary.
+
+__Act IV — the global pack {16³, 64³, 256³}__ (see @docs/SIXFOUR-PALETTE-STORY-WORKFLOW.md@).
+The committed global palette renders at three rungs of the ×4 cube ladder, all from the ONE
+64³ index cube (GIFB): GIFC 16³ = 'downsample2D' (4×4 block __mode__ — the dominant index per
+block, gamut-closed), GIFB 64³ = identity, GIFD 256³ = 'replicate2D'. @16 = 64/4@, @256 = 64·4@,
+so the pack is @{16,64,256}@ spatially and in frames. The downsample is index-domain too (mode
+picks an actual block index — no colour invented), so GIFC shares GIFB's exact palette.
 -}
 module SixFour.Spec.Export
   ( upscaleFactor
   , sourceSide
   , outputSide
+  , previewSide
+  , packSides
   , replicate2D
+  , downsample2D
     -- * Laws
   , lawReplicateLength
   , lawReplicatePreservesUsedSet
   , lawReplicateCountsScale
+  , lawDownsampleLength
+  , lawDownsampleGamutClosed
+  , lawDownsampleConstantBlock
+  , lawCubeLadder
   ) where
 
-import Data.List (nub, sort)
+import Data.List (nub, sort, group)
 
 -- | The export upscale factor: 1 source pixel → a 4×4 output block.
 upscaleFactor :: Int
@@ -40,6 +54,14 @@ sourceSide = 64
 -- | The exported GIF side: @sourceSide * upscaleFactor = 256@.
 outputSide :: Int
 outputSide = sourceSide * upscaleFactor
+
+-- | The preview (GIFC) side: @sourceSide \`div\` upscaleFactor = 16@.
+previewSide :: Int
+previewSide = sourceSide `div` upscaleFactor
+
+-- | The global pack's three spatial rungs of the ×4 cube ladder: @[16, 64, 256]@ (= frame counts too).
+packSides :: [Int]
+packSides = [previewSide, sourceSide, outputSide]
 
 -- | Replicate each cell of a @side×side@ row-major grid into a @factor×factor@
 -- block, producing a @(factor·side)×(factor·side)@ row-major grid. Nearest-
@@ -80,3 +102,55 @@ lawReplicateCountsScale factor side cells =
     out = replicate2D factor side cells
     count v xs = length (filter (== v) xs)
     scaled v = count v out == factor * factor * count v cells
+
+-- ---------------------------------------------------------------------------
+-- GIFC downsample (64² → 16²): the dual of 'replicate2D', in the index domain
+-- ---------------------------------------------------------------------------
+
+-- | Downsample a @side×side@ row-major grid to @(side\`div\`factor)×(side\`div\`factor)@ by taking, for
+-- each @factor×factor@ source block, its __mode__ (most frequent index; ties resolve to the lowest index
+-- — a total, device-stable rule). Index-domain, so the output uses only source indices (gamut-closed):
+-- GIFC shares GIFB's exact global palette, no colour invented.
+downsample2D :: Ord a => Int -> Int -> [a] -> [a]
+downsample2D factor side cells =
+  [ modeLowest [ cells !! ((by * factor + dy) * side + (bx * factor + dx))
+               | dy <- [0 .. factor - 1], dx <- [0 .. factor - 1] ]
+  | by <- [0 .. side `div` factor - 1]
+  , bx <- [0 .. side `div` factor - 1]
+  ]
+
+-- | Most frequent element; ties broken toward the smallest (the runs are value-ascending, so the first
+-- max-count run is the least value with that count).
+modeLowest :: Ord a => [a] -> a
+modeLowest xs =
+  let runs     = map (\g -> (length g, head g)) (group (sort xs))
+      maxCount = maximum (map fst runs)
+  in head [ v | (c, v) <- runs, c == maxCount ]
+
+-- | Downsampling a full @side²@ grid yields exactly @(side\`div\`factor)²@ cells.
+lawDownsampleLength :: Ord a => Int -> Int -> [a] -> Bool
+lawDownsampleLength factor side cells =
+  factor <= 0 || side `mod` factor /= 0 || length cells /= side * side
+    || length (downsample2D factor side cells) == (side `div` factor) * (side `div` factor)
+
+-- | The downsample invents NO colour — its index set is a subset of the source's (mode picks an actual
+-- block index). This is what lets GIFC reuse GIFB's exact global palette.
+lawDownsampleGamutClosed :: Ord a => Int -> Int -> [a] -> Bool
+lawDownsampleGamutClosed factor side cells =
+  factor <= 0 || side `mod` factor /= 0 || length cells /= side * side
+    || all (`elem` nub cells) (downsample2D factor side cells)
+
+-- | A constant grid downsamples to that same single value, repeated @(side\`div\`factor)²@ times.
+lawDownsampleConstantBlock :: Int -> Int -> Int -> Bool
+lawDownsampleConstantBlock factor side v =
+  factor <= 0 || side <= 0 || side `mod` factor /= 0
+    || downsample2D factor side (replicate (side * side) v)
+         == replicate ((side `div` factor) * (side `div` factor)) v
+
+-- | The ×4 cube ladder is exact: @previewSide·factor = sourceSide@ and @sourceSide·factor = outputSide@,
+-- so the pack is @[16, 64, 256]@.
+lawCubeLadder :: Bool
+lawCubeLadder =
+     previewSide * upscaleFactor == sourceSide
+  && sourceSide * upscaleFactor == outputSide
+  && packSides == [16, 64, 256]

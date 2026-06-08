@@ -49,6 +49,7 @@ mkPermutation xs =
         && Set.fromList xs == Set.fromList [0 .. nk - 1]
   in if ok then Just (Permutation v) else Nothing
 
+-- | The identity permutation on @k@ elements (slot @i@ ↦ @i@).
 identityPermutation :: forall k. KnownNat k => Permutation k
 identityPermutation =
   let nk = fromIntegral (natVal (Proxy :: Proxy k)) :: Int

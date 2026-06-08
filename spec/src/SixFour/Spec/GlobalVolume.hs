@@ -59,6 +59,7 @@ globalSignificantN t p k counts =
 globalComplete :: [[Int]] -> Bool
 globalComplete = globalCompleteN tVal pixelsPerFrame kVal
 
+-- | Does this global index assignment meet the significance floor (every slot ≥ min population)?
 globalSignificant :: [Int] -> Bool
 globalSignificant = globalSignificantN tVal pixelsPerFrame kVal
 

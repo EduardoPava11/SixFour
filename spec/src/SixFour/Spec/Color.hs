@@ -57,6 +57,7 @@ m2 =
   , ( 0.0259040371,  0.7827717662, -0.8086757660)
   )
 
+-- | Linear-sRGB → OKLab (Ottosson: the @M1@ matrix, per-channel cube root, then @M2@).
 linearSRGBToOKLab :: (Double, Double, Double) -> OKLab
 linearSRGBToOKLab (r, g, b) =
   let ((m1_00, m1_01, m1_02), (m1_10, m1_11, m1_12), (m1_20, m1_21, m1_22)) = m1
@@ -72,6 +73,7 @@ linearSRGBToOKLab (r, g, b) =
       bOut = m2_20 * lc + m2_21 * mc + m2_22 * sc
   in OKLab bigL aOut bOut
 
+-- | OKLab → linear-sRGB — the exact inverse of 'linearSRGBToOKLab' (@M2⁻¹@, cube, @M1⁻¹@).
 okLabToLinearSRGB :: OKLab -> (Double, Double, Double)
 okLabToLinearSRGB (OKLab bigL aIn bIn) =
   -- Inverse of M2 is hard-coded (taken from Ottosson's reference impl).

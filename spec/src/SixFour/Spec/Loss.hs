@@ -360,6 +360,7 @@ data LossWeights = LossWeights
   , lwBeauty   :: !Double
   } deriving (Eq, Show)
 
+-- | The default loss-term weights — all three terms weighted equally at 1.0.
 defaultLossWeights :: LossWeights
 defaultLossWeights = LossWeights 1.0 1.0 1.0
 

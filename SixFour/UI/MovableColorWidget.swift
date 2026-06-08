@@ -75,16 +75,23 @@ private struct MovableModifier: ViewModifier {
     @GestureState private var drag: CGSize = .zero
     /// True once the long-press has completed and the lift is active (drives the overlay).
     @State private var lifted = false
+    /// The detent counter: cells crossed at the last `CellTick`, so we fire one tick per
+    /// `tickEvery` boundary the finger crosses (the spec's `cellsCrossed` made felt).
+    @State private var lastTickCells = 0
 
-    private var atom: CGFloat { GlobalLattice.gifPx }
+    private var atomInt: Int { SixFourLattice.gifPx }
 
     func body(content: Content) -> some View {
         guard enabled else { return AnyView(content) }
+        // GREEN-FRAME FIX + DSL: `.overlay` is applied BEFORE `.offset`, so the drop
+        // outline rides the SAME offset as the content and stays frame-locked to the
+        // finger (`.offset` moves visuals but not the layout frame an after-overlay would
+        // anchor to). The outline's colour comes from `SixFourCellMechanics.dropAccepts`,
+        // the SAME verdict `commit` uses (`Spec.CellMechanics.lawDropColorMatchesMove`), so
+        // it can never disagree with what the drop will do.
         let base = content
-            // The transient drag-follow: the lifted widget tracks the finger. This is
-            // a LIVE TOUCH POINT, not a layout — the single sanctioned `.offset`.
-            .offset(drag)   // LINT-ALLOW-POSITION: transient lift-follow (auto-resets)
             .overlay { if lifted { dropOverlay } }
+            .offset(drag)   // LINT-ALLOW-POSITION: transient lift-follow (auto-resets)
             // Give the gesture a solid hittable area even if the content opts out of hit
             // testing (the preview hero sets `.allowsHitTesting(false)` for a focus layer).
             .contentShape(Rectangle())
@@ -101,15 +108,28 @@ private struct MovableModifier: ViewModifier {
     }
 
     /// LongPress(0.3) → Drag(minDistance: 1 cell). The long-press must complete before the
-    /// drag begins, so a clean tap (<0.3 s) never lifts and the shutter tap is preserved.
+    /// drag begins, so a clean tap (<0.3 s) never lifts and the shutter tap is preserved —
+    /// the SwiftUI realisation of `Spec.CellMechanics.lawDragRequiresHold` (the hold gate).
     private var liftDrag: some Gesture {
         LongPressGesture(minimumDuration: 0.3)
-            .sequenced(before: DragGesture(minimumDistance: atom))
+            .sequenced(before: DragGesture(minimumDistance: CGFloat(atomInt)))
             .updating($drag) { value, state, _ in
                 if case .second(true, let d?) = value { state = d.translation }
             }
             .onChanged { value in
-                if case .second(true, _) = value { lifted = true }
+                guard case .second(true, let dOpt) = value else { return }
+                if !lifted {                          // Pressed → Lifted (the hold armed)
+                    lifted = true
+                    lastTickCells = 0
+                    Haptics.play(0)                    // liftPop
+                }
+                guard let d = dOpt else { return }
+                // CellTick: one detent per `tickEvery` cell-boundary the finger crosses.
+                let cell = snapCells(d.translation)
+                let crossed = SixFourCellMechanics.cellsCrossed((col: 0, row: 0), cell)
+                let every = max(1, SixFourCellMechanics.tickEvery(identity))
+                if crossed / every != lastTickCells / every { Haptics.play(1) }   // cellTick
+                lastTickCells = crossed
             }
             .onEnded { value in
                 lifted = false
@@ -118,44 +138,54 @@ private struct MovableModifier: ViewModifier {
             }
     }
 
-    /// Snap the pt-translation to a whole-atom CELL delta and run `MoveContract.move`.
-    /// Persists the result only if accepted; a reject leaves the store unchanged (the
-    /// transient offset auto-resets ⇒ exact snap-back). The Swift `move` reuses
-    /// `GridLayoutContract.isDisjoint` and adds no geometry authority.
+    /// Snap a pt-translation to a whole-atom CELL delta (the one continuous→discrete edge).
+    private func snapCells(_ t: CGSize) -> (col: Int, row: Int) {
+        (MoveContract.snapToAtom(Int(t.width),  atom: atomInt) / atomInt,
+         MoveContract.snapToAtom(Int(t.height), atom: atomInt) / atomInt)
+    }
+
+    /// Commit the drop through the SAME verdict the overlay shows. On accept, persist
+    /// `MoveContract.move` and confirm; on reject, the transient offset auto-resets ⇒ exact
+    /// snap-back, and the error haptic fires. No new geometry authority (verdict = move).
     private func commit(_ translation: CGSize) {
-        let atomInt = SixFourLattice.gifPx
-        let dCol = MoveContract.snapToAtom(Int(translation.width), atom: atomInt) / atomInt
-        let dRow = MoveContract.snapToAtom(Int(translation.height), atom: atomInt) / atomInt
-        guard dCol != 0 || dRow != 0 else { return }
+        let cell = snapCells(translation)
+        guard cell.col != 0 || cell.row != 0 else { return }
         let current = settings.widgetPlacement
-        let next = MoveContract.move(current, identity, dCol: dCol, dRow: dRow)
-        // `move` returns the input unchanged on reject; only persist a real change.
-        if !placementsEqual(next, current) { settings.widgetPlacement = next }
-    }
-
-    private func placementsEqual(_ a: [ColorIdentity: (col: Int, row: Int)],
-                                 _ b: [ColorIdentity: (col: Int, row: Int)]) -> Bool {
-        for i in ColorIdentity.allCases {
-            if a[i]?.col != b[i]?.col || a[i]?.row != b[i]?.row { return false }
+        if SixFourCellMechanics.dropAccepts(current, identity, dCol: cell.col, dRow: cell.row) {
+            settings.widgetPlacement = MoveContract.move(current, identity, dCol: cell.col, dRow: cell.row)
+            Haptics.play(3)                            // dropAccept
+        } else {
+            Haptics.play(4)                            // dropReject (snaps back)
         }
-        return true
     }
 
-    /// Live valid/invalid feedback while lifted — a one-cell footprint outline drawn as a
-    /// `CellSprite` (no glass, no opacity-on-a-cell). Green when the snapped drop would be
-    /// accepted, red when it would snap back. Mirrors the move acceptance exactly.
+    /// Live drop feedback while lifted — a one-cell footprint outline that BREATHES: its
+    /// colour is the spec verdict (`dropAccepts` → green accept / red reject), and it
+    /// pulses via `SixFourCellMechanics.reactivePulse` (faster & wider on reject, faster
+    /// the farther the drag), sampled by the integer `pulseSampleQ16` triangle. So the
+    /// outline visibly tracks the user's intent — calm green when valid, urgent red when not.
     private var dropOverlay: some View {
-        let atomInt = SixFourLattice.gifPx
-        let dCol = MoveContract.snapToAtom(Int(drag.width), atom: atomInt) / atomInt
-        let dRow = MoveContract.snapToAtom(Int(drag.height), atom: atomInt) / atomInt
-        let current = settings.widgetPlacement
-        let next = MoveContract.move(current, identity, dCol: dCol, dRow: dRow)
-        let accepted = !placementsEqual(next, current) || (dCol == 0 && dRow == 0)
-        let ink: SIMD3<UInt8> = accepted ? SIMD3(70, 200, 90) : SIMD3(220, 60, 60)
+        let cell = snapCells(drag)
+        let accepted = SixFourCellMechanics.dropAccepts(
+            settings.widgetPlacement, identity, dCol: cell.col, dRow: cell.row)
+        let dragMag = SixFourCellMechanics.cellsCrossed((col: 0, row: 0), cell)
+        let pulse = SixFourCellMechanics.reactivePulse(identity: identity, accept: accepted, dragMag: dragMag)
+        let accent = accepted ? SixFourCellMechanics.acceptInk : SixFourCellMechanics.rejectInk
+        // The trough: an opaque dim of the accent (GRID Law: step the colour, never alpha).
+        let dim = (r: accent.r * 30 / 100, g: accent.g * 30 / 100, b: accent.b * 30 / 100)
         let (w, h) = identity.footprint
-        return CellSprite(cols: w, rows: h, cellPt: GlobalLattice.gifPx) { c, r in
-            // A 1-cell border outline — interior transparent so the widget shows through.
-            (c == 0 || r == 0 || c == w - 1 || r == h - 1) ? ink : nil
+        // TimelineView gives the per-frame tick that samples the (spec-pinned) pulse — the
+        // single impure leaf. Spec owns the waveform; this only reads the clock.
+        return TimelineView(.animation) { tl in
+            let tick = Int(tl.date.timeIntervalSinceReferenceDate * 20)   // ~20 fps phase
+            let amp = SixFourCellMechanics.pulseSampleQ16(
+                period: pulse.period, lo: pulse.lo, hi: pulse.hi, tick: tick)
+            let t = SixFourCellMechanics.tintLerpQ16(base: dim, accent: accent, ampQ16: amp)
+            let ink = SIMD3<UInt8>(UInt8(clamping: t.r), UInt8(clamping: t.g), UInt8(clamping: t.b))
+            CellSprite(cols: w, rows: h, cellPt: GlobalLattice.gifPx) { c, r in
+                // A 1-cell border outline — interior transparent so the widget shows through.
+                (c == 0 || r == 0 || c == w - 1 || r == h - 1) ? ink : nil
+            }
         }
         .allowsHitTesting(false)
     }

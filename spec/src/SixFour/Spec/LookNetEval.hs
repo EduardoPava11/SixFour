@@ -60,12 +60,15 @@ data LookNetWeights = LookNetWeights
   , wHeads  :: ![U.Vector Double]   -- ^ L5 heads: 8 of (decoderLevelDims!!k)×64
   } deriving (Eq, Show)
 
+-- | Shape of the encoder projection weight @φ@: @(64, 10)@ (hidden ← 10-D GMM token).
 phiShape :: (Int, Int)
 phiShape = (64, 10)
 
+-- | Shape of the core recursion weight: @(64, 64)@ (hidden ← hidden).
 w64Shape :: (Int, Int)
 w64Shape = (64, 64)
 
+-- | Shape of the PonderNet halting head weight: @(1, 2)@.
 haltWShape :: (Int, Int)
 haltWShape = (1, 2)
 
@@ -105,6 +108,8 @@ headMask k =
 genFill :: Double -> Int -> U.Vector Double
 genFill seed n = U.generate n (\k -> 0.1 * sin (seed + fromIntegral k))
 
+-- | A fixed, reproducible weight set (each matrix a distinct @0.1·sin@ fill) — the controlled,
+-- non-trivial input the forward-pass golden vectors are computed from.
 deterministicTestWeights :: LookNetWeights
 deterministicTestWeights = LookNetWeights
   { wPhi   = genFill 1 (64 * 10)
@@ -139,6 +144,8 @@ data ForwardTrace = ForwardTrace
   , ftOutput  :: ![Double]   -- ^ 384
   } deriving (Eq, Show)
 
+-- | The full look-NN forward pass E→R→D on a token set: pooled context, per-step halt λ's, and the
+-- 384-D SigmaPairTree output. Mirrors the emitted Swift/MLX modules exactly (golden-pinned).
 forward :: LookNetWeights -> [Tensor1 10 Double] -> ForwardTrace
 forward w tokens =
   let phiM   = U.zipWith (*) (wPhi w) phiMask           -- effective (masked) phi

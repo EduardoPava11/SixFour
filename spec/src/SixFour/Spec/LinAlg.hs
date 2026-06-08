@@ -61,9 +61,9 @@ import           Data.Vector.Unboxed (Vector)
 
 -- | Row-major dense matrix.
 data Matrix = Matrix
-  { matRows :: !Int
-  , matCols :: !Int
-  , matData :: !(Vector Double)
+  { matRows :: !Int             -- ^ number of rows
+  , matCols :: !Int             -- ^ number of columns
+  , matData :: !(Vector Double) -- ^ entries, row-major
   } deriving (Eq, Show)
 
 -- | Build a matrix from row-major flat data. Returns 'Nothing' on a length

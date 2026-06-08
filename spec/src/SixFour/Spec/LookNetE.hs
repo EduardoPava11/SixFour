@@ -103,11 +103,13 @@ newtype GmmTokenSet = GmmTokenSet { unGmmTokenSet :: [Tensor1 10 Double] }
 newtype HiddenContext = HiddenContext { unHiddenContext :: Tensor1 64 Double }
   deriving (Eq, Show)
 
+-- | Build a 'GmmTokenSet' from rows, each required to be a 10-D GMM token (@Nothing@ otherwise).
 mkGmmTokenSet :: [[Double]] -> Maybe GmmTokenSet
 mkGmmTokenSet rows
   | all ((== 10) . length) rows = Just (GmmTokenSet [ Tensor1 (U.fromList r) | r <- rows ])
   | otherwise                   = Nothing
 
+-- | The number of tokens in the set (the pooled per-frame palette count, ≤ @T·K@).
 gmmTokenSetSize :: GmmTokenSet -> Int
 gmmTokenSetSize (GmmTokenSet xs) = length xs
 

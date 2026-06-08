@@ -78,9 +78,11 @@ import SixFour.Spec.Diversity  (gaussianColorEntropy)
 -- OKLab + list helpers (local; PairTree does not export its vector ops)
 -- ---------------------------------------------------------------------------
 
+-- | Componentwise sum of two OKLab triples (local; PairTree's vector ops aren't exported).
 addOK :: OKLab -> OKLab -> OKLab
 addOK (OKLab l a b) (OKLab l' a' b') = OKLab (l + l') (a + a') (b + b')
 
+-- | Componentwise negation of an OKLab triple.
 negOK :: OKLab -> OKLab
 negOK (OKLab l a b) = OKLab (negate l) (negate a) (negate b)
 
@@ -121,6 +123,7 @@ data Move = Move
   , mvDelta :: OKLab
   } deriving (Eq, Show)
 
+-- | Apply a 'Move' to a 'SearchState' — the deterministic state transition the search explores.
 applyMove :: Move -> SearchState -> SearchState
 applyMove (Move lv ix d) (HaarPalette rt lvls) =
   HaarPalette rt (modifyAt lv (modifyAt ix (addOK d)) lvls)
@@ -143,6 +146,7 @@ data Oracle = Oracle
 -- The persistent search tree
 -- ---------------------------------------------------------------------------
 
+-- | An MCTS node: the palette state it stands for, its visit count, accumulated value, and children.
 data SearchTree = SearchTree
   { stState    :: SearchState
   , stVisits   :: Int
@@ -152,9 +156,11 @@ data SearchTree = SearchTree
   , stExpanded :: Bool
   } deriving (Eq, Show)
 
+-- | A fresh leaf 'SearchTree' node holding a state and its initial (prior) value, no children yet.
 leafNode :: Double -> SearchState -> SearchTree
 leafNode p s = SearchTree s 0 0 p [] False
 
+-- | The backed-up mean value of a 'SearchTree' node (total value / visit count).
 meanValue :: SearchTree -> Double
 meanValue t
   | stVisits t == 0 = 0
@@ -168,10 +174,12 @@ subtreeVisits t = stVisits t + sum [ subtreeVisits c | (_, c) <- stChildren t ]
 -- Selection (PUCT), iteration, halting
 -- ---------------------------------------------------------------------------
 
+-- | The search's tunable knobs (PUCT exploration constant, budgets, …).
 data Hyperparams = Hyperparams
   { hpC :: Double   -- ^ PUCT exploration constant. 0 ⇒ pure exploitation.
   } deriving (Eq, Show)
 
+-- | The default MCTS hyperparameters (exploration constant, rollout budget, …).
 defaultHyperparams :: Hyperparams
 defaultHyperparams = Hyperparams 1.4
 
@@ -226,6 +234,7 @@ argmaxWithSeed scored seed =
       pick      = tied !! (seed' `mod` max 1 (length tied))
   in (pick, seed')
 
+-- | The stopping rule for a search run.
 data Halting
   = HaltOnVisits Int     -- ^ stop after N root iterations
   | HaltOnValue Double   -- ^ stop once the root mean value reaches the threshold
@@ -247,6 +256,7 @@ runSearch o hp halt seed0 root0 = go seed0 root0 (budget halt)
 -- The diverse option set (DPP gallery)
 -- ---------------------------------------------------------------------------
 
+-- | A diversity-curated set of high-value palette states surfaced for the user to pick from.
 data Gallery = Gallery
   { galStates :: [SearchState]
   , galValues :: [Double]
@@ -276,8 +286,10 @@ extractGallery k alpha ell t =
 -- Deterministic RNG (LCG) — no IO, reproducible by seed
 -- ---------------------------------------------------------------------------
 
+-- | The deterministic RNG state threaded through rollouts (advanced by 'stepSeed').
 type Seed = Int
 
+-- | Advance the deterministic RNG seed one step (the reproducible rollout randomness).
 stepSeed :: Seed -> Seed
 stepSeed s = (1103515245 * s + 12345) `mod` 2147483648
 

@@ -52,6 +52,7 @@ newtype Mask3D (t :: Nat) (h :: Nat) (w :: Nat) =
   Mask3D { unMask3D :: U.Vector Word8 }
   deriving (Eq, Show)
 
+-- | Build a 'Mask3D' from a flat byte list, shape-checked against @t·h·w@ (@Nothing@ on mismatch).
 mkMask3D
   :: forall t h w. (KnownNat t, KnownNat h, KnownNat w)
   => [Word8] -> Maybe (Mask3D t h w)
@@ -62,6 +63,7 @@ mkMask3D xs =
       v  = U.fromList xs
   in if U.length v == nt * nh * nw then Just (Mask3D v) else Nothing
 
+-- | Sample the mask at @(frame, y, x)@ (row-major @(f·h + y)·w + x@).
 mask3DLookup
   :: forall t h w. (KnownNat h, KnownNat w)
   => Mask3D t h w -> Int -> Int -> Int -> Word8
@@ -70,6 +72,7 @@ mask3DLookup (Mask3D v) f y x =
       nw = fromIntegral (natVal (Proxy :: Proxy w)) :: Int
   in v U.! ((f * nh + y) * nw + x)
 
+-- | Total number of cells in the mask (@t·h·w@).
 mask3DLength :: Mask3D t h w -> Int
 mask3DLength (Mask3D v) = U.length v
 
