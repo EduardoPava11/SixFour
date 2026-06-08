@@ -211,10 +211,12 @@ runLookNet hp (LookInput stack localIx) =
 
 -- | A deterministic baseline palette: collapse the per-frame palettes by
 -- farthest-point (the fidelity floor) and read it back as a Haar tree via
--- 'analyze'. This farthest-point/k-means collapse IS the free-support
--- Wasserstein-2 barycenter (@LOOK_NN.md@ Thm 9); 'SixFour.Spec.Bures.buresBarycenter'
--- is its parametric (Gaussian) companion. Lets the scaffold run end-to-end without the
--- learnable net; the trained decoder is the controlled deviation from this floor.
+-- 'analyze'. This maximin collapse is the discrete approximation to the free-support
+-- Wasserstein-2 barycenter (@LOOK_NN.md@ Thm 9; the exact discrete barycenter is
+-- NP-hard — see docs/SIXFOUR-BURES-DISCRETE-CORRECTION.md). The Gaussian Bures distance
+-- ("SixFour.Spec.Bures") is a spread-aware fidelity term, not a palette barycenter.
+-- Lets the scaffold run end-to-end without the learnable net; the trained decoder is
+-- the controlled deviation from this floor.
 baselinePalette
   :: forall t k. KnownNat k
   => CyclicStack t k -> HaarPalette

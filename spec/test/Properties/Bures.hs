@@ -70,26 +70,7 @@ tests = testGroup "Bures (Gaussian Wasserstein-2 collapse backbone)"
           abs (buresDistanceSq (pointMass c1 1) (pointMass c2 1)
                - okLabDistanceSquared c1 c2) < 1e-4
 
-  , testProperty "barycenter of a single Gaussian is that Gaussian" $
-      forAll genGaussian $ \g ->
-        let b = buresBarycenter [(1, g)]
-            OKLab l a bb = gMean b; OKLab l' a' bb' = gMean g
-        in abs (l-l') < 1e-6 && abs (a-a') < 1e-6 && abs (bb-bb') < 1e-6
-           && cov3Near (gCov b) (gCov g) 1e-4
-
-  , testProperty "barycenter mean is the weighted mean of means (linear)" $
-      forAll genGaussian $ \g1 ->
-        forAll genGaussian $ \g2 ->
-          forAll (choose (0.1, 0.9)) $ \w1 ->
-            let b  = buresBarycenter [(w1, g1), (1 - w1, g2)]
-                OKLab l a bb = gMean b
-                OKLab l1 a1 b1 = gMean g1; OKLab l2 a2 b2 = gMean g2
-                el = w1*l1 + (1-w1)*l2
-                ea = w1*a1 + (1-w1)*a2
-                eb = w1*b1 + (1-w1)*b2
-            in abs (l-el) < 1e-6 && abs (a-ea) < 1e-6 && abs (bb-eb) < 1e-6
-
-  , -- The barycenter is symmetric in its (equally-weighted) arguments — the
+  ,-- The barycenter is symmetric in its (equally-weighted) arguments — the
     -- 2-measure iteration converges to the same covariance regardless of order.
     testProperty "barycenter covariance is order-independent (equal weights)" $
       forAll genCov $ \c1 ->

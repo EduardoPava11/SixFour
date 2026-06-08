@@ -48,10 +48,11 @@ import SixFour.Spec.LookNet  (baselinePalette)
 lookCoreScale :: Double
 lookCoreScale = 0.1
 
--- | The deterministic floor palette: the free-support Wasserstein-2 barycenter
--- (farthest-point / k-means collapse) of the per-frame palettes, read as a Haar tree.
--- (`baselinePalette`; 'SixFour.Spec.Bures.buresBarycenter' supplies the covariance-aware
--- companion the loss uses.)
+-- | The deterministic floor palette: the farthest-point / k-means maximin collapse of
+-- the per-frame palettes (the discrete approximation to the W₂ barycenter — exact is
+-- NP-hard; see docs/SIXFOUR-BURES-DISCRETE-CORRECTION.md), read as a Haar tree.
+-- (`baselinePalette`. The Gaussian Bures distance in "SixFour.Spec.Bures" supplies a
+-- spread-aware fidelity term, NOT a discrete-palette barycenter.)
 lookFloor :: KnownNat k => CyclicStack t k -> HaarPalette
 lookFloor = baselinePalette
 

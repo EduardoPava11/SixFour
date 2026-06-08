@@ -1,25 +1,31 @@
 {- |
 Module      : SixFour.Spec.Bures
-Description : The Bures–Wasserstein (Gaussian W₂) backbone for the collapse.
+Description : Bures–Wasserstein (Gaussian W₂) distance + covariance backbone — a
+              GAUSSIAN-SUMMARY approximation, NOT the discrete-palette collapse.
 
-The look-NN collapses 64 per-frame measures into one global palette. The collapse
-*is* the **Wasserstein-2 barycenter** (@spec/LOOK_NN.md@ Def 30). Two faces of it:
+The per-frame palettes are DISCRETE empirical measures (≤256 weighted OKLab atoms).
+The actual collapse to one palette is the maximin floor in "SixFour.Spec.Collapse"
+('SixFour.Spec.Collapse.farthestPointCollapse' / 'SixFour.Spec.Collapse.globalCollapseQ16')
+— gamut-closed, deterministic, golden-pinned. THIS module supplies only the
+Gaussian-summary backbone: 'buresDistanceSq' (the spread-aware fidelity term the loss
+uses) and 'buresBarycenterCov' (the covariance fixed point the Rust analysis oracle
+cross-checks).
 
-  * **free-support** barycenter with 256 atoms = population-weighted k-means (Thm 9) —
-    the 256-point palette floor, already in "SixFour.Spec.Collapse".
-  * **parametric (Gaussian)** barycenter = the **Bures–Wasserstein** barycenter of the
-    per-frame Gaussian summaries — this module. It supplies the covariance/spread
-    backbone (the global smoothness target) and, crucially, the law that ties the two
-    together: as @Σ → 0@ the Bures distance reduces to plain Euclidean OKLab, so the
-    Gaussian collapse degenerates to the k-means floor (@Properties.Bures@).
+These are an APPROXIMATION with a real projection error, NOT the palette barycenter:
+the closed-form Bures barycenter @Σ̄ = Σᵢ λᵢ (Σ̄^½ Σᵢ Σ̄^½)^½@ (Agueh–Carlier 2011;
+Álvarez-Esteban et al. 2016) is proven ONLY for absolutely-continuous / Gaussian
+measures — [arXiv:1511.05355] EXPLICITLY excludes discrete distributions, and the exact
+discrete W₂ barycenter is NP-hard. So do NOT read a Gaussian Bures barycenter as "the
+collapse"; it is a moment-matched spread prior. See docs/SIXFOUR-BURES-DISCRETE-CORRECTION.md
+and docs/SIXFOUR-JEPA-VS-STATISTICAL-CELLGRID.md.
 
 For Gaussians, @W₂((μ₁,Σ₁),(μ₂,Σ₂))² = ‖μ₁−μ₂‖² + tr(Σ₁ + Σ₂ − 2(Σ₁^½ Σ₂ Σ₁^½)^½)@
-(the Bures metric on covariances). The barycenter covariance is the fixed point
-@Σ̄ = Σᵢ λᵢ (Σ̄^½ Σᵢ Σ̄^½)^½@ (Agueh–Carlier 2011; Álvarez-Esteban et al. 2016), reached
-by direct iteration from the linear average. The matrix square root uses scaled
-Denman–Beavers iteration (branch-free, ports identically to the Rust oracle — the
-golden cross-check in Phase 5). No eigendecomposition, no metric weights: the metric
-is identity OKLab, the research default — never the deleted hand-set @[4,2,1]@.
+(the Bures metric on covariances). The matrix square root uses scaled Denman–Beavers
+iteration (branch-free, ports identically to the Rust oracle). The bridge law
+(@Properties.Bures@): as @Σ → 0@ the Bures distance reduces to plain Euclidean OKLab,
+so the Gaussian summary degenerates to the discrete k-means/maximin floor. No
+eigendecomposition, no metric weights: the metric is identity OKLab, the research
+default — never the deleted hand-set @[4,2,1]@.
 -}
 module SixFour.Spec.Bures
   ( -- * 3×3 matrices
@@ -36,10 +42,9 @@ module SixFour.Spec.Bures
   , inverse3
     -- * Matrix square root (PSD)
   , sqrtPSD
-    -- * Bures–Wasserstein
+    -- * Bures–Wasserstein (Gaussian-summary approximation — see module note)
   , buresDistanceSq
   , buresBarycenterCov
-  , buresBarycenter
   ) where
 
 import Data.List (foldl')
@@ -142,9 +147,12 @@ buresDistanceSq (Gaussian m1 c1 _) (Gaussian m2 c2 _) =
       t     = matTrace (fromCov3 c1) + matTrace (fromCov3 c2) - 2 * cross
   in dmu + max 0 t
 
--- | Bures–Wasserstein barycenter **covariance** of weighted covariances: the fixed
--- point @Σ̄ = Σᵢ λᵢ (Σ̄^½ Σᵢ Σ̄^½)^½@, reached by direct iteration from the linear
--- average. Weights are renormalised to sum to 1.
+-- | Bures–Wasserstein barycenter **covariance** of weighted Gaussian covariances: the
+-- fixed point @Σ̄ = Σᵢ λᵢ (Σ̄^½ Σᵢ Σ̄^½)^½@, reached by direct iteration from the linear
+-- average. Weights are renormalised to sum to 1. GAUSSIAN-ONLY (see module note): a
+-- spread summary cross-checked by the Rust oracle, NOT the discrete-palette collapse
+-- (that is 'SixFour.Spec.Collapse.farthestPointCollapse'; exact discrete barycenter is
+-- NP-hard, [arXiv:1511.05355] excludes discrete measures).
 buresBarycenterCov :: [(Double, Cov3)] -> Cov3
 buresBarycenterCov wcs =
   let s   = sum (map fst wcs)
@@ -159,16 +167,3 @@ buresBarycenterCov wcs =
       iterateN 0 x = x
       iterateN n x = iterateN (n - 1) (step x)
   in toCov3 (iterateN (30 :: Int) lin)
-
--- | Bures–Wasserstein barycenter of weighted Gaussians: mean = the (weight-normalised)
--- weighted mean of means; covariance = 'buresBarycenterCov'; weight = total input
--- weight. This is the parametric companion to the k-means free-support barycenter.
-buresBarycenter :: [(Double, Gaussian)] -> Gaussian
-buresBarycenter wgs =
-  let s = sum (map fst wgs)
-      meanAcc (xl, xa, xb) (w, Gaussian (OKLab l a b) _ _) =
-        (xl + w * l, xa + w * a, xb + w * b)
-      (al, aa, ab) = foldl' meanAcc (0, 0, 0) wgs
-      mu = if s <= 0 then OKLab 0 0 0 else OKLab (al / s) (aa / s) (ab / s)
-      cov = buresBarycenterCov [ (w, gCov g) | (w, g) <- wgs ]
-  in Gaussian mu cov s
