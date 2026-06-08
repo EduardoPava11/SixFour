@@ -21,6 +21,14 @@ public enum SixFourPlaybackClock {
         n <= 0 ? 0 : ((f + 1) % n + n) % n
     }
 
+    /// Step the cursor one frame BACKWARDS, wrapping `0 -> N-1` — the exact inverse
+    /// of `frameAfter`. Drives the Act-II reverse playback (the preview sweeps the
+    /// assembling GIFA backwards instead of freezing). Total: `count <= 0` yields 0.
+    @inline(__always)
+    public static func frameBefore(_ f: Int, count n: Int) -> Int {
+        n <= 0 ? 0 : ((f - 1) % n + n) % n
+    }
+
     /// Clamp an arbitrary scrub index into the valid cursor range `[0, N)`.
     @inline(__always)
     public static func clampFrame(_ i: Int, count n: Int) -> Int {
@@ -52,12 +60,21 @@ public enum SixFourPlaybackClock {
     /// The Swift parity gate for `PlaybackClock.advance`.
     public static let goldenAdvanceTable: [Int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 0]
 
+    /// The reverse-step table `[N-1, 0, 1, ..., N-2]` — the parity gate for `frameBefore`.
+    public static let goldenReverseTable: [Int] = [63, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62]
+
     /// Re-derives `goldenAdvanceTable` from `frameAfter` and asserts equality —
     /// a live Haskell<->Swift parity gate for the cyclic step.
     public static func selfCheck() -> Bool {
         guard goldenAdvanceTable.count == frameCount else { return false }
         for f in 0..<frameCount where goldenAdvanceTable[f] != frameAfter(f, count: frameCount) {
             return false
+        }
+        // frameBefore is the exact inverse of frameAfter, and matches its golden.
+        guard goldenReverseTable.count == frameCount else { return false }
+        for f in 0..<frameCount {
+            if goldenReverseTable[f] != frameBefore(f, count: frameCount) { return false }
+            if frameBefore(frameAfter(f, count: frameCount), count: frameCount) != f { return false }
         }
         // 2D and 3D-front-face index the same frame for every cursor.
         for i in 0..<frameCount where twoDFrame(i, count: frameCount) != threeDFrontFace(i, count: frameCount) {

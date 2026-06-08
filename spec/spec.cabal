@@ -51,6 +51,7 @@ library
         SixFour.Spec.GridLayout
         SixFour.Spec.MovableLayout
         SixFour.Spec.CellMechanics
+        SixFour.Spec.WidgetDescriptor
         SixFour.Spec.Ownership
         SixFour.Spec.Display
         SixFour.Spec.FrontProjection
@@ -278,6 +279,7 @@ test-suite spec-tests
         Properties.GridLayout
         Properties.MovableLayout
         Properties.CellMechanics
+        Properties.WidgetDescriptor
         Properties.Ownership
         Properties.Display
         Properties.FrontProjection

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SixFour data-fill mockup — LENS: Histogram / Waveform / Scope.
+  Canvas = the screen: 400 x 872 pt = 100 cols x 218 rows of the 4 pt atom.
+  Rounded corners. Faint 4 pt cell grid. Centred widgets (Field64, Palette16)
+  drawn to scale; the scope widgets fill the empty regions at cell+pt scale.
+  All scope widgets are DATA-COLOURED CELLS (CellSprite), never glass/Text.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="872" viewBox="0 0 400 872">
+  <defs>
+    <pattern id="grid4" width="4" height="4" patternUnits="userSpaceOnUse">
+      <path d="M4 0H0V4" fill="none" stroke="#1c1c22" stroke-width="0.25"/>
+    </pattern>
+    <clipPath id="screen"><rect x="0" y="0" width="400" height="872" rx="44" ry="44"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#screen)">
+    <rect x="0" y="0" width="400" height="872" fill="#0b0b0e"/>
+    <rect x="0" y="0" width="400" height="872" fill="url(#grid4)"/>
+
+    <!-- ===== CENTRED HERO WIDGETS (to scale) ===== -->
+    <!-- Field64: 64x64 cells = 256pt, dock col18 row22 => x=72 y=88 -->
+    <rect x="72" y="88" width="256" height="256" fill="#15161c" stroke="#3a78d8" stroke-width="1"/>
+    <text x="200" y="216" fill="#5a86c8" font-family="monospace" font-size="11" text-anchor="middle">Field64  64x64  256pt</text>
+    <text x="200" y="232" fill="#3a5688" font-family="monospace" font-size="8" text-anchor="middle">col18 row22  (live / GIFA)</text>
+
+    <!-- Palette16: 16x16 = 64pt, dock col42 row145 => x=168 y=580 -->
+    <rect x="168" y="580" width="64" height="64" fill="#1a1a22" stroke="#d8a23a" stroke-width="1"/>
+    <text x="200" y="612" fill="#d8a23a" font-family="monospace" font-size="7" text-anchor="middle">Palette16</text>
+    <text x="200" y="622" fill="#a07a28" font-family="monospace" font-size="6" text-anchor="middle">SHUTTER 64pt</text>
+
+    <!-- ===== SCOPE 1: LUMA WAVEFORM (left rail) =====
+         cols 2-16 (14w=56pt), rows 22-86 (64h=256pt) -> x=8 y=88 256pt tall.
+         Vertically co-registered with Field64: a column-per-image-row waveform. -->
+    <rect x="8" y="88" width="56" height="256" fill="#0e1410" stroke="#2f6f3a" stroke-width="0.75"/>
+    <!-- fake waveform spray: brighter cells toward right = higher luma count -->
+    <g fill="#5ad07a" opacity="0.85">
+      <rect x="12" y="120" width="4" height="4"/><rect x="20" y="120" width="4" height="4"/>
+      <rect x="28" y="124" width="4" height="4"/><rect x="36" y="124" width="4" height="4"/>
+      <rect x="44" y="128" width="4" height="4"/><rect x="16" y="160" width="4" height="4"/>
+      <rect x="24" y="160" width="4" height="4"/><rect x="32" y="164" width="4" height="4"/>
+      <rect x="40" y="168" width="4" height="4"/><rect x="48" y="172" width="4" height="4"/>
+      <rect x="20" y="210" width="4" height="4"/><rect x="28" y="210" width="4" height="4"/>
+      <rect x="36" y="214" width="4" height="4"/><rect x="44" y="218" width="4" height="4"/>
+      <rect x="14" y="260" width="4" height="4"/><rect x="22" y="264" width="4" height="4"/>
+      <rect x="30" y="268" width="4" height="4"/><rect x="38" y="272" width="4" height="4"/>
+      <rect x="46" y="300" width="4" height="4"/><rect x="38" y="304" width="4" height="4"/>
+    </g>
+    <text x="36" y="100" fill="#5ad07a" font-family="monospace" font-size="6" text-anchor="middle">LUMA WAVEFORM</text>
+    <text x="36" y="338" fill="#2f6f3a" font-family="monospace" font-size="6" text-anchor="middle">14x64 56x256pt</text>
+
+    <!-- ===== SCOPE 2: RGB PARADE / HISTOGRAM (mid band) =====
+         cols 2-98 wide band, rows 92-118 (26h=104pt) -> x=8 y=368 384x104pt.
+         Three stacked 64-bucket bars (R,G,B) as cell columns. -->
+    <rect x="8" y="368" width="384" height="104" fill="#100e10" stroke="#444" stroke-width="0.5"/>
+    <!-- R row -->
+    <g fill="#e05050"><rect x="12" y="380" width="4" height="20"/><rect x="20" y="380" width="4" height="28"/><rect x="28" y="380" width="4" height="14"/><rect x="60" y="380" width="4" height="24"/><rect x="120" y="380" width="4" height="12"/><rect x="240" y="380" width="4" height="18"/><rect x="360" y="380" width="4" height="8"/></g>
+    <!-- G row -->
+    <g fill="#50d070"><rect x="16" y="412" width="4" height="22"/><rect x="48" y="412" width="4" height="16"/><rect x="100" y="412" width="4" height="26"/><rect x="180" y="412" width="4" height="14"/><rect x="300" y="412" width="4" height="20"/></g>
+    <!-- B row -->
+    <g fill="#5080e0"><rect x="24" y="444" width="4" height="18"/><rect x="80" y="444" width="4" height="12"/><rect x="160" y="444" width="4" height="24"/><rect x="280" y="444" width="4" height="16"/><rect x="356" y="444" width="4" height="22"/></g>
+    <text x="200" y="378" fill="#888" font-family="monospace" font-size="6" text-anchor="middle">RGB PARADE  96x26  384x104pt   (rows 92-118)</text>
+
+    <!-- ===== SCOPE 3: OKLab VECTORSCOPE (mid, below parade) =====
+         cols 34-66 (32w=128pt), rows 122-154 (32h=128pt) -> x=136 y=488 128pt sq.
+         a-b plane polar cloud, centred. -->
+    <rect x="136" y="488" width="128" height="128" fill="#0c0c12" stroke="#555" stroke-width="0.5"/>
+    <circle cx="200" cy="552" r="60" fill="none" stroke="#333" stroke-width="0.5"/>
+    <circle cx="200" cy="552" r="30" fill="none" stroke="#2a2a2a" stroke-width="0.5"/>
+    <line x1="140" y1="552" x2="260" y2="552" stroke="#222" stroke-width="0.5"/>
+    <line x1="200" y1="492" x2="200" y2="612" stroke="#222" stroke-width="0.5"/>
+    <g>
+      <rect x="224" y="540" width="4" height="4" fill="#e07a5a"/><rect x="228" y="536" width="4" height="4" fill="#e0905a"/>
+      <rect x="176" y="568" width="4" height="4" fill="#5a90e0"/><rect x="172" y="572" width="4" height="4" fill="#5a78e0"/>
+      <rect x="208" y="528" width="4" height="4" fill="#d0d05a"/><rect x="184" y="540" width="4" height="4" fill="#7ad08a"/>
+      <rect x="216" y="560" width="4" height="4" fill="#c06a6a"/>
+    </g>
+    <text x="200" y="498" fill="#999" font-family="monospace" font-size="6" text-anchor="middle">OKLab VECTORSCOPE 32x32 128pt</text>
+
+    <!-- ===== SCOPE 4: per-frame COVERAGE TIMELINE (under palette) =====
+         cols 2-98 (96w=384pt), rows 162-170 (8h=32pt) -> x=8 y=648 384x32pt.
+         64 columns, one per frame; height/brightness = gamut coverage; cursor marker. -->
+    <rect x="8" y="648" width="384" height="32" fill="#0d0f12" stroke="#444" stroke-width="0.5"/>
+    <g fill="#46c8d8">
+      <rect x="12" y="664" width="4" height="12"/><rect x="18" y="660" width="4" height="16"/><rect x="24" y="668" width="4" height="8"/>
+      <rect x="36" y="656" width="4" height="20"/><rect x="48" y="662" width="4" height="14"/><rect x="90" y="658" width="4" height="18"/>
+      <rect x="150" y="666" width="4" height="10"/><rect x="220" y="660" width="4" height="16"/><rect x="300" y="664" width="4" height="12"/><rect x="360" y="658" width="4" height="18"/>
+    </g>
+    <rect x="120" y="648" width="4" height="32" fill="#ffffff" opacity="0.7"/>
+    <text x="200" y="658" fill="#46c8d8" font-family="monospace" font-size="6" text-anchor="middle">COVERAGE TIMELINE 96x8 384x32pt  (cursor=white)</text>
+
+    <!-- ===== SCOPE 5: DIVERSITY RING gauge (bottom, replaces empty DiversityRing) =====
+         20x20 cells = 80pt, dock col40 row170 => x=160 y=680 -->
+    <circle cx="200" cy="720" r="38" fill="none" stroke="#6a3ad8" stroke-width="2"/>
+    <path d="M 200 682 A 38 38 0 1 1 168 740" fill="none" stroke="#a26ad8" stroke-width="4"/>
+    <text x="200" y="724" fill="#a26ad8" font-family="monospace" font-size="7" text-anchor="middle">DIV</text>
+    <text x="200" y="772" fill="#6a3ad8" font-family="monospace" font-size="6" text-anchor="middle">DiversityRing 20x20 80pt  effectiveDim</text>
+
+    <!-- ===== SCOPE 6: RIGHT RAIL — significance bars =====
+         cols 84-98 (14w=56pt), rows 22-86 -> x=336 y=88 256pt tall. -->
+    <rect x="336" y="88" width="56" height="256" fill="#14100e" stroke="#8a6a2f" stroke-width="0.75"/>
+    <g fill="#e0b050">
+      <rect x="340" y="120" width="48" height="4"/><rect x="340" y="140" width="36" height="4"/>
+      <rect x="340" y="160" width="44" height="4"/><rect x="340" y="190" width="28" height="4"/>
+      <rect x="340" y="220" width="40" height="4"/><rect x="340" y="260" width="20" height="4"/>
+      <rect x="340" y="300" width="32" height="4"/>
+    </g>
+    <text x="364" y="100" fill="#e0b050" font-family="monospace" font-size="6" text-anchor="middle">SIGNIFICANCE</text>
+    <text x="364" y="338" fill="#8a6a2f" font-family="monospace" font-size="6" text-anchor="middle">14x64 56x256pt</text>
+
+    <rect x="0" y="0" width="400" height="872" rx="44" ry="44" fill="none" stroke="#2a2a32" stroke-width="2"/>
+  </g>
+</svg>

@@ -95,11 +95,15 @@ private struct MovableModifier: ViewModifier {
             // Give the gesture a solid hittable area even if the content opts out of hit
             // testing (the preview hero sets `.allowsHitTesting(false)` for a focus layer).
             .contentShape(Rectangle())
-        // A clean TAP fires `onTap` ONLY if the lift-drag fails (quick release); `.exclusively`
-        // gives the lift-drag precedence, so a long-press never fires the tap (no stray burst).
+        // The shutter tap MUST be bulletproof (this IS the camera button). A plain
+        // `.onTapGesture` fires capture on a quick tap; the SEPARATE `.gesture(liftDrag)`
+        // needs a 0.3 s hold first, so the two are mutually exclusive by timing and never
+        // fight. (The old `liftDrag.exclusively(before: TapGesture)` let the LongPress
+        // starve the tap in the gesture arena — capture would silently not fire.)
         if let onTap {
             return AnyView(base
-                .gesture(liftDrag.exclusively(before: TapGesture().onEnded { onTap() }))
+                .onTapGesture { onTap() }
+                .gesture(liftDrag)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { onTap() })
         } else {
@@ -144,19 +148,69 @@ private struct MovableModifier: ViewModifier {
          MoveContract.snapToAtom(Int(t.height), atom: atomInt) / atomInt)
     }
 
-    /// Commit the drop through the SAME verdict the overlay shows. On accept, persist
-    /// `MoveContract.move` and confirm; on reject, the transient offset auto-resets ⇒ exact
-    /// snap-back, and the error haptic fires. No new geometry authority (verdict = move).
+    /// Commit the drop by SNAPPING TO THE NEAREST FREE CELL: the widget lands at the
+    /// dropped position if it is in-bounds and clear, else slides to the closest cell that
+    /// is — "approximate a location and snap into place as long as I am not over another
+    /// widget." Only when the whole field is full (never, in practice) does it stay put.
     private func commit(_ translation: CGSize) {
         let cell = snapCells(translation)
         guard cell.col != 0 || cell.row != 0 else { return }
-        let current = settings.widgetPlacement
-        if SixFourCellMechanics.dropAccepts(current, identity, dCol: cell.col, dRow: cell.row) {
-            settings.widgetPlacement = MoveContract.move(current, identity, dCol: cell.col, dRow: cell.row)
-            Haptics.play(3)                            // dropAccept
+        if let next = snapToNearestFree(settings.widgetPlacement, dCol: cell.col, dRow: cell.row) {
+            settings.widgetPlacement = next
+            Haptics.play(3)                            // dropAccept — landed
         } else {
-            Haptics.play(4)                            // dropReject (snaps back)
+            Haptics.play(4)                            // dropReject — nowhere free (rare)
         }
+    }
+
+    /// Identities that actually OCCUPY the screen (so a move collides with them). The
+    /// `DiversityRing` is in the closed alphabet but is not rendered, so it is NOT a
+    /// collider — excluding it removes an invisible dead-zone. (Field64 + Palette16 only.)
+    private static let colliders: [ColorIdentity] = [.field64, .palette16]
+
+    /// Is `identity` clear (in-bounds AND disjoint from the other COLLIDERS) at `(c,r)`?
+    /// Reuses the proven `GridLayoutContract.isDisjoint` over `MoveContract.placedRegion`,
+    /// so this adds no geometry authority — only the search for WHICH free cell is new.
+    private func isFree(_ placement: [ColorIdentity: (col: Int, row: Int)],
+                        at c: Int, _ r: Int) -> Bool {
+        let clamped = MoveContract.clampInBounds(identity, c, r)
+        guard clamped.col == c, clamped.row == r else { return false }   // in-bounds only
+        var scene: [GridRegion] = [MoveContract.placedRegion(identity, col: c, row: r)]
+        for other in Self.colliders where other != identity {
+            if let p = placement[other] {
+                scene.append(MoveContract.placedRegion(other, col: p.col, row: p.row))
+            }
+        }
+        return GridLayoutContract.isDisjoint(scene)
+    }
+
+    /// The placement after moving `identity` to the NEAREST free cell to its dropped
+    /// position (expanding square rings, nearest-by-distance within each ring). Returns
+    /// `nil` only if no free cell exists within the search bound.
+    private func snapToNearestFree(_ current: [ColorIdentity: (col: Int, row: Int)],
+                                   dCol: Int, dRow: Int) -> [ColorIdentity: (col: Int, row: Int)]? {
+        guard let cur = current[identity] else { return nil }
+        let target = MoveContract.clampInBounds(identity, cur.col + dCol, cur.row + dRow)
+        func placed(_ c: Int, _ r: Int) -> [ColorIdentity: (col: Int, row: Int)] {
+            var p = current; p[identity] = (c, r); return p
+        }
+        if isFree(current, at: target.col, target.row) { return placed(target.col, target.row) }
+        let maxRadius = 64
+        for radius in 1 ... maxRadius {
+            var best: (c: Int, r: Int)? = nil
+            var bestDist = Int.max
+            for dc in -radius ... radius {
+                for dr in -radius ... radius where max(abs(dc), abs(dr)) == radius {
+                    let c = target.col + dc, r = target.row + dr
+                    if isFree(current, at: c, r) {
+                        let d = dc * dc + dr * dr
+                        if d < bestDist { bestDist = d; best = (c, r) }
+                    }
+                }
+            }
+            if let b = best { return placed(b.c, b.r) }
+        }
+        return nil
     }
 
     /// Live drop feedback while lifted — a one-cell footprint outline that BREATHES: its
@@ -166,8 +220,12 @@ private struct MovableModifier: ViewModifier {
     /// outline visibly tracks the user's intent — calm green when valid, urgent red when not.
     private var dropOverlay: some View {
         let cell = snapCells(drag)
-        let accepted = SixFourCellMechanics.dropAccepts(
-            settings.widgetPlacement, identity, dCol: cell.col, dRow: cell.row)
+        // Green when the cell under the finger is CLEAR (lands exactly there); amber/red
+        // when over another widget — in which case the drop still SLIDES to the nearest
+        // free cell (commit → snapToNearestFree), so it never bounces back to the origin.
+        let cur = settings.widgetPlacement[identity] ?? (col: 0, row: 0)
+        let target = MoveContract.clampInBounds(identity, cur.col + cell.col, cur.row + cell.row)
+        let accepted = isFree(settings.widgetPlacement, at: target.col, target.row)
         let dragMag = SixFourCellMechanics.cellsCrossed((col: 0, row: 0), cell)
         let pulse = SixFourCellMechanics.reactivePulse(identity: identity, accept: accepted, dragMag: dragMag)
         let accent = accepted ? SixFourCellMechanics.acceptInk : SixFourCellMechanics.rejectInk

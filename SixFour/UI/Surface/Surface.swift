@@ -178,6 +178,14 @@ final class Surface {
     func advanceCursor() {
         cursor = SixFourPlaybackClock.frameAfter(cursor, count: SixFourPlaybackClock.frameCount)
     }
+
+    /// Advance the cursor one frame BACKWARDS — the Act-II no-freeze reverse playback.
+    /// While `.capturing` / `.rendering` the surface sweeps the assembling GIFA backwards
+    /// (`SixFourPlaybackClock.frameBefore`, the spec-pinned inverse of `frameAfter`)
+    /// instead of holding a frozen frame. Same single κ, opposite direction.
+    func advanceCursorReverse() {
+        cursor = SixFourPlaybackClock.frameBefore(cursor, count: SixFourPlaybackClock.frameCount)
+    }
 }
 
 // MARK: - The ONE addressing function (cells × frames)

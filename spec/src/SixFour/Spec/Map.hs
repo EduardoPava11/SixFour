@@ -59,7 +59,7 @@ barycenter / maximin; the NN learns this barycenter.)
 "SixFour.Spec.Display", "SixFour.Spec.PlaybackClock", "SixFour.Spec.Lattice", "SixFour.Spec.CellFiber",
 "SixFour.Spec.CellGrid", "SixFour.Spec.CellShapes", "SixFour.Spec.CellMechanics", "SixFour.Spec.GridLayout",
 "SixFour.Spec.GridAxis",
-"SixFour.Spec.GridScript", "SixFour.Spec.MovableLayout", "SixFour.Spec.Ownership", "SixFour.Spec.Order",
+"SixFour.Spec.GridScript", "SixFour.Spec.MovableLayout", "SixFour.Spec.WidgetDescriptor", "SixFour.Spec.Ownership", "SixFour.Spec.Order",
 "SixFour.Spec.CloudProjection", "SixFour.Spec.SevenSeg", "SixFour.Spec.Pipeline", "SixFour.Spec.Obfuscation".
 
 == 8. Cross-cutting

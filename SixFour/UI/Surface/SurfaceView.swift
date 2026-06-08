@@ -35,7 +35,17 @@ struct SurfaceView: View {
                 clock.reduceMotion = reduceMotion
                 // The ONE per-tick action: advance the Z₆₄ playback cursor. Per-phase
                 // engine progress is folded into σ via `.onChange` below, not the tick.
-                clock.onTick = { [weak surface] in surface?.advanceCursor() }
+                clock.onTick = { [weak surface] in
+                    guard let surface else { return }
+                    // Act II: while building the GIFA the preview does NOT freeze — it
+                    // sweeps backwards. Forward (normal loop) everywhere else.
+                    switch surface.phase {
+                    case .capturing, .rendering:
+                        surface.advanceCursorReverse()
+                    default:
+                        surface.advanceCursor()
+                    }
+                }
                 if scenePhase == .active { clock.start() }
             }
             .onDisappear { clock.stop() }

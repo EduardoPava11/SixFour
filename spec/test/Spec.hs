@@ -29,6 +29,7 @@ import qualified Properties.CellGrid     as CellGrid
 import qualified Properties.GridLayout   as GridLayout
 import qualified Properties.MovableLayout as MovableLayout
 import qualified Properties.CellMechanics as CellMechanics
+import qualified Properties.WidgetDescriptor as WidgetDescriptor
 import qualified Properties.Ownership    as Ownership
 import qualified Properties.Display      as Display
 import qualified Properties.FrontProjection as FrontProjection
@@ -99,6 +100,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , GridLayout.tests
   , MovableLayout.tests
   , CellMechanics.tests
+  , WidgetDescriptor.tests
   , Ownership.tests
   , Display.tests
   , FrontProjection.tests

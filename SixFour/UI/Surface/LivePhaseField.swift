@@ -48,9 +48,13 @@ struct LivePhaseField: View {
             // Field64 — the 64-cell preview hero, placed at its SHARED global position and
             // movable (long-press to lift). The data source is the live camera tile; the
             // POSITION is the same `field64Position` review/render read.
+            // `.movable` BEFORE `.place`: `.place` ends in a greedy `.position` that fills
+            // the parent, so the gesture/contentShape MUST be applied to the sized widget
+            // first — else each widget's hit area becomes the whole screen and the top one
+            // swallows every touch (only one widget grabbable). Scoped here to the footprint.
             previewHero
-                .place(region(for: .field64, at: placement))
                 .movable(.field64, settings: settings, surface: surface)
+                .place(region(for: .field64, at: placement))
 
             // Palette16 — the 16-cell live palette = THE capture button, at its shared
             // position. The tap (`onTap`) and the long-press lift are ONE composed gesture

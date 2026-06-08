@@ -35,6 +35,7 @@ module SixFour.Spec.PlaybackClock
     FrameCount
     -- * Cursor motion
   , frameAfter
+  , frameBefore
   , clampFrame
     -- * Reduce-motion
   , frozenStream
@@ -46,6 +47,7 @@ module SixFour.Spec.PlaybackClock
   , paletteAt
     -- * Golden vectors (the cross-language gate; N = 64)
   , goldenAdvanceTable
+  , goldenReverseTable
   , goldenFreezeVector
   ) where
 
@@ -62,6 +64,14 @@ frameAfter :: FrameCount -> Int -> Int
 frameAfter n f
   | n <= 0    = 0
   | otherwise = (f + 1) `mod` n
+
+-- | Step the cursor exactly one frame BACKWARDS, wrapping @0 → N-1@ — the exact
+-- inverse of 'frameAfter'. Drives the Act-II reverse playback: the preview does NOT
+-- freeze on capture, it sweeps the assembling GIFA backwards. Total: @N ≤ 0@ yields @0@.
+frameBefore :: FrameCount -> Int -> Int
+frameBefore n f
+  | n <= 0    = 0
+  | otherwise = (f - 1 + n) `mod` n
 
 -- | Clamp an arbitrary (e.g. scrub-drag) index into the valid cursor range
 -- @[0, N)@. Scrub never leaves the loop.
@@ -107,6 +117,11 @@ paletteAt ps i = Just (ps !! clampFrame (length ps) i)
 -- @N = 64@ as the Swift parity gate for @PlaybackClock.advance@.
 goldenAdvanceTable :: FrameCount -> [Int]
 goldenAdvanceTable n = map (frameAfter n) [0 .. max 0 (n - 1)]
+
+-- | The reverse-step table: @map frameBefore [0..N-1]@ = @[N-1, 0, 1, …, N-2]@. Pinned
+-- for @N = 64@ as the Swift parity gate for the reverse cursor (Act II no-freeze).
+goldenReverseTable :: FrameCount -> [Int]
+goldenReverseTable n = map (frameBefore n) [0 .. max 0 (n - 1)]
 
 -- | The first @k@ frames shown under reduce-motion: all @0@. Pins the Swift
 -- freeze-on-frame-0 behaviour.

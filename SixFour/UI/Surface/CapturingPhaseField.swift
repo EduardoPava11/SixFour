@@ -21,6 +21,11 @@ import simd
 struct CapturingPhaseField: View {
     let surface: Surface
     let clock: SurfaceClock
+    /// The shared widget layout, so the preview hero stays at the SAME position the live
+    /// field placed it (a phase is a cell transform of the one surface, not a new screen).
+    @Bindable var settings: AppSettings
+
+    private var placement: [ColorIdentity: (col: Int, row: Int)] { settings.widgetPlacement }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -28,6 +33,13 @@ struct CapturingPhaseField: View {
             // at 20 fps off the single clock's heartbeat. The opaque heroes draw on top.
             GridRefreshFieldView(phase: clock.heartbeat)
                 .ignoresSafeArea()
+
+            // The 64×64 preview STAYS ALIVE through the burst — the live camera tile keeps
+            // feeding it, so the preview does NOT freeze (Act II). It plays backwards once
+            // the GIFA cube starts streaming in `.rendering`; during the burst it is the
+            // live camera. Inert (not movable) while busy.
+            previewHero
+                .place(region(for: .field64, at: placement))
 
             // The palette-as-progress hero, placed by the proven capture-scene layout
             // (the same region the live shutter occupies — capture is a cell transform
@@ -38,6 +50,27 @@ struct CapturingPhaseField: View {
         .ignoresSafeArea()
         // The phase banner cell-strip, top-aligned over the field.
         .overlay(alignment: .top) { banner }
+    }
+
+    // MARK: - The live preview hero (64 × 64 cells) — stays alive, no freeze
+
+    /// The 64×64 preview during the burst: the live camera tile (`surface.previewTile`)
+    /// through its paired palette — identical geometry to the live field, so the surface
+    /// keeps painting the camera while the burst is shot (no freeze, no view swap). Falls
+    /// back to the ghost ink before a frame arrives. Inert (no gesture) while capturing.
+    private var previewHero: some View {
+        let side = GlobalLattice.gif(GlobalLattice.previewCells)   // 64 × 4 = 256 pt
+        let tile = surface.previewTile
+        let pal = surface.previewPalette
+        let ghost = SIMD3<UInt8>(20, 20, 24)
+        return CellSprite(cols: 64, rows: 64, cellPt: side / 64) { c, r in
+            let i = r * 64 + c
+            guard i < tile.count, Int(tile[i]) < pal.count else { return ghost }
+            return pal[Int(tile[i])]
+        }
+        .frame(width: side, height: side)
+        .clipped()
+        .allowsHitTesting(false)
     }
 
     // MARK: - The 256-cell capture-progress fill
