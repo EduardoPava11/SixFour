@@ -5,8 +5,10 @@ import simd
 /// `Spec.InfluenceField` once locked). A plain (nonisolated) enum so both the `@MainActor`
 /// `InfluenceField` view and the nonisolated `FieldModel` read them without an actor hop.
 enum FieldTuning {
-    /// Frames in the breathing noise ring (cycled by `tick % phases`). Higher = livelier shimmer.
-    static let phases = 8
+    /// Outward drift of the breathing speckle, in CELLS PER 20 fps TICK — the chaos flows out of
+    /// the widgets (order) instead of re-rolling in place. Small = calm, larger = faster radiation.
+    /// (Replaces the strobing pre-baked ring; the field now recomputes once per tick — F0/F1.)
+    static let driftPerTick = 0.2
     /// Falloff reach (cells) of an `.arrangement` source (uniform).
     static let reachArrangement = 34.0
     /// Base falloff reach (cells) of a `.set` source, before usage scaling.
@@ -69,8 +71,10 @@ struct InfluenceField: View {
                                palette: tilePalette.isEmpty ? surface.palette : tilePalette,
                                tile: tile, tick: tick, phaseToken: surface.phase.token,
                                lifted: surface.liftedWidget != nil)
-        return StageField(phaseCount: FieldTuning.phases, phase: tick, bakeKey: model.key) { c, r, f in
-            model.color(c, r, frame: f)
+        // F0: ONE fresh grid per tick (tick is in `model.key`, so `StageField` re-bakes every
+        // tick — the 20 fps budget is for exactly this). A single frame, no pre-baked ring.
+        return StageField(phaseCount: 1, phase: 0, bakeKey: model.key) { c, r, _ in
+            model.color(c, r)
         }
     }
 
@@ -151,23 +155,29 @@ private struct FieldModel {
         let srcKey = sources.map { "\($0.kind == .set ? "s" : "a"):\(Int($0.rect.minX)),\(Int($0.rect.minY)),\(Int($0.rect.width))x\(Int($0.rect.height))" }.joined(separator: ";")
         let topDominant = counts.enumerated().sorted { $0.element > $1.element }.prefix(8)
             .map { "\($0.offset):\($0.element * 16 / maxC)" }.joined(separator: ",")
-        key = AnyHashable([phaseToken, "\(pal.count)", srcKey, topDominant, lifted ? "lift" : "-"])
+        // `tick` is in the key ⇒ the field re-bakes every 20 fps tick (F0). topDominant/srcKey are
+        // kept for readability; they no longer gate caching (tick already changes every tick).
+        key = AnyHashable(["\(tick)", phaseToken, "\(pal.count)", srcKey, topDominant, lifted ? "lift" : "-"])
     }
 
-    /// The sRGB8 a stage cell shows on breathing `frame`. `nil` → transparent (a widget owns its
-    /// own cells — it draws opaque on top — so the field never bleeds over a widget's edge).
-    func color(_ c: Int, _ r: Int, frame f: Int) -> SIMD3<UInt8>? {
+    /// The sRGB8 a stage cell shows this tick. `nil` → transparent (a widget owns its own cells —
+    /// it draws opaque on top — so the field never bleeds over a widget's edge).
+    func color(_ c: Int, _ r: Int) -> SIMD3<UInt8>? {
         let px = Double(c) + 0.5, py = Double(r) + 0.5
 
-        // Energy from every source; track the top two and the dominant's colour.
+        // Energy from every source; track the top two + the DOMINANT source's colour AND centre.
         var w1 = 0.0, w2 = 0.0, sum = 0.0
         var domColor = FieldTuning.neutral
+        var domCX = px, domCY = py
         for s in sources {
             if s.rect.contains(CGPoint(x: px, y: py)) { return nil }   // occlusion (order owns it)
             let w = weight(px, py, s)
             sum += w
-            if w > w1 { w2 = w1; w1 = w; domColor = sourceColor(px, py, s) }
-            else if w > w2 { w2 = w }
+            if w > w1 {
+                w2 = w1; w1 = w
+                domColor = sourceColor(px, py, s)
+                domCX = Double(s.rect.midX); domCY = Double(s.rect.midY)
+            } else if w > w2 { w2 = w }
         }
         if sum <= 0.001 { return FieldTuning.farDark }              // far calm: a near-black cell
         // While a widget is lifted, the chaos recedes (radiation + lift-drag working together).
@@ -177,8 +187,15 @@ private struct FieldModel {
         let interplay = w1 > 0 ? w2 / w1 : 0
         let lit = FieldModel.lerp(domColor, FieldTuning.neutral, FieldTuning.seamMute * interplay)
 
-        // Hybrid texture: energy sets the speckle density via the breathing noise ring.
-        let n = FieldModel.noise(c, r, ((f % FieldTuning.phases) + FieldTuning.phases) % FieldTuning.phases)
+        // F1 — hybrid texture with COHERENT OUTWARD DRIFT: the speckle threshold is sampled at a
+        // point that marches outward from the dominant source by `driftPerTick·tick`, so the chaos
+        // *flows out of* the order each tick (small per-tick delta) instead of re-rolling = strobe.
+        let dx = px - domCX, dy = py - domCY
+        let len = max(0.001, (dx * dx + dy * dy).squareRoot())
+        let off = Double(tick) * FieldTuning.driftPerTick
+        let sx = Int((px - dx / len * off).rounded(.down))
+        let sy = Int((py - dy / len * off).rounded(.down))
+        let n = FieldModel.noise(sx, sy, 0)
         return n < E ? lit : FieldTuning.farDark
     }
 
