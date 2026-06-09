@@ -72,11 +72,11 @@ far-field (low-energy cells are `farDark` regardless). Measure on device; never 
 
 ## 5. Sequencing
 
-| Phase | Items | Risk | Gate |
+| Phase | Items | Risk | Status |
 |------|-------|------|------|
-| **A** | F0 one-grid-per-tick + F1 coherent drift | med (per-tick cost) | builds; on-device perf ≤ 50 ms/tick + smooth breathing |
-| **B** | F2 act1→act2 ease + F3 lift ramp | low | builds; on-device |
-| **C** | F4 GIFA build reveal + F5 snap ease | low–med | builds; on-device |
+| **A** | F0 one-grid-per-tick + F1 coherent drift | med (per-tick cost) | ✅ SHIPPED (`0804a8c`) — builds; verify perf ≤ 50 ms/tick + smoothness on-device |
+| **B** | F2 act1→act2 ease + F3 lift ramp | low | ✅ SHIPPED (`691068c`) — verify on-device |
+| **C** | F4 GIFA build reveal (eased serpentine) | low–med | ✅ SHIPPED — verify on-device. **F5 snap-ease DEFERRED** (drop lands ≈ where lifted ⇒ ≤4 pt snap; low value, finicky `@GestureState` reset) |
 
 ## 6. Files
 

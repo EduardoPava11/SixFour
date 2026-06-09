@@ -111,15 +111,17 @@ struct RenderingPhaseField: View {
 
     // MARK: - Stage → resolve progress / label
 
-    /// The serpentine sweep front for the current stage: the five ordered stages each
-    /// own a 1/5 band of the resolve, so the front advances monotonically across the
-    /// pipeline (quantize 0→.2 … encode .8→1). Within a stage the band fills to its top
-    /// (the surface advances per stage transition, the spec's only granularity here).
+    /// F4 — smooth GIFA build: the five ordered stages each own a 1/5 band of the resolve, and
+    /// WITHIN a stage the serpentine front now EASES across its band (over `stageRevealTicks` 20 fps
+    /// ticks since the stage was entered) instead of snapping the whole band at once. So the image
+    /// builds cell-by-cell in serpentine order — you watch the GIFA assemble. The front eases to the
+    /// band top and holds there until the (real, Zig-timed) stage advances, then continues.
+    private static let stageRevealTicks = 8
     private var progress: Double {
         let order = SurfacePhase.RenderStage.allCases
         guard let i = order.firstIndex(of: stage) else { return 0 }
-        // The stage's band TOP — the sweep has resolved through the end of this stage.
-        return Double(i + 1) / Double(order.count)
+        let within = CellEase.progress(clock.tick, since: surface.phaseEnteredTick, ticks: Self.stageRevealTicks)
+        return (Double(i) + within) / Double(order.count)
     }
 
     /// Human-readable label for the deterministic stage (the verified Zig kernel running).
