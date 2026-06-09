@@ -173,6 +173,21 @@ final class Surface {
     var phaseEnteredTick: Int = 0
     var liftChangedTick: Int = 0
 
+    /// The captured-burst PREFIX (indexed tiles + paired palettes, oldest→newest) accumulated as
+    /// the burst lands — so the `.capturing` hero plays it BACKWARDS (the Act II no-freeze
+    /// reverse-cursor) instead of freezing on the last live frame. Out-of-band; mirrored from the
+    /// engine by `SurfaceView`; empty ⇒ the hero falls back to the live tile.
+    var capturedFrames: [[UInt8]] = []
+    var capturedPalettes: [[SIMD3<UInt8>]] = []
+
+    /// Reverse-cursor over the captured prefix: NEWEST→OLDEST sweep, looping over the landed
+    /// frames, advanced by κ's monotonic `tick`. The visible "no-freeze, plays backwards" Act II
+    /// behaviour. Returns 0 when nothing has landed yet.
+    static func captureReverseCursor(count: Int, tick: Int) -> Int {
+        guard count > 0 else { return 0 }
+        return count - 1 - (((tick % count) + count) % count)
+    }
+
     /// The surface settings (dither / deterministic-core toggles), integer-encoded.
     var settings: SurfaceSettings = .init()
 

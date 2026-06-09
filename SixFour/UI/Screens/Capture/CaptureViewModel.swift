@@ -83,13 +83,13 @@ private final class CoalescingFrameRenderer: @unchecked Sendable {
     private let lock = NSLock()
     private var pending: OKLabTile?
     private var draining = false
-    private let render: @Sendable (OKLabTile) -> UIImage?
-    private let onImage: @Sendable (UIImage) -> Void
+    private let render: @Sendable (OKLabTile) -> CaptureViewModel.PreviewFrame?
+    private let onFrame: @Sendable (CaptureViewModel.PreviewFrame) -> Void
 
-    init(render: @escaping @Sendable (OKLabTile) -> UIImage?,
-         onImage: @escaping @Sendable (UIImage) -> Void) {
+    init(render: @escaping @Sendable (OKLabTile) -> CaptureViewModel.PreviewFrame?,
+         onFrame: @escaping @Sendable (CaptureViewModel.PreviewFrame) -> Void) {
         self.render = render
-        self.onImage = onImage
+        self.onFrame = onFrame
     }
 
     /// Stash the newest tile and kick the drain if idle. Never blocks the caller.
@@ -114,7 +114,7 @@ private final class CoalescingFrameRenderer: @unchecked Sendable {
             pending = nil
             if tile == nil { draining = false; lock.unlock(); return }
             lock.unlock()
-            if let tile, let image = render(tile) { onImage(image) }
+            if let tile, let frame = render(tile) { onFrame(frame) }
         }
     }
 }
@@ -197,6 +197,13 @@ final class CaptureViewModel {
     /// quantized frame; empty also on the raw-downsample fallback path.
     var previewIndexTile: [UInt8] = []
     var previewPalette: [SIMD3<UInt8>] = []
+
+    /// The burst frames as INDEXED tiles + their paired palettes, accumulated AS THE BURST LANDS
+    /// (oldest→newest), so the one-surface hero can play the captured prefix BACKWARDS during
+    /// `.capturing` — the Act II no-freeze reverse-cursor — instead of freezing on the last live
+    /// frame. Reset at each capture start; bridged into σ by `SurfaceView`. Empty ⇒ hero falls back.
+    var capturedFrames: [[UInt8]] = []
+    var capturedPalettes: [[SIMD3<UInt8>]] = []
 
     /// The live 256-colour palette of the current scene (sRGB8), recomputed from the
     /// preview tile at ~3 fps (maximin, off the delegate queue). Drives the capture
@@ -402,6 +409,8 @@ final class CaptureViewModel {
         syncPreviewDither()  // keep the live look in sync with the engine + sampler
         Haptics.impact(.medium)
         loadingProgress = 0      // fresh resolve sweep for this capture
+        capturedFrames = []      // fresh reverse-cursor prefix for this burst (no-freeze)
+        capturedPalettes = []
         phase = .locking
         let lockResult = await session.lockExposureAndWhiteBalance(timeoutMs: 400)
         Self.logger.info("[viewmodel] AE/AWB lock: \(String(describing: lockResult), privacy: .public)")
@@ -419,11 +428,23 @@ final class CaptureViewModel {
         let renderer = CoalescingFrameRenderer(
             render: { tile in
                 quantized
-                    ? Self.makeQuantizedPreviewImage(from: tile, mode: mode, serpentine: serpentine).image
-                    : Self.makePreviewImage(from: tile)
+                    ? Self.makeQuantizedPreviewImage(from: tile, mode: mode, serpentine: serpentine)
+                    : PreviewFrame(image: Self.makePreviewImage(from: tile), indices: [], palette: [])
             },
-            onImage: { [weak self] image in
-                Task { @MainActor in self?.previewTile = image }
+            onFrame: { [weak self] frame in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    // No freeze: stream the newest captured frame into σ AND accumulate the prefix
+                    // so the surface plays it BACKWARDS (reverse-cursor) — the burst builds visibly.
+                    self.previewTile = frame.image
+                    guard !frame.indices.isEmpty else { return }
+                    self.previewIndexTile = frame.indices
+                    self.previewPalette = frame.palette
+                    if self.capturedFrames.count < burstTotal {
+                        self.capturedFrames.append(frame.indices)
+                        self.capturedPalettes.append(frame.palette)
+                    }
+                }
             }
         )
         previewRenderer = renderer

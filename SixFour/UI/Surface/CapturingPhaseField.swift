@@ -79,9 +79,21 @@ struct CapturingPhaseField: View {
     /// back to the ghost ink before a frame arrives. Inert (no gesture) while capturing.
     private var previewHero: some View {
         let side = GlobalLattice.gif(GlobalLattice.previewCells)   // 64 × 4 = 256 pt
-        let tile = surface.previewTile
-        let pal = surface.previewPalette
         let ghost = SIMD3<UInt8>(20, 20, 24)
+        // NO FREEZE (reverse-cursor): play the captured PREFIX backwards (newest→oldest, advanced
+        // by κ) so the burst builds visibly instead of the hero freezing on the last live frame.
+        // Falls back to the live tile until the first frame lands.
+        let frames = surface.capturedFrames
+        let tile: [UInt8]
+        let pal: [SIMD3<UInt8>]
+        if frames.isEmpty {
+            tile = surface.previewTile
+            pal = surface.previewPalette
+        } else {
+            let rev = Surface.captureReverseCursor(count: frames.count, tick: clock.tick)
+            tile = frames[rev]
+            pal = rev < surface.capturedPalettes.count ? surface.capturedPalettes[rev] : surface.previewPalette
+        }
         return CellSprite(cols: 64, rows: 64, cellPt: side / 64) { c, r in
             let i = r * 64 + c
             guard i < tile.count, Int(tile[i]) < pal.count else { return ghost }
