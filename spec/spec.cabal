@@ -46,6 +46,7 @@ library
         SixFour.Spec.GridScript
         SixFour.Spec.Export
         SixFour.Spec.Lattice
+        SixFour.Spec.Boundary
         SixFour.Spec.CellFiber
         SixFour.Spec.CellGrid
         SixFour.Spec.GridLayout
@@ -274,6 +275,7 @@ test-suite spec-tests
         Properties.GridScript
         Properties.Export
         Properties.Lattice
+        Properties.Boundary
         Properties.CellFiber
         Properties.CellGrid
         Properties.GridLayout

@@ -8,28 +8,29 @@ import simd
 ///      rounded corner (the move's nearest-free search + a launch re-home enforce it).
 ///   2. `isOutline` — the visible 2-cell edge `BoundaryView` draws.
 ///
-/// Faithful Swift mirror of the designed `Spec.Boundary` (stepped rounded-rect); promote
-/// to a golden-pinned spec module when the boundary phase lands. Tier-2: simd only.
+/// The typed facade over the golden-pinned `SixFourBoundary` (generated from `Spec.Boundary`,
+/// `cabal test`-proven). This file adds NO geometry authority — every constant is sourced from
+/// the contract; only the `inside`/`footprintFits`/`isOutline` predicate logic lives here (a
+/// faithful mirror of the spec's, which the laws prove). Tier-2: simd only.
 enum Boundary {
     /// Lattice extent in cells (the screen): 100 × 218.
     static let cols = SixFourLattice.cols
     static let rows = SixFourLattice.rows
 
-    /// Inset margins (cells) from each screen edge. Top clears the Dynamic Island
-    /// (~16 cells = 64 pt); bottom clears the home indicator (~8 cells); sides a clear
-    /// visible gutter. The frame is the rect [minC,maxC) × [minR,maxR).
-    static let insetX = 3
-    static let insetTop = 16
-    static let insetBottom = 10
+    /// Inset margins (cells) from each screen edge — sourced from `SixFourBoundary` (the spec).
+    /// Top clears the Dynamic Island; bottom clears the home indicator; sides a visible gutter.
+    /// The frame is the rect [minC,maxC) × [minR,maxR).
+    static let insetX = SixFourBoundary.insetX
+    static let insetTop = SixFourBoundary.insetTop
+    static let insetBottom = SixFourBoundary.insetBottom
     /// Corner radius in cells (56 pt) — MATCHES the iPhone 17 Pro display corner so the
-    /// 4-corner `footprintFits` test keeps a square widget fully inside the curved screen
-    /// (it can never be moved where the physical rounding crops a corner).
-    static let cornerCells = 14
+    /// 4-corner `footprintFits` test keeps a square widget fully inside the curved screen.
+    static let cornerCells = SixFourBoundary.cornerCells
 
-    static var minC: Int { insetX }
-    static var maxC: Int { cols - insetX }       // exclusive
-    static var minR: Int { insetTop }
-    static var maxR: Int { rows - insetBottom }  // exclusive
+    static var minC: Int { SixFourBoundary.minC }
+    static var maxC: Int { SixFourBoundary.maxC }   // exclusive
+    static var minR: Int { SixFourBoundary.minR }
+    static var maxR: Int { SixFourBoundary.maxR }   // exclusive
 
     /// Is cell `(c, r)` INSIDE the inset rounded rect? Plain rectangle except in the four
     /// corner quadrants, where it must lie within the quarter-disc of radius `cornerCells`.
