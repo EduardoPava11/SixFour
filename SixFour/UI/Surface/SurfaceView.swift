@@ -130,13 +130,6 @@ struct SurfaceView: View {
                     surface.previewPalette = engine.previewPalette
                 }
             }
-            // Captured-burst PREFIX → σ (the Act II no-freeze reverse-cursor source). Keyed on the
-            // landed-frame COUNT so we copy once per landed frame, not per palette tweak. Mirrors
-            // the engine's accumulating prefix so `CapturingPhaseField` plays it backwards.
-            .onChange(of: engine.capturedFrames.count) { _, _ in
-                surface.capturedFrames = engine.capturedFrames
-                surface.capturedPalettes = engine.capturedPalettes
-            }
             // Streamed render partials → σ. The deterministic core surfaces the REAL
             // per-stage buffers (quantize→dither→significance→palette) in true colour; fold
             // them into σ so `RenderingPhaseField`'s serpentine sweep reveals the actual
@@ -147,6 +140,8 @@ struct SurfaceView: View {
                     surface.indexCube = cube
                 }
             }
+            // REAL render progress → σ (drives the GIFA construction reveal, not a clock timer).
+            .onChange(of: engine.loadingProgress) { _, p in surface.renderProgress = p }
             // The finished GIFA → σ (palette + index cube), then the explicit commit
             // (`lawReviewExplicit`: review is reached ONLY via `.committed`).
             .onChange(of: engine.primaryOutput) { _, out in

@@ -65,16 +65,22 @@ struct RenderingPhaseField: View {
     private var resolveHero: some View {
         let edge = heroEdge
         let cellPt = edge / CGFloat(GlobalLattice.previewCells)
-        let resolved = Int((progress * Double(GlobalLattice.previewCells * GlobalLattice.previewCells)).rounded())
+        let n = GlobalLattice.previewCells
+        let resolved = Int((progress * Double(n * n)).rounded())
+        // The UNDER-CONSTRUCTION base = the frozen last captured frame (still populated through
+        // render), NOT near-black. The true GIFA (frame 0, through its partial palette) RESOLVES
+        // over it along the serpentine front as the real render progresses — you watch it construct.
+        let baseTile = surface.previewTile
+        let basePal = surface.previewPalette
         let ghost = SIMD3<UInt8>(12, 12, 14)
-        return CellSprite(cols: GlobalLattice.previewCells,
-                          rows: GlobalLattice.previewCells,
-                          cellPt: cellPt) { c, r in
-            let slot = r * GlobalLattice.previewCells + c
-            // Unresolved cells are covered by the opaque ghost; resolved cells show the
-            // frame underneath (or, if the cube isn't populated yet, the live checker).
-            guard Self.sweepRank[slot] < resolved else { return ghost }
-            return frameColor(col: c, row: r)
+        return CellSprite(cols: n, rows: n, cellPt: cellPt) { c, r in
+            let slot = r * n + c
+            if Self.sweepRank[slot] < resolved, let col = frameColor(col: c, row: r) {
+                return col                       // resolved → the true GIFA cell
+            }
+            let i = r * n + c                    // under construction → the frozen last frame
+            if i < baseTile.count, Int(baseTile[i]) < basePal.count { return basePal[Int(baseTile[i])] }
+            return ghost
         }
         .frame(width: edge, height: edge)
         .clipped()
@@ -86,7 +92,9 @@ struct RenderingPhaseField: View {
     /// Returns `nil` when the cube isn't populated yet, so the live checker ground shows
     /// through the resolved cells instead of a flat fill.
     private func frameColor(col c: Int, row r: Int) -> SIMD3<UInt8>? {
-        surface.cellGlobal(c, r, surface.cursor)
+        // Frame 0 — the partial palette streamed during render is frame-0's, so frame 0 has the
+        // correct colours (a backward cursor sweep would mis-paint other frames with it).
+        surface.cellGlobal(c, r, 0)
     }
 
     // MARK: - The deterministic stage banner (cells)
@@ -108,18 +116,11 @@ struct RenderingPhaseField: View {
 
     // MARK: - Stage → resolve progress / label
 
-    /// F4 — smooth GIFA build: the five ordered stages each own a 1/5 band of the resolve, and
-    /// WITHIN a stage the serpentine front now EASES across its band (over `stageRevealTicks` 20 fps
-    /// ticks since the stage was entered) instead of snapping the whole band at once. So the image
-    /// builds cell-by-cell in serpentine order — you watch the GIFA assemble. The front eases to the
-    /// band top and holds there until the (real, Zig-timed) stage advances, then continues.
-    private static let stageRevealTicks = 8
-    private var progress: Double {
-        let order = SurfacePhase.RenderStage.allCases
-        guard let i = order.firstIndex(of: stage) else { return 0 }
-        let within = CellEase.progress(clock.tick, since: surface.phaseEnteredTick, ticks: Self.stageRevealTicks)
-        return (Double(i) + within) / Double(order.count)
-    }
+    /// The serpentine reveal front, driven by the REAL render progress (`surface.renderProgress` =
+    /// the deterministic core's `loadingProgress`, monotonic 0→1 across the 5 stages) — NOT a clock
+    /// timer that reset to black each stage (the old bug). The GIFA frame resolves over the frozen
+    /// last frame in serpentine order as the Zig stages actually complete.
+    private var progress: Double { surface.renderProgress }
 
     /// Human-readable label for the deterministic stage (the verified Zig kernel running).
     private static func label(_ stage: SurfacePhase.RenderStage) -> String {

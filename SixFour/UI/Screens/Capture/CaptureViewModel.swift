@@ -198,13 +198,6 @@ final class CaptureViewModel {
     var previewIndexTile: [UInt8] = []
     var previewPalette: [SIMD3<UInt8>] = []
 
-    /// The burst frames as INDEXED tiles + their paired palettes, accumulated AS THE BURST LANDS
-    /// (oldest→newest), so the one-surface hero can play the captured prefix BACKWARDS during
-    /// `.capturing` — the Act II no-freeze reverse-cursor — instead of freezing on the last live
-    /// frame. Reset at each capture start; bridged into σ by `SurfaceView`. Empty ⇒ hero falls back.
-    var capturedFrames: [[UInt8]] = []
-    var capturedPalettes: [[SIMD3<UInt8>]] = []
-
     /// The live 256-colour palette of the current scene (sRGB8), recomputed from the
     /// preview tile at ~3 fps (maximin, off the delegate queue). Drives the capture
     /// screen's 16×16 palette grid + the 4×4 Haar shutter (the abstraction cascade,
@@ -409,8 +402,6 @@ final class CaptureViewModel {
         syncPreviewDither()  // keep the live look in sync with the engine + sampler
         Haptics.impact(.medium)
         loadingProgress = 0      // fresh resolve sweep for this capture
-        capturedFrames = []      // fresh reverse-cursor prefix for this burst (no-freeze)
-        capturedPalettes = []
         phase = .locking
         let lockResult = await session.lockExposureAndWhiteBalance(timeoutMs: 400)
         Self.logger.info("[viewmodel] AE/AWB lock: \(String(describing: lockResult), privacy: .public)")
@@ -434,16 +425,13 @@ final class CaptureViewModel {
             onFrame: { [weak self] frame in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    // No freeze: stream the newest captured frame into σ AND accumulate the prefix
-                    // so the surface plays it BACKWARDS (reverse-cursor) — the burst builds visibly.
+                    // Stream the newest captured frame into σ so the capturing hero shows the latest
+                    // landed frame forward (no freeze). The reverse-cursor accumulation was removed
+                    // (the preview renderer coalesces, so a per-frame build isn't available here).
                     self.previewTile = frame.image
                     guard !frame.indices.isEmpty else { return }
                     self.previewIndexTile = frame.indices
                     self.previewPalette = frame.palette
-                    if self.capturedFrames.count < burstTotal {
-                        self.capturedFrames.append(frame.indices)
-                        self.capturedPalettes.append(frame.palette)
-                    }
                 }
             }
         )
