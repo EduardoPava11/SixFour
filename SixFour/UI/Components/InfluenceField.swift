@@ -1,30 +1,30 @@
 import SwiftUI
 import simd
 
-/// THE TUNABLES for the influence field — one home, Swift-side for on-device iteration (pinned in
-/// `Spec.InfluenceField` once locked). A plain (nonisolated) enum so both the `@MainActor`
-/// `InfluenceField` view and the nonisolated `FieldModel` read them without an actor hop.
+/// THE TUNABLES for the influence field — now the typed FACADE over the golden-pinned
+/// `SixFourFieldTuning` (generated from `Spec.InfluenceField`, `cabal test`-proven). The SAME
+/// values are emitted to `FieldTuning.metal.h` for the GPU field shader, so the CPU reference here
+/// and the shader read ONE source and can never drift. A plain (nonisolated) enum so both the
+/// `@MainActor` `InfluenceField` view and the nonisolated `FieldModel` read them without an actor
+/// hop. (To tune: edit `Spec.InfluenceField` → `cabal run spec-codegen`, not these lines.)
 enum FieldTuning {
-    /// Outward drift of the breathing speckle, in CELLS PER 20 fps TICK — the chaos flows out of
-    /// the widgets (order) instead of re-rolling in place. Small = calm, larger = faster radiation.
-    /// (Replaces the strobing pre-baked ring; the field now recomputes once per tick — F0/F1.)
-    static let driftPerTick = 0.2
+    /// Outward drift of the breathing speckle, in CELLS PER 20 fps TICK (the chaos flows outward).
+    static let driftPerTick = SixFourFieldTuning.driftPerTick
     /// Falloff reach (cells) of an `.arrangement` source (uniform).
-    static let reachArrangement = 34.0
+    static let reachArrangement = SixFourFieldTuning.reachArrangement
     /// Base falloff reach (cells) of a `.set` source, before usage scaling.
-    static let reachSet = 40.0
+    static let reachSet = SixFourFieldTuning.reachSet
     /// Usage→reach scaling for `.set` spokes: an unused colour still reaches `min`·reach.
-    static let usageReachMin = 0.22
+    static let usageReachMin = SixFourFieldTuning.usageReachMin
     /// How hard a chaos SEAM (two widgets contesting) mutes toward the neutral (0…1).
-    static let seamMute = 0.85
-    /// Energy multiplier while a widget is LIFTED for a move — the chaos recedes so the lifted
-    /// piece of order reads as pulled out of the field (radiation + lift-drag working together).
-    static let liftDim = 0.4
+    static let seamMute = SixFourFieldTuning.seamMute
+    /// Energy multiplier while a widget is LIFTED for a move — the chaos recedes (radiation+lift).
+    static let liftDim = SixFourFieldTuning.liftDim
     /// Ticks over which the lift-dim RAMPS in/out (F3) — recede/return smoothly, not a snap.
-    static let liftRampTicks = 4
+    static let liftRampTicks = SixFourFieldTuning.liftRampTicks
     /// The neutral a seam mutes toward, and the calm far-field / unlit ink.
-    static let neutral = SIMD3<UInt8>(11, 11, 16)
-    static let farDark = SIMD3<UInt8>(6, 6, 10)
+    static let neutral = SixFourFieldTuning.neutral
+    static let farDark = SixFourFieldTuning.farDark
 }
 
 /// THE UNIVERSAL GROUND — the influence field for EVERY act (`docs/SIXFOUR-INFLUENCE-FIELD-WORKFLOW.md`).

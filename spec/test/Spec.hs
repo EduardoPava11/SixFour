@@ -25,6 +25,7 @@ import qualified Properties.GridScript   as GridScript
 import qualified Properties.Export       as Export
 import qualified Properties.Lattice      as Lattice
 import qualified Properties.Boundary     as Boundary
+import qualified Properties.InfluenceField as InfluenceField
 import qualified Properties.CellFiber    as CellFiber
 import qualified Properties.CellGrid     as CellGrid
 import qualified Properties.GridLayout   as GridLayout
@@ -97,6 +98,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Export.tests
   , Lattice.tests
   , Boundary.tests
+  , InfluenceField.tests
   , CellFiber.tests
   , CellGrid.tests
   , GridLayout.tests

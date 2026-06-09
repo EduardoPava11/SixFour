@@ -33,7 +33,8 @@ import           Data.Maybe (fromMaybe)
 
 import SixFour.Codegen.Swift
   ( emitStageContract, emitNetContract, emitSTBN3DContract, emitSignificanceContract
-  , emitGlobalVolumeContract, emitLatticeContract, emitBoundaryContract, emitCellShapesContract
+  , emitGlobalVolumeContract, emitLatticeContract, emitBoundaryContract
+  , emitFieldTuningContract, emitFieldTuningMetalHeader, emitCellShapesContract
   , emitSevenSegContract, emitPlaybackClockContract, emitCellContract
   , emitDisplayContract, emitFrontProjectionGolden, emitVoxelFitContract, emitOrderContract, emitExportContract
   , emitGridLayoutContract, emitMoveContract, emitCellMechanicsContract, emitOwnershipContract )
@@ -65,6 +66,8 @@ main = do
   writeUtf8 (swiftOutDir   </> "GlobalVolumeContract.swift") emitGlobalVolumeContract
   writeUtf8 (swiftOutDir   </> "LatticeContract.swift")      emitLatticeContract
   writeUtf8 (swiftOutDir   </> "BoundaryContract.swift")     emitBoundaryContract
+  writeUtf8 (swiftOutDir   </> "FieldTuningContract.swift")  emitFieldTuningContract
+  writeUtf8 (swiftOutDir   </> "FieldTuning.metal.h")        emitFieldTuningMetalHeader
   writeUtf8 (swiftOutDir   </> "CellShapesContract.swift")   emitCellShapesContract
   writeUtf8 (swiftOutDir   </> "SevenSegContract.swift")     emitSevenSegContract
   writeUtf8 (swiftOutDir   </> "PlaybackClockContract.swift") emitPlaybackClockContract
