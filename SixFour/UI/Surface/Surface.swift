@@ -307,6 +307,13 @@ extension Surface {
         // re-derive the golden haptics + pulse — the live Swift↔Haskell pin of the
         // interaction algebra (lifetime / detent / haptics / reactive pulse).
         assert(SixFourCellMechanics.selfCheck(), "SixFourCellMechanics.selfCheck() failed")
+
+        // Geometry + field parity: the Stage (byte-exact), the field params, and the field
+        // FUNCTION golden (noise hash byte-exact + falloff within ε) — the live Swift↔Haskell pin
+        // for the influence-field architecture (the same primitives the Metal shader will use).
+        assert(SixFourBoundary.selfCheck(), "SixFourBoundary.selfCheck() failed")
+        assert(SixFourFieldTuning.selfCheck(), "SixFourFieldTuning.selfCheck() failed")
+        assert(SixFourInfluenceFieldGolden.selfCheck(), "SixFourInfluenceFieldGolden.selfCheck() failed")
         var placement = MoveContract.defaultPlacement
         for step in MoveContract.goldenScript {
             placement = MoveContract.move(placement, step.id, dCol: step.dCol, dRow: step.dRow)

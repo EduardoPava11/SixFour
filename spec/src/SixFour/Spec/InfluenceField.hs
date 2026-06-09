@@ -32,6 +32,9 @@ module SixFour.Spec.InfluenceField
   , seamMute, liftDim, liftRampTicks
     -- * Inks (sRGB8 component triples)
   , neutralInk, farDarkInk
+    -- * The field FUNCTION primitives (CPU reference for the GPU shader)
+  , noiseHash, noiseUnit, falloff
+  , noiseSamples, falloffSamples
     -- * Laws
   , lawReachesPositive
   , lawFractionsUnit
@@ -40,7 +43,15 @@ module SixFour.Spec.InfluenceField
   , lawDriftPositive
   , lawInksInGamut
   , lawFarDarkerThanNeutral
+  , lawNoiseInUnit
+  , lawFalloffBounds
+  , lawFalloffFullAtZero
+  , lawFalloffZeroBeyondReach
+  , lawFalloffMonotone
   ) where
+
+import Data.Word (Word32)
+import Data.Bits (xor, shiftR)
 
 -- Falloff / radiation -------------------------------------------------------
 
@@ -86,6 +97,47 @@ neutralInk = (11, 11, 16)
 farDarkInk :: (Int, Int, Int)
 farDarkInk = (6, 6, 10)
 
+-- The field FUNCTION primitives (the CPU reference the GPU shader matches) -----
+
+-- | The dither NOISE HASH — a 32-bit integer hash of cell @(c,r)@ + breathing phase
+-- @f@, the heart of the speckle. PURE integer bit-ops, so it is BYTE-EXACT across the
+-- Swift CPU reference and the Metal GPU shader (low-32-bit multiply/XOR is
+-- truncation-invariant: 64-bit-then-truncate == 32-bit-direct). The single piece of the
+-- field that MUST match bit-for-bit (a mismatch = a different speckle, invisibly). Mirror
+-- of @FieldModel.noise@ (InfluenceField.swift).
+noiseHash :: Int -> Int -> Int -> Word32
+noiseHash c r f =
+  let h0 = fromIntegral ((c * 73856093) `xor` (r * 19349663)
+                          `xor` (f * 83492791) `xor` 0x9e3779b9) :: Word32
+      h1 = h0 `xor` (h0 `shiftR` 13)
+      h2 = h1 * 0x5bd1e995
+      h3 = h2 `xor` (h2 `shiftR` 15)
+  in h3
+
+-- | The noise hash normalised to @[0,1)@ — the dither threshold the speckle density
+-- compares against (@n < E@).
+noiseUnit :: Int -> Int -> Int -> Double
+noiseUnit c r f = fromIntegral (noiseHash c r f) / fromIntegral (maxBound :: Word32)
+
+-- | A source's linear FALLOFF weight at distance @d@ (cells) for a given @reach@:
+-- @max 0 (1 − d / max 1 reach)@ — 1 at the edge, 0 at/beyond the reach. The smooth
+-- core of the energy field. Float, so it is gated to a TOLERANCE (Metal @float@ ≠
+-- @Double@). Mirror of @FieldModel.weight@'s ramp.
+falloff :: Double -> Double -> Double
+falloff d reach = max 0 (1 - d / max 1 reach)
+
+-- | Golden sample cells @(c, r, f)@ for the byte-exact noise hash (corners, mids, a
+-- breathing phase) — codegen emits @noiseHash@ at each; Swift recomputes + compares exact.
+noiseSamples :: [(Int, Int, Int)]
+noiseSamples =
+  [ (0,0,0), (1,0,0), (0,1,0), (13,7,0), (50,109,0)
+  , (99,217,0), (42,142,0), (7,200,3), (64,64,1) ]
+
+-- | Golden samples @(d, reach)@ for the tolerance falloff (at, before, and beyond reach).
+falloffSamples :: [(Double, Double)]
+falloffSamples =
+  [ (0,34), (10,34), (34,34), (40,34), (0,40), (20,40), (8.8,40) ]
+
 -- Laws ----------------------------------------------------------------------
 
 -- | Both source reaches are positive (a source radiates outward).
@@ -123,3 +175,30 @@ lawInksInGamut = inGamut neutralInk && inGamut farDarkInk
 lawFarDarkerThanNeutral :: Bool
 lawFarDarkerThanNeutral = luma farDarkInk < luma neutralInk
   where luma (r, g, b) = r + g + b
+
+-- | The normalised noise is in @[0,1)@ at every golden sample (a valid dither threshold).
+lawNoiseInUnit :: Bool
+lawNoiseInUnit = all ok noiseSamples
+  where ok (c, r, f) = let u = noiseUnit c r f in u >= 0 && u < 1
+
+-- | The falloff weight is bounded to @[0,1]@ at every golden sample.
+lawFalloffBounds :: Bool
+lawFalloffBounds = all ok falloffSamples
+  where ok (d, re) = let w = falloff d re in w >= 0 && w <= 1
+
+-- | The falloff is full (1) at the source edge (@d = 0@).
+lawFalloffFullAtZero :: Bool
+lawFalloffFullAtZero = falloff 0 reachArrangement == 1 && falloff 0 reachSet == 1
+
+-- | The falloff is 0 at and beyond the reach (the far field is calm).
+lawFalloffZeroBeyondReach :: Bool
+lawFalloffZeroBeyondReach =
+  falloff reachArrangement reachArrangement == 0
+    && falloff (reachArrangement + 10) reachArrangement == 0
+
+-- | The falloff is monotone non-increasing in distance (closer = stronger).
+lawFalloffMonotone :: Bool
+lawFalloffMonotone =
+  falloff 0 reachSet >= falloff 10 reachSet
+    && falloff 10 reachSet >= falloff 30 reachSet
+    && falloff 30 reachSet >= falloff reachSet reachSet

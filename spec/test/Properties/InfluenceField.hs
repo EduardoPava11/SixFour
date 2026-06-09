@@ -28,6 +28,21 @@ tests = testGroup "InfluenceField (radiation-ground tunables — FieldTuning sou
   , testProperty "far-field ink is darker than the seam neutral" $
       once lawFarDarkerThanNeutral
 
+  , testProperty "dither noise is a valid [0,1) threshold at every sample" $
+      once lawNoiseInUnit
+
+  , testProperty "falloff weight is bounded to [0,1]" $
+      once lawFalloffBounds
+
+  , testProperty "falloff is full (1) at the source edge" $
+      once lawFalloffFullAtZero
+
+  , testProperty "falloff is 0 at and beyond the reach" $
+      once lawFalloffZeroBeyondReach
+
+  , testProperty "falloff is monotone non-increasing in distance" $
+      once lawFalloffMonotone
+
   , testProperty "field tunables golden: the pinned values" $
       once $    (driftPerTick === 0.2) .&&. (reachArrangement === 34.0)
            .&&. (reachSet === 40.0) .&&. (usageReachMin === 0.22)
