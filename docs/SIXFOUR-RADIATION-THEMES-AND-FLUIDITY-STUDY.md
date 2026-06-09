@@ -102,8 +102,13 @@ disjoint because the ground keeps breathing but the hero is a still.
 - **(C) Synthesized ingest hold** (animate the last live frame inward): a fallback if the camera
   truly cannot surface burst frames in time — least honest.
 
-**Recommendation:** (A) — it is the smallest change that removes the freeze and turns the dead burst
-into a visible build. **Engine-side + camera-dependent ⇒ verify on device.**
+**Recommendation:** (A) — smallest change. **USER CHOSE (B) reverse-cursor — SHIPPED (`44da9fc`).**
+The burst renderer now carries the full `PreviewFrame` (indices+palette) and accumulates the
+captured PREFIX (`CaptureViewModel.capturedFrames`/`capturedPalettes`), bridged into σ
+(`Surface.capturedFrames`) by `SurfaceView` per landed frame; `CapturingPhaseField` plays it
+BACKWARDS via `Surface.captureReverseCursor(count:tick:)` (newest→oldest, κ-advanced). Additive with
+a live-tile fallback (no regression). **Camera path ⇒ verify on device.** Pairs next with the
+INGEST theme (the chaos pulling inward as frames land).
 
 ---
 
@@ -153,9 +158,10 @@ These are the "move = alive" upgrades; the black-space fix is the prerequisite f
 
 | Phase | Work | Risk | Needs |
 |------|------|------|-------|
-| **0 (done)** | Black-space occlusion fix | low | shipped this turn |
+| **0 (done)** | Black-space occlusion fix (`99ed2e8`) | low | shipped |
+| **0b (done)** | Freeze fix — reverse-cursor burst playback B (`44da9fc`) | med | shipped; **verify on device** |
 | **1** | `RadiationTheme` scaffold + per-phase selection + cross-phase param morph (act1=BLOOM as-is) | med | user: confirm the 5 themes |
-| **2** | Freeze fix (Part 3A: burst → `previewIndexTile`) + INGEST theme for `.capturing` | med | **on-device** (camera) |
+| **2** | INGEST theme for `.capturing` (chaos pulls inward as frames land) | med | **on-device** (camera) |
 | **3** | CRYSTALLIZE (tie to F4) + SETTLED + SURVEY (after `browsing` lands) | med | per-act on-device tuning |
 | **4** | Move-feels-alive upgrades (heal trail, lift bloom via `liftOffset`) | low–med | on-device feel |
 
