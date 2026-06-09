@@ -24,6 +24,14 @@ struct SurfaceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
+    #if DEBUG
+    /// TESTABLE ACT I (no camera): when launched with `-demoScene`, skip the engine bootstrap,
+    /// land directly in `.live`, and feed σ a synthetic drifting scene each κ tick so the
+    /// influence field can be seen/tuned in the Simulator. DEBUG-only.
+    /// (docs/SIXFOUR-TESTABLE-ACT1-WORKFLOW.md)
+    private static let demoScene = ProcessInfo.processInfo.arguments.contains("-demoScene")
+    #endif
+
     var body: some View {
         PhaseField.field(for: surface.phase, surface, clock, engine.settings)
             // The rounded play boundary is an INVISIBLE constraint (open screen = just the
@@ -35,15 +43,31 @@ struct SurfaceView: View {
             // The shutter (a σ event) kicks the engine. σ moves to `.locking` on
             // `.shutterTap`; here we observe that edge and start the real burst.
             .environment(surface)
-            .task { await engine.bootstrap() }
+            .task {
+                #if DEBUG
+                // Demo scene: bypass the camera, go straight to a live, data-fed Act I.
+                if Self.demoScene { surface.step(.sessionReady); return }
+                #endif
+                await engine.bootstrap()
+            }
             .onAppear {
                 Surface.assertSpecParity()
                 normalizePlacement()   // re-home any widget stranded outside the boundary
                 clock.reduceMotion = reduceMotion
                 // The ONE per-tick action: advance the Z₆₄ playback cursor. Per-phase
                 // engine progress is folded into σ via `.onChange` below, not the tick.
-                clock.onTick = { [weak surface] in
+                clock.onTick = { [weak surface, weak clock] in
                     guard let surface else { return }
+                    #if DEBUG
+                    // Demo scene: write the synthetic drifting tile/palette into σ each tick
+                    // (keyed off κ's monotonic counter), so the live influence field animates
+                    // without a camera. Only while `.live`.
+                    if Self.demoScene, let clock, surface.phase == .live {
+                        surface.previewTile = DemoScene.tile(tick: clock.tick)
+                        surface.previewPalette = DemoScene.palette
+                        surface.palette = DemoScene.palette
+                    }
+                    #endif
                     // Act II: while building the GIFA the preview does NOT freeze — it
                     // sweeps backwards. Forward (normal loop) everywhere else.
                     switch surface.phase {

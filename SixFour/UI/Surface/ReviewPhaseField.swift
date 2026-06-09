@@ -39,10 +39,11 @@ struct ReviewPhaseField: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // The whole screen is ONE live cell field in EVERY phase (cell-field-law);
-            // review is no exception. `nil` GIFA cells (before commit) show it through.
-            GridRefreshFieldView(phase: clock.heartbeat)
-                .ignoresSafeArea()
+            // The whole screen is ONE live cell field in EVERY phase (cell-field-law); review is
+            // no exception. The INFLUENCE FIELD (the ONE universal ground): colour radiates from
+            // the widgets (order) into the chaos, fed by the committed GIFA frame at the cursor +
+            // its per-frame palette. The monotonic κ tick keeps it breathing (never pauses).
+            InfluenceField(surface: surface, placement: placement, tick: clock.tick)
 
             if surface.palettesPerFrame.isEmpty {
                 // No committed GIFA in σ yet: a static cell line, never a spinner.

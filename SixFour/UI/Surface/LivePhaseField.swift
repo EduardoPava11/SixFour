@@ -38,12 +38,14 @@ struct LivePhaseField: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // The living ground: a full-screen checker of the ONE 4 pt atom that inverts at
-            // 20 fps. Palette-tinted (the captured/live look), not B/W — the two checker
-            // inks are pulled from σ's palette via `SurfaceColor`, so the ground wears the
-            // scene's colour while still proving liveness through the heartbeat inversion.
-            TintedCheckerField(palette: surface.palette, phase: clock.heartbeat)
-                .ignoresSafeArea()
+            // The living ground: the INFLUENCE FIELD — the empty cells become a function of
+            // the interaction between the two movable widgets (Field64 ⇄ Palette16). Colour
+            // radiates from each (palette spokes reach farther the more a colour is used in the
+            // live preview; the preview bleeds its edge colours), muted at the interplay ridge
+            // where they meet, fading to dark in the far calm — all masked to the canonical
+            // Stage. The user authors the link by dragging the widgets.
+            // (docs/SIXFOUR-INFLUENCE-FIELD-WORKFLOW.md)
+            InfluenceField(surface: surface, placement: placement, tick: clock.tick)
 
             // Field64 — the 64-cell preview hero, placed at its SHARED global position and
             // movable (long-press to lift). The data source is the live camera tile; the
@@ -127,78 +129,18 @@ struct LivePhaseField: View {
     }
 }
 
-// MARK: - The palette-tinted heartbeat ground
-
-/// The capture screen's living ground, ported from `GridRefreshFieldView` but PALETTE-
-/// TINTED: a full-screen checker of the ONE 4 pt atom whose two inks are pulled from σ's
-/// palette (dark + light extremes), inverting every tick at 20 fps. Off the deterministic
-/// GIF path → pure cell bitmap, no `Path`/`.stroke`/`.opacity`. When the palette is empty
-/// (pre-bootstrap) it falls back to the canonical near-B/W `GridChecker` inks so the
-/// ground is always visibly live.
-///
-/// Perf: both parities are pre-baked into TWO `UIImage`s (re-baked only when the palette's
-/// chosen inks change), so each 20 fps tick is a texture SWAP, not a per-cell re-bake —
-/// the same O(1)-flip discipline as `GridRefreshFieldView`.
-private struct TintedCheckerField: View {
-    let palette: [SIMD3<UInt8>]
-    /// The 20 fps heartbeat bit from κ; selects the checker parity.
-    let phase: Int
-
-    /// Cache: the inks the current pair was baked for, and the (parity-0, parity-1) images.
-    @State private var baked: (dark: SIMD3<UInt8>, light: SIMD3<UInt8>, p0: UIImage?, p1: UIImage?)? = nil
-
-    var body: some View {
-        let (dark, light) = Self.inks(palette)
-        let pair = ensure(dark: dark, light: light)
-        let img = (phase & 1) == 1 ? pair.1 : pair.0
-        return Group {
-            if let img {
-                Image(uiImage: img)
-                    .interpolation(.none)
-                    .resizable()
-                    .frame(width: GlobalLattice.gif(SixFourLattice.cols),
-                           height: GlobalLattice.gif(SixFourLattice.rows))
-            } else {
-                Color.black
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.black)
+#if DEBUG
+/// TESTABLE ACT I in the Xcode canvas — the live influence field fed by the synthetic
+/// `DemoScene` (no camera needed). Tune `InfluenceField`'s `static` constants and watch it here;
+/// run the full interactive app (draggable widgets) with the `-demoScene` launch argument.
+/// (docs/SIXFOUR-TESTABLE-ACT1-WORKFLOW.md)
+#Preview("Act I — influence field (demo scene)") {
+    let surface = Surface()
+    surface.step(.sessionReady)                 // bootstrap → .live (enables the shutter gate)
+    surface.previewTile = DemoScene.tile(tick: 0)
+    surface.previewPalette = DemoScene.palette
+    surface.palette = DemoScene.palette
+    return LivePhaseField(surface: surface, clock: SurfaceClock(), settings: AppSettings())
         .ignoresSafeArea()
-        .accessibilityHidden(true)
-    }
-
-    /// Return the cached (parity-0, parity-1) pair, re-baking only when the inks change.
-    private func ensure(dark: SIMD3<UInt8>, light: SIMD3<UInt8>) -> (UIImage?, UIImage?) {
-        if let b = baked, b.dark == dark, b.light == light { return (b.p0, b.p1) }
-        let p0 = Self.image(dark: dark, light: light, phase: 0)
-        let p1 = Self.image(dark: dark, light: light, phase: 1)
-        DispatchQueue.main.async { baked = (dark, light, p0, p1) }
-        return (p0, p1)
-    }
-
-    /// Bake one parity of the tinted checker as a `cols × rows` indexed bitmap (1 px == 1
-    /// cell). Mirrors `GridChecker.image`, but with palette-derived inks.
-    private static func image(dark: SIMD3<UInt8>, light: SIMD3<UInt8>, phase: Int) -> UIImage? {
-        CellBitmap.image(cols: SixFourLattice.cols, rows: SixFourLattice.rows) { c, r in
-            let lit = ((c + r) & 1) == 1
-            return (lit != ((phase & 1) == 1)) ? light : dark
-        }
-    }
-
-    /// Pick the two checker inks from the live palette: the darkest and the lightest
-    /// entries (by sRGB luma proxy r+g+b), so the ground wears the scene's tonal extremes.
-    /// Falls back to `GridChecker`'s near-B/W when the palette is empty.
-    private static func inks(_ pal: [SIMD3<UInt8>]) -> (SIMD3<UInt8>, SIMD3<UInt8>) {
-        guard !pal.isEmpty else { return (GridChecker.dark, GridChecker.white) }
-        @inline(__always) func luma(_ c: SIMD3<UInt8>) -> Int { Int(c.x) + Int(c.y) + Int(c.z) }
-        var dark = pal[0], light = pal[0]
-        var dMin = luma(pal[0]), dMax = luma(pal[0])
-        for c in pal.dropFirst() {
-            let l = luma(c)
-            if l < dMin { dMin = l; dark = c }
-            if l > dMax { dMax = l; light = c }
-        }
-        return (dark, light)
-    }
 }
+#endif

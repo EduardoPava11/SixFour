@@ -62,39 +62,18 @@ enum GridChecker {
 
 // MARK: - The live grid view (O(1)-flip)
 
-/// The capture screen's living ground: a full 4 pt B/W checker with the 20 fps heartbeat.
-/// The two phases are pre-baked into TWO `UIImage`s once; each tick is a `UIImage` SWAP
-/// (the GPU samples the other texture), not a per-cell re-bake.
+/// The non-live acts' living ground: a full 4 pt B/W checker with the 20 fps heartbeat, now
+/// MASKED to the canonical Stage via `StageField` (whole cells inside the inset rounded rect;
+/// transparent → black bezel outside). The two parities are pre-baked once and each tick is a
+/// `UIImage` SWAP, not a per-cell re-bake. The checker pattern never varies, so `bakeKey` is a
+/// constant — the Stage mask + the parities bake exactly once.
 struct GridRefreshFieldView: View {
-    /// The 20 fps phase bit from `GridHeartbeatClock`; selects which pre-baked image shows.
+    /// The 20 fps phase bit from κ; selects which pre-baked parity shows.
     let phase: Int
 
-    @State private var pair: (UIImage?, UIImage?)? = nil
-
-    private func ensurePair() -> (UIImage?, UIImage?) {
-        if let p = pair { return p }
-        let p = (GridChecker.image(phase: 0), GridChecker.image(phase: 1))
-        pair = p
-        return p
-    }
-
     var body: some View {
-        let (i0, i1) = ensurePair()
-        let img = (phase & 1) == 1 ? i1 : i0
-        return Group {
-            if let img {
-                Image(uiImage: img)
-                    .interpolation(.none)
-                    .resizable()
-                    .frame(width: GlobalLattice.gif(SixFourLattice.cols),
-                           height: GlobalLattice.gif(SixFourLattice.rows))
-            } else {
-                Color.black
-            }
+        StageField(phaseCount: 2, phase: phase, bakeKey: "checker") { c, r, f in
+            GridChecker.color(c, r, phase: f)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.black)
-        .ignoresSafeArea()
-        .accessibilityHidden(true)
     }
 }

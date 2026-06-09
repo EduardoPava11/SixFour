@@ -38,10 +38,11 @@ struct RenderingPhaseField: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // The live B/W checker ground (κ heartbeat) — proves the canvas is alive
+            // The ONE universal ground: the INFLUENCE FIELD — colour radiates from the widgets
+            // (order) into the chaos, fed by the resolving GIFA frame at the cursor + the partial
+            // palette. Same field as every act; the monotonic κ tick keeps it alive (never pauses)
             // while the deterministic core resolves the GIFA on top.
-            GridRefreshFieldView(phase: clock.heartbeat)
-                .ignoresSafeArea()
+            InfluenceField(surface: surface, placement: placement, tick: clock.tick)
 
             // Field64 — the resolve hero, placed at the SHARED global position + movable
             // (capture→render→review share the one surface geometry AND one position).

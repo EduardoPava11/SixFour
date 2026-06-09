@@ -29,10 +29,11 @@ struct CapturingPhaseField: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // The living ground: the full-screen B/W checker of the ONE atom, inverting
-            // at 20 fps off the single clock's heartbeat. The opaque heroes draw on top.
-            GridRefreshFieldView(phase: clock.heartbeat)
-                .ignoresSafeArea()
+            // The living ground: the INFLUENCE FIELD (the ONE universal ground) — colour
+            // radiates from the widgets (order) into the surrounding chaos, fed by the burst's
+            // growing palette + the still-alive preview tile. Same field as every act; the
+            // monotonic κ tick drives it so it never pauses. The opaque heroes draw on top.
+            InfluenceField(surface: surface, placement: placement, tick: clock.tick)
 
             // The 64×64 preview STAYS ALIVE through the burst — the live camera tile keeps
             // feeding it, so the preview does NOT freeze (Act II). It plays backwards once
