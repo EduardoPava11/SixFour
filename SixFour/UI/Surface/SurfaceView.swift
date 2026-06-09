@@ -33,12 +33,17 @@ struct SurfaceView: View {
     #endif
 
     var body: some View {
-        PhaseField.field(for: surface.phase, surface, clock, engine.settings)
-            // The rounded play boundary is an INVISIBLE constraint (open screen = just the
-            // preview + palette + checker, nothing else): widgets are kept inside it by
-            // `Boundary.footprintFits` (the move's nearest-free search), so the square 64×64
-            // can never be dragged where the curved screen would crop it; any saved position
-            // outside it is re-homed on launch (`normalizePlacement`). No drawn frame.
+        ZStack {
+            // THE ONE PERSISTENT GROUND, hoisted ABOVE the phase router so it is created ONCE for
+            // the whole app lifetime — the GPU CAMetalLayer is never torn down/rebuilt per phase
+            // (the act1→act2 transition flash). Every phase field renders its widgets + chrome on a
+            // CLEAR background ON TOP of this. (docs/SIXFOUR-DIMENSIONAL-FIELD-ARCHITECTURE.md S5.)
+            StageGround(surface: surface, placement: engine.settings.widgetPlacement, tick: clock.tick)
+                .ignoresSafeArea()
+            PhaseField.field(for: surface.phase, surface, clock, engine.settings)
+        }
+            // The rounded play boundary is an INVISIBLE constraint (widgets kept inside it by
+            // `Boundary.footprintFits`); any saved position outside it is re-homed on launch.
             .ignoresSafeArea()
             // The shutter (a σ event) kicks the engine. σ moves to `.locking` on
             // `.shutterTap`; here we observe that edge and start the real burst.

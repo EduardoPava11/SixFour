@@ -45,11 +45,8 @@ struct CapturingPhaseField: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // The living ground: the INFLUENCE FIELD (the ONE universal ground) — colour
-            // radiates from the widgets (order) into the surrounding chaos, fed by the burst's
-            // growing palette + the still-alive preview tile. Same field as every act; the
-            // monotonic κ tick drives it so it never pauses. The opaque heroes draw on top.
-            StageGround(surface: surface, placement: placement, tick: clock.tick)
+            // The influence-field ground is the ONE persistent surface in `SurfaceView` (behind
+            // every phase). This phase renders only its widgets + chrome on a clear background.
 
             // The 64×64 preview STAYS ALIVE through the burst — the live camera tile keeps
             // feeding it, so the preview does NOT freeze (Act II). It plays backwards once

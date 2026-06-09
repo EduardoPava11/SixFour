@@ -39,11 +39,8 @@ struct ReviewPhaseField: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // The whole screen is ONE live cell field in EVERY phase (cell-field-law); review is
-            // no exception. The INFLUENCE FIELD (the ONE universal ground): colour radiates from
-            // the widgets (order) into the chaos, fed by the committed GIFA frame at the cursor +
-            // its per-frame palette. The monotonic κ tick keeps it breathing (never pauses).
-            StageGround(surface: surface, placement: placement, tick: clock.tick)
+            // The influence-field ground is the ONE persistent surface in `SurfaceView` (behind
+            // every phase). This phase renders only the GIFA hero + chrome on a clear background.
 
             if surface.palettesPerFrame.isEmpty {
                 // No committed GIFA in σ yet: a static cell line, never a spinner.

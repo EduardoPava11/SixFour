@@ -185,6 +185,12 @@ final class FieldUIView: UIView {
     private var tick: Int = 0
     private var liftAmount: Float = 0
 
+    /// κ-gate: the last tick we actually drew on, so multiple `updateUIView` calls within one 20 fps
+    /// tick (σ mutates several times — palette, captured frames, cursor) collapse to ONE draw.
+    private var lastDrawnTick: Int = -1
+    /// Pooled tile buffer (allocated once, re-filled) — no per-draw MTLBuffer allocation.
+    private var tileBuffer: (any MTLBuffer)?
+
     func configure() {
         isUserInteractionEnabled = false
         guard let core = FieldMetalCore.shared else { return }
@@ -192,6 +198,7 @@ final class FieldUIView: UIView {
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
         metalLayer.isOpaque = true
+        metalLayer.maximumDrawableCount = 3   // triple-buffer so a draw never starves on the pool
     }
 
     override func layoutSubviews() {
@@ -205,7 +212,11 @@ final class FieldUIView: UIView {
                 tile: [UInt8], tick: Int, liftAmount: Float) {
         self.sources = sources; self.palette = palette; self.usage = usage
         self.tile = tile; self.tick = tick; self.liftAmount = liftAmount
-        draw()   // one κ tick → one GPU draw (the κ tick is the only clock)
+        // κ-gate: exactly ONE draw per tick. σ mutates several times per tick (palette, captured
+        // frames, cursor), each re-firing updateUIView; collapse them so nextDrawable is called once.
+        guard tick != lastDrawnTick else { return }
+        lastDrawnTick = tick
+        draw()
     }
 
     private func draw() {
@@ -234,9 +245,15 @@ final class FieldUIView: UIView {
         enc.setFragmentBytes(&u, length: MemoryLayout<FieldUniformsU>.stride, index: 0)
         palette.withUnsafeBytes { enc.setFragmentBytes($0.baseAddress!, length: $0.count, index: 1) }
         usage.withUnsafeBytes { enc.setFragmentBytes($0.baseAddress!, length: $0.count, index: 2) }
-        // tile is 4096 B (the setBytes ceiling); use a buffer to stay safely under the inline limit.
-        if let tbuf = core.device.makeBuffer(bytes: tile, length: tile.count, options: .storageModeShared) {
-            enc.setFragmentBuffer(tbuf, offset: 0, index: 3)
+        // tile (4096 B) via a POOLED buffer (allocated once, memcpy'd) — no per-draw allocation.
+        if tile.count > 0 {
+            if tileBuffer == nil || tileBuffer!.length < tile.count {
+                tileBuffer = core.device.makeBuffer(length: tile.count, options: .storageModeShared)
+            }
+            if let tbuf = tileBuffer {
+                memcpy(tbuf.contents(), tile, tile.count)
+                enc.setFragmentBuffer(tbuf, offset: 0, index: 3)
+            }
         }
         sources.withUnsafeBytes { enc.setFragmentBytes($0.baseAddress!, length: $0.count, index: 4) }
         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)

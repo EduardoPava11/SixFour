@@ -38,11 +38,8 @@ struct RenderingPhaseField: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // The ONE universal ground: the INFLUENCE FIELD — colour radiates from the widgets
-            // (order) into the chaos, fed by the resolving GIFA frame at the cursor + the partial
-            // palette. Same field as every act; the monotonic κ tick keeps it alive (never pauses)
-            // while the deterministic core resolves the GIFA on top.
-            StageGround(surface: surface, placement: placement, tick: clock.tick)
+            // The influence-field ground is the ONE persistent surface in `SurfaceView` (behind
+            // every phase). This phase renders only the resolve hero + chrome on a clear background.
 
             // Field64 — the resolve hero, placed at the SHARED global position + movable
             // (capture→render→review share the one surface geometry AND one position).

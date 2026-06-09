@@ -38,16 +38,9 @@ struct LivePhaseField: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // The living ground: the INFLUENCE FIELD — the empty cells become a function of
-            // the interaction between the two movable widgets (Field64 ⇄ Palette16). Colour
-            // radiates from each (palette spokes reach farther the more a colour is used in the
-            // live preview; the preview bleeds its edge colours), muted at the interplay ridge
-            // where they meet, fading to dark in the far calm — all masked to the canonical
-            // Stage. The user authors the link by dragging the widgets.
-            // (docs/SIXFOUR-INFLUENCE-FIELD-WORKFLOW.md)
-            // The ONE ground (GPU field when `-metalField`, else the CPU InfluenceField fallback) —
-            // shared by every act so it stays smooth across act1→act2. (SIXFOUR-CAPTURE-FLUIDITY-SYSTEMS.md)
-            StageGround(surface: surface, placement: placement, tick: clock.tick)
+            // The influence-field ground is the ONE persistent surface hoisted to `SurfaceView`
+            // (behind every phase) — not drawn here, so it is never recreated per phase. This phase
+            // renders only its widgets + chrome on a CLEAR background over it.
 
             // Field64 — the 64-cell preview hero, placed at its SHARED global position and
             // movable (long-press to lift). The data source is the live camera tile; the
