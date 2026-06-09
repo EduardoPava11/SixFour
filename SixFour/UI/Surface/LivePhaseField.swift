@@ -45,7 +45,16 @@ struct LivePhaseField: View {
             // where they meet, fading to dark in the far calm — all masked to the canonical
             // Stage. The user authors the link by dragging the widgets.
             // (docs/SIXFOUR-INFLUENCE-FIELD-WORKFLOW.md)
-            InfluenceField(surface: surface, placement: placement, tick: clock.tick)
+            // GPU field (CAMetalLayer) when `-metalField` is set — renders the ground off the
+            // main thread (the fluidity fix); otherwise the CPU `InfluenceField`. Same field, same
+            // 20 fps κ tick. A/B-gated so the GPU path can be verified on device before it replaces
+            // the CPU bake. (docs/SIXFOUR-CAPTURE-FLUIDITY-SYSTEMS.md)
+            if FieldMetalView.enabled {
+                FieldMetalView(surface: surface, placement: placement, tick: clock.tick)
+                    .ignoresSafeArea()
+            } else {
+                InfluenceField(surface: surface, placement: placement, tick: clock.tick)
+            }
 
             // Field64 — the 64-cell preview hero, placed at its SHARED global position and
             // movable (long-press to lift). The data source is the live camera tile; the

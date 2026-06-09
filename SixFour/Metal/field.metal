@@ -12,22 +12,28 @@ using namespace metal;
 // floors to the 4 pt grid). No occlusion branch — widgets draw opaque ON TOP in SwiftUI, so a lifted
 // widget moving away reveals live (lift-dimmed) field, never a black hole.
 
-// Up to 4 radiating order-sources (the two persistent widgets + future act widgets).
+// One radiating order-source (a widget). Passed in its OWN buffer (not nested in the uniforms
+// struct) so the Swift↔Metal layout is a flat array of a simple struct — robust to alignment.
+// Swift mirror: `FieldSourceU` in FieldMetalView.swift (same field order).
 struct FieldSourceU {
-    float2 rectMin;   // top-left in CELL coords (inclusive)
-    float2 rectMax;   // bottom-right in CELL coords (exclusive)
-    int    kind;      // 0 = arrangement (bleed the tile), 1 = set (usage-weighted palette wheel)
+    float minX;   // top-left in CELL coords (inclusive)
+    float minY;
+    float maxX;   // bottom-right in CELL coords (exclusive)
+    float maxY;
+    int   kind;   // 0 = arrangement (bleed the tile), 1 = set (usage-weighted palette wheel)
+    int   _pad0;  // explicit pad → 24-byte stride, matched exactly in Swift
 };
 
+// Scalars only (no nested arrays) → trivially layout-matched with the Swift mirror via setBytes.
 struct FieldUniforms {
     float cellSizePx;                 // drawable pixels per cell (gifPx · contentScale)
+    float liftAmount;                 // 0…1 eased lift-dim (F3)
     int   cols, rows;                 // lattice extent (SixFourLattice)
     int   minC, maxC, minR, maxR;     // Stage bounds (SixFourBoundary)
     int   cornerCells;                // Stage corner radius (cells)
-    int   sourceCount;                // active sources (≤ 4)
+    int   sourceCount;                // active sources
     int   tick;                       // κ monotonic tick (drives the breathing drift)
-    float liftAmount;                 // 0…1 eased lift-dim (F3)
-    FieldSourceU sources[4];
+    int   _pad0;                      // pad to 16-byte multiple (matched in Swift)
 };
 
 // --- pure helpers (byte-/tolerance-faithful to FieldModel) ---
@@ -82,10 +88,11 @@ vertex VOut fieldVertex(uint vid [[vertex_id]]) {
 
 // --- fragment: the field colour for this pixel's cell ---
 fragment float4 fieldFragment(VOut in [[stage_in]],
-                              constant FieldUniforms& u    [[buffer(0)]],
-                              device const uchar*  palette [[buffer(1)]],   // 256 × (r,g,b)
-                              device const float*  usage   [[buffer(2)]],   // 256, normalised
-                              device const uchar*  tile    [[buffer(3)]]) { // 64×64 indices
+                              constant FieldUniforms&    u       [[buffer(0)]],
+                              device const uchar*        palette [[buffer(1)]],   // 256 × (r,g,b)
+                              device const float*        usage   [[buffer(2)]],   // 256, normalised
+                              device const uchar*        tile    [[buffer(3)]],   // 64×64 indices
+                              device const FieldSourceU* sources [[buffer(4)]]) {  // u.sourceCount
     int c = int(floor(in.pos.x / u.cellSizePx));
     int r = int(floor(in.pos.y / u.cellSizePx));
     if (!stageInside(u, c, r)) return float4(0.0, 0.0, 0.0, 1.0);  // outside the Stage = black bezel
@@ -96,10 +103,12 @@ fragment float4 fieldFragment(VOut in [[stage_in]],
     float w1 = 0.0, w2 = 0.0, sum = 0.0;
     float3 domColor = kFieldNeutral;
     float2 domC = p;
-    for (int i = 0; i < u.sourceCount && i < 4; i++) {
-        FieldSourceU s = u.sources[i];
-        float2 ctr = (s.rectMin + s.rectMax) * 0.5;
-        float d = distToRect(p, s.rectMin, s.rectMax);
+    for (int i = 0; i < u.sourceCount; i++) {
+        FieldSourceU s = sources[i];
+        float2 lo = float2(s.minX, s.minY);
+        float2 hi = float2(s.maxX, s.maxY);
+        float2 ctr = (lo + hi) * 0.5;
+        float d = distToRect(p, lo, hi);
         float reach;
         float3 col;
         if (s.kind == 1) {                                    // .set — usage-weighted palette wheel
@@ -108,8 +117,8 @@ fragment float4 fieldFragment(VOut in [[stage_in]],
             col = paletteColor(palette, rank);
         } else {                                              // .arrangement — bleed the tile edge
             reach = kFieldReachArrangement;
-            int lc = clamp(int(p.x - s.rectMin.x), 0, 63);
-            int lr = clamp(int(p.y - s.rectMin.y), 0, 63);
+            int lc = clamp(int(p.x - s.minX), 0, 63);
+            int lr = clamp(int(p.y - s.minY), 0, 63);
             col = paletteColor(palette, int(tile[lr * 64 + lc]));
         }
         float w = max(0.0, 1.0 - d / max(1.0, reach));
