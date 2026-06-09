@@ -1,106 +1,103 @@
 # SixFour — Cell-Grid Graphical Fluidity (workflow)
 
-> Keywords: fluidity, render-rate vs logic-rate, fixed timestep + interpolated render, one-clock
-> law, ProMotion, field breathing cross-fade, act1→act2 transition, lift dims radiation, preview
-> frame-build reveal, snap easing, cell-field law, no-blend hero.
+> Keywords: fluidity at 20 fps, per-tick delta, one-grid-per-tick, coherent breathing drift,
+> eased act1→act2 transition, lift-dim ramp, GIFA build reveal, snap-on-drop ease, smoothstep,
+> tick-driven animation, cell-field law, no-blend hero, ProMotion-free.
 
-**Status:** UI/UX + build plan (2026-06-09). Companion to `SIXFOUR-INFLUENCE-FIELD-WORKFLOW.md`
-(the ground), `SIXFOUR-ACTS-WORKFLOW.md` (the acts), `SIXFOUR-DISPLAY-FSM.md` (κ / `lawOneClock`).
-Branch `feat/influence-field-stage`. SixFour owns all code; spec is the source of truth.
+**Status:** UI/UX + build plan (2026-06-09, v2 — REPLACES the v1 render-rate proposal). Companion
+to `SIXFOUR-INFLUENCE-FIELD-WORKFLOW.md` (the ground), `SIXFOUR-ACTS-WORKFLOW.md`,
+`SIXFOUR-DISPLAY-FSM.md` (`lawOneClock`). Branch `feat/influence-field-stage`.
 
-The influence field looks right but **not smooth**. This maps how to make the cell grid fluid:
-act1→act2 must be smooth, radiation and tap+hold+drag must work together (radiation recedes while
-lifting), and tapping the 16×16 palette to capture must build the GIFA in the preview smoothly.
+## 0. The rate model — what is FIXED, what is the lever
 
-## 0. Why it isn't smooth (root cause, `file:line`)
+Three distinct rates; only the third is touched:
 
-1. **ONE 20 Hz clock drives every visual.** `SurfaceClock` is a single `CADisplayLink` pinned to
-   `SixFourDisplay.logicRateHz = 20` (`SurfaceClock.swift:52`). The field breathing, the cursor,
-   and phase transitions ALL update 20×/s. On a 60/120 Hz display that reads as a **strobe** — the
-   dominant cause.
-2. **Discrete bakes, no interpolation.** `StageField` hard-SWAPS between pre-baked noise frames each
-   tick (`StageField.swift`); widget moves re-bake discretely; nothing tweens.
-3. **Hard phase swaps.** `live → locking → capturing` swaps the whole phase field instantly — the
-   palette content (shutter→progress fill) and banner pop in.
-4. **Preview frame cadence.** During capture the hero shows the reverse cursor over the captured
-   prefix at 20 fps with hard cuts — "frames building" looks steppy.
-5. **No eased lift feedback** (now: lift dims the field, but as a hard step — see F5).
+1. **Compute rate** — how often a *new* cell grid is calculated. **FIXED at 20 fps** (`logicRateHz`):
+   it matches the Zig GIF's true 20 fps cadence (the preview must not look smoother than the GIF is)
+   and is the per-frame compute budget the phone is given. **Not changed.**
+2. **Present rate** — how often pixels hit the screen. **FIXED at 20 fps** (one κ tick = one present).
+   No native-refresh interpolation, no cross-fade presentation. **Not changed.** (v1's F1/F2 wrongly
+   proposed raising this — retired.)
+3. **Per-tick delta** — *how much the grid changes between two 20 fps ticks*. **THIS is the lever.**
 
-> **The honest frame:** cells are DISCRETE (4 pt, indexed, no AA — the cell-field law). "Fluid"
-> here = smooth **cadence + easing + cross-faded ground**, NOT sub-cell motion. We make the
-> *timing* continuous, not the geometry.
+The choppiness is per-tick delta: today each tick is a HARD CUT — instant phase swap, *random*
+noise re-roll (strobe), 1-tick lift-dim snap, frames popping. Fluidity = make each 20 fps tick a
+**small, coherent, eased step**. Same 20 grids/sec; no jumps between them.
 
-## 1. The plan (F1 is the crux)
+> Honest limit: at 20 fps there is always a 50 ms step — the chosen GIF cadence. We remove the
+> JARRING (pops/strobe/instant swaps), we do not add frames. Cells are discrete (4 pt, indexed,
+> no AA — the cell-field law); "smooth" = eased *timing of content*, never sub-cell motion.
 
-### F1 — Decouple RENDER rate from LOGIC rate  ⚠️ needs go-ahead (spec-touching)
-Keep ONE clock (honor `lawOneClock`) but run the `CADisplayLink` at the **native refresh** (up to
-120 Hz via `preferredFrameRateRange.maximum`) and DERIVE the 20 Hz logic from a **time
-accumulator**: step δ / `advanceCursor` only once ≥ 1/`logicRateHz` s has elapsed; EVERY native
-frame, advance CONTINUOUS visual params — `renderPhase: Double` (breathing), `transitionProgress`,
-`liftAmount`, `snapEase`. The canonical *fixed-timestep + interpolated-render* loop.
-- **Spec impact:** `logicRateHz` stays 20 (the LOGIC rate); add a `renderRateHz`/native concept and
-  reword `lawOneClock` to "one display link; logic subdivided to 20 Hz." Edit `Spec.Display` →
-  `DisplayContract` → `SurfaceClock`; re-fold parity. THIS is the change that makes everything else
-  feel smooth, so do it first — but it is behavioral + spec, hence the go-ahead gate.
+## 1. F0 — Foundation: ONE fresh grid per tick (everything else rides this)
 
-### F2 — Smooth field breathing (cross-fade, not strobe)
-With F1's continuous `renderPhase`, `StageField` CROSS-FADES between ring frame ⌊p⌋ and ⌈p⌉ by
-frac(p) — a cheap GPU opacity blend of two pre-baked images, no re-bake. For the cross-fade to read
-as *flow* (chaos radiating) and not blur, make the ring a **coherent outward drift** (the noise
-pattern advances radially away from each source per frame) instead of independent random frames.
+Make the influence field recompute **every** κ tick, parameterized by the monotonic `clock.tick`.
+Concretely: include `tick` in `InfluenceField`'s `StageField` `bakeKey` → the field re-bakes once
+per tick (the "next cell grid" the 20 fps budget exists for). Retire the pre-baked N-frame noise
+ring + `FieldTuning.phases` (the swap-a-random-frame strobe); the static B/W checker
+(`GridRefreshFieldView`) keeps its constant `bakeKey` (single bake, no waste).
 
-### F3 — Smooth act1→act2 transition
-Already 80% solved: the universal field + persistent widgets keep the GROUND and POSITIONS
-continuous across the swap (shipped). Remaining discontinuities to ease (via `transitionProgress`
-or `withAnimation`): the palette **shutter→progress fill grows smoothly** as frames land; the
-banner fades/slides in; a `shutterTap` fires a Q16 **press ripple** from the palette
-(`Spec.CellMechanics` pulse already exists). Low risk once F1 lands.
+This is the whole architectural move: **one grid per tick, as a function of `tick` and the
+animation state.** No new clock, no rate change. Every item below is then a pure function of
+`tick`, recomputed inside that one per-tick bake.
 
-### F4 — Preview builds the GIFA smoothly during capture
-The hero is indexed cells (no-blend law) — do NOT cross-fade frames (that blends indices). Instead:
-as each of the 64 frames lands, REVEAL it with a cell-progressive wipe (`Spec.Order.serpentine`,
-the same reveal `RenderingPhaseField` uses) + one `CellTick`; F1's native cadence makes the
-per-frame arrival smooth, not a pop. The no-freeze reverse-cursor (Act II design) keeps it alive;
-F4 makes each landing fluid. Net: you watch the GIFA assemble frame-by-frame, smoothly.
+## 2. The shared easing primitive + animation state
 
-### F5 — Lift dims radiation  ✅ SHIPPED (this turn), ease pending
-While a widget is lifted, the field energy is scaled by `FieldTuning.liftDim` (σ carries
-`liftedWidget`; `MovableColorWidget` sets it on lift/drop; `InfluenceField` reads it). Currently a
-HARD step — F1's `liftAmount` (eased 0→1 over ~150 ms) makes the radiation recede/return smoothly.
+- **Easing** (pure, UI-only — off the verified GIF path): `smoothstep(p) = p*p*(3 - 2p)` on
+  `p = clamp((tick − startTick) / durationTicks, 0, 1)`. Integer in, Double out. One helper
+  `Ease.progress(tick, start:, ticks:) -> Double`.
+- **Animation state = a few out-of-band σ fields** (Ints; NOT FSM events — mirrors the Display
+  out-of-band discipline). Each is "the tick an animation began":
+  - `phaseEnteredTick: Int` — set in `SurfaceView.onChange(of: surface.phase)` (already a seam).
+  - `liftChangedTick: Int` — set when `liftedWidget` changes (already set in `MovableColorWidget`).
+  - `capturedFrames: Int` + per-frame `frameLandedTick` — the burst-progress source (Act II).
+  All derive `elapsed = tick − startTick`; no float state on the spine.
 
-### F6 — Eased widget snap-on-drop
-Animate the snap when a drop commits (today the `.offset` auto-resets instantly). `withAnimation`
-on the `widgetPlacement` change → the widget glides to its cell. Independent of F1, low risk.
+## 3. The fluidity items (each = a small eased per-tick delta at 20 fps)
 
-## 2. Sequencing
+| # | What | Driver | Duration | Per-tick delta (recomputed in the F0 bake) |
+|---|------|--------|----------|---------------------------------------------|
+| **F1** | **Coherent breathing drift** (chaos radiates, not strobes) | `tick` | continuous | The dither threshold samples noise at a position DRIFTING outward from the dominant source: `n = noise(c − dir.x·tick·drift, r − dir.y·tick·drift)`, `dir = unit(p − domCenter)`. Each tick the speckle marches ~`drift` cell outward (tunable `driftPerTick`, e.g. 0.2). Adjacent ticks differ slightly → flow, not re-roll. |
+| **F2** | **Eased act1→act2** | `phaseEnteredTick` | ~8 ticks (0.4 s) | `p = smoothstep(elapsed/8)`. The palette's shutter→progress fill grows by `p` (and tracks `capturedFrames`); the banner eases in (cell rows fill by `p`); a `shutterTap` press ripple (Spec.CellMechanics pulse) plays over the first ~3 ticks. Ground + widget positions already persist (universal field) → no jump. |
+| **F3** | **Lift-dim RAMP** (not a snap) | `liftChangedTick` + target | ~4 ticks (0.2 s) | `a = smoothstep(elapsed/4)` toward `target = lifted ? 1 : 0`; `E *= 1 − a·(1 − liftDim)`. Radiation recedes/returns over 4 ticks instead of one. (Replaces the hard step shipped in F5/`3ae2cf0`.) |
+| **F4** | **GIFA build reveal** (watch frames assemble) | `frameLandedTick[t]` | ~3 ticks/frame | Hero is no-blend indexed cells ⇒ REVEAL, not cross-fade: as each landed frame shows, its cells appear in `Spec.Order.serpentine` rank order, fraction `= smoothstep(elapsed/3)`; un-revealed cells = the prior frame / ghost. One `CellTick` per landed frame. The no-freeze reverse cursor keeps it alive; this makes each landing fluid. |
+| **F5** | **Snap-on-drop ease** | drop event | ~4 ticks | The widget glides from its lifted offset to the snapped cell (a residual offset eased to 0). This is the placed widget VIEW (not the cell field) → a `withAnimation(.easeOut)` on the committed `widgetPlacement`/offset; reads fine at 20 fps. |
+
+## 4. Performance budget (the reason 20 fps exists)
+
+One full field bake/tick ≈ `100×218 = 21,800` cells × the N-source inner loop. The 20 fps budget is
+50 ms/tick — ample. Watch items: precompute a **256-bucket angle LUT** per source once per bake
+(kills per-cell `atan2`), and keep the static geometry (source rects, usage histogram) out of the
+per-cell loop. If a device tick ever exceeds budget, drop `driftPerTick` resolution or coarsen the
+far-field (low-energy cells are `farDark` regardless). Measure on device; never exceed 20 fps.
+
+## 5. Sequencing
 
 | Phase | Items | Risk | Gate |
 |------|-------|------|------|
-| **now** | F5 lift-dim (hard step) | shipped | builds |
-| **A** ⚠️ | F1 render/logic split + F2 smooth breathing | spec-touching | `Spec.Display` go-ahead, `cabal test`, on-device |
-| **B** | F3 transition ease + F5 ease + F6 snap ease | low (SwiftUI anim) | on-device |
-| **C** | F4 preview frame-build reveal | low–med | on-device |
+| **A** | F0 one-grid-per-tick + F1 coherent drift | med (per-tick cost) | builds; on-device perf ≤ 50 ms/tick + smooth breathing |
+| **B** | F2 act1→act2 ease + F3 lift ramp | low | builds; on-device |
+| **C** | F4 GIFA build reveal + F5 snap ease | low–med | builds; on-device |
 
-## 3. Files
+## 6. Files
 
-- **F1:** `spec/src/SixFour/Spec/Display.hs` (logic vs render rate, `lawOneClock` reword) →
-  `Generated/DisplayContract.swift`; `SixFour/UI/Surface/SurfaceClock.swift` (native link +
-  accumulator + continuous params); `SurfaceView.swift` (`onTick` → onLogicTick / onRenderFrame).
-- **F2:** `SixFour/UI/Components/StageField.swift` (cross-fade overlay) +
-  `InfluenceField.swift`/`FieldModel` (coherent outward-drift ring).
-- **F3:** `LivePhaseField` / `CapturingPhaseField` (palette fill + banner + press ripple).
-- **F4:** `CapturingPhaseField` (serpentine per-frame reveal, reuse `Order.serpentine`).
-- **F5 (done):** `Surface.swift` (`liftedWidget`), `MovableColorWidget.swift`, `InfluenceField.swift`
-  (`FieldTuning.liftDim`). Ease = F1 `liftAmount`.
-- **F6:** `MovableColorWidget.swift` (animate the commit).
-- Never hand-edit `Generated/*`.
+- **F0/F1:** `SixFour/UI/Components/InfluenceField.swift` (tick in `bakeKey`; drift in the noise
+  sample; retire `phases` ring), `StageField.swift` (per-tick bake path stays; ring no longer used
+  by the field). New `Ease` helper (small, in `InfluenceField.swift` or a `CellEase.swift`).
+- **F2:** `Surface.swift` (`phaseEnteredTick`), `SurfaceView.swift` (set it on phase change),
+  `CapturingPhaseField.swift` / `LivePhaseField.swift` (progress-driven fill/banner/ripple).
+- **F3:** `Surface.swift` (`liftChangedTick`), `MovableColorWidget.swift` (set it),
+  `InfluenceField.swift` (ramp `E`).
+- **F4:** `Surface.swift` (`capturedFrames` / `frameLandedTick`), `CapturingPhaseField.swift`
+  (serpentine reveal, reuse `Order.serpentine`).
+- **F5:** `MovableColorWidget.swift` (`withAnimation` on commit).
+- Never hand-edit `Generated/*`. No `Spec.Display` change (rates unchanged) — F0–F5 are Swift-only
+  presentation easing; the field math formalizes later in `Spec.InfluenceField` (incl. the drift +
+  ease as pinned functions).
 
-## 4. Open questions
+## 7. Open questions
 
-- F1: cap render at 120 Hz, or honor `maximumFramesPerSecond`? Battery vs smoothness — the field is
-  a full-screen bitmap swap, cheap, but a 120 Hz cross-fade is more GPU than a 20 Hz swap.
-- F2: does the outward-drift breathing read as "chaos radiating," or is a gentle in-place shimmer
-  calmer? (on-device judgment.)
-- F4: serpentine reveal per landed frame vs a simple top-down wipe vs just the higher cadence alone?
-- Should reduce-motion pin the breathing (accessibility) even though the field "never pauses"? (Lean:
-  reduce amplitude, keep a minimal pulse.)
+- `driftPerTick` magnitude + whether drift is purely radial (outward) or has a slight tangential
+  swirl (more organic). On-device.
+- F2 duration (8 ticks) and whether the banner slides or fills.
+- F4: serpentine reveal per frame vs a simpler row wipe vs cadence alone.
+- Reduce-motion: pin the drift (no breathing) but keep the field present? (Lean yes — accessibility.)
