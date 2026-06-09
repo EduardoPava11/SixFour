@@ -104,6 +104,23 @@ struct FieldMetalView: UIViewRepresentable {
     }
 }
 
+/// THE ONE GROUND for every act — picks the GPU field (`-metalField`) or the CPU `InfluenceField`
+/// fallback. Used by all act phase fields so the smooth GPU field persists across the act1→act2
+/// transition (no reverting to the main-thread CPU bake during the burst). Same field, same κ tick.
+struct StageGround: View {
+    let surface: Surface
+    let placement: [ColorIdentity: (col: Int, row: Int)]
+    let tick: Int
+    var body: some View {
+        if FieldMetalView.enabled {
+            FieldMetalView(surface: surface, placement: placement, tick: tick)
+                .ignoresSafeArea()
+        } else {
+            InfluenceField(surface: surface, placement: placement, tick: tick)
+        }
+    }
+}
+
 // MARK: - Swift mirrors of the Metal structs (same field order + padding → layout-matched)
 
 /// Mirror of `FieldSourceU` in field.metal — 24-byte stride (4 floats + 2 int32).
@@ -126,6 +143,32 @@ struct FieldUniformsU {
 
 // MARK: - The CAMetalLayer-backed view (draws once per κ tick)
 
+/// The shared Metal device/queue/render-pipeline, built ONCE and reused by every `FieldUIView`
+/// across phase transitions — so tapping into capture doesn't rebuild the pipeline (an expensive
+/// `makeRenderPipelineState`) on the main thread at the transition. `@unchecked Sendable`: Metal
+/// device/queue/PSO are safe to share (same discipline as the app's other pipelines).
+final class FieldMetalCore: @unchecked Sendable {
+    let device: any MTLDevice
+    let queue: any MTLCommandQueue
+    let pipeline: any MTLRenderPipelineState
+
+    static let shared: FieldMetalCore? = FieldMetalCore()
+
+    private init?() {
+        guard let dev = MTLCreateSystemDefaultDevice(),
+              let q = dev.makeCommandQueue(),
+              let lib = dev.makeDefaultLibrary(),
+              let vfn = lib.makeFunction(name: "fieldVertex"),
+              let ffn = lib.makeFunction(name: "fieldFragment") else { return nil }
+        let desc = MTLRenderPipelineDescriptor()
+        desc.vertexFunction = vfn
+        desc.fragmentFunction = ffn
+        desc.colorAttachments[0].pixelFormat = .bgra8Unorm
+        guard let pso = try? dev.makeRenderPipelineState(descriptor: desc) else { return nil }
+        device = dev; queue = q; pipeline = pso
+    }
+}
+
 final class FieldUIView: UIView {
     // UIKit requires `class var layerClass` (static does not satisfy the override).
     // swiftlint:disable:next static_over_final_class
@@ -134,10 +177,6 @@ final class FieldUIView: UIView {
         // swiftlint:disable:next force_cast
         layer as! CAMetalLayer
     }
-
-    private var device: (any MTLDevice)?
-    private var queue: (any MTLCommandQueue)?
-    private var pipeline: (any MTLRenderPipelineState)?
 
     private var sources: [FieldSourceU] = []
     private var palette: [UInt8] = []
@@ -148,22 +187,11 @@ final class FieldUIView: UIView {
 
     func configure() {
         isUserInteractionEnabled = false
-        guard let dev = MTLCreateSystemDefaultDevice(),
-              let q = dev.makeCommandQueue(),
-              let lib = dev.makeDefaultLibrary(),
-              let vfn = lib.makeFunction(name: "fieldVertex"),
-              let ffn = lib.makeFunction(name: "fieldFragment") else { return }
-        device = dev
-        queue = q
-        metalLayer.device = dev
+        guard let core = FieldMetalCore.shared else { return }
+        metalLayer.device = core.device
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
         metalLayer.isOpaque = true
-        let desc = MTLRenderPipelineDescriptor()
-        desc.vertexFunction = vfn
-        desc.fragmentFunction = ffn
-        desc.colorAttachments[0].pixelFormat = .bgra8Unorm
-        pipeline = try? dev.makeRenderPipelineState(descriptor: desc)
     }
 
     override func layoutSubviews() {
@@ -181,10 +209,10 @@ final class FieldUIView: UIView {
     }
 
     private func draw() {
-        guard let queue, let pipeline,
+        guard let core = FieldMetalCore.shared,
               metalLayer.drawableSize.width > 0,
               let drawable = metalLayer.nextDrawable(),
-              let cmd = queue.makeCommandBuffer() else { return }
+              let cmd = core.queue.makeCommandBuffer() else { return }
 
         let scale = Float(metalLayer.contentsScale)
         var u = FieldUniformsU(
@@ -202,12 +230,12 @@ final class FieldUIView: UIView {
         rpd.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         rpd.colorAttachments[0].storeAction = .store
         guard let enc = cmd.makeRenderCommandEncoder(descriptor: rpd) else { return }
-        enc.setRenderPipelineState(pipeline)
+        enc.setRenderPipelineState(core.pipeline)
         enc.setFragmentBytes(&u, length: MemoryLayout<FieldUniformsU>.stride, index: 0)
         palette.withUnsafeBytes { enc.setFragmentBytes($0.baseAddress!, length: $0.count, index: 1) }
         usage.withUnsafeBytes { enc.setFragmentBytes($0.baseAddress!, length: $0.count, index: 2) }
         // tile is 4096 B (the setBytes ceiling); use a buffer to stay safely under the inline limit.
-        if let tbuf = device?.makeBuffer(bytes: tile, length: tile.count, options: .storageModeShared) {
+        if let tbuf = core.device.makeBuffer(bytes: tile, length: tile.count, options: .storageModeShared) {
             enc.setFragmentBuffer(tbuf, offset: 0, index: 3)
         }
         sources.withUnsafeBytes { enc.setFragmentBytes($0.baseAddress!, length: $0.count, index: 4) }
