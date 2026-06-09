@@ -73,7 +73,7 @@ struct InfluenceField: View {
         // since the last lift-state change; `liftAmount` is 1 while lifted, easing back to 0 after.
         let ramp = CellEase.progress(tick, since: surface.liftChangedTick, ticks: FieldTuning.liftRampTicks)
         let liftAmount = surface.liftedWidget != nil ? ramp : (1 - ramp)
-        let model = FieldModel(sources: Self.sources(placement, extraSources),
+        let model = FieldModel(sources: Self.sources(placement, extraSources, lifted: surface.liftedWidget),
                                palette: tilePalette.isEmpty ? surface.palette : tilePalette,
                                tile: tile, tick: tick, phaseToken: surface.phase.token,
                                liftAmount: liftAmount)
@@ -87,14 +87,14 @@ struct InfluenceField: View {
     /// The two persistent movable widgets as sources (Field64 = arrangement, Palette16 = set),
     /// plus any act-specific extras. The minimal universal source set every phase shares.
     private static func sources(_ placement: [ColorIdentity: (col: Int, row: Int)],
-                                _ extra: [FieldSource]) -> [FieldSource] {
+                                _ extra: [FieldSource], lifted: ColorIdentity?) -> [FieldSource] {
         func rect(_ id: ColorIdentity) -> CGRect {
             let p = placement[id] ?? (MoveContract.defaultCol(id), MoveContract.defaultRow(id))
             let (w, h) = MoveContract.footprint(id)
             return CGRect(x: CGFloat(p.col), y: CGFloat(p.row), width: CGFloat(w), height: CGFloat(h))
         }
-        return [FieldSource(rect: rect(.field64), kind: .arrangement),
-                FieldSource(rect: rect(.palette16), kind: .set)] + extra
+        return [FieldSource(rect: rect(.field64), kind: .arrangement, lifted: lifted == .field64),
+                FieldSource(rect: rect(.palette16), kind: .set, lifted: lifted == .palette16)] + extra
     }
 
     /// The best-available 64×64 "arrangement" (tile + its palette) for the current phase, so the
@@ -122,10 +122,13 @@ struct InfluenceField: View {
 
 /// One radiating order-region. `.arrangement` bleeds the tile's nearest edge pixel outward (the
 /// preview / GIFA frame); `.set` radiates the palette in rank order with usage-scaled reach.
+/// `lifted` = this widget is being moved → the field radiates THROUGH its footprint instead of
+/// occluding it (no black hole at the vacated spot; the chaos heals as the widget leaves).
 struct FieldSource {
     enum Kind { case arrangement, set }
     let rect: CGRect
     let kind: Kind
+    var lifted: Bool = false
 }
 
 // MARK: - The field model (precomputed once per bake)
@@ -176,7 +179,10 @@ private struct FieldModel {
         var domColor = FieldTuning.neutral
         var domCX = px, domCY = py
         for s in sources {
-            if s.rect.contains(CGPoint(x: px, y: py)) { return nil }   // occlusion (order owns it)
+            // Occlusion: a docked widget owns its own cells (it draws opaque on top). But a LIFTED
+            // widget must NOT occlude — the field radiates through its footprint so lifting reveals
+            // calm field, not a black hole at the vacated spot (Part 4 of the radiation study).
+            if !s.lifted && s.rect.contains(CGPoint(x: px, y: py)) { return nil }
             let w = weight(px, py, s)
             sum += w
             if w > w1 {
