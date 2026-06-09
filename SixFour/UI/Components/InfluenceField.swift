@@ -20,6 +20,8 @@ enum FieldTuning {
     /// Energy multiplier while a widget is LIFTED for a move — the chaos recedes so the lifted
     /// piece of order reads as pulled out of the field (radiation + lift-drag working together).
     static let liftDim = 0.4
+    /// Ticks over which the lift-dim RAMPS in/out (F3) — recede/return smoothly, not a snap.
+    static let liftRampTicks = 4
     /// The neutral a seam mutes toward, and the calm far-field / unlit ink.
     static let neutral = SIMD3<UInt8>(11, 11, 16)
     static let farDark = SIMD3<UInt8>(6, 6, 10)
@@ -67,10 +69,14 @@ struct InfluenceField: View {
         // Read σ on the MainActor (View.body is MainActor-isolated) and hand plain values to the
         // nonisolated FieldModel — Swift 6 strict concurrency forbids touching σ off the actor.
         let (tile, tilePalette) = Self.arrangement(of: surface)
+        // F3: ramp the lift-dim in/out over `liftRampTicks` instead of snapping. `ramp` runs 0→1
+        // since the last lift-state change; `liftAmount` is 1 while lifted, easing back to 0 after.
+        let ramp = CellEase.progress(tick, since: surface.liftChangedTick, ticks: FieldTuning.liftRampTicks)
+        let liftAmount = surface.liftedWidget != nil ? ramp : (1 - ramp)
         let model = FieldModel(sources: Self.sources(placement, extraSources),
                                palette: tilePalette.isEmpty ? surface.palette : tilePalette,
                                tile: tile, tick: tick, phaseToken: surface.phase.token,
-                               lifted: surface.liftedWidget != nil)
+                               liftAmount: liftAmount)
         // F0: ONE fresh grid per tick (tick is in `model.key`, so `StageField` re-bakes every
         // tick — the 20 fps budget is for exactly this). A single frame, no pre-baked ring.
         return StageField(phaseCount: 1, phase: 0, bakeKey: model.key) { c, r, _ in
@@ -133,15 +139,15 @@ private struct FieldModel {
     let tile: [UInt8]              // the 64×64 arrangement indices (row-major), may be empty
     let usageNorm: [Double]        // per-index usage / maxUsage ∈ [0,1] (256)
     let tick: Int
-    let lifted: Bool              // a widget is being lifted → the radiation recedes (liftDim)
-    let key: AnyHashable           // re-bake signature (NOT tick — breathing cycles baked frames)
+    let liftAmount: Double        // 0…1 eased lift-dim ramp → the radiation recedes (F3)
+    let key: AnyHashable           // re-bake signature (includes `tick` ⇒ one grid per tick, F0)
 
     init(sources: [FieldSource], palette: [SIMD3<UInt8>], tile: [UInt8], tick: Int,
-         phaseToken: String, lifted: Bool) {
+         phaseToken: String, liftAmount: Double) {
         self.sources = sources
         self.tile = tile
         self.tick = tick
-        self.lifted = lifted
+        self.liftAmount = liftAmount
         let ghost = SIMD3<UInt8>(20, 20, 24)
         pal = (0 ..< 256).map { $0 < palette.count ? palette[$0] : ghost }
 
@@ -157,7 +163,7 @@ private struct FieldModel {
             .map { "\($0.offset):\($0.element * 16 / maxC)" }.joined(separator: ",")
         // `tick` is in the key ⇒ the field re-bakes every 20 fps tick (F0). topDominant/srcKey are
         // kept for readability; they no longer gate caching (tick already changes every tick).
-        key = AnyHashable(["\(tick)", phaseToken, "\(pal.count)", srcKey, topDominant, lifted ? "lift" : "-"])
+        key = AnyHashable(["\(tick)", phaseToken, "\(pal.count)", srcKey, topDominant])
     }
 
     /// The sRGB8 a stage cell shows this tick. `nil` → transparent (a widget owns its own cells —
@@ -180,8 +186,9 @@ private struct FieldModel {
             } else if w > w2 { w2 = w }
         }
         if sum <= 0.001 { return FieldTuning.farDark }              // far calm: a near-black cell
-        // While a widget is lifted, the chaos recedes (radiation + lift-drag working together).
-        let E = min(1.0, sum) * (lifted ? FieldTuning.liftDim : 1.0)
+        // While a widget is lifted the chaos recedes (radiation + lift-drag together), eased by
+        // `liftAmount` 0→1 so it dims/returns over a few ticks rather than snapping (F3).
+        let E = min(1.0, sum) * (1 - liftAmount * (1 - FieldTuning.liftDim))
 
         // Chaos SEAM: where the runner-up rivals the dominant, mute toward the neutral.
         let interplay = w1 > 0 ? w2 / w1 : 0

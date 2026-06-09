@@ -166,6 +166,13 @@ final class Surface {
     /// Transient; never persisted; never an `δ` event (mirrors the Display out-of-band discipline).
     var liftedWidget: ColorIdentity? = nil
 
+    /// OUT-OF-BAND ANIMATION STATE (Ints, not events) — the κ tick at which an eased per-tick
+    /// transition began, so the renderers can compute `CellEase.progress(tick, since:, ticks:)`
+    /// at the fixed 20 fps cadence (docs/SIXFOUR-CELL-FLUIDITY-WORKFLOW.md). Set by `SurfaceView`.
+    /// `phaseEnteredTick` drives the eased act-to-act transition; `liftChangedTick` the lift-dim ramp.
+    var phaseEnteredTick: Int = 0
+    var liftChangedTick: Int = 0
+
     /// The surface settings (dither / deterministic-core toggles), integer-encoded.
     var settings: SurfaceSettings = .init()
 

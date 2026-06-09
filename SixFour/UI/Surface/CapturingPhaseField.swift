@@ -27,6 +27,22 @@ struct CapturingPhaseField: View {
 
     private var placement: [ColorIdentity: (col: Int, row: Int)] { settings.widgetPlacement }
 
+    /// F2 — eased act1→act2: 0→1 over `transitionTicks` 20 fps ticks since this phase was entered.
+    /// The palette's full→ghost drain and the banner fade ride this, so the tap doesn't hard-cut.
+    private static let transitionTicks = 8
+    private var transition: Double {
+        CellEase.progress(clock.tick, since: surface.phaseEnteredTick, ticks: Self.transitionTicks)
+    }
+
+    /// Per-channel integer lerp `a→b` by `t` (UI-only; off the verified GIF path).
+    private static func mix(_ a: SIMD3<UInt8>, _ b: SIMD3<UInt8>, _ t: Double) -> SIMD3<UInt8> {
+        let tt = min(1, max(0, t))
+        @inline(__always) func m(_ x: UInt8, _ y: UInt8) -> UInt8 {
+            UInt8(min(255, max(0, (Double(x) + (Double(y) - Double(x)) * tt).rounded())))
+        }
+        return SIMD3(m(a.x, b.x), m(a.y, b.y), m(a.z, b.z))
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             // The living ground: the INFLUENCE FIELD (the ONE universal ground) — colour
@@ -94,10 +110,13 @@ struct CapturingPhaseField: View {
         // by a real palette colour. `.locking` carries no palette yet → 0 filled.
         let captured = surface.phase == .locking ? 0 : min(surface.palette.count, 256)
 
+        // F2: unfilled cells EASE from their live colour → ghost over the transition, so the tap
+        // doesn't flash the whole palette to ghost; captured cells stay solid.
+        let t = transition
         return CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gif(1)) { c, r in
             let rank = r * 16 + c
             guard rank < ordered.count else { return ghost }
-            return rank < captured ? ordered[rank] : ghost
+            return rank < captured ? ordered[rank] : Self.mix(ordered[rank], ghost, t)
         }
         .allowsHitTesting(false)   // inert during the burst — a state is a cell transform, never a button
         .accessibilityLabel(surface.phase == .locking
@@ -119,6 +138,7 @@ struct CapturingPhaseField: View {
             .padding(.vertical, GlobalLattice.pt(3))
             .background(Color(srgb8: SFTheme.ledGhost))
             .padding(.top, GlobalLattice.pt(4))
+            .opacity(transition)        // F2: fade the banner in over the transition (chrome, not a cell)
             .allowsHitTesting(false)
     }
 }

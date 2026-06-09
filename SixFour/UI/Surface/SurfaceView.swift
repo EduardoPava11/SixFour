@@ -88,6 +88,9 @@ struct SurfaceView: View {
             // a `.shutterTap` (σ now `.locking`) fires the burst; a `.retake` (σ now
             // `.live`) resets the engine for the next shot.
             .onChange(of: surface.phase) { old, new in
+                // Stamp the tick the new phase was entered → the renderers ease the act-to-act
+                // transition over a few 20 fps ticks (F2) instead of cutting.
+                surface.phaseEnteredTick = clock.tick
                 switch (old, new) {
                 case (.live, .locking):
                     Task { await engine.capture() }
@@ -96,6 +99,11 @@ struct SurfaceView: View {
                 default:
                     break
                 }
+            }
+            // Lift state changed → stamp the tick so the influence field RAMPS the lift-dim (F3)
+            // over a few 20 fps ticks instead of snapping.
+            .onChange(of: surface.liftedWidget) { _, _ in
+                surface.liftChangedTick = clock.tick
             }
             // engine.phase → σ event. The engine drives the lifecycle forward; σ.step
             // maps each engine edge onto the verified FSM.
