@@ -57,10 +57,12 @@ struct CapturingPhaseField: View {
                 .movable(.field64, settings: settings, surface: surface)
                 .place(region(for: .field64, at: placement))
 
-            // The palette-as-progress hero, placed by the proven capture-scene layout
-            // (the same region the live shutter occupies — capture is a cell transform
-            // of the live field, not a new screen).
-            paletteProgress.place("palette")
+            // The palette-as-progress, at the SAME movable position the live shutter occupies
+            // (`region(for:.palette16, at: placement)`), NOT a hardcoded region — so tapping to
+            // capture does NOT make the palette JUMP from where the user dragged it (the "it moves!"
+            // bug). The field radiates Palette16 from this same movable placement, so widget +
+            // radiation stay aligned. Inert here (no `.movable`) — it's the burst progress, not a button.
+            paletteProgress.place(region(for: .palette16, at: placement))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
