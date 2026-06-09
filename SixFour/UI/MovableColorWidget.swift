@@ -122,6 +122,7 @@ private struct MovableModifier: ViewModifier {
                 if !lifted {                          // Pressed → Lifted (the hold armed)
                     lifted = true
                     lastTickCells = 0
+                    surface.liftedWidget = identity    // calm the radiation while lifting
                     Haptics.play(0)                    // liftPop
                 }
                 guard let d = dOpt else { return }
@@ -134,6 +135,7 @@ private struct MovableModifier: ViewModifier {
             }
             .onEnded { value in
                 lifted = false
+                surface.liftedWidget = nil             // restore the radiation on drop
                 guard case .second(true, let d?) = value else { return }
                 commit(d.translation)
             }

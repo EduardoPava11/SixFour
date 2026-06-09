@@ -15,6 +15,9 @@ enum FieldTuning {
     static let usageReachMin = 0.22
     /// How hard a chaos SEAM (two widgets contesting) mutes toward the neutral (0…1).
     static let seamMute = 0.85
+    /// Energy multiplier while a widget is LIFTED for a move — the chaos recedes so the lifted
+    /// piece of order reads as pulled out of the field (radiation + lift-drag working together).
+    static let liftDim = 0.4
     /// The neutral a seam mutes toward, and the calm far-field / unlit ink.
     static let neutral = SIMD3<UInt8>(11, 11, 16)
     static let farDark = SIMD3<UInt8>(6, 6, 10)
@@ -64,7 +67,8 @@ struct InfluenceField: View {
         let (tile, tilePalette) = Self.arrangement(of: surface)
         let model = FieldModel(sources: Self.sources(placement, extraSources),
                                palette: tilePalette.isEmpty ? surface.palette : tilePalette,
-                               tile: tile, tick: tick, phaseToken: surface.phase.token)
+                               tile: tile, tick: tick, phaseToken: surface.phase.token,
+                               lifted: surface.liftedWidget != nil)
         return StageField(phaseCount: FieldTuning.phases, phase: tick, bakeKey: model.key) { c, r, f in
             model.color(c, r, frame: f)
         }
@@ -125,12 +129,15 @@ private struct FieldModel {
     let tile: [UInt8]              // the 64×64 arrangement indices (row-major), may be empty
     let usageNorm: [Double]        // per-index usage / maxUsage ∈ [0,1] (256)
     let tick: Int
+    let lifted: Bool              // a widget is being lifted → the radiation recedes (liftDim)
     let key: AnyHashable           // re-bake signature (NOT tick — breathing cycles baked frames)
 
-    init(sources: [FieldSource], palette: [SIMD3<UInt8>], tile: [UInt8], tick: Int, phaseToken: String) {
+    init(sources: [FieldSource], palette: [SIMD3<UInt8>], tile: [UInt8], tick: Int,
+         phaseToken: String, lifted: Bool) {
         self.sources = sources
         self.tile = tile
         self.tick = tick
+        self.lifted = lifted
         let ghost = SIMD3<UInt8>(20, 20, 24)
         pal = (0 ..< 256).map { $0 < palette.count ? palette[$0] : ghost }
 
@@ -144,7 +151,7 @@ private struct FieldModel {
         let srcKey = sources.map { "\($0.kind == .set ? "s" : "a"):\(Int($0.rect.minX)),\(Int($0.rect.minY)),\(Int($0.rect.width))x\(Int($0.rect.height))" }.joined(separator: ";")
         let topDominant = counts.enumerated().sorted { $0.element > $1.element }.prefix(8)
             .map { "\($0.offset):\($0.element * 16 / maxC)" }.joined(separator: ",")
-        key = AnyHashable([phaseToken, "\(pal.count)", srcKey, topDominant])
+        key = AnyHashable([phaseToken, "\(pal.count)", srcKey, topDominant, lifted ? "lift" : "-"])
     }
 
     /// The sRGB8 a stage cell shows on breathing `frame`. `nil` → transparent (a widget owns its
@@ -163,7 +170,8 @@ private struct FieldModel {
             else if w > w2 { w2 = w }
         }
         if sum <= 0.001 { return FieldTuning.farDark }              // far calm: a near-black cell
-        let E = min(1.0, sum)
+        // While a widget is lifted, the chaos recedes (radiation + lift-drag working together).
+        let E = min(1.0, sum) * (lifted ? FieldTuning.liftDim : 1.0)
 
         // Chaos SEAM: where the runner-up rivals the dominant, mute toward the neutral.
         let interplay = w1 > 0 ? w2 / w1 : 0

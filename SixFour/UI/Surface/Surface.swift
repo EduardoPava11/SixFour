@@ -160,6 +160,12 @@ final class Surface {
     /// The Z₆₄ playback cursor — the current frame `0..<64`. Advanced by κ each tick.
     var cursor: Int = 0
 
+    /// OUT-OF-BAND UI state (NOT in the FSM alphabet): which ColorWidget is currently LIFTED for
+    /// a move, or `nil`. The influence-field ground reads this to CALM the radiation while a
+    /// widget is being lifted out of the field (order is being rearranged → the chaos recedes).
+    /// Transient; never persisted; never an `δ` event (mirrors the Display out-of-band discipline).
+    var liftedWidget: ColorIdentity? = nil
+
     /// The surface settings (dither / deterministic-core toggles), integer-encoded.
     var settings: SurfaceSettings = .init()
 
