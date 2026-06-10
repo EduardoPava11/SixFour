@@ -1,0 +1,7 @@
+attrs==26.1.0
+numpy==2.4.6
+pillow==12.2.0
+psutil==7.2.2
+pyarrow==24.0.0
+rerun-sdk==0.32.2
+typing_extensions==4.15.0
