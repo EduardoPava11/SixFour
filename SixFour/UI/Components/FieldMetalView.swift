@@ -14,19 +14,25 @@ import simd
 /// shader reads the generated `FieldTuning.metal.h` constants + the byte-exact `SixFourBoundary`
 /// Stage mask (fed as uniforms) + the byte-exact dither hash.
 ///
-/// GATED behind the `-metalField` launch argument (DEBUG); the CPU `InfluenceField` stays the
-/// default/fallback so the GPU path can be A/B-compared on device before it replaces the bake.
+/// DEFAULT cell-grid ground: the GPU field runs whenever Metal is available (every real
+/// device), so the live field is smooth off the main thread. The CPU `InfluenceField` is the
+/// fallback only when Metal is unavailable. In DEBUG, `-cpuField` forces the CPU path for A/B.
 /// **On-device only** — the geometry/timing is the user's to verify; Claude compile-checks.
 struct FieldMetalView: UIViewRepresentable {
     let surface: Surface
     let placement: [ColorIdentity: (col: Int, row: Int)]
     let tick: Int
 
-    #if DEBUG
-    static let enabled = ProcessInfo.processInfo.arguments.contains("-metalField")
-    #else
-    static let enabled = false
-    #endif
+    /// GPU field on iff Metal initialised. The CPU bake (`InfluenceField`) is the no-Metal
+    /// fallback; `-cpuField` (DEBUG) forces it so the two can still be A/B-compared.
+    static let enabled: Bool = {
+        guard FieldMetalCore.shared != nil else { return false }
+        #if DEBUG
+        return !ProcessInfo.processInfo.arguments.contains("-cpuField")
+        #else
+        return true
+        #endif
+    }()
 
     func makeUIView(context: Context) -> FieldUIView {
         let v = FieldUIView()
@@ -104,9 +110,10 @@ struct FieldMetalView: UIViewRepresentable {
     }
 }
 
-/// THE ONE GROUND for every act — picks the GPU field (`-metalField`) or the CPU `InfluenceField`
-/// fallback. Used by all act phase fields so the smooth GPU field persists across the act1→act2
-/// transition (no reverting to the main-thread CPU bake during the burst). Same field, same κ tick.
+/// THE ONE GROUND for every act — the GPU field by default (`FieldMetalView.enabled`), with the
+/// CPU `InfluenceField` as the no-Metal fallback. Used by all act phase fields so the smooth GPU
+/// field persists across the act1→act2 transition (no reverting to the main-thread CPU bake during
+/// the burst). Same field, same κ tick.
 struct StageGround: View {
     let surface: Surface
     let placement: [ColorIdentity: (col: Int, row: Int)]
