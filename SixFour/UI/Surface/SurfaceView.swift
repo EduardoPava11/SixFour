@@ -247,6 +247,7 @@ struct SurfaceView: View {
         // Carry the FULL per-frame palette series so review shows the real per-frame GIFA;
         // keep frame-0 on `surface.palette` for the `cellGlobal` accessor / loading reads.
         surface.palettesPerFrame = out.palettesForDisplay
+        surface.gifURL = out.gifURL          // the Review Share source
         if let pal = out.palettesForDisplay.first {
             surface.palette = pal
         }

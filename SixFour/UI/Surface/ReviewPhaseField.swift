@@ -32,6 +32,13 @@ struct ReviewPhaseField: View {
     /// now placed (no longer VStack-centered), so all phases honor the one global layout.
     private var placement: [ColorIdentity: (col: Int, row: Int)] { settings.widgetPlacement }
 
+    /// COLOR ATLAS (gated, default OFF) — the out-of-band curation SUB-STATE inside
+    /// `.review` (docs/COLOR-ATLAS.md §8 Phase C): not a new FSM phase, no new movable
+    /// widget identity. Both are view-local: leaving review removes this field from the
+    /// hierarchy, so the sub-state and the session reset naturally on retake.
+    @State private var atlasOpen = false
+    @State private var atlas = AtlasState()
+
     /// The shared content edge — 64 cells × the 4 pt atom = 256 pt (same as the preview).
     private let gifEdge = GlobalLattice.gif(GlobalLattice.previewCells)
     /// The palette edge — 16 cells × 4 pt = 64 pt (the GIF's first abstraction = the shutter).
@@ -43,10 +50,12 @@ struct ReviewPhaseField: View {
             // every phase). This phase renders only the GIFA hero + chrome on a clear background.
 
             if surface.palettesPerFrame.isEmpty {
-                // No committed GIFA in σ yet: a static cell line, never a spinner.
-                CellText("no GIF in surface", rows: 11,
-                         ink: Color(srgb8: SIMD3<UInt8>(140, 140, 140)))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // No committed GIFA in σ yet: just the field ground, no label.
+                Color.clear
+            } else if atlasOpen && settings.colorAtlasEnabled {
+                // The Color Atlas curation sub-state (flag-gated; never reachable
+                // while `colorAtlasEnabled` is false — the default path is untouched).
+                atlasCurationField
             } else {
                 // All three ColorWidgets are PLACED at the ONE shared global position (no
                 // more VStack-centering) and movable — Field64's gif-render and Palette16's
@@ -62,12 +71,9 @@ struct ReviewPhaseField: View {
                     .movable(.palette16, settings: settings, surface: surface)
                     .place(region(for: .palette16, at: placement))
 
-                // Immovable bottom chrome (NOT a ColorWidget): the determinism badge over
-                // the action row, VStack-pinned to the bottom edge.
-                VStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
-                    determinismBadge
-                    actionRow
-                }
+                // Immovable bottom chrome (NOT a ColorWidget): the action row, pinned to
+                // the bottom edge. (Determinism text removed — illegible at cell size.)
+                actionRow
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .padding(.horizontal, GlobalLattice.gif(GlobalLattice.gutterCells))
                 .padding(.bottom, GlobalLattice.gif(GlobalLattice.gutterCells))
@@ -112,23 +118,6 @@ struct ReviewPhaseField: View {
         .accessibilityLabel("Per-frame palette, 256 colours")
     }
 
-    // MARK: - Determinism badge
-
-    /// The trust line: which core produced the GIFA (deterministic Zig vs GPU fallback).
-    private var determinismBadge: some View {
-        let green = SIMD3<UInt8>(70, 200, 90)
-        let amber = SIMD3<UInt8>(225, 200, 70)
-        return Group {
-            if surface.settings.useDeterministicCore {
-                CellText("deterministic core · byte-reproducible", rows: 6,
-                         ink: Color(srgb8: green))
-            } else {
-                CellText("GPU fallback · not byte-reproducible", rows: 6,
-                         ink: Color(srgb8: amber))
-            }
-        }
-    }
-
     // MARK: - Actions
 
     /// Share + Retake. Retake fires `.retake` (→ `.live`, the only modelled review exit).
@@ -136,14 +125,64 @@ struct ReviewPhaseField: View {
     /// renders as a cell button placeholder, keeping the row visually intact.
     private var actionRow: some View {
         HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
-            CellActionButton(icon: .share, title: "Share", prominent: true)
-                .accessibilityHidden(true)   // not yet wired through σ
+            if let url = surface.gifURL {
+                ShareLink(item: url) {
+                    CellActionButton(icon: .share, title: "Share", prominent: true)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Share GIF")
+            } else {
+                // No committed GIF on disk yet — inert placeholder, same footprint.
+                CellActionButton(icon: .share, title: "Share", prominent: true)
+                    .accessibilityHidden(true)
+            }
 
             Button { surface.step(.retake) } label: {
                 CellActionButton(icon: .retake, title: "Retake")
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Retake")
+
+            // Color Atlas entry (flag-gated): off ⇒ this branch is EmptyView and
+            // the action row is byte-identical to the pre-Atlas screen.
+            if settings.colorAtlasEnabled {
+                Button {
+                    atlas.loadIfNeeded(palettesPerFrame: surface.palettesPerFrame,
+                                       indexCube: surface.indexCube)
+                    atlasOpen = true
+                } label: {
+                    CellActionButton(icon: .grid3x3, title: "Atlas")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open color atlas")
+            }
         }
+    }
+
+    // MARK: - Color Atlas curation sub-state (gated)
+
+    /// The 16³ curation field: the scrubbable board (ToggleBin / WeightRegion /
+    /// PinAnchor by tap mode) over the Compare candidate strip — all four Move
+    /// types are playable, every play is logged + replay-folded. VStack-pinned
+    /// chrome (no new movable widget identity ⇒ no MoveContract regen).
+    private var atlasCurationField: some View {
+        VStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
+            CellText("COLOR ATLAS · 16³", rows: 11,
+                     ink: Color(srgb8: SIMD3<UInt8>(235, 235, 235)))
+
+            AtlasBoardView(atlas: atlas)
+            AtlasGalleryView(atlas: atlas)
+
+            CellText("moves \(atlas.log.entries.count) · compares \(atlas.log.compareCount)",
+                     rows: 6, ink: Color(srgb8: SIMD3<UInt8>(140, 140, 140)))
+
+            Button { atlasOpen = false } label: {
+                CellActionButton(icon: .none, title: "Done", prominent: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close color atlas")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, GlobalLattice.gif(GlobalLattice.gutterCells))
     }
 }

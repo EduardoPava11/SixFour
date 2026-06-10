@@ -149,6 +149,10 @@ final class Surface {
     /// Empty until review. A flat buffer keeps the value type cheap to carry.
     var indexCube: [UInt8] = []
 
+    /// The committed GIF file on disk — the Review Share source. Set by `commit(_:)` from
+    /// the engine's `CaptureOutput.gifURL`; `nil` until a GIFA is rendered.
+    var gifURL: URL?
+
     /// The LIVE camera tile as 64×64 indexed cells (row-major `y·64 + x`) + its paired
     /// sRGB palette — the live hero paints the REAL camera through these (the cube law:
     /// 1 GIF pixel per cell). Distinct from `palette` (the throttled shutter/ground palette)
