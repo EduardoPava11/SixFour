@@ -108,6 +108,7 @@ library
         SixFour.Codegen.GenomeFixed
         SixFour.Codegen.CloudProjection
         SixFour.Codegen.GridAxis
+        SixFour.Codegen.LookCategory
     build-depends:
         base       >=4.16 && <5
       , vector     >=0.13 && <0.14
