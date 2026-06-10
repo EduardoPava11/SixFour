@@ -7,6 +7,47 @@ newest first.
 
 ---
 
+## 2026-06-10 — Swipe-to-LOOK + R3D `.cube` LUT extraction (one transform, two projections)
+
+> **Session theme:** "a look IS a LUT." Brought the GIF→LUT idea from
+> `~/lut-generator/src/python/gif_palette_lut.py` into SixFour as ONE data-driven OKLab
+> palette→palette transform with two projections: the live capture screen recolours on a
+> horizontal **swipe**, and Review exports the SAME transform as a 65³ `.cube` for grading R3D
+> in DaVinci Resolve. Spec-first, byte-exact, golden-gated. **750 Haskell tests + 28 Zig tests
+> green; drift gate 24 symbols; iOS BUILD SUCCEEDED** (compile-only per the camera-app rule).
+
+### Design decisions
+- **OKLab, not CIELAB.** The python analyses in CIELAB; we port to OKLab so the whole transform
+  reuses the existing byte-exact Q16 colour core (`Spec.ColorFixed`). A primaries coincidence
+  (sRGB ≡ Rec.709 primaries, differing only in gamma) makes OKLab→linear land exactly in linear
+  Rec.709 — so the Rec.709 output is correct. The cost: every zone edge/threshold is in OKLab L
+  ∈ [0,1] units (NOT the python's L\* ∈ [0,100]); the luminance-preservation law pins this.
+- **Transcendentals as spec-generated embedded 1-D LUTs.** Log3G10 decode + filmic `exp` would
+  break integer determinism, so the Haskell spec generates `log3g10_decode_lut.bin` /
+  `filmic_tonemap_lut.bin` (+ a Q16 `srgb_encode_lut.bin` for 6-decimal output) and Zig
+  `@embedFile`s them — the `gamma_lut.bin` pattern. No float on the core path.
+- **Q16 6-decimal `.cube`** (not 8-bit) for banding-free R3D; golden stays exact (Q16 ints).
+- **Swipe = render param only.** The look recolours the palette; the index tile is untouched, so
+  the 4 pt cell grid is structurally intact. The swipe is a clear background layer behind the
+  widgets (the hero is `allowsHitTesting(false)`), so it never contends with the palette's
+  tap-to-shoot / hold-to-move.
+
+### Keystone laws (the feature pivots on these)
+- ★ **luminance preservation** — the transform is chrominance-only (output L == input L).
+- ★ **preview ≡ cube** — the live 256-colour preview and the 65³ voxel call a byte-identical
+  `transferOklabQ16`; a regression there breaks the build.
+- ★ **.cube grid ordering** (R fastest) — prevents an R/B-swapped LUT.
+
+### Where it lives
+Spec `Spec.{ZoneProfile,LookTransfer,RedFrontEnd,CubeLut}` + `Properties.*` (laws) +
+`Fixtures.hs` (blobs + `lut_golden.json`). Zig `s4_zone_profile_q16` / `s4_look_transfer_q16` /
+`s4_build_cube_q16` + `lut_fixture_test.zig`. Bridge `SixFourNative.{srgb8ToOklab,lookZoneProfile,
+lookTransfer,extractLUT}`. UI `LookVariant`, `AppSettings.captureLook`, `LivePhaseField.lookSwipe`
++ look-name `CellText`, `SurfaceView` palette re-grade, `ReviewPhaseField` Export LUT + `LUTFile`.
+Full design: `docs/SIXFOUR-LOOK-LUT-WORKFLOW.md`.
+
+---
+
 ## 2026-06-07 — The GIFA cube becomes CELLS; capture→GIFA morph wired; raymarcher deleted
 
 > **Session theme:** "render the cell grid EVERY time." The whole capture→GIFA experience now

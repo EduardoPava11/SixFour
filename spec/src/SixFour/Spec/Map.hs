@@ -69,5 +69,15 @@ barycenter / maximin; the NN learns this barycenter.)
 == 9. Codegen — emitters to the app (Swift / Zig / Python), golden-pinned
 @SixFour.Codegen.Swift@, @.Shapes@, @.Golden@, @.Collapse@, @.PairTree@, @.Genome@, @.GenomeFixed@,
 @.PaletteValue@, @.MLX@, @.CoreML@, @.Burn@.
+
+== 10. Look transfer / LUT extraction (R3D .cube)
+The on-screen "look" and the exported 3D LUT are two projections of ONE OKLab palette→palette
+transform derived from the captured palette's luminance-zone chroma profile (a port of
+@~/lut-generator/src/python/gif_palette_lut.py@). See @docs/SIXFOUR-LOOK-LUT-WORKFLOW.md@.
+
+  * "SixFour.Spec.ZoneProfile"  — luminance-zone mean a/b/chroma profile of a palette
+  * "SixFour.Spec.LookTransfer" — the chrominance-only transfer (preview ≡ cube core)
+  * "SixFour.Spec.RedFrontEnd"  — Log3G10 decode + RWG→Rec.709 + filmic tonemap (LUT-driven, Q16)
+  * "SixFour.Spec.CubeLut"      — the 65³ .cube grid builder
 -}
 module SixFour.Spec.Map () where

@@ -54,11 +54,25 @@ Feasibility verdict (researched 2026-06-09, iPhone 17 Pro / iOS 26):
 - **Deterministic Zig render core.** Per-stage kernels (widen → linear→OKLab → quantize
   (maximin+Lloyd) → dither → significance fill → palette → LZW/GIF89a assemble) drive
   `DeterministicRenderer`; default path, GPU-float `GIFRenderer` is the throw-fallback.
-  Native header now **declares all 21** `s4_*` exports (18 shipped + 3 tooling-only:
+  Native header now **declares all 24** `s4_*` exports (21 shipped + 3 tooling-only:
   `s4_gif_decode`, `s4_gif_decode_scratch_bytes`, `s4_srgb8_to_oklab_q16`); the gate asserts the
   header symbol set ≡ the Zig export set (drift-proof). **RESOLVED:** `s4_quantize_frame`'s
   maximin (Gonzalez 1985 farthest-first) **IS** the `Spec.QuantFixed`/`Spec.Collapse` canon and
   Zig matches byte-for-byte — it was never a "maximin ≠ Wu" bug; do not re-flag.
+- **Swipe-to-LOOK + R3D `.cube` LUT export (2026-06-10).** A "look" is ONE data-driven OKLab
+  palette→palette transform derived from the captured palette's luminance-zone chroma profile
+  (an OKLab port of `~/lut-generator/.../gif_palette_lut.py`). Two projections of the same
+  transform: the live capture screen recolours the 64×64 hero + 16×16 palette on a horizontal
+  **swipe** (`LivePhaseField.lookSwipe` cycles `AppSettings.captureLook: LookVariant`; index tile
+  untouched ⇒ cell-grid law intact; transient `CellText` look name), and Review **Export LUT**
+  bakes a 65³ `.cube` (`LUTFile`, Q16 6-decimal, Log3G10/RWGRGB→Rec.709) for grading R3D in
+  Resolve. Spec source of truth: `Spec.{ZoneProfile,LookTransfer,RedFrontEnd,CubeLut}` (★ laws:
+  luminance-preservation, preview≡cube, .cube grid ordering; 750 Haskell tests). Zig kernels
+  `s4_zone_profile_q16`/`s4_look_transfer_q16`/`s4_build_cube_q16` are byte-exact to the spec
+  (`lut_fixture_test.zig`, 28 Zig tests); transcendentals (Log3G10 decode, filmic exp) +sRGB
+  encode are spec-generated embedded 1-D LUTs (`{log3g10_decode,filmic_tonemap,srgb_encode}_lut.bin`).
+  Swift bridge `SixFourNative.{lookZoneProfile,lookTransfer,extractLUT}`. iOS build SUCCEEDED
+  (compile-checked; on-device swipe/look + Resolve LUT verification is the user's step).
 - **GIFA→GIFB global collapse is WIRED in production.** `CaptureViewModel.renderDeterministic`
   (`:478`) → `renderDeterministicGlobal` (`:480/:555`) → `DeterministicRenderer.renderGlobalPalette`
   (`:268`) → `SixFourNative.globalCollapse` (`:314`) → Zig `s4_global_collapse`, gated by

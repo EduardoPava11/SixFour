@@ -119,7 +119,9 @@ struct SurfaceView: View {
             // Live palette → σ.palette (the live/capturing field paints from σ).
             .onChange(of: engine.livePalette) { _, pal in
                 if surface.phase == .live || surface.phase == .locking || surface.phase == .capturing {
-                    surface.palette = pal
+                    // The capture-screen LOOK re-grades the palette (swipe to cycle); the
+                    // index tile is untouched, so the 16×16 shutter recolours in place.
+                    surface.palette = engine.settings.captureLook.apply(to: pal)
                 }
             }
             // Live camera tile → σ (indexed cells + paired palette). The live hero paints
@@ -127,7 +129,9 @@ struct SurfaceView: View {
             .onChange(of: engine.previewIndexTile) { _, tile in
                 if surface.phase == .live || surface.phase == .locking || surface.phase == .capturing {
                     surface.previewTile = tile
-                    surface.previewPalette = engine.previewPalette
+                    // Re-grade the hero's palette through the active LOOK (same transform
+                    // as the shutter + the exported LUT); the index tile is unchanged.
+                    surface.previewPalette = engine.settings.captureLook.apply(to: engine.previewPalette)
                 }
             }
             // Streamed render partials → σ. The deterministic core surfaces the REAL

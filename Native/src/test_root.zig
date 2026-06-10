@@ -18,5 +18,6 @@ test {
     _ = @import("collapse_fixture_test.zig"); // cross-language global-collapse golden (GIFA→GIFB)
     _ = @import("haar_fixture_test.zig"); // cross-language integer-Haar golden (reversible lifting)
     _ = @import("gif_fixture_test.zig"); // cross-language full-burst GIF golden (Stage 6)
+    _ = @import("lut_fixture_test.zig"); // cross-language look transfer + LUT-extraction golden
     _ = @import("fixture_test.zig"); // cross-language Python-fixture check
 }

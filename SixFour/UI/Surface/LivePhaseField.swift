@@ -42,6 +42,16 @@ struct LivePhaseField: View {
             // (behind every phase) — not drawn here, so it is never recreated per phase. This phase
             // renders only its widgets + chrome on a CLEAR background over it.
 
+            // LOOK swipe ground: a clear full-screen layer BEHIND the widgets. A horizontal
+            // swipe cycles `settings.captureLook` (the data-driven OKLab grade that recolours
+            // the hero + palette and is what Export LUT bakes). The hero passes touches through
+            // (`allowsHitTesting(false)`), so swipes over it reach here; the palette keeps its
+            // own tap-to-shoot / hold-to-move. Only a render param changes — nothing moves, so
+            // the 4 pt cell grid is intact.
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(lookSwipe)
+
             // Field64 — the 64-cell preview hero, placed at its SHARED global position and
             // movable (long-press to lift). The data source is the live camera tile; the
             // POSITION is the same `field64Position` review/render read.
@@ -63,7 +73,32 @@ struct LivePhaseField: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
         // The open screen is JUST the preview + palette on the checker ground — no build
-        // stamp / status text (the grey writing read as distracting clutter).
+        // stamp / status text (the grey writing read as distracting clutter). The ONE
+        // exception is a transient LOOK name, shown only when a grade is active (default
+        // `.off` ⇒ the screen is unchanged), so the swipe is legible without clutter.
+        .overlay(alignment: .top) {
+            if settings.captureLook != .off {
+                CellText(settings.captureLook.displayName, cell: GlobalLattice.gif(1))
+                    .padding(.top, GlobalLattice.gif(4))
+                    .allowsHitTesting(false)
+                    .accessibilityLabel("Look: \(settings.captureLook.displayName)")
+            }
+        }
+    }
+
+    /// A horizontal swipe cycles the LOOK (right = next, left = previous) with a haptic
+    /// tick. `.onEnded` so one swipe = one step; horizontal-dominant + a 6-cell minimum
+    /// keeps it from firing on taps or vertical drags. It only writes `settings.captureLook`
+    /// (a render param) — never a position, so the cell grid is never disturbed.
+    private var lookSwipe: some Gesture {
+        DragGesture(minimumDistance: GlobalLattice.gif(6))
+            .onEnded { value in
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard abs(dx) > abs(dy), abs(dx) >= GlobalLattice.gif(6) else { return }
+                settings.captureLook = dx < 0 ? settings.captureLook.next : settings.captureLook.prev
+                Haptics.play(1)
+            }
     }
 
     // MARK: - The preview hero (64 × 64 cells)

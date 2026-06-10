@@ -4,6 +4,10 @@ import Test.Tasty
 
 import qualified Properties.Color        as Color
 import qualified Properties.ColorFixed   as ColorFixed
+import qualified Properties.ZoneProfile  as ZoneProfile
+import qualified Properties.LookTransfer as LookTransfer
+import qualified Properties.RedFrontEnd  as RedFrontEnd
+import qualified Properties.CubeLut      as CubeLut
 import qualified Properties.Gauge        as Gauge
 import qualified Properties.Surjectivity as Surj
 import qualified Properties.Wu           as Wu
@@ -90,6 +94,10 @@ main :: IO ()
 main = defaultMain $ testGroup "sixfour-spec"
   [ Color.tests
   , ColorFixed.tests
+  , ZoneProfile.tests
+  , LookTransfer.tests
+  , RedFrontEnd.tests
+  , CubeLut.tests
   , Gauge.tests
   , Surj.tests
   , Wu.tests

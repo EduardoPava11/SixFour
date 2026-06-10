@@ -417,6 +417,120 @@ enum SixFourNative {
         return rgb
     }
 
+    /// k sRGB8 triples → k OKLab Q16 (decode; lossy inverse of `paletteToSRGB8`).
+    /// Used by the look round-trip to bring a display palette back into OKLab.
+    static func srgb8ToOklab(rgb: [UInt8], k: Int) -> [Int32]? {
+        var out = [Int32](repeating: 0, count: k * 3)
+        let rc = rgb.withUnsafeBufferPointer { r in
+            out.withUnsafeMutableBufferPointer { o in
+                s4_srgb8_to_oklab_q16(r.baseAddress, Int32(k), o.baseAddress)
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_srgb8_to_oklab_q16 rc=\(rc)"); return nil }
+        return out
+    }
+
+    // ── Look transfer / LUT extraction (R3D .cube) ────────────────────────────
+    // The on-screen "look" and the exported 3D LUT are two projections of ONE
+    // OKLab palette→palette transform derived from the captured palette's
+    // luminance-zone chroma profile. Mirrors SixFour.Spec.{ZoneProfile,
+    // LookTransfer,CubeLut}; byte-exact (golden-gated by lut_fixture_test.zig).
+
+    /// The luminance-zone chroma profile of a palette — the data-driven source of
+    /// a look. `meanA/B/C` each hold `numZones` Q16 values; `global` is the
+    /// empty-zone fallback. Fed to `lookTransfer` (preview) and `extractLUT`.
+    struct ZoneProfile {
+        let numZones: Int
+        let meanA: [Int32]
+        let meanB: [Int32]
+        let meanC: [Int32]
+        let global: SIMD3<Int32>
+    }
+
+    /// Look transform parameters (Q16). A "look variant" is a choice of these over
+    /// a live-derived profile (`LookVariant` maps to one). Defaults match the spec.
+    struct LookParams {
+        var strength: Int32   = 49152      // 0.75
+        var chromaMin: Int32  = 6553       // 0.1
+        var chromaMax: Int32  = 196608     // 3.0
+        var polarity: Int32   = 65536      // +1 (−65536 = complement)
+        var chromaEps: Int32  = 64
+    }
+
+    /// Analyse a 256-colour OKLab Q16 palette into its luminance-zone profile.
+    static func lookZoneProfile(paletteOklabQ16: [Int32], numZones: Int = 8) -> ZoneProfile? {
+        let p = Int32(paletteOklabQ16.count / 3)
+        var meanA = [Int32](repeating: 0, count: numZones)
+        var meanB = [Int32](repeating: 0, count: numZones)
+        var meanC = [Int32](repeating: 0, count: numZones)
+        var global = [Int32](repeating: 0, count: 3)
+        let rc = paletteOklabQ16.withUnsafeBufferPointer { pal in
+            meanA.withUnsafeMutableBufferPointer { a in
+                meanB.withUnsafeMutableBufferPointer { b in
+                    meanC.withUnsafeMutableBufferPointer { c in
+                        global.withUnsafeMutableBufferPointer { g in
+                            s4_zone_profile_q16(pal.baseAddress, p, Int32(numZones),
+                                                a.baseAddress, b.baseAddress, c.baseAddress,
+                                                g.baseAddress)
+                        }
+                    }
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_zone_profile_q16 rc=\(rc)"); return nil }
+        return ZoneProfile(numZones: numZones, meanA: meanA, meanB: meanB, meanC: meanC,
+                           global: SIMD3(global[0], global[1], global[2]))
+    }
+
+    /// Map K OKLab Q16 colours through the look transform (the live PREVIEW look).
+    /// Returns transferred OKLab Q16 (K·3); pair with `paletteToSRGB8` to display.
+    static func lookTransfer(oklabQ16: [Int32], profile: ZoneProfile, params: LookParams) -> [Int32]? {
+        let k = Int32(oklabQ16.count / 3)
+        var out = [Int32](repeating: 0, count: oklabQ16.count)
+        let rc = oklabQ16.withUnsafeBufferPointer { inp in
+            profile.meanA.withUnsafeBufferPointer { a in
+                profile.meanB.withUnsafeBufferPointer { b in
+                    profile.meanC.withUnsafeBufferPointer { c in
+                        out.withUnsafeMutableBufferPointer { o in
+                            s4_look_transfer_q16(inp.baseAddress, k,
+                                                 a.baseAddress, b.baseAddress, c.baseAddress,
+                                                 Int32(profile.numZones),
+                                                 params.strength, params.chromaMin, params.chromaMax,
+                                                 params.polarity, params.chromaEps,
+                                                 o.baseAddress)
+                        }
+                    }
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_look_transfer_q16 rc=\(rc)"); return nil }
+        return out
+    }
+
+    /// Build the `size`³ .cube as Q16 sRGB-encoded triples in .cube order (R
+    /// fastest). For R3D: input domain Log3G10/RWGRGB, output Rec.709 sRGB-gamma.
+    /// `LUTFile` formats these `Double(v)/65536` to 6 decimals.
+    static func extractLUT(profile: ZoneProfile, params: LookParams, size: Int = 65) -> [Int32]? {
+        let count = size * size * size * 3
+        var cube = [Int32](repeating: 0, count: count)
+        let rc = profile.meanA.withUnsafeBufferPointer { a in
+            profile.meanB.withUnsafeBufferPointer { b in
+                profile.meanC.withUnsafeBufferPointer { c in
+                    cube.withUnsafeMutableBufferPointer { o in
+                        s4_build_cube_q16(Int32(size),
+                                          a.baseAddress, b.baseAddress, c.baseAddress,
+                                          Int32(profile.numZones),
+                                          params.strength, params.chromaMin, params.chromaMax,
+                                          params.polarity, params.chromaEps,
+                                          o.baseAddress, count)
+                    }
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_build_cube_q16 rc=\(rc)"); return nil }
+        return cube
+    }
+
     /// Assemble GIF89a bytes from per-frame indices (T·P) + sRGB8 palettes (T·K·3).
     static func gifAssemble(indices: [UInt8], palettesRGB: [UInt8], frameCount: Int,
                             side: Int, k: Int, delayCs: UInt16, comment: String?) -> Data? {

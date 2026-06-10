@@ -4,7 +4,7 @@ import Test.Tasty
 import Test.Tasty.QuickCheck
 
 import SixFour.Spec.Color      (OKLab(..), SRGB(..), linearSRGBToOKLab, okLabToSRGB)
-import SixFour.Spec.ColorFixed (linearToOklabQ16, oklabToSrgb8Q16, q16One, icbrtQ16)
+import SixFour.Spec.ColorFixed (linearToOklabQ16, oklabToSrgb8Q16, q16One, icbrtQ16, isqrtFloor)
 
 toQ :: Double -> Int
 toQ x = round (x * fromIntegral q16One)
@@ -37,6 +37,15 @@ tests = testGroup "ColorFixed"
             y = icbrtQ16 x
             n = x * 4294967296          -- x << 32
         in y * y * y <= n && (y + 1) * (y + 1) * (y + 1) > n
+
+  , -- isqrtFloor is EXACTLY the integer floor square root: Y² ≤ n < (Y+1)².
+    -- This is the property the Zig chroma-magnitude helper must reproduce
+    -- bit-for-bit. Domain bounded under 2^40 (OKLab Q16 sum-of-squares).
+    testProperty "isqrtFloor is the exact floor sqrt (Y² ≤ n < (Y+1)²)" $
+      \(NonNegative n') ->
+        let n = n' `mod` (1099511627776 :: Int)   -- [0, 2^40)
+            y = isqrtFloor n
+        in y * y <= n && (y + 1) * (y + 1) > n
 
   , -- Black → 0, white → ~1.0 in L with ~0 chroma (sign/scale sanity anchors).
     testProperty "black→0, white→L≈1 a≈b≈0" $ once $

@@ -22,6 +22,10 @@ library
         SixFour.Spec.Shape
         SixFour.Spec.Color
         SixFour.Spec.ColorFixed
+        SixFour.Spec.ZoneProfile
+        SixFour.Spec.LookTransfer
+        SixFour.Spec.RedFrontEnd
+        SixFour.Spec.CubeLut
         SixFour.Spec.Palette
         SixFour.Spec.Indices
         SixFour.Spec.Gauge
@@ -268,6 +272,10 @@ test-suite spec-tests
     other-modules:
         Properties.Color
         Properties.ColorFixed
+        Properties.ZoneProfile
+        Properties.LookTransfer
+        Properties.RedFrontEnd
+        Properties.CubeLut
         Properties.Gauge
         Properties.Surjectivity
         Properties.Wu

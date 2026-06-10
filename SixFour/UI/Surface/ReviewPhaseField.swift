@@ -39,6 +39,9 @@ struct ReviewPhaseField: View {
     @State private var atlasOpen = false
     @State private var atlas = AtlasState()
 
+    /// The built `.cube` awaiting the share sheet (set by the Export LUT button).
+    @State private var lutShare: LUTShareItem?
+
     /// The shared content edge — 64 cells × the 4 pt atom = 256 pt (same as the preview).
     private let gifEdge = GlobalLattice.gif(GlobalLattice.previewCells)
     /// The palette edge — 16 cells × 4 pt = 64 pt (the GIF's first abstraction = the shutter).
@@ -81,6 +84,16 @@ struct ReviewPhaseField: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
+        .sheet(item: $lutShare) { item in
+            ActivityView(items: [item.url])
+        }
+    }
+
+    /// The colours the LUT grades toward: ALL frames' palettes pooled into one cloud
+    /// (a clip-wide profile), falling back to the single review palette.
+    private var lutPalette: [SIMD3<UInt8>] {
+        let pooled = surface.palettesPerFrame.flatMap { $0 }
+        return pooled.isEmpty ? surface.palette : pooled
     }
 
     // MARK: - The GIFA hero (64 × 64 cells, the 2D loop)
@@ -135,6 +148,19 @@ struct ReviewPhaseField: View {
                 // No committed GIF on disk yet — inert placeholder, same footprint.
                 CellActionButton(icon: .share, title: "Share", prominent: true)
                     .accessibilityHidden(true)
+            }
+
+            // Export the active LOOK as a .cube LUT for R3D (only when a grade is on;
+            // `.off` would be an identity LUT). Builds via the deterministic Zig core
+            // from the clip-wide palette, then shares the file.
+            if settings.captureLook != .off {
+                Button {
+                    lutShare = LUTFile.makeShareItem(palette: lutPalette, look: settings.captureLook)
+                } label: {
+                    CellActionButton(icon: .share, title: "LUT")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Export 3D LUT for R3D")
             }
 
             Button { surface.step(.retake) } label: {

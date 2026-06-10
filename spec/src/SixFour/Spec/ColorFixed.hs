@@ -26,8 +26,10 @@ independently.
 module SixFour.Spec.ColorFixed
   ( q16One
   , icbrtQ16
+  , isqrtFloor
   , linearToOklabQ16
-    -- * inverse path (OKLab → sRGB8) + the shared gamma LUT
+    -- * inverse path (OKLab → linear sRGB → sRGB8) + the shared gamma LUT
+  , oklabToLinearSRGBQ16
   , oklabToSrgb8Q16
   , gammaLut
     -- * exposed for the cross-language golden emitter
@@ -76,6 +78,27 @@ icbrtQ16 x0
           let mid = (lo + hi + 1) `quot` 2
           in if mid * mid * mid <= n then go mid hi else go lo (mid - 1)
 
+-- | Exact integer floor square root: @isqrtFloor n = floor(sqrt n)@ for @n ≥ 0@.
+--
+-- Used for OKLab chroma magnitude: because the components are carried in Q16,
+-- @sqrt(a² + b²)@ in Q16 is exactly @isqrtFloor (va·va + vb·vb)@ (the 2^16 scale
+-- cancels — @sqrt((va/2^16)² + (vb/2^16)²)·2^16 = sqrt(va² + vb²)@). Found by
+-- binary search. The sum-of-squares argument stays well under @2^40@ for any
+-- in-range OKLab chroma (|a|,|b| ≪ 2^20 in Q16, even after a 3× chroma boost),
+-- so every @mid·mid ≤ 2^40@ stays inside @i64@ — the SAME bound the Zig port
+-- uses (ReleaseSafe traps on overflow, so the bound is load-bearing). Result @Y@
+-- satisfies @Y² ≤ n < (Y+1)²@.
+isqrtFloor :: Int -> Int
+isqrtFloor n
+  | n <= 0    = 0
+  | otherwise = go 0 (1 `shiftL` 20)
+  where
+    go lo hi
+      | lo >= hi  = lo
+      | otherwise =
+          let mid = (lo + hi + 1) `quot` 2
+          in if mid * mid <= n then go mid hi else go lo (mid - 1)
+
 -- | Q16 linear-sRGB triple → Q16 OKLab triple. Integer-only; truncating division.
 linearToOklabQ16 :: (Int, Int, Int) -> (Int, Int, Int)
 linearToOklabQ16 (r0, g0, b0) =
@@ -122,11 +145,14 @@ gammaLut = U.generate 65537 entry
       in fromIntegral (max 0 (min 255 v))
     clamp01 x = max 0 (min 1 x)
 
--- | Q16 OKLab triple → sRGB8 triple in @[0,255]@. Integer-only (M2⁻¹ matmul,
--- exact integer cube, M1⁻¹ matmul, clamp) then a 'gammaLut' lookup. Mirrors the
--- Zig @s4_palette_oklab_to_srgb8@ byte-for-byte.
-oklabToSrgb8Q16 :: (Int, Int, Int) -> (Int, Int, Int)
-oklabToSrgb8Q16 (bigL, a, b) =
+-- | Q16 OKLab triple → Q16 linear-sRGB triple. The integer matmul half of the
+-- inverse path (M2⁻¹ matmul, exact integer cube, M1⁻¹ matmul) WITHOUT the gamma
+-- encode — the output is Q16 linear sRGB and MAY be negative or @> q16One@
+-- (out-of-gamut). Factored out so the LUT-extraction path can insert black-lift
+-- and gamut-compression before the gamma step; 'oklabToSrgb8Q16' is just this
+-- followed by the 'gammaLut' lookup, so the existing color golden re-verifies it.
+oklabToLinearSRGBQ16 :: (Int, Int, Int) -> (Int, Int, Int)
+oklabToLinearSRGBQ16 (bigL, a, b) =
   let l_ = (q16One * bigL + m2i_la * a + m2i_lb * b) `quot` q16One
       m_ = (q16One * bigL + m2i_ma * a + m2i_mb * b) `quot` q16One
       s_ = (q16One * bigL + m2i_sa * a + m2i_sb * b) `quot` q16One
@@ -136,10 +162,18 @@ oklabToSrgb8Q16 (bigL, a, b) =
       r  = (m1i_00 * l + m1i_01 * m + m1i_02 * s) `quot` q16One
       g  = (m1i_10 * l + m1i_11 * m + m1i_12 * s) `quot` q16One
       bl = (m1i_20 * l + m1i_21 * m + m1i_22 * s) `quot` q16One
-  in (gammaByte r, gammaByte g, gammaByte bl)
+  in (r, g, bl)
   where
     -- (v/2^16)^3 in Q16 = v^3 / 2^32, truncating toward zero (sign-correct).
     cubeQ16 v = (v * v * v) `quot` 4294967296
+
+-- | Q16 OKLab triple → sRGB8 triple in @[0,255]@. 'oklabToLinearSRGBQ16' then a
+-- 'gammaLut' lookup. Mirrors the Zig @s4_palette_oklab_to_srgb8@ byte-for-byte.
+oklabToSrgb8Q16 :: (Int, Int, Int) -> (Int, Int, Int)
+oklabToSrgb8Q16 oklab =
+  let (r, g, bl) = oklabToLinearSRGBQ16 oklab
+  in (gammaByte r, gammaByte g, gammaByte bl)
+  where
     gammaByte lin = fromIntegral (gammaLut U.! clampIdx lin)
     clampIdx v = max 0 (min 65536 v)
 

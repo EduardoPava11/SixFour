@@ -32,6 +32,8 @@ final class AppSettings {
         static let showPaletteTree        = "sixfour.showPaletteTree.v1"
         static let paletteBranching       = "sixfour.paletteBranching.v1"
         static let paletteScope           = "sixfour.paletteScope.v1"
+        // Capture-screen LOOK (swipe to cycle); also what Export LUT bakes for R3D.
+        static let captureLook            = "sixfour.captureLook.v1"
         static let paletteRepresentation  = "sixfour.paletteRepresentation.v1"
         static let gridAxisX              = "sixfour.gridAxisX.v1"
         static let gridAxisY              = "sixfour.gridAxisY.v1"
@@ -123,6 +125,14 @@ final class AppSettings {
     /// collapsed global palette (NN output, editable). Defaults to per-frame.
     var paletteScope: PaletteScope {
         didSet { defaults.set(paletteScope.rawValue, forKey: Key.paletteScope) }
+    }
+
+    /// The capture-screen LOOK (swipe to cycle): a data-driven OKLab palette→palette
+    /// transform derived from the live palette's luminance-zone profile, recolouring
+    /// the preview + palette/shutter. The SAME look is what Export LUT bakes for R3D.
+    /// Defaults to `.off` (honest, ungraded).
+    var captureLook: LookVariant {
+        didSet { defaults.set(captureLook.rawValue, forKey: Key.captureLook) }
     }
 
     /// Which dimensional view the palette tool shows: the median-cut `.structure`
@@ -237,6 +247,9 @@ final class AppSettings {
         self.paletteScope = PaletteScope(
             rawValue: defaults.string(forKey: Key.paletteScope) ?? ""
         ) ?? .perFrame
+        self.captureLook = LookVariant(
+            rawValue: defaults.string(forKey: Key.captureLook) ?? ""
+        ) ?? .off
         self.paletteRepresentation = PaletteRepresentation(
             rawValue: defaults.string(forKey: Key.paletteRepresentation) ?? ""
         ) ?? .structure

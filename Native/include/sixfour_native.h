@@ -206,12 +206,51 @@ int32_t s4_synth_burst(uint64_t seed, int32_t mode,
                        int32_t *out_oklab_q16);
 
 // ─────────────────────────────────────────────────────────────────────────
+// Look transfer / LUT extraction (R3D .cube). The on-screen "look" and the
+// exported 3D LUT are two projections of ONE OKLab palette→palette transform
+// derived from the captured palette's luminance-zone chroma profile. Mirrors
+// SixFour.Spec.{ZoneProfile,LookTransfer,CubeLut}. Caller owns all memory.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Analyse a `p`-entry OKLab Q16 palette into a luminance-zone chroma profile:
+// per-zone mean a/b/chroma (sum-then-divide; empty zones fall back to the global
+// mean) + the global means. `num_zones` ∈ [1,64]. `out_mean_*` each hold
+// `num_zones` int32; `out_global` holds 3 int32. Returns S4_RC_*.
+int32_t s4_zone_profile_q16(const int32_t *palette_oklab_q16, int32_t p, int32_t num_zones,
+                           int32_t *out_mean_a, int32_t *out_mean_b, int32_t *out_mean_c,
+                           int32_t *out_global);
+
+// Map `k` OKLab Q16 colours through the look transform (the live PREVIEW look):
+// keep L, blend a/b toward the zone target by `strength_q16`, scale chroma
+// (clamped [chroma_min_q16, chroma_max_q16]); `polarity_q16` = ±65536 flips the
+// target hue; below `chroma_eps_q16` blended chroma it snaps to the target
+// direction. `out_oklab_q16` may alias `in_oklab_q16`. Returns S4_RC_*.
+int32_t s4_look_transfer_q16(const int32_t *in_oklab_q16, int32_t k,
+                            const int32_t *mean_a, const int32_t *mean_b, const int32_t *mean_c,
+                            int32_t num_zones, int32_t strength_q16,
+                            int32_t chroma_min_q16, int32_t chroma_max_q16,
+                            int32_t polarity_q16, int32_t chroma_eps_q16,
+                            int32_t *out_oklab_q16);
+
+// Build the `cube_size`³ .cube as Q16 sRGB-encoded triples in .cube order (R
+// fastest, then G, then B): per voxel Log3G10/RWG grid coord → tonemapped linear
+// Rec.709 → OKLab → look transfer → linear sRGB → black lift → gamut compress →
+// sRGB gamma (Q16). `out_q16` holds `out_cap` int32 (needs cube_size³·3).
+// cube_size ∈ [2,65]. Returns S4_RC_* (S4_RC_OUTPUT_TOO_SMALL if out_cap short).
+int32_t s4_build_cube_q16(int32_t cube_size,
+                         const int32_t *mean_a, const int32_t *mean_b, const int32_t *mean_c,
+                         int32_t num_zones, int32_t strength_q16,
+                         int32_t chroma_min_q16, int32_t chroma_max_q16,
+                         int32_t polarity_q16, int32_t chroma_eps_q16,
+                         int32_t *out_q16, size_t out_cap);
+
+// ─────────────────────────────────────────────────────────────────────────
 // Host-side decode + inverse colour — TOOLING / TEST ONLY (not shipped path).
 //
 // These three are exported by the Zig core (Native/src/kernels.zig) for host-side
 // round-trip verification and the cross-language golden tests; they are NOT called
 // by the iOS app. Declared here so header-based callers get correct prototypes and
-// the contract surface is unambiguous (Zig exports 21 symbols total: 18 shipped +
+// the contract surface is unambiguous (Zig exports 24 symbols total: 21 shipped +
 // these 3 tooling). Memory rule unchanged: caller owns all memory.
 // ─────────────────────────────────────────────────────────────────────────
 
