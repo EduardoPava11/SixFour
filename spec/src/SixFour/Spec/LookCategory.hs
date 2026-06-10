@@ -33,6 +33,8 @@ module SixFour.Spec.LookCategory
   , allLookCategories
   , categoryPrototype
   , classify
+  , lookDescriptor
+  , classifyPalette
     -- * Per-user push-pull learning (Bradley–Terry SGD)
   , preferenceGap
   , btGradStep
@@ -43,6 +45,9 @@ module SixFour.Spec.LookCategory
   , lawCategoriesDistinct
   , lawZeroRateIdentity
   , lawStepIncreasesPreferredGap
+  , lawDescriptorSingleton
+  , lawClassifyPaletteTotal
+  , lawUniformPaletteClassifiesToPrototype
   ) where
 
 import Data.List (foldl', minimumBy)
@@ -90,6 +95,23 @@ classify :: OKLab -> LookCategory
 classify desc =
   fst (minimumBy (comparing snd)
         [ (c, okLabDistanceSquared desc (categoryPrototype c)) | c <- allLookCategories ])
+
+-- | Summarise a whole palette's look as a single OKLab descriptor: the component-wise
+-- mean of its colours. This is the bridge from the deterministic palette the app emits
+-- today to the taxonomy — no NN required, so 'classifyPalette' works on the current
+-- render output. An empty palette maps to the neutral centre @(0.5, 0, 0)@ so the
+-- function is total.
+lookDescriptor :: [OKLab] -> OKLab
+lookDescriptor [] = OKLab 0.5 0 0
+lookDescriptor cs =
+  let n            = fromIntegral (length cs)
+      (sl, sa, sb) = foldl' (\(l, a, b) (OKLab l' a' b') -> (l + l', a + a', b + b')) (0, 0, 0) cs
+  in OKLab (sl / n) (sa / n) (sb / n)
+
+-- | The look category of a whole palette: classify its mean-OKLab descriptor. The
+-- end-to-end "what look is this?" the Review screen can label a render with today.
+classifyPalette :: [OKLab] -> LookCategory
+classifyPalette = classify . lookDescriptor
 
 -- ----------------------------------------------------------------------------
 -- Per-user push-pull learning (Bradley–Terry SGD)
@@ -152,3 +174,17 @@ lawStepIncreasesPreferredGap rate theta (w, l)
   | w == l    = True
   | otherwise =
       preferenceGap (btGradStep rate theta (w, l)) w l > preferenceGap theta w l
+
+-- | A singleton palette's descriptor is that colour (mean of one).
+lawDescriptorSingleton :: OKLab -> Bool
+lawDescriptorSingleton c = okLabDistanceSquared (lookDescriptor [c]) c == 0
+
+-- | 'classifyPalette' is total for any palette (including empty).
+lawClassifyPaletteTotal :: [OKLab] -> Bool
+lawClassifyPaletteTotal cs = classifyPalette cs `elem` allLookCategories
+
+-- | A palette made entirely of one category's prototype classifies to that category —
+-- the taxonomy round-trips through the descriptor. (@n ≥ 1@.)
+lawUniformPaletteClassifiesToPrototype :: Int -> LookCategory -> Bool
+lawUniformPaletteClassifiesToPrototype n c =
+  classifyPalette (replicate (max 1 n) (categoryPrototype c)) == c

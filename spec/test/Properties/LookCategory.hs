@@ -46,6 +46,16 @@ tests = testGroup "LookCategory (look taxonomy + on-device push-pull learning)"
         forAll genVec $ \theta ->
           forAll genPair (lawStepIncreasesPreferredGap rate theta)
 
+  , testProperty "a singleton palette's descriptor is that colour" $
+      forAll genOKLab lawDescriptorSingleton
+
+  , testProperty "classifyPalette is total (incl. empty palette)" $
+      forAll (listOf genOKLab) lawClassifyPaletteTotal
+
+  , testProperty "a uniform-prototype palette classifies to that category" $
+      forAll (choose (1, 64)) $ \n ->
+        forAll (elements allLookCategories) (lawUniformPaletteClassifiesToPrototype n)
+
   , testProperty "training a batch is the fold of single steps" $
       forAll genRatePos $ \rate ->
         forAll genVec $ \theta ->
