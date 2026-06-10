@@ -27,6 +27,18 @@ genHaar = do
   lvls <- mapM (\i -> vectorOf (2 ^ i) genOKLab) [0 .. d - 1]
   pure (HaarPalette rt lvls)
 
+-- | DEPTH-7 generator (the Atlas σ-pair root depth — design COLOR-ATLAS §4.0:
+-- the old suite only generated depths 1–4, so the documented "768-D embedding"
+-- claim was never exercised; at depth 7 'reconstruct' yields 128 leaves = 384
+-- floats, which is exactly why 'SixFour.Spec.AtlasState' re-roots embedding
+-- and reward at 'reconstructPaired').
+genHaarDeep :: Gen HaarPalette
+genHaarDeep = do
+  d    <- choose (1, 7) :: Gen Int
+  rt   <- genOKLab
+  lvls <- mapM (\i -> vectorOf (2 ^ i) genOKLab) [0 .. d - 1]
+  pure (HaarPalette rt lvls)
+
 -- | A move whose (level, index) is in range for the given palette.
 genMoveFor :: HaarPalette -> Gen Move
 genMoveFor (HaarPalette _ lvls) = do
@@ -71,6 +83,15 @@ tests = testGroup "PaletteSearch (MCTS over global-palette candidates)"
       forAll genHaar $ \s -> forAll (genMoveFor s) $ \m1 -> forAll (genMoveFor s) $ \m2 ->
         colorsClose 1e-9 (reconstruct (applyMove m1 (applyMove m2 s)))
                          (reconstruct (applyMove m2 (applyMove m1 s)))
+    -- Depth-7 coverage (COLOR-ATLAS §4.0): the embedding length is pinned PER
+    -- DEPTH — 3·2^d floats, i.e. 384 (not 768) at the σ-pair root depth 7.
+  , testProperty "paletteEmbedding has exactly 3*2^depth entries (384 at depth 7)" $
+      forAll genHaarDeep $ \s ->
+        length (paletteEmbedding s) == 3 * length (reconstruct s)
+          && length (reconstruct s) == 2 ^ length (levels s)
+  , testProperty "depth-7: move round-trips + preserves well-formedness" $
+      forAll genHaarDeep $ \s -> forAll (genMoveFor s) $ \m ->
+        lawMoveRoundTrip m s && lawMovePreservesWellFormed m s
     -- Model-based / state-machine law: a search only GROWS the tree, never corrupts it.
   , testProperty "model-based: search grows monotonically + keeps states well-formed" $
       forAll genHaar $ \rt -> forAll (listOf1 (choose (1, 12))) $ \batches ->

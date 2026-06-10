@@ -76,6 +76,15 @@ import qualified Properties.CoreMLContract as CoreMLContract
 import qualified Properties.MLXContract  as MLXContract
 import qualified Properties.GoldenForward as GoldenForward
 import qualified Properties.Loss         as Loss
+import qualified Properties.AtlasBoard   as AtlasBoard
+import qualified Properties.AtlasMove    as AtlasMove
+import qualified Properties.AtlasState   as AtlasState
+import qualified Properties.DeltaCodebook as DeltaCodebook
+import qualified Properties.AtlasOracle  as AtlasOracle
+import qualified Properties.PreferenceUpdate as PreferenceUpdate
+import qualified Properties.DecisionLog  as DecisionLog
+import qualified Properties.AtlasCascade as AtlasCascade
+import qualified Properties.Upscale256   as Upscale256
 
 main :: IO ()
 main = defaultMain $ testGroup "sixfour-spec"
@@ -153,4 +162,13 @@ main = defaultMain $ testGroup "sixfour-spec"
   , MLXContract.tests
   , GoldenForward.tests
   , Loss.tests
+  , AtlasBoard.tests
+  , AtlasMove.tests
+  , AtlasState.tests
+  , DeltaCodebook.tests
+  , AtlasOracle.tests
+  , PreferenceUpdate.tests
+  , DecisionLog.tests
+  , AtlasCascade.tests
+  , Upscale256.tests
   ]

@@ -95,6 +95,15 @@ library
         SixFour.Spec.LookNetEval
         SixFour.Spec.Loss
         SixFour.Spec.STBN3D
+        SixFour.Spec.AtlasBoard
+        SixFour.Spec.AtlasMove
+        SixFour.Spec.AtlasState
+        SixFour.Spec.DeltaCodebook
+        SixFour.Spec.AtlasOracle
+        SixFour.Spec.PreferenceUpdate
+        SixFour.Spec.DecisionLog
+        SixFour.Spec.AtlasCascade
+        SixFour.Spec.Upscale256
         SixFour.Codegen.Swift
         SixFour.Codegen.Shapes
         SixFour.Codegen.Burn
@@ -331,6 +340,15 @@ test-suite spec-tests
         Properties.MLXContract
         Properties.GoldenForward
         Properties.Loss
+        Properties.AtlasBoard
+        Properties.AtlasMove
+        Properties.AtlasState
+        Properties.DeltaCodebook
+        Properties.AtlasOracle
+        Properties.PreferenceUpdate
+        Properties.DecisionLog
+        Properties.AtlasCascade
+        Properties.Upscale256
     build-depends:
         base
       , sixfour-spec
