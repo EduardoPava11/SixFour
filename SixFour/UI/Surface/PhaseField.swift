@@ -26,7 +26,7 @@ enum PhaseField {
         case .live:
             LivePhaseField(surface: surface, clock: clock, settings: settings)
         case .settings:
-            SettingsPhaseField(surface: surface, clock: clock)
+            SettingsPhaseField(surface: surface, clock: clock, settings: settings)
         case .locking:
             // The lock is a cell transform of the live field — the shutter goes inert and
             // the capture-progress field names the lock (it carries no palette yet).

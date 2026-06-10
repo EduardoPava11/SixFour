@@ -690,8 +690,15 @@ final class CaptureViewModel {
         let renderer = DeterministicRenderer(dither: dither)
 
         let branching = settings.paletteBranching   // the radix = the NN genome
+        // Color Atlas (gated, default OFF): the curated global palette — the
+        // user's Compare pick with anchors substituted — rides the render-path
+        // seam so the "global palette cube" is rendered through THE USER'S
+        // palette. Flag off or no curated palette ⇒ nil ⇒ byte-identical.
+        let curatedLeaves: [SIMD3<Int32>]? =
+            settings.colorAtlasEnabled ? AtlasPaletteStore.shared.curatedLeavesQ16 : nil
         let g = try await Task.detached(priority: .userInitiated) {
-            try renderer.renderGlobalPalette(tiles: tiles, comment: comment, branching: branching) { stage in
+            try renderer.renderGlobalPalette(tiles: tiles, comment: comment, branching: branching,
+                                             curatedLeavesQ16: curatedLeaves) { stage in
                 Task { @MainActor [weak self] in self?.surfaceDeterministicStage(stage) }
             }
         }.value

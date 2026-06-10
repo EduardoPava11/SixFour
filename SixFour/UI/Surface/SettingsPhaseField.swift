@@ -32,6 +32,10 @@ struct SettingsPhaseField: View {
     /// proves it is still the live field, just in its `.settings` phase.
     let clock: SurfaceClock
 
+    /// The persisted app preferences — the home of the Color Atlas gate. Threaded
+    /// through `PhaseField` (the same instance every phase reads).
+    @Bindable var settings: AppSettings
+
     // MARK: - Sampler state not yet on the σ spine (see header note)
 
     @State private var ditherMethod: DitherMethod = .errorDiffusion
@@ -63,6 +67,7 @@ struct SettingsPhaseField: View {
                     }
                     engineGroup
                     captureGroup
+                    atlasGroup
                     formGroup
                 }
                 .padding(GlobalLattice.pt(8))
@@ -155,6 +160,19 @@ struct SettingsPhaseField: View {
             header("CAPTURE")
             CellToggle(label: "Open in 64 preview", isOn: $openInPixelatedPreview)
             CellToggle(label: "Auto-save to Photos", isOn: $autoSaveToPhotos)
+        }
+    }
+
+    /// Color Atlas (experimental, default OFF): the 16³ curation board in review
+    /// + the curated-global-palette render seam. With the toggle off the
+    /// production path is byte-identical (docs/COLOR-ATLAS.md).
+    private var atlasGroup: some View {
+        VStack(alignment: .leading, spacing: GlobalLattice.pt(3)) {
+            header("COLOR ATLAS")
+            CellToggle(label: "16^3 curation board", isOn: $settings.colorAtlasEnabled)
+            tagline(settings.colorAtlasEnabled
+                ? "curate the global palette in review"
+                : "off · default render path")
         }
     }
 

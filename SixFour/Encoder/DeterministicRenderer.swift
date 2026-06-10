@@ -307,10 +307,18 @@ struct DeterministicRenderer {
     /// run: a global palette need not be fully exercised by any single frame —
     /// that is a WHOLE-GIF property (union-surjectivity), enforced by the caller,
     /// not the incompatible per-frame `CompleteVoxelVolume` gate.
+    /// `curatedLeavesQ16` — the Color Atlas injection seam (docs/COLOR-ATLAS.md
+    /// §8 Phase D): when non-nil with exactly `k` leaves, the curated/searched
+    /// global palette REPLACES the collapse result between `globalCollapse` and
+    /// `BranchedPalette.projectQ16`, so dither, whole-GIF significance rescue,
+    /// sRGB, gifAssemble, and the SHA-256 all run downstream unchanged (WYSIWYG:
+    /// curated-view bytes == export bytes). Default nil ⇒ byte-identical to the
+    /// pre-Atlas path. Gated by `AppSettings.colorAtlasEnabled` at the caller.
     func renderGlobalPalette(
         tiles: [OKLabTile],
         comment: String?,
         branching: PaletteBranching = .b16,
+        curatedLeavesQ16: [SIMD3<Int32>]? = nil,
         onStage: @Sendable (Stage) -> Void
     ) throws -> GlobalResult {
         precondition(!tiles.isEmpty)
@@ -356,11 +364,18 @@ struct DeterministicRenderer {
         guard let collapse = SixFourNative.globalCollapse(perFramePalettes: perFramePalettes, kOut: k) else {
             throw DetError.stageFailed("collapse")
         }
+        // Color Atlas seam: a curated global palette (the user's Compare pick,
+        // anchors substituted) replaces the collapse leaves HERE — on the render
+        // path, not merely the display protocol — iff it carries exactly k leaves.
+        let collapsedLeaves: [SIMD3<Int32>] = {
+            if let curated = curatedLeavesQ16, curated.count == k { return curated }
+            return collapse.leaves
+        }()
         // Apply the radix GENOME projection: 16² = identity; 4⁴/2⁸ = byte-exact
         // integer projections that shift colours (the radix's inductive bias).
         // This is where "set the control = set the NN genome" reaches the GIFB
         // colour table — exact integer, so GIFB stays byte-exact for every radix.
-        let globalLeaves = BranchedPalette.projectQ16(collapse.leaves, branching: branching)
+        let globalLeaves = BranchedPalette.projectQ16(collapsedLeaves, branching: branching)
         let globalFlat: [Int32] = globalLeaves.flatMap { [$0.x, $0.y, $0.z] }
         let qMs = lap()   // quantize + collapse
 

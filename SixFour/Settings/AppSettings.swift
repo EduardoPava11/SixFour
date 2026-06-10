@@ -38,6 +38,10 @@ final class AppSettings {
         // Unified player (Review GIF hero): which render mode the 2D/3D toggle shows.
         // Debug-only ownership overlay (full-lattice identity-badge bitmap). Default OFF.
         static let debugOwnershipOverlay  = "sixfour.debugOwnershipOverlay.v1"
+        // Color Atlas — the 16³ curation board + curated-global-palette seam
+        // (docs/COLOR-ATLAS.md). Default OFF: the production path is
+        // byte-identical while false.
+        static let colorAtlasEnabled      = "sixfour.colorAtlas.v1"
         // Movable ColorWidget positions (col,row in atoms). Defaults = the spec docks.
         static let field64Position        = "sixfour.field64Position.v1"
         static let palette16Position      = "sixfour.palette16Position.v1"
@@ -144,6 +148,14 @@ final class AppSettings {
         didSet { defaults.set(debugOwnershipOverlay, forKey: Key.debugOwnershipOverlay) }
     }
 
+    /// Whether the Color Atlas curation surface (the 16³ board, the Compare
+    /// gallery, and the curated-global-palette render seam) is enabled.
+    /// Defaults **OFF** — with this false the review field, the collapse seam,
+    /// and the rendered bytes are byte-identical to the pre-Atlas app.
+    var colorAtlasEnabled: Bool {
+        didSet { defaults.set(colorAtlasEnabled, forKey: Key.colorAtlasEnabled) }
+    }
+
     // MARK: - Movable ColorWidget positions (the ONE shared layout)
 
     /// A user-set widget position, in lattice atoms (col,row). Stored as a small
@@ -232,6 +244,8 @@ final class AppSettings {
         self.gridAxisY = GridAxis(rawValue: defaults.string(forKey: Key.gridAxisY) ?? "") ?? .L
         // Absent key → false ⇒ overlay OFF (shipping UI byte-identical).
         self.debugOwnershipOverlay = defaults.bool(forKey: Key.debugOwnershipOverlay)
+        // Absent key → false ⇒ Color Atlas OFF (production path byte-identical).
+        self.colorAtlasEnabled = defaults.bool(forKey: Key.colorAtlasEnabled)
 
         // Movable ColorWidget positions: parse each stored "col,row" (absent/garbage →
         // the generated spec dock).
