@@ -1,14 +1,17 @@
-//! Cross-language GIF golden fixture test (Stage 0 scaffold).
+//! Cross-language GIF golden fixture test — the monolithic burst entrypoint.
 //!
-//! The plan (stateful-spinning-lemon.md, Tier B) has a Haskell driver emit, into
-//! the `fixture_dir` build-option path, a golden burst: the linear-sRGB half
-//! input plus the byte-exact `golden.gif` the Haskell spec produces. This test
-//! will load the SAME input, run `s4_gif_encode_burst`, and assert the produced
-//! GIF byte stream equals `golden.gif` exactly — pinning the Zig core to the
-//! Haskell source of truth the way fixture_test.zig pins the S4LN parser.
+//! The Haskell driver (spec-fixtures, app/Fixtures.hs) emits into `fixture_dir`:
+//!   * golden_input.halfs — a binary16 burst (T·H·W·3, exact dyadic halfs), and
+//!   * golden.gif         — the byte-exact GIF the spec's COMPOSED fold produces
+//!                          (widen→oklab→quantize→dither(FS)→palette→assemble).
+//! This loads the SAME input, runs `s4_gif_encode_burst` (the single-call fold),
+//! and asserts the produced bytes equal golden.gif EXACTLY — pinning the
+//! monolithic entrypoint to the Haskell source of truth (the per-stage kernels
+//! are already pinned individually; this pins their COMPOSITION).
 //!
-//! Until the GIF/quantize kernels land (Stages 2 & 5) the golden does not exist,
-//! so this skips via error.SkipZigTest — never a vacuous pass, never a red tree.
+//! Small dims (2×8²×4) — composition correctness is size-independent. Floyd-
+//! Steinberg dither (mode 0) so no STBN mask is needed. If the goldens are absent
+//! (driver not run) the test skips — never a vacuous pass, never a red tree.
 
 const std = @import("std");
 const kernels = @import("kernels.zig");
@@ -45,28 +48,31 @@ test "cross-language: Haskell golden GIF reproduced byte-exactly by the Zig core
         return error.SkipZigTest;
     defer alloc.free(in_halfs);
 
-    // Stage 0: the encoder is a stub, so reaching here with a real golden would
-    // (correctly) fail. The golden does not exist yet, so we never get here.
-    const bound = kernels.s4_gif_encode_burst_bound(kernels.FRAME_COUNT, kernels.SIDE, kernels.K);
+    // Match the Haskell golden's burst shape (app/Fixtures.hs burst* constants).
+    const FC: i32 = 2;
+    const SD: i32 = 32;
+    const KK: i32 = 256;
+
+    const bound = kernels.s4_gif_encode_burst_bound(FC, SD, KK);
     const out = try alloc.alloc(u8, bound);
     defer alloc.free(out);
-    const scratch_bytes = kernels.s4_burst_scratch_bytes(kernels.FRAME_COUNT, kernels.SIDE, kernels.K);
+    const scratch_bytes = kernels.s4_burst_scratch_bytes(FC, SD, KK);
     const scratch = try alloc.alloc(u8, scratch_bytes);
     defer alloc.free(scratch);
 
     var out_len: usize = 0;
     const rc = kernels.s4_gif_encode_burst(
         @ptrCast(@alignCast(in_halfs.ptr)),
-        kernels.FRAME_COUNT,
-        kernels.SIDE,
-        kernels.K,
+        FC,
+        SD,
+        KK,
         0, // input_space = linear-sRGB halfs
-        15, // lloyd_iters (pinned by spec constant)
-        2, // dither_mode = blue-noise spatiotemporal
+        15, // lloyd_iters (matches burstLloyd)
+        0, // dither_mode = Floyd-Steinberg (no STBN mask needed)
         0, // serpentine
-        null, // stbn_mask (filled when the dither stage lands)
-        5, // frame_delay_cs
-        null,
+        null, // stbn_mask (FS ignores it)
+        5, // frame_delay_cs (20 fps)
+        null, // comment
         0,
         out.ptr,
         out.len,

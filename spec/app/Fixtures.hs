@@ -61,6 +61,13 @@ main = do
   BS.writeFile (outDir </> "gif_golden_palettes.bin") gifPalettesBin
   BL.writeFile (outDir </> "gif_golden.gif")          gifBytes
 
+  -- Full-burst golden for s4_gif_encode_burst (the COMPOSED fold:
+  -- widen→oklab→quantize→dither(FS)→palette→assemble). golden_input.halfs is the
+  -- matching binary16 burst; golden.gif is the byte-exact output the Zig monolithic
+  -- entrypoint must reproduce. Small dims (2×8²×4) — the fold is size-independent.
+  BS.writeFile (outDir </> "golden_input.halfs") burstInputHalfsBin
+  BL.writeFile (outDir </> "golden.gif")          burstGifBytes
+
   -- Significance split-fill golden for s4_significance_fill.
   writeFile (outDir </> "significance_golden.json") emitSignificanceGolden
 
@@ -84,6 +91,67 @@ main = do
   putStrLn $ "spec-fixtures: wrote srgb_linear_lut.bin (" <> show (BS.length srgbLinearLutBin) <> " bytes) to " <> nativeDir
   putStrLn $ "spec-fixtures: wrote gif_golden.gif (" <> show (BL.length gifBytes) <> " bytes), "
              <> show gifFrameCount <> " frames @ " <> show gifSide <> "²×" <> show gifK <> " to " <> outDir
+  putStrLn $ "spec-fixtures: wrote golden.gif (" <> show (BL.length burstGifBytes) <> " bytes) + golden_input.halfs ("
+             <> show (BS.length burstInputHalfsBin) <> " bytes), burst "
+             <> show burstFrames <> "×" <> show burstSide <> "²×" <> show burstK <> " to " <> outDir
+
+-- ---------------------------------------------------------------------------
+-- Full-burst golden for s4_gif_encode_burst — the COMPOSED fold
+-- ---------------------------------------------------------------------------
+
+burstFrames, burstSide, burstK, burstLloyd :: Int
+burstFrames = 2
+burstSide   = 32                -- 1024 px/frame: p > k so quantize loses info ⇒ real dither
+burstK      = 256               -- the app shape GifWire/GIFEncoder.swift support (K=256)
+burstLloyd  = 15                -- Lloyd refinements (matches the test call)
+
+-- Exact binary16 halfs and their linear-sRGB Q16 widening, for the 9 eighths
+-- {0, ⅛, ¼, ⅜, ½, ⅝, ¾, ⅞, 1}. Each is exactly representable in binary16 AND
+-- ×2^16 is an exact integer, so s4_widen_half_to_q16 (half→f32→×65536→round) is
+-- EXACT — the golden cannot diverge on the I/O edge by float precision. 9³ = 729
+-- distinct colours > K, so the 256-centroid quantize is non-degenerate. (bits, q16).
+burstHalfTable :: [(Int, Int)]
+burstHalfTable =
+  [ (0x0000, 0),     (0x3000, 8192),  (0x3400, 16384)
+  , (0x3600, 24576), (0x3800, 32768), (0x3900, 40960)
+  , (0x3A00, 49152), (0x3B00, 57344), (0x3C00, 65536) ]
+
+-- Deterministic value index in [0,8] for (frame, pixel, channel) — spatial variation
+-- so quantize forms real clusters and FS dither has error to diffuse.
+burstPick :: Int -> Int -> Int -> Int
+burstPick f i c = (i * 3 + c * 7 + f * 13 + i * i) `mod` 9
+
+-- A pixel's linear-sRGB Q16 triple (= the exact widen of its halfs).
+burstPixelQ16 :: Int -> Int -> (Int, Int, Int)
+burstPixelQ16 f i = (q 0, q 1, q 2)
+  where q c = snd (burstHalfTable !! burstPick f i c)
+
+-- The burst input as binary16 LE bytes: frame-major, pixel, channel (T·H·W·3).
+burstInputHalfsBin :: BS.ByteString
+burstInputHalfsBin = BS.pack
+  [ byte
+  | f <- [0 .. burstFrames - 1]
+  , i <- [0 .. burstSide * burstSide - 1]
+  , c <- [0 .. 2]
+  , let bits = fst (burstHalfTable !! burstPick f i c)
+  , byte <- [ fromIntegral (bits .&. 0xFF), fromIntegral ((bits `shiftR` 8) .&. 0xFF) ]
+  ]
+
+-- One frame through the fold: oklab → quantize → FS dither → palette(sRGB8).
+burstFrameOut :: Int -> (U.Vector Int, [(Word8, Word8, Word8)])
+burstFrameOut f =
+  let p           = burstSide * burstSide
+      oklab       = [ linearToOklabQ16 (burstPixelQ16 f i) | i <- [0 .. p - 1] ]
+      (cents, _)  = quantizeFrameQ16 burstK burstLloyd oklab
+      indices     = ditherFrameQ16 FloydSteinberg burstSide False cents [] oklab
+      paletteRGB  = [ let (r, g, b) = oklabToSrgb8Q16 c
+                      in (fromIntegral r, fromIntegral g, fromIntegral b) | c <- cents ]
+  in (U.fromList indices, paletteRGB)
+
+-- The whole composed GIF (no comment, 20 fps ⇒ 5 cs/frame) the Zig entrypoint mirrors.
+burstGifBytes :: BL.ByteString
+burstGifBytes =
+  assembleGifRGB8 burstSide burstSide 20 Nothing [ burstFrameOut f | f <- [0 .. burstFrames - 1] ]
 
 -- | sRGB8→linear Q16 decode LUT: 256 little-endian int32 of
 -- @round(srgbToLinear(i/255) · 65536)@, clamped ≥ 0. The inverse-direction
