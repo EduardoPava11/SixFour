@@ -42,6 +42,8 @@ import qualified Properties.CloudProjection as CloudProjection
 import qualified Properties.AddressPicker as AddressPicker
 import qualified Properties.PaletteSearch as PaletteSearch
 import qualified Properties.LookCategory as LookCategory
+import qualified Properties.HaarRibbon as HaarRibbon
+import qualified Properties.QuartetDelta as QuartetDelta
 import qualified Properties.PaletteOracle as PaletteOracle
 import qualified Properties.Dither       as Dither
 import qualified Properties.SpatialDither as SpatialDither
@@ -117,6 +119,8 @@ main = defaultMain $ testGroup "sixfour-spec"
   , PaletteSearch.tests
   , PaletteOracle.tests
   , LookCategory.tests
+  , HaarRibbon.tests
+  , QuartetDelta.tests
   , Dither.tests
   , SpatialDither.tests
   , LookNet.tests

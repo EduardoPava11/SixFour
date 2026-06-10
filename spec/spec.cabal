@@ -298,6 +298,8 @@ test-suite spec-tests
         Properties.PaletteSearch
         Properties.PaletteOracle
         Properties.LookCategory
+        Properties.HaarRibbon
+        Properties.QuartetDelta
         Properties.Dither
         Properties.SpatialDither
         Properties.LookNet
