@@ -49,6 +49,7 @@ import SixFour.Codegen.PairTree (emitPairTreeGolden)
 import SixFour.Codegen.PaletteValue (emitPaletteValueGolden)
 import SixFour.Codegen.Genome (emitGenomeGolden)
 import SixFour.Codegen.GenomeFixed (emitGenomeFixedGolden)
+import SixFour.Codegen.CloudProjection (emitCloudProjectionGolden)
 import SixFour.Spec.STBN3D    (Mask3D(..), generateSTBN3D)
 
 main :: IO ()
@@ -88,6 +89,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "PaletteValueGolden.swift")   emitPaletteValueGolden
   writeUtf8 (swiftOutDir   </> "GenomeGolden.swift")         emitGenomeGolden
   writeUtf8 (swiftOutDir   </> "GenomeFixedGolden.swift")    emitGenomeFixedGolden
+  writeUtf8 (swiftOutDir   </> "CloudProjectionGolden.swift") emitCloudProjectionGolden
   writeUtf8 (mlxOutDir     </> "stages.py")            emitStagesPy
   writeUtf8 (mlxOutDir     </> "net_shape.py")         emitNetShapePy
   writeUtf8 (mlxOutDir     </> "look_net_mlx.py")      emitLookNetMLX
@@ -111,7 +113,7 @@ main = do
   let Mask3D maskBytes = generateSTBN3D @8 @8 @8
   writeBinary (resourceOutDir </> "stbn3d-8.bin") maskBytes
 
-  putStrLn "spec-codegen: wrote 24 files + 1 resource."
+  putStrLn "spec-codegen: wrote 25 files + 1 resource."
   putStrLn $ "  swift   : " <> swiftOutDir
   putStrLn $ "  mlx     : " <> mlxOutDir
   putStrLn $ "  burn    : " <> burnOutDir

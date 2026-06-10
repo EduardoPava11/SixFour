@@ -70,6 +70,7 @@ library
         SixFour.Spec.Layer
         SixFour.Spec.Scale
         SixFour.Spec.Preference
+        SixFour.Spec.LookCategory
         SixFour.Spec.Bottleneck16
         SixFour.Spec.SigmaDecomp
         SixFour.Spec.Quad4
@@ -105,6 +106,7 @@ library
         SixFour.Codegen.PaletteValue
         SixFour.Codegen.Genome
         SixFour.Codegen.GenomeFixed
+        SixFour.Codegen.CloudProjection
     build-depends:
         base       >=4.16 && <5
       , vector     >=0.13 && <0.14
@@ -294,6 +296,7 @@ test-suite spec-tests
         Properties.AddressPicker
         Properties.PaletteSearch
         Properties.PaletteOracle
+        Properties.LookCategory
         Properties.Dither
         Properties.SpatialDither
         Properties.LookNet

@@ -41,6 +41,7 @@ import qualified Properties.SevenSeg     as SevenSeg
 import qualified Properties.CloudProjection as CloudProjection
 import qualified Properties.AddressPicker as AddressPicker
 import qualified Properties.PaletteSearch as PaletteSearch
+import qualified Properties.LookCategory as LookCategory
 import qualified Properties.PaletteOracle as PaletteOracle
 import qualified Properties.Dither       as Dither
 import qualified Properties.SpatialDither as SpatialDither
@@ -115,6 +116,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , AddressPicker.tests
   , PaletteSearch.tests
   , PaletteOracle.tests
+  , LookCategory.tests
   , Dither.tests
   , SpatialDither.tests
   , LookNet.tests

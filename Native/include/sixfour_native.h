@@ -193,12 +193,41 @@ int32_t s4_gif_assemble(const uint8_t *indices, const uint8_t *palettes_rgb,
 //
 // `out_oklab_q16` is caller-owned, frame_count·side·side·3 int32 (interleaved
 // L,a,b row-major). side ≥ 2. Returns S4_RC_OK / S4_RC_NULL_PTR / S4_RC_BAD_SHAPE.
+// `l_min_q16`/`l_max_q16` set the L dynamic range (Q16); `chroma_max_q16` bounds
+// the a,b chroma deviation (Q16). The caller passes the canonical span
+// (synth.zig L_MIN/L_MAX/CHROMA) for the default look; grain is range-proportional.
 // ─────────────────────────────────────────────────────────────────────────
 #define S4_SYNTH_COLOR      0   /* full OKLab burst (L,a,b vary) */
 #define S4_SYNTH_GRAYSCALE  1   /* a=b=0 exactly — Milestone L training data */
 
 int32_t s4_synth_burst(uint64_t seed, int32_t mode,
                        int32_t frame_count, int32_t side,
+                       int32_t l_min_q16, int32_t l_max_q16, int32_t chroma_max_q16,
                        int32_t *out_oklab_q16);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Host-side decode + inverse colour — TOOLING / TEST ONLY (not shipped path).
+//
+// These three are exported by the Zig core (Native/src/kernels.zig) for host-side
+// round-trip verification and the cross-language golden tests; they are NOT called
+// by the iOS app. Declared here so header-based callers get correct prototypes and
+// the contract surface is unambiguous (Zig exports 21 symbols total: 18 shipped +
+// these 3 tooling). Memory rule unchanged: caller owns all memory.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Inverse of s4_palette_oklab_to_srgb8: k packed sRGB8 triplets → interleaved
+// OKLab Q16 (fixed-point). Used by golden round-trip tests.
+int32_t s4_srgb8_to_oklab_q16(const uint8_t *rgb, int32_t k, int32_t *out_oklab_q16);
+
+// Scratch bytes s4_gif_decode needs for a `gif_len`-byte GIF89a. 0 if gif_len==0.
+size_t s4_gif_decode_scratch_bytes(size_t gif_len);
+
+// Decode a GIF89a (the inverse of s4_gif_assemble) back to per-frame indices +
+// local palettes. Pass out_indices/out_palettes_rgb = NULL to PROBE shape only
+// (writes out_frame_count/out_side/out_k). Returns S4_RC_*.
+int32_t s4_gif_decode(const uint8_t *gif, size_t gif_len,
+                      uint8_t *out_indices, uint8_t *out_palettes_rgb,
+                      int32_t *out_frame_count, int32_t *out_side, int32_t *out_k,
+                      void *scratch, size_t scratch_cap);
 
 #endif // SIXFOUR_NATIVE_H

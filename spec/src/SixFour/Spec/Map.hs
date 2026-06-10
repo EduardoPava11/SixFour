@@ -26,6 +26,7 @@ residual head__ on a deterministic statistical base; every cell still emits an e
   * "SixFour.Spec.PaletteOracle"  — the deterministic value head (Ou-Luo beauty + entropy)
   * "SixFour.Spec.PaletteSearch"  — MCTS over scored candidates
   * "SixFour.Spec.Preference", "SixFour.Spec.Look", "SixFour.Spec.Loom" — preference / authoring surface
+  * "SixFour.Spec.LookCategory" — ★ north-star: named look taxonomy + on-device Bradley–Terry push-pull learning
 
 == 1. Numeric & colour core
 "SixFour.Spec.Shape", "SixFour.Spec.Color", "SixFour.Spec.ColorFixed", "SixFour.Spec.LinAlg",
@@ -43,7 +44,7 @@ barycenter / maximin; the NN learns this barycenter.)
 == 4. Palette structure / genome — the NN OUTPUT space (16² / 4⁴ / 2⁸)
 "SixFour.Spec.SplitTree", "SixFour.Spec.PairTree", "SixFour.Spec.PairTreeFixed",
 "SixFour.Spec.SigmaPairFixed", "SixFour.Spec.SigmaPairHead", "SixFour.Spec.SigmaDecomp",
-"SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Quad4Fit", "SixFour.Spec.Bottleneck16",
+"SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Bottleneck16",
 "SixFour.Spec.AddressPicker".
 
 == 5. The authoring STORY (Acts I–IV) — the user-facing pipeline the NN lives in

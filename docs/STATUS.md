@@ -3,7 +3,10 @@
 > **NOTES.md = history; STATUS.md = current truth.**
 > The load-bearing facts in this file are gated by `scripts/verify-doc-claims.sh` — run it
 > before trusting a status claim. If a claim here disagrees with another doc, this file wins;
-> the other doc is stale. Last reconciled 2026-06-05 (merges the former
+> the other doc is stale. Last reconciled 2026-06-09 (debt-cleanup pass: archived 10 docs
+> superseded by the 4 pt GRID v3 atom / deleted views, recorded on-device-personalization
+> feasibility, and added orphan-spec + Zig-export-surface debt rows — see
+> `docs/SIXFOUR-DEBT-CLEANUP-REPORT.md`). Prior reconcile 2026-06-05 (merged the former
 > SIXFOUR-ARCHITECTURE-MAP, TECH-DEBT-LEDGER, SIXFOUR-DEBT-RECONCILIATION, and the
 > forward-status parts of NOTES.md, all now archived/demoted).
 
@@ -20,13 +23,42 @@ Swift ≡ Haskell) is pinned by a generated golden vector. A look-NN is **design
 trained on the Mac but not shipped on device**; the global palette the app emits today is the
 deterministic Zig collapse, not a learned genome.
 
+## On-device personalization feasibility (A19 Pro / iOS 26) — north-star
+
+The product north-star is **on-device personalized look-learning**: the user trains / "push-pulls"
+a tiny proprietary net on the iPhone so it learns *their* look, with looks mapped in categories.
+Feasibility verdict (researched 2026-06-09, iPhone 17 Pro / iOS 26):
+
+- **Hardware: YES, comfortably.** A19 Pro's per-GPU-core **Neural Accelerators** (~8 TFLOPS FP16 /
+  ~14.7 TOPS INT8, programmable + autodiff-capable) can train a ~115K-param net on-device; a
+  forward+backward step over a 64-frame batch is < 1 GFLOP. The 40+ TOPS **Neural Engine is
+  inference-only (no public backprop)** — this validates the "deploy on GPU, skip the ANE"
+  decision. Real ceilings are 76.8 GB/s unified-memory bandwidth + kernel-launch overhead → keep
+  the net small and on-chip (fuse via Metal `cooperative_tensor`).
+- **Zero-dep training path (ranked by fit to the Tier 2 contract):** (1) **hand-written SGD on a
+  small look-delta head** in Swift or the **Zig core** (byte-exact, cross-device — matches the
+  `s4_*` philosophy), optionally BNNS; (2) **MPSGraph custom training loop** (first-party GPU
+  autodiff + arbitrary W2/OT losses Core ML can't express); (3) **Core ML `MLUpdateTask` / kNN**
+  (sanctioned, MSE/cross-entropy + innerProduct/conv only; kNN maps onto per-user look categories).
+- **Ruled OUT on the shipped path:** `mlx-swift` (Tier 1 Mac-only — Swift.org says research, not
+  production; the old "deploy to mlx-swift" note is STALE for Tier 2), Foundation Models LoRA
+  (Mac-only training, language model, per-OS adapter lock), Metal 4 ML encoder (inference-only).
+- **Spine:** Tier 1 (Mac/MLX) pre-trains the base net; the iPhone trains only a small per-user
+  **delta head** from push/pull signals; the Haskell spec golden-gates both.
+- **Spec gap (open debt below):** no look-CATEGORY taxonomy survives, no per-user delta/adapter
+  spec, and no on-device trainer/gradient spec — the north-star has **zero spec footprint** today.
+
 ## BUILT / DESIGN-ONLY / MISSING ledger
 
 ### BUILT (verified on device path / in source)
 - **Deterministic Zig render core.** Per-stage kernels (widen → linear→OKLab → quantize
   (maximin+Lloyd) → dither → significance fill → palette → LZW/GIF89a assemble) drive
   `DeterministicRenderer`; default path, GPU-float `GIFRenderer` is the throw-fallback.
-  Native header exports **18** `s4_*` symbols.
+  Native header now **declares all 21** `s4_*` exports (18 shipped + 3 tooling-only:
+  `s4_gif_decode`, `s4_gif_decode_scratch_bytes`, `s4_srgb8_to_oklab_q16`); the gate asserts the
+  header symbol set ≡ the Zig export set (drift-proof). **RESOLVED:** `s4_quantize_frame`'s
+  maximin (Gonzalez 1985 farthest-first) **IS** the `Spec.QuantFixed`/`Spec.Collapse` canon and
+  Zig matches byte-for-byte — it was never a "maximin ≠ Wu" bug; do not re-flag.
 - **GIFA→GIFB global collapse is WIRED in production.** `CaptureViewModel.renderDeterministic`
   (`:478`) → `renderDeterministicGlobal` (`:480/:555`) → `DeterministicRenderer.renderGlobalPalette`
   (`:268`) → `SixFourNative.globalCollapse` (`:314`) → Zig `s4_global_collapse`, gated by
@@ -129,8 +161,19 @@ deterministic Zig collapse, not a learned genome.
 | missing-palette-srgb8-golden | `s4_palette_oklab_to_srgb8` lacks a Swift golden gate | `SixFourTests/GlobalRenderTests.swift` | low | open |
 | missing-srgb8-oklab-golden | `s4_srgb8_to_oklab_q16` lacks a dedicated golden | `Native/src/kernels.zig` | low | open |
 | palette-tree-unlabeled | `PaletteTreeView` split planes drawn but axis/threshold unlabelled | `SixFour/UI/Components/PaletteTreeView.swift:64` | low | open |
-| atom-pitch-violations | Bare point dims bypass `GlobalLattice` (AddressPicker/GlobalPaletteEditor step buttons) | `SixFour/UI/Components/AddressPickerView.swift:173` | low | open |
+| atom-pitch-violations | `Spec.Lattice` call-site lint not yet enforced; re-scan live call sites for off-atom point literals (old `AddressPickerView.swift:173` cite is DEAD — that view + `GlobalPaletteEditorView` are deleted) | `scripts/lint-grid.sh` (planned) | low | open (cite refreshed 2026-06-09) |
 | ledger-self-drift | TECH-DEBT-LEDGER §A1 (#5–#8) audits NOTES phrases already annotated CLOSED inline | `docs/TECH-DEBT-LEDGER.md:177` | low | resolved-by-archival |
+| glasscontrols-dead | ~~`GlassControls.swift` orphaned~~ — **INVALID**: it defines `GlassIconButton`/`GlassToolbarCluster`/`GlassInfoChip`, all used by `PaletteCloudView`. NOT dead; the "0 refs" check grepped the type name, not the exported components. Kept. | `SixFour/UI/Components/GlassControls.swift` | — | **closed-invalid 2026-06-09** |
+| haarribbon-orphan | `Spec.HaarRibbon` imported by nothing but `Spec.Map`; header claims a `Properties.HaarRibbon` parity gate that doesn't exist (Act III authoring stage, unwired) | `spec/src/SixFour/Spec/HaarRibbon.hs` | med | open |
+| quartetdelta-orphan | `Spec.QuartetDelta` same shape: no importer/test/consumer; false `Properties.QuartetDelta` header claim (Act II 4⁴ quartet stage, unwired) | `spec/src/SixFour/Spec/QuartetDelta.hs` | med | open |
+| spec-quad4fit-dangling | `Spec.Map` cited retired `SixFour.Spec.Quad4Fit` (ADR-014) — dangling Haddock cross-ref | `spec/src/SixFour/Spec/Map.hs:46` | low | **resolved 2026-06-09 (removed)** |
+| golden-drift-cloudgrid | `Spec.GridAxis`/`Spec.GridScript` hand-ported into Swift UI but NOT golden-pinned → drift risk. (`Spec.CloudProjection` **resolved 2026-06-09**: `Codegen.CloudProjection` emits `CloudProjectionGolden.swift`, `CloudWorld.map` extracted + pinned by `CloudProjectionGoldenTests`, TODO removed.) | `SixFour/UI/Components/{PaletteGridView,GridScript}.swift` | med | partial |
+| s4-synth-burst-header-drift | `sixfour_native.h` declared `s4_synth_burst` with 5 params; Zig fn takes 8 | `Native/include/sixfour_native.h` | med | **resolved 2026-06-09 (8-param prototype)** |
+| zig-undeclared-exports | 3 Zig exports lacked header decls (`s4_gif_decode`, `s4_gif_decode_scratch_bytes`, `s4_srgb8_to_oklab_q16`) | `Native/include/sixfour_native.h` | low | **resolved 2026-06-09 (declared + set-equality gate)** |
+| gif-encode-burst-golden-skip | `gif_fixture` skips the `golden.gif` vs `gif_golden.gif` check → `s4_gif_encode_burst` monolithic path is composition-tested but not directly golden-pinned | `Native/src/gif_fixture_test.zig` | med | open |
+| no-look-category-taxonomy | North-star "looks mapped in categories" has no spec — the Berlin-Kay/`Spec.Competition` grid was deleted when `Spec.Preference` went category-free | `spec/src/SixFour/Spec/Preference.hs` | high | open |
+| no-ondevice-trainer-spec | No Spec/Codegen for an on-device gradient/weight-update step over the 384-DOF σ-pair delta head; `Spec.Preference` (Bradley-Terry) is orphaned (no Swift port/codegen/consumer) | `spec/src/SixFour/Spec/Preference.hs` | high | open |
+| palette-value-unused | `PaletteValue.swift` search value head has zero iOS consumers (part of the unwired learned/search spine) | `SixFour/Palette/PaletteValue.swift` | med | open |
 
 ## Ethos pillars
 

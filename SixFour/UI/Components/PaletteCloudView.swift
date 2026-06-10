@@ -138,24 +138,35 @@ private struct CloudPoint {
 /// All 64 frames of points, plus the fixed working-cube transform. The OKLab→world
 /// mapping is a CONTRACT (L→y, a→x, b→z) so the axes never drift — pinned in the
 /// golden `SixFour.Spec.CloudProjection.oklabToWorld`.
+/// OKLab → world, the DISTANCE-TRUE map. Hand-port of the golden
+/// `SixFour.Spec.CloudProjection.oklabToWorld`: centre (Lᶜ,aᶜ,bᶜ)=(0.5,0,0), then a
+/// SINGLE ISOTROPIC scale s=2 on all three axes (a→x, L→y up, b→z). Isotropy is what
+/// makes world distance = OKLab distance up to the constant s (`lawWorldIsometry`) —
+/// per-axis scaling is FORBIDDEN because it would distort perceptual distance, the lie
+/// the cloud must not tell. Pinned bit-for-bit (within float tolerance) against
+/// `CloudProjectionGolden` by `CloudProjectionGoldenTests`. `lab` is (L=x, a=y, b=z).
+enum CloudWorld {
+    static let centreL: Float = 0.5
+    static let centreA: Float = 0.0
+    static let centreB: Float = 0.0
+    static let scale: Float = 2.0          // canonicalScale
+
+    @inline(__always) static func map(_ lab: SIMD3<Float>) -> SIMD3<Float> {
+        SIMD3<Float>(
+            (lab.y - centreA) * scale,     // (a - aᶜ)·s → x (green–red)
+            (lab.x - centreL) * scale,     // (L - Lᶜ)·s → y (up)
+            (lab.z - centreB) * scale      // (b - bᶜ)·s → z (blue–yellow depth)
+        )
+    }
+}
+
 private struct CloudGeometry {
     let frames: [[CloudPoint]]   // 64 × 256
     let maxPopulation: Int
 
-    /// OKLab → world, the DISTANCE-TRUE map. Ported from the golden
-    /// `SixFour.Spec.CloudProjection.oklabToWorld`: centre (Lᶜ,aᶜ,bᶜ)=(0.5,0,0),
-    /// then a SINGLE ISOTROPIC scale s=2 applied to all three axes (a→x, L→y up,
-    /// b→z). Isotropy is what makes world distance = OKLab distance up to the
-    /// constant s (the `lawWorldIsometry` claim) — per-axis scaling is FORBIDDEN
-    /// because it would distort perceptual distance, the lie the cloud must not
-    /// tell. TODO(spec-pin): verify this Swift port bit-for-bit vs the golden.
+    /// Delegates to the spec-pinned `CloudWorld.map` (see `CloudProjectionGolden`).
     @inline(__always) static func world(_ lab: SIMD3<Float>) -> SIMD3<Float> {
-        let s: Float = 2.0                 // canonicalScale
-        return SIMD3<Float>(
-            (lab.y - 0.0) * s,             // (a - aᶜ)·s → x (green–red)
-            (lab.x - 0.5) * s,             // (L - Lᶜ)·s → y (up)
-            (lab.z - 0.0) * s              // (b - bᶜ)·s → z (blue–yellow depth)
-        )
+        CloudWorld.map(lab)
     }
 
     static func build(palettes: [[SIMD3<UInt8>]],
