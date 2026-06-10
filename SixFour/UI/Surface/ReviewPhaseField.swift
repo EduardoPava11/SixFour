@@ -65,7 +65,6 @@ struct ReviewPhaseField: View {
                 // Immovable bottom chrome (NOT a ColorWidget): the determinism badge over
                 // the action row, VStack-pinned to the bottom edge.
                 VStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
-                    lookBadge
                     determinismBadge
                     actionRow
                 }
@@ -111,20 +110,6 @@ struct ReviewPhaseField: View {
         }
         .frame(width: paletteEdge, height: paletteEdge)
         .accessibilityLabel("Per-frame palette, 256 colours")
-    }
-
-    // MARK: - Look badge
-
-    /// The detected LOOK CATEGORY of the current frame's palette — the first visible
-    /// surface of the personalization spine (`SixFour.Spec.LookCategory` via
-    /// `SFLookCategory`). Pure cells; reads σ only. Breathes with the cursor.
-    private var lookBadge: some View {
-        let frame = surface.cursor < surface.palettesPerFrame.count
-            ? surface.palettesPerFrame[surface.cursor] : []
-        let oklab = frame.map { ColorScience.srgb8ToOKLab($0.x, $0.y, $0.z).simd }
-        let name = SFLookCategory.name(oklab)
-        return CellText("look · \(name.lowercased())", rows: 6,
-                        ink: Color(srgb8: SIMD3<UInt8>(200, 190, 230)))
     }
 
     // MARK: - Determinism badge
