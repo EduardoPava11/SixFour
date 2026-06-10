@@ -44,6 +44,7 @@ import qualified Properties.PaletteSearch as PaletteSearch
 import qualified Properties.LookCategory as LookCategory
 import qualified Properties.HaarRibbon as HaarRibbon
 import qualified Properties.QuartetDelta as QuartetDelta
+import qualified Properties.LinAlg as LinAlg
 import qualified Properties.PaletteOracle as PaletteOracle
 import qualified Properties.Dither       as Dither
 import qualified Properties.SpatialDither as SpatialDither
@@ -121,6 +122,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LookCategory.tests
   , HaarRibbon.tests
   , QuartetDelta.tests
+  , LinAlg.tests
   , Dither.tests
   , SpatialDither.tests
   , LookNet.tests

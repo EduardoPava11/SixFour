@@ -20,6 +20,20 @@ for m in $(grep -oE 'SixFour\.Spec\.[A-Za-z0-9]+' spec.cabal | sort -u); do
 done
 [ "$MISSING" -eq 0 ] && echo "  ok — all modules indexed" || echo "  ⚠ $MISSING module(s) not in Map (add a line under their category)"
 
+echo "== 0b. lint: every 'Properties.X' a module header claims must EXIST =="
+# Guards the HaarRibbon/QuartetDelta debt class: a header advertising a
+# "parity gate (Properties.X)" / "QuickCheck'd in Properties.X" with no such test
+# file is a silent orphan. Any Properties.X named in a Spec source must be a real
+# test module under test/Properties/.
+BADCLAIM=0
+for ref in $(grep -rhoE 'Properties\.[A-Za-z0-9]+' src/SixFour/Spec | sort -u); do
+  short=${ref##*.}
+  [ -f "test/Properties/$short.hs" ] \
+    || { echo "  CLAIMED but MISSING: $ref (no test/Properties/$short.hs)"; BADCLAIM=$((BADCLAIM+1)); }
+done
+[ "$BADCLAIM" -eq 0 ] && echo "  ok — every claimed Properties.X test exists" \
+  || echo "  ⚠ $BADCLAIM header(s) claim a Properties.X that does not exist (write it or drop the claim)"
+
 echo "== 1. typecheck + laws (the gate) =="
 cabal build sixfour-spec
 cabal test 2>/dev/null || echo "  (no test-suite run / some laws pending — see output)"

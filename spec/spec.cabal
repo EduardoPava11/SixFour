@@ -300,6 +300,7 @@ test-suite spec-tests
         Properties.LookCategory
         Properties.HaarRibbon
         Properties.QuartetDelta
+        Properties.LinAlg
         Properties.Dither
         Properties.SpatialDither
         Properties.LookNet
