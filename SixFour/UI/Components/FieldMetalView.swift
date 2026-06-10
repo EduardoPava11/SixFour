@@ -211,8 +211,14 @@ final class FieldUIView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         let s = traitCollection.displayScale > 0 ? traitCollection.displayScale : 3.0
+        let newSize = CGSize(width: bounds.width * s, height: bounds.height * s)
         metalLayer.contentsScale = s
-        metalLayer.drawableSize = CGSize(width: bounds.width * s, height: bounds.height * s)
+        guard newSize != metalLayer.drawableSize else { return }
+        metalLayer.drawableSize = newSize
+        // Re-fill the resized drawable now (rotation / safe-area / first non-zero layout) so the
+        // field never shows a stale or blank frame until the next κ tick. Guarded on `sources` so
+        // we never draw before the first `update()` (the draw path indexes the source buffers).
+        if !sources.isEmpty { draw() }
     }
 
     func update(sources: [FieldSourceU], palette: [UInt8], usage: [Float],
