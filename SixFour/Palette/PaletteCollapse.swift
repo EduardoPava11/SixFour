@@ -15,14 +15,49 @@ protocol PaletteCollapse: Sendable {
     func collapse(perFramePalettes: [[OKLabQ16]], k: Int) -> CollapsedPalette
 }
 
-/// The collapse output: the `k` global leaves (Q16 OKLab, maximin order) and their
-/// indices into the pooled candidate cloud (the golden pins both).
+extension PaletteCollapse {
+    /// Branch-aware collapse: run the flat collapse, then project the leaves onto the
+    /// `branching` genome so the radix choice reaches the collapse OUTPUT (the genome in
+    /// `.branchedLeaves`), not just the display. `.b16` = flat identity (today's GIFB);
+    /// `.b4`/`.b2` yield the lossy Quad4 / σ-pair global colour table. Additive — every
+    /// `collapse(perFramePalettes:k:)` conformer is untouched. (SIXFOUR-WIDGETS Family 2;
+    /// RADIX-CONTROLS §4 Step 1 — the spec analysers it relies on already exist.)
+    func collapse(perFramePalettes: [[OKLabQ16]], k: Int,
+                  branching: PaletteBranching) -> CollapsedPalette {
+        let flat = collapse(perFramePalettes: perFramePalettes, k: k)
+        return CollapsedPalette(leaves: flat.leaves, chosenIndices: flat.chosenIndices,
+                                branching: branching)
+    }
+}
+
+/// The collapse output: the `k` global leaves (Q16 OKLab, maximin order), their
+/// indices into the pooled candidate cloud (the golden pins both), and the radix
+/// genome the chosen `branching` projects them onto.
 struct CollapsedPalette: Sendable, Equatable {
     let leaves: [OKLabQ16]
     /// The pooled-cloud index each leaf was chosen from. WITNESS-ONLY: read solely by
     /// `CollapseGoldenTests` to pin the collapse *choice* — the runtime render path uses
     /// `.leaves`. Don't delete without relaxing that golden.
     let chosenIndices: [Int]
+    /// The radix genome this collapse was projected onto. `.b16` (flat) is the identity.
+    let branching: PaletteBranching
+    /// The 256 leaves AFTER projecting `.leaves` onto the `branching` genome subspace
+    /// (`BranchedPalette.projectQ16`, byte-exact). For `.b16` this EQUALS `.leaves`
+    /// (identity); for `.b4`/`.b2` it is the lossy opponent-quadrant / σ-pair genome the
+    /// radix yields. THIS is the GIFB global colour table the chosen radix produces — so
+    /// "set the control = set the collapse OUTPUT", not just the display.
+    /// (RADIX-CONTROLS §4 Step 1 / SIXFOUR-WIDGETS Family 2 — the delta-control face.)
+    let branchedLeaves: [OKLabQ16]
+
+    /// Build a collapse output and project its leaves onto `branching` (default `.b16`
+    /// = flat identity, so every existing flat caller is unchanged and pays no cost —
+    /// `.b16` short-circuits to the leaves with no native call).
+    init(leaves: [OKLabQ16], chosenIndices: [Int], branching: PaletteBranching = .b16) {
+        self.leaves = leaves
+        self.chosenIndices = chosenIndices
+        self.branching = branching
+        self.branchedLeaves = BranchedPalette.projectQ16(leaves, branching: branching)
+    }
 }
 
 /// Deterministic collapse = the coverage/diversity **maximin** floor: farthest-point

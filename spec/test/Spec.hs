@@ -20,6 +20,7 @@ import qualified Properties.Bures        as Bures
 import qualified Properties.PairTree     as PairTree
 import qualified Properties.PairTreeFixed as PairTreeFixed
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
+import qualified Properties.LeafOverride  as LeafOverride
 import qualified Properties.Quad4Fixed   as Quad4Fixed
 import qualified Properties.GlobalVolume as GlobalVolume
 import qualified Properties.SplitTree    as SplitTree
@@ -110,6 +111,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , PairTree.tests
   , PairTreeFixed.tests
   , SigmaPairFixed.tests
+  , LeafOverride.tests
   , Quad4Fixed.tests
   , GlobalVolume.tests
   , SplitTree.tests

@@ -8,6 +8,15 @@
 **SixFour owns all code.** QUAD is a separate project, **reference only** — its R,G,B,T proposal is
 *derived from first principles below* and reimplemented as SixFour-owned spec+golden+Zig.
 
+> **AMENDMENT 2026-06-12 (TWO-256³ correction).** "256³" is a **literal `256×256×256` cube — both
+> spatial AND temporal** (64×64×64 → 256×256×256: 256 px × 256 px × 256 frames), not temporal-only. The
+> "64→256 frames" engine in §3 is the *temporal* axis of that cube; spatial flux advection (§5 Phase 6 /
+> the super-res companion) is the *spatial* axis. There are **TWO 256³ products**, each getting its own
+> super-res: **Product A = 256³ per-frame** (diversity-max, HD GIFA) and **Product B = 256³ global**
+> (HD GIFB) — and *this doc's "palette is motion" residual is exactly the seed for B*: B is driven by the
+> measured `64³ per-frame ⟷ 64³ global` displacement field. Both products are trainable AND shareable.
+> Source: `docs/SIXFOUR-APP-WIDGET-GAP-REPORT.md` §4 (pipeline) + §8 (Decisions 4 & 5).
+
 This doc answers two questions the project kept circling:
 1. **How can `256 = 4⁴ = 2⁸ = 16²` act as *levers in the collapse* of the 64 per-frame palettes — given
    that the palette *deltas between frames carry motion*?**
@@ -125,14 +134,15 @@ Each tree gives a *different kind* of knob:
 
 ### 2.4 Why this *is* the user's authorship lever (ties to agency)
 Collapse (down) and super-res (up) are the **same ladder run in opposite directions**. The cut level
-controls the down-map; *therefore it also controls the up-map* — how much of the 256³ temporal motion is
-deterministically reconstructed from the residual bands vs smoothed away. **The 16³ histogram the user
+controls the down-map; *therefore it also controls the up-map* — how much of the 256³ cube's motion
+(temporal *and* spatial; see AMENDMENT) is deterministically reconstructed from the residual bands vs
+smoothed away. **The 16³ histogram the user
 edits IS this cut.** Editing there = **setting the motion-bandwidth of the entire render.** That is the
 strongest possible single lever, because it sits at the waist both directions pass through.
 
 ---
 
-## 3. The deterministic temporal super-res engine (64→256 frames)
+## 3. The deterministic temporal super-res engine (64→256 frames — the T axis of the 256³ cube)
 
 Temporal upsampling = **sample McCann's displacement geodesic at more t** (McCann 1997, eq. 7):
 
@@ -191,7 +201,8 @@ maximin `s4_global_collapse` (`kernels.zig:459`).
   `s4_displacement_interp`: sample McCann geodesics 64→256 along OT maps. The byte-exact color-motion
   engine; complementary to spatial flux advection.
 - **Phase 6 — Couple to spatial flux (full R,G,B,T render).** Combine OKLab displacement (appearance) with
-  `(x,y)` flux advection (geometry, from the 256-superres workflow) → unified 256³ motion. Disoccluded
+  `(x,y)` flux advection (geometry, from the 256-superres workflow) → the unified 256³ cube's full motion
+  (spatial × temporal; this engine seeds **both** products A and B — see AMENDMENT). Disoccluded
   voxels (no source under either projection) are the *only* genuinely under-determined remainder → the
   single small learned/gated head from the companion doc.
 

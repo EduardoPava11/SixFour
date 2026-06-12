@@ -44,6 +44,7 @@ final class AppSettings {
         // (docs/COLOR-ATLAS.md). Default OFF: the production path is
         // byte-identical while false.
         static let colorAtlasEnabled      = "sixfour.colorAtlas.v1"
+        static let paletteControlEnabled  = "sixfour.paletteControl.v1"
         // Movable ColorWidget positions (col,row in atoms). Defaults = the spec docks.
         static let field64Position        = "sixfour.field64Position.v1"
         static let palette16Position      = "sixfour.palette16Position.v1"
@@ -166,6 +167,15 @@ final class AppSettings {
         didSet { defaults.set(colorAtlasEnabled, forKey: Key.colorAtlasEnabled) }
     }
 
+    /// Whether the global-palette CREATION control (the PALETTE sub-state: radix-face
+    /// selector + LAB rank axes + σ-locked δ + a live 16×16 preview that equals the
+    /// exported GIFB) is reachable from Review. Defaults **ON** — it is the point of the
+    /// Family-2 work, so it is surfaced; no rendered bytes change (it only adds the Palette
+    /// entry button + an opt-in sub-state). SIXFOUR-WIDGETS Family 2 / docs/SIXFOUR-GLOBAL-PALETTE-CONTROL.md.
+    var paletteControlEnabled: Bool {
+        didSet { defaults.set(paletteControlEnabled, forKey: Key.paletteControlEnabled) }
+    }
+
     // MARK: - Movable ColorWidget positions (the ONE shared layout)
 
     /// A user-set widget position, in lattice atoms (col,row). Stored as a small
@@ -259,6 +269,7 @@ final class AppSettings {
         self.debugOwnershipOverlay = defaults.bool(forKey: Key.debugOwnershipOverlay)
         // Absent key → false ⇒ Color Atlas OFF (production path byte-identical).
         self.colorAtlasEnabled = defaults.bool(forKey: Key.colorAtlasEnabled)
+        self.paletteControlEnabled = defaults.object(forKey: Key.paletteControlEnabled) as? Bool ?? true
 
         // Movable ColorWidget positions: parse each stored "col,row" (absent/garbage →
         // the generated spec dock).

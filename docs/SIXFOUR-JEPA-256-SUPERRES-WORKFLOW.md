@@ -6,13 +6,23 @@
 **Status:** design (2026-06-07). No code yet. This doc makes the architecture call and lays out a
 spec-first build. It supersedes the framing in the pasted "H-JEPA / I-JEPA" analysis that kicked this off.
 
+> **AMENDMENT 2026-06-12 (TWO-256³ correction).** This doc's singular "ship a 256³ render" framing is
+> superseded: there are **TWO 256³ products**, each a literal **256×256×256** cube (256 px × 256 px ×
+> 256 frames). **Product A = 256³ per-frame** (direct super-res of the per-frame cube, diversity-max =
+> HD GIFA). **Product B = 256³ global** (seeded by comparing `64³ per-frame ⟷ 64³ global`; the measured
+> per-frame↔global displacement is the residual that drives B = HD GIFB). The RQ-VAE / VAR architecture
+> below serves **both**: A is the direct branch, B is the residual-seeded branch. Both tile/stream
+> (16.7M voxels each, export-only), and **both are trainable AND shareable** (no archival-only split). §8.3
+> below ("product or quality lever") is resolved: **both are products.** Source: `docs/SIXFOUR-APP-WIDGET-
+> GAP-REPORT.md` §4 (pipeline) + §8 (Decisions 4 & 5).
+
 ---
 
 ## 0. TL;DR — the verdict
 
 The goal: from a captured **64-frame, 64×64 burst**, let the user simplify color to **one global
-palette** (authored at a coarse **16³ OKLab abstraction**) and **ship a 256×256×256 render** (256px ×
-256px × 256 frames).
+palette** (authored at a coarse **16³ OKLab abstraction**) and **ship two 256×256×256 renders** (256px ×
+256px × 256 frames each — Product A per-frame / Product B global; see AMENDMENT).
 
 **This is not a JEPA problem.** JEPA predicts *embeddings* and refuses to synthesize pixels; shipping a
 256³ cube is a *generative synthesis* problem. The architecture that matches the user's own intuition —
@@ -58,7 +68,9 @@ upscale of the existing render plus a learned residual. That split is the whole 
   "dyadic vs quaternary" conflict in SixFour's mixed 2⁸-Haar.
 - **Spatial 64→256:** **deterministic enlarge** (no hallucination on the matched content).
 - **Temporal 64→256:** **deterministic flux advection** (invented motion, but model-free & byte-exact).
-- **Ship the 256³** (so the container is *not* a GIF — GIF caps at 256 colors and this size; see §4.3).
+- **Ship the two 256³ products** (A per-frame, B global; see AMENDMENT) — the container is *not* a GIF
+  (GIF caps at a 256-color *palette* and at this size; the 256³ is a *256-index* cube, not a 256-entry
+  palette; see §4.3).
 
 ### 1.2 The three "fours" — keep them distinct
 | "4" | meaning | role |
@@ -254,9 +266,11 @@ Swift/Metal**. Stay Layers 0–2 + golden vectors. A phase ships only when its g
   fine regardless (dimensionless rates). **Measure on real data first.**
 - **8.2 Byte-exactness vs the gated VAR head.** Sampling breaks cross-device determinism. Keep it walled
   off to the disocclusion residual; everything else stays fix-point.
-- **8.3 64-canon break.** 256³ shipped artifact breaks the cube-UI law, VoxelCubeView (64³), and the
-  "64-frame burst" identity. Decide consciously: is 256³ a *product* or a *quality lever* that
-  down-samples back to 64³? (Down-sample keeps the canon; shipping raw 256³ is a new product surface.)
+- **8.3 64-canon break.** A 256³ shipped artifact breaks the cube-UI law, VoxelCubeView (64³), and the
+  "64-frame burst" identity. **RESOLVED 2026-06-12 (AMENDMENT):** both 256³ are **products** (A per-frame,
+  B global), each **export-only** — the interactive/canon surface stays 16³/64³, so the cube-UI law is
+  preserved while export decodes the new product surface. The earlier "down-sample back to 64³ to keep the
+  canon" option is no longer the plan.
 - **8.4 Disocclusion honesty.** Advected motion is *invented*; large disocclusions = large hallucination.
   Cap the temporal upscale where flux confidence is low rather than fabricating motion wholesale.
 - **8.5 "Don't out-engineer the deterministic baseline."** Phase 1 may already be good enough. Gate every

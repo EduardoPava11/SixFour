@@ -1,5 +1,10 @@
 # SixFour — Movable Color Widgets (authoritative design)
 
+> ▶ **CONSOLIDATED (2026-06-12):** architecture authority is now
+> [`SIXFOUR-WIDGETS.md`](SIXFOUR-WIDGETS.md) (Family 2 — Delta Control). This doc is
+> the *implementation detail* for movable widget layout; read it through that family.
+> If it conflicts with SIXFOUR-WIDGETS on architecture, SIXFOUR-WIDGETS wins.
+
 > Status: DESIGN (this doc is the contract). Source of truth is Haskell
 > (`spec/src/SixFour/Spec/MovableLayout.hs`); the Swift mirror is generated
 > (`SixFour/Generated/MoveContract.swift`) and never hand-edited. Gated by
