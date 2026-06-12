@@ -55,6 +55,15 @@ struct ReviewPhaseField: View {
     /// The picker is cell buttons, NOT a system `Menu` — the screen IS the cell grid.
     @State private var rungPickerOpen = false
 
+    /// PALETTE creation control (gated, default OFF) — the `.review` sub-state where the
+    /// user chooses the global-palette genome (16²/4⁴/2⁸ face) and reads it in honest LAB
+    /// rank, with a live 16×16 preview that EQUALS the exported GIFB (same `projectQ16` on
+    /// the same leaves). docs/SIXFOUR-GLOBAL-PALETTE-CONTROL.md (SIXFOUR-WIDGETS Family 2).
+    @State private var paletteOpen = false
+    /// The branching-INDEPENDENT flat global leaves (the ~seconds maximin), computed once
+    /// off-thread on entry and re-projected cheaply per face — empty until cached.
+    @State private var globalLeaves: [OKLabQ16] = []
+
     /// The shared content edge — 64 cells × the 4 pt atom = 256 pt (same as the preview).
     private let gifEdge = GlobalLattice.gif(GlobalLattice.previewCells)
     /// The palette edge — 16 cells × 4 pt = 64 pt (the GIF's first abstraction = the shutter).
@@ -72,6 +81,10 @@ struct ReviewPhaseField: View {
                 // The Color Atlas curation sub-state (flag-gated; never reachable
                 // while `colorAtlasEnabled` is false — the default path is untouched).
                 atlasCurationField
+            } else if paletteOpen && settings.paletteControlEnabled {
+                // The PALETTE creation control sub-state (flag-gated; mutually exclusive
+                // with normal review, leaves the hierarchy + resets on `.retake`).
+                paletteControlField
             } else {
                 // All three ColorWidgets are PLACED at the ONE shared global position (no
                 // more VStack-centering) and movable — Field64's gif-render and Palette16's
@@ -222,6 +235,16 @@ struct ReviewPhaseField: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open color atlas")
             }
+
+            // PALETTE creation control entry (flag-gated): choose the global-palette
+            // genome face + read it in LAB rank, then export at that genome.
+            if settings.paletteControlEnabled {
+                Button { openPaletteControl() } label: {
+                    CellActionButton(icon: .grid3x3, title: "Palette")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open global palette control")
+            }
         }
     }
 
@@ -242,6 +265,126 @@ struct ReviewPhaseField: View {
             }.value
             exporting = nil
             ladderShare = item
+        }
+    }
+
+    /// Compute the flat global leaves once OFF the main thread (the maximin is the
+    /// ~seconds step), then open the PALETTE control; cheap re-projection per face after.
+    private func openPaletteControl() {
+        paletteOpen = true
+        guard globalLeaves.isEmpty else { return }
+        let palettes = surface.palettesPerFrame
+        Task {
+            let leaves = await Task.detached(priority: .userInitiated) {
+                LadderExport.flatGlobalLeaves(palettesPerFrame: palettes)
+            }.value
+            globalLeaves = leaves
+        }
+    }
+
+    /// Cycle a `GridAxis` to its next case — six axis segments do not fit one row, so we
+    /// single-tap cycle and name the active axis in the readout (honest, budget-fitting).
+    private func nextAxis(_ a: GridAxis) -> GridAxis {
+        let all = GridAxis.allCases
+        return all[((all.firstIndex(of: a) ?? 0) + 1) % all.count]
+    }
+
+    // MARK: - PALETTE creation control sub-state (gated)
+
+    /// The user's control of global-palette CREATION (SIXFOUR-WIDGETS Family 2): a FACE
+    /// selector (16²/4⁴/2⁸) sets the genome that reaches the GIFB bytes; the 16×16 surface
+    /// shows it live in honest LAB rank; export ships exactly that genome. Fully
+    /// cell-rendered (CellSelector/CellSprite/CellActionButton/CellText) — lint-grid clean.
+    private var paletteControlField: some View {
+        VStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
+            CellText("GLOBAL PALETTE · \(settings.paletteBranching.label)", rows: 11,
+                     ink: Color(srgb8: SIMD3<UInt8>(235, 235, 235)))
+
+            // FACE — the genome selector. Reaches the collapse OUTPUT (preview ≡ ship).
+            CellSelector(options: PaletteBranching.allCases.map { (value: $0, label: $0.label) },
+                         selection: $settings.paletteBranching)
+
+            paletteSurface
+
+            // X/Y LAB axes (16² SEE face only) — honest rank, single-tap cycle.
+            if settings.paletteBranching == .b16 {
+                HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
+                    Button { settings.gridAxisX = nextAxis(settings.gridAxisX) } label: {
+                        CellActionButton(title: "X \(settings.gridAxisX.rawValue)", fillWidth: false)
+                    }
+                    .buttonStyle(.plain).accessibilityLabel("Cycle X axis")
+                    Button { settings.gridAxisY = nextAxis(settings.gridAxisY) } label: {
+                        CellActionButton(title: "Y \(settings.gridAxisY.rawValue)", fillWidth: false)
+                    }
+                    .buttonStyle(.plain).accessibilityLabel("Cycle Y axis")
+                }
+            }
+
+            CellText(paletteReadout, rows: 9, ink: Color(srgb8: SIMD3<UInt8>(140, 140, 140)))
+
+            // Export at THIS genome — the producer already reads settings.paletteBranching.
+            HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
+                Button { exportRung(.working16) } label: {
+                    CellActionButton(icon: .share, title: "16³", fillWidth: false)
+                }
+                .buttonStyle(.plain).disabled(exporting != nil).accessibilityLabel("Export 16³")
+                Button { exportRung(.global64) } label: {
+                    CellActionButton(icon: .share, title: "64³", fillWidth: false)
+                }
+                .buttonStyle(.plain).disabled(exporting != nil).accessibilityLabel("Export 64³")
+                Button { paletteOpen = false } label: {
+                    CellActionButton(title: "Done", prominent: true)
+                }
+                .buttonStyle(.plain).accessibilityLabel("Close palette control")
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, GlobalLattice.gif(GlobalLattice.gutterCells))
+    }
+
+    /// The ONE 16×16 leaf surface — the projected genome, laid by FACE: 16² in honest LAB
+    /// rank (GridLayout), 4⁴/2⁸ in genome (leaf) order. Painted from the cached flat leaves
+    /// re-projected by `projectQ16`, so it EQUALS the exported GIFB. Ghost until cached.
+    private var paletteSurface: some View {
+        let proj = globalLeaves.isEmpty
+            ? []
+            : BranchedPalette.projectQ16(globalLeaves, branching: settings.paletteBranching)
+        let srgb = proj.isEmpty ? [] : LadderGIF.paletteToSRGB8(proj)
+        let grid = paletteGrid(proj, srgb: srgb)
+        return CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gifPx) { c, r in
+            guard !grid.isEmpty else { return nil }   // ghost-fill until the maximin lands
+            let slot = grid[r][c]
+            return slot < srgb.count ? srgb[slot] : nil
+        }
+        .accessibilityLabel("Global palette, \(settings.paletteBranching.label)")
+    }
+
+    /// The 16×16 slot layout: 16² → GridLayout LAB rank (assignable X/Y); 4⁴/2⁸ → genome
+    /// (leaf) order. (Per-face Quad4/σ-pair adjacency re-layout is the next refinement.)
+    private func paletteGrid(_ proj: [OKLabQ16], srgb: [SIMD3<UInt8>]) -> [[Int]] {
+        guard proj.count == 256, srgb.count == 256 else { return [] }
+        if settings.paletteBranching == .b16 {
+            let colors = proj.enumerated().map { i, q in
+                IndexedColor(index: i,
+                             oklab: SIMD3<Float>(Float(q.x), Float(q.y), Float(q.z)) / 65536,
+                             srgb: srgb[i])
+            }
+            let g = GridLayout.layout(x: settings.gridAxisX, y: settings.gridAxisY, colors: colors)
+            return g.isEmpty ? rowMajorGrid : g
+        }
+        return rowMajorGrid
+    }
+
+    private var rowMajorGrid: [[Int]] {
+        (0 ..< 16).map { r in (0 ..< 16).map { c in r * 16 + c } }
+    }
+
+    private var paletteReadout: String {
+        if globalLeaves.isEmpty { return "collapsing…" }
+        switch settings.paletteBranching {
+        case .b16: return "256 leaves · X \(settings.gridAxisX.rawValue) · Y \(settings.gridAxisY.rawValue)"
+        case .b4:  return "256 leaves · 4⁴ opponent quadrants"
+        case .b2:  return "256 leaves · 2⁸ σ-pair genome"
         }
     }
 

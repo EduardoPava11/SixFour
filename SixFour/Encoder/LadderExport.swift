@@ -66,11 +66,22 @@ enum LadderExport {
         }
     }
 
+    /// The branching-INDEPENDENT flat global leaves (the maximin collapse). Project these
+    /// with `BranchedPalette.projectQ16(_, branching:)` for an instant radix preview — the
+    /// expensive maximin runs ONCE, every radix choice re-projects cheaply, and the result
+    /// is byte-identical to what `makeURL` encodes (preview ≡ ship). Run off the main
+    /// thread (it is the ~seconds step).
+    static func flatGlobalLeaves(palettesPerFrame: [[SIMD3<UInt8>]]) -> [OKLabQ16] {
+        FarthestPointCollapse()
+            .collapse(perFramePalettes: toQ16(palettesPerFrame), k: SixFourShape.K)
+            .leaves
+    }
+
     // MARK: - Helpers
 
     /// sRGB8 per-frame palettes → Q16 OKLab (mirrors `FarthestPointCollapse
     /// .collapseForDisplay`'s conversion — the Q16 substrate the collapse expects).
-    private static func toQ16(_ frames: [[SIMD3<UInt8>]]) -> [[OKLabQ16]] {
+    static func toQ16(_ frames: [[SIMD3<UInt8>]]) -> [[OKLabQ16]] {
         frames.map { frame in
             frame.map { c in
                 let lab = ColorScience.srgb8ToOKLab(c.x, c.y, c.z).simd
