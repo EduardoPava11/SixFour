@@ -1,5 +1,11 @@
 # SixFour — The Collapse Lever: UI/UX Plan (2⁸/4⁴/16² grids → one palette → 16³/64³/256³ GIFs)
 
+> ▶ **CONSOLIDATED (2026-06-12):** architecture authority is now
+> [`SIXFOUR-WIDGETS.md`](SIXFOUR-WIDGETS.md) — the cut-lever is **Family 2** (Delta
+> Control, Axis B) and the resolution ladder is **Family 1** (the 5 shareable GIFs).
+> This doc is the cut-lever/ladder *implementation detail*; SIXFOUR-WIDGETS wins on
+> architecture.
+
 > Keywords: collapse lever, radix grid, 16²/4⁴/2⁸, cut-level slider, 16³ preview, 64³ hero, 256³ export,
 > PaletteBranching, BranchedPalette.projectQ16, cell-field law, ColorIdentity, Surface FSM.
 
@@ -7,9 +13,22 @@
 `SIXFOUR-PALETTE-IS-MOTION-WORKFLOW.md` (the math) and `SIXFOUR-JEPA-256-SUPERRES-WORKFLOW.md` (the renders).
 **SixFour owns all code.** Determinism is the decision — so the user steers via UI controls, not an NN.
 
+> **AMENDMENT 2026-06-12 (TWO-256³ correction).** Wherever this doc says "256³ export" in the
+> singular, read it as **TWO 256³ products**, each a literal **256×256×256 voxel cube** (256 px ×
+> 256 px × 256 frames), neither a naive 4× upsample:
+> - **Product A = 256³ per-frame** — direct super-res of the per-frame cube, diversity-max (**HD GIFA**).
+> - **Product B = 256³ global** — *seeded by comparing `64³ per-frame ⟷ 64³ global`*; the measured
+>   per-frame↔global displacement IS the "palette is motion" residual that drives it (**HD GIFB**).
+>
+> Both Phase-0 (`replicate4x`) and Phase-1 (OT/flux super-res) below apply to **both** products.
+> Both are **export-only** (live preview stays 16³/64³) and **both are trainable AND shareable** (no
+> archival-only split). Source of record: `docs/SIXFOUR-APP-WIDGET-GAP-REPORT.md` §4 (pipeline) + §8
+> (Decisions 4 & 5).
+
 This plan answers: **(1)** how `2⁸/4⁴/16²` live in the UI grid cells, and **(2)** what buttons/sliders
 surface so the user can *collapse* the 64 per-frame palettes + 64³ voxels into **one** global palette, see
-a **16³ GIF** of the simplified result, and emit the **64³ + 256³** GIFs from that one palette.
+a **16³ GIF** of the simplified result, and emit the **64³ hero + the two 256³ products** (A per-frame,
+B global; see AMENDMENT) from that one palette.
 
 ---
 
@@ -88,15 +107,20 @@ re-render** behind an explicit **"Apply"** (expensive, FSM stage).
   through `BranchedPalette.projectQ16` at `DeterministicRenderer.swift:363`). Add a **Share 64³** button
   (reuse the existing Share pattern, `ReviewPhaseField.swift:137`).
 
-### 2.4 The 256³ export — from the one global palette
+### 2.4 The 256³ export — TWO products from the one global palette
+Per the AMENDMENT, "256³ export" is **two** literal `256×256×256` cubes, both run through the same two
+phases: **Product A = 256³ per-frame (HD GIFA)** and **Product B = 256³ global (HD GIFB, seeded by the
+`64³ per-frame ⟷ 64³ global` comparison residual)**. Both are export-only and both trainable+shareable
+(`SIXFOUR-APP-WIDGET-GAP-REPORT.md` §4/§8).
 - **Phase-0 (ship first): index replication.** `replicate4x(indices, side:64) -> 256²` per frame +
   4× temporal = `256³`, then `GIFEncoder(256,256)`. **Byte-safe: no re-quantize, palette unchanged** — the
-  256³ GIF uses the *same* collapsed palette as the 16³ preview and 64³ hero. (Spec `Spec.Export`, designed;
-  **TO BUILD**.) Container note: a true `256×256×256` exceeds GIF's practical size; ship `256²×256f` as
-  APNG/HEVC or down-sample, per the super-res doc §4.3.
+  256³ cubes use the *same* collapsed palette as the 16³ preview and 64³ hero. Applies to **both A and B**.
+  (Spec `Spec.Export`, designed; **TO BUILD**.) Container note: a true `256×256×256` exceeds GIF's practical
+  size; ship `256²×256f` as APNG/HEVC or down-sample, per the super-res doc §4.3.
 - **Phase-1 (quality upgrade): OT/flux super-res.** Replace naive replication with the deterministic
   displacement-interpolation (color) + flux-advection (space) from the motion doc. Same UI button; better
-  pixels. Gated behind a measured win.
+  pixels. Applies to **both A and B**; for B the displacement field is exactly the `64³ per-frame ⟷ 64³
+  global` residual ("palette is motion"). Gated behind a measured win.
 
 ### 2.5 Scope toggle (free win, currently a seam)
 `paletteScope {.global,.perFrame}` is routed but has **no UI**. Surface it as a 2-cell toggle in Review:
@@ -163,7 +187,8 @@ Spec-first per `SIXFOUR-SPEC-METHODOLOGY.md` — Haskell oracle → golden → S
 ## 6. Honest gaps
 - `4⁴` and `2⁸` *authoring views* are TO BUILD (the genomes exist; the cell-grid drill/wheel UIs don't).
 - The cut-level slider is new chrome — must be **cell-rendered** (pixelation law), not SwiftUI `Slider`.
-- `256×256×256` true GIF is impractical (size + 256-color cap); ship `256²×256f` in a non-GIF container or
-  down-sample back to `64³` for the legacy GIF surface (super-res doc §4.3).
+- `256×256×256` true GIF is impractical (size + 256-color cap — note the cap is on the *256-color palette*,
+  not the 256³ *index* cube); ship `256²×256f` in a non-GIF container or down-sample back to `64³` for the
+  legacy GIF surface (super-res doc §4.3). This holds for **both** 256³ products (A per-frame, B global).
 - The 16³ preview's *spatial* downsample is naive decimation in Phase 0; the OT-coherent downsample is a
   Phase-1 upgrade (same as the export's two phases).

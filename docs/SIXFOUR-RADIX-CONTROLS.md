@@ -1,5 +1,11 @@
 # SixFour — Radix Controls (16²/4⁴/2⁸) = the NN Genome, tied to the Voxel Cube
 
+> ▶ **CONSOLIDATED (2026-06-12):** architecture authority is now
+> [`SIXFOUR-WIDGETS.md`](SIXFOUR-WIDGETS.md), which reframes 16²/4⁴/2⁸ as the
+> **see / control / learn faces** of one tree (Family 2 — Delta Control). This doc
+> remains the **file:line implementation map** for that family — keep using it for
+> exact edit sites. SIXFOUR-WIDGETS wins on architecture/framing.
+
 > Status legend used throughout: **[BUILT]** = in the shipped Swift/Haskell today;
 > **[SPEC-ONLY]** = the Haskell spec has it but no Swift consumes it yet;
 > **[TO BUILD]** = proposed, does not exist in any tier. This document is a

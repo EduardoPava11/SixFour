@@ -218,6 +218,7 @@ do not re-research or re-derive it.
 | no-look-category-taxonomy | North-star "looks mapped in categories" has no spec — the Berlin-Kay/`Spec.Competition` grid was deleted when `Spec.Preference` went category-free | `spec/src/SixFour/Spec/Preference.hs` | high | open |
 | no-ondevice-trainer-spec | No Spec/Codegen for an on-device gradient/weight-update step over the 384-DOF σ-pair delta head; `Spec.Preference` (Bradley-Terry) is orphaned (no Swift port/codegen/consumer) | `spec/src/SixFour/Spec/Preference.hs` | high | open |
 | palette-value-unused | `PaletteValue.swift` search value head has zero iOS consumers (part of the unwired learned/search spine) | `SixFour/Palette/PaletteValue.swift` | med | open |
+| app-widget-gap-plan | App-only widget plan (radix 16²/4⁴/2⁸ as one `SplitTree` at 3 branching factors, the compression/cut-level lever P5, and the P6 train-the-iPhone seam). 5 decisions resolved 2026-06-12: (1) three radix screens = perspectives of one widget; (2) picking on Capture+Review; (3) log picks as Bradley–Terry NOW behind the Atlas flag; (4) **TWO 256³ products** — A=per-frame (HD GIFA) + B=global (residual-seeded by the 64³ per-frame↔global comparison, HD GIFB); (5) both 256³ products are **trainable AND shareable**. §7 sequences the build (steps 1–2 = zero-NN plumbing). | `docs/SIXFOUR-APP-WIDGET-GAP-REPORT.md` | — | plan (2026-06-12) |
 
 ## Ethos pillars
 

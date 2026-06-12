@@ -1,5 +1,10 @@
 # SixFour Palette Explorer — Honest Dimensionality Upgrade
 
+> ▶ **CONSOLIDATED (2026-06-12):** architecture authority is now
+> [`SIXFOUR-WIDGETS.md`](SIXFOUR-WIDGETS.md) (Family 2 — Delta Control; the 16²/4⁴/2⁸
+> see/control/learn faces). This doc is the *honesty/dimensionality detail* under that
+> family. SIXFOUR-WIDGETS wins on architecture.
+
 **Status:** Design (spec-first). Extends `docs/palette-explorer-2d-3d-4d-design.md`; governed by `docs/SIXFOUR-DESIGN-LANGUAGE.md` (GRID) and `docs/SIXFOUR-TOTAL-PIXELATION.md` (glass retired; the former GLASS doc is archived at `docs/archive/SIXFOUR-GLASS-LANGUAGE.md`).
 **Date:** 2026-06-01
 **Contract:** Tier-2 (ships) — zero third-party deps, Apple frameworks + `simd` only; every new numeric is a Haskell-spec golden before any Swift lands.

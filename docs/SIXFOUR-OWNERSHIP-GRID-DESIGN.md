@@ -1,5 +1,15 @@
 # SixFour — Ownership-Grid Spec + Grid Tech-Debt Cleanup Plan
 
+> **Atom-size reconciliation (2026-06-12).** The authoritative atom is **`gifPx = 4 pt`**
+> (`= 12 device-px @3x`), and the **single source of truth is the code, not any prose doc**:
+> `SixFour/Generated/LatticeContract.swift` (`gifPx = 4`, codegen'd from `Spec.Lattice`),
+> mirrored by `SixFour/UI/ScreenLattice.swift` + `SixFour/UI/GlobalLattice.swift`
+> (`SixFourLattice.gifPx`, GRID v3.0). This document already states 4 pt — it is **correct**.
+> The gap report's §6 row that labels the (now-deleted) `SIXFOUR-DESIGN-LANGUAGE.md` v2.0 / 6 pt
+> as "authoritative" is **mislabeled**: that doc was the stale one (6 pt is GRID-v2.0 lineage)
+> and is no longer in the repo. When in doubt, read `ScreenLattice.swift`, not a markdown doc.
+> (See also D16 in §below.)
+
 > **Date:** 2026-06-06
 > **Status:** DESIGN (spec-first, not yet built)
 > **Owner module to add:** `SixFour.Spec.Ownership`
