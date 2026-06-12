@@ -48,6 +48,36 @@ Feasibility verdict (researched 2026-06-09, iPhone 17 Pro / iOS 26):
 - **Spec gap (open debt below):** no look-CATEGORY taxonomy survives, no per-user delta/adapter
   spec, and no on-device trainer/gradient spec — the north-star has **zero spec footprint** today.
 
+**UPDATE 2026-06-12 — the MPSGraph path is PROVEN on hardware and the Color Atlas gives the
+north-star its first spec footprint.** Future Claude Code sessions: work ON TOP of this state —
+do not re-research or re-derive it.
+
+- **On-device training proven** (commit `ef0344e`, `SixFour/Atlas/AtlasTrainer.swift` +
+  `SixFourTests/AtlasTrainerTests.swift`): MPSGraph `gradients(of:with:)` + SGD trained a
+  29,249-param value net on the physical iPhone 17 Pro — Bradley–Terry loss 0.7154 → 0.00075
+  over 300 steps, **12.4 ms/step steady, 6.3 s total**, loss trajectory **bit-identical
+  Mac ↔ iPhone**. Gotchas (encoded in code): MPSGraph cannot EXECUTE in the simulator
+  (uncatchable ObjC exception) and `MPSSupportsMTLDevice()` falsely returns true there —
+  gate with `#if targetEnvironment(simulator)`. Device tests need signing overrides
+  (`DEVELOPMENT_TEAM` + Apple Development identity; project.yml pins ad-hoc).
+- **Curated research**: `docs/ON-DEVICE-TRAINING.md` (adversarially verified, cited) — MPSGraph
+  is the recommended first-party training API; `MLUpdateTask` legacy-only; `mlx-swift` stays
+  Tier 1. Federated bootstrap design: single-message Prio split-trust aggregation, central DP
+  at the aggregator, preference clustering for non-IID taste.
+- **Federation thresholds measured** (`trainer/fed_sim.py`, findings in
+  `trainer/fed_sim_results.md`): FedAvg beats local at K≥4 users for shared taste, K≥16–64 at
+  moderate heterogeneity, never at the strong-non-IID worst case; the **β = n/(n+50) blend is
+  the dominant cold-start policy**; oracle-vs-self cluster assignment gap (8–9 pts) is the
+  high-leverage research item.
+- **Spec footprint now exists**: `Spec/AtlasBoard|AtlasMove|AtlasState|DeltaCodebook|AtlasOracle|
+  PreferenceUpdate|DecisionLog|AtlasCascade|Upscale256` (74 properties, all green) — the Move
+  ADT, replay-record wire format, and on-device preference-update rule the north-star lacked.
+  Remaining gaps: look-CATEGORY taxonomy, MPSGraph trainer spec/golden-gating, `.s4ln` v2.
+- **Canonical design + continuation plan**: `docs/COLOR-ATLAS.md` — §8 lists the implementation
+  phases and seams; the disclosed stub limits (true Q16 centroids through CaptureOutput, MCTS
+  gallery for candidate B, binary SF64 decision log, brand-gate preflight) are the next units
+  of work.
+
 ## BUILT / DESIGN-ONLY / MISSING ledger
 
 ### BUILT (verified on device path / in source)

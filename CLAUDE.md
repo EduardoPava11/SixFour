@@ -43,7 +43,16 @@ GPU/CPU latency and power are negligible — there is no performance reason to
 take on a dependency.
 
 ## Train / deploy spine
-- **Train:** MLX on the M1.
+- **Train (base net):** MLX on the M1.
+- **Train (on-device, per-user):** **MPSGraph** — an Apple system framework, so it satisfies
+  the Tier 2 contract. Proven on the physical iPhone 17 Pro 2026-06-12
+  (`SixFour/Atlas/AtlasTrainer.swift`: Bradley–Terry value training, 12.4 ms/step,
+  bit-identical loss trajectory Mac↔iPhone). The never-`mlx-swift` / never-CoreML rules
+  stand; MPSGraph does not execute in the simulator (gate via `targetEnvironment(simulator)`).
+  See `docs/ON-DEVICE-TRAINING.md` (verified research) and `docs/COLOR-ATLAS.md` (the
+  curation/policy/value design this trains). **Future sessions: build on top of this state**
+  — the continuation plan is COLOR-ATLAS.md §8 + the UPDATE 2026-06-12 block in
+  `docs/STATUS.md`.
 - **Verify:** Haskell spec (golden vectors gate every backend).
 - **Deploy:** hand-written Swift + Metal on the iPhone 17 Pro (zero deps).
 - **Fallback:** PyTorch→CoreML→ANE is kept dormant, never shipped.

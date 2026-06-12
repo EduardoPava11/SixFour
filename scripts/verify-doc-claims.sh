@@ -157,6 +157,20 @@ check "AppSettings has the three versioned ColorWidget position keys" \
 check "PairTree uses Euclidean okLabDistanceSquared ([4,2,1] weighting gone)" \
   grep -q 'okLabDistanceSquared' spec/src/SixFour/Spec/PairTree.hs
 
+# --- COLOR ATLAS (2026-06-12): north-star spec footprint + proven MPSGraph trainer ---
+check "Color Atlas canonical design doc exists" \
+  test -f docs/COLOR-ATLAS.md
+check "on-device training research report exists" \
+  test -f docs/ON-DEVICE-TRAINING.md
+check "Atlas spec footprint exists (board module registered)" \
+  grep -q 'SixFour.Spec.AtlasBoard' spec/spec.cabal
+check "MPSGraph on-device trainer exists and is simulator-gated" \
+  grep -q 'targetEnvironment(simulator)' SixFour/Atlas/AtlasTrainer.swift
+check "Atlas UI is gated by the versioned colorAtlas flag (default off)" \
+  grep -q 'sixfour.colorAtlas.v1' SixFour/Settings/AppSettings.swift
+check "federation cohort findings exist (fed_sim)" \
+  test -f trainer/fed_sim_results.md
+
 echo "----------------------------------------"
 if [ "$FAILS" -ne 0 ]; then
   echo "$FAILS load-bearing fact(s) FAILED — docs/STATUS.md may be stale."
