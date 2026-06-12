@@ -1,3 +1,4 @@
+import Foundation
 import simd
 
 /// Pure index-domain transforms that turn the captured 64³ cube into any rung of the
@@ -77,5 +78,35 @@ enum LadderGIF {
                             side: Int = 16, frames: Int = 16) -> [[UInt8]] {
         temporalSubsample(frameIndices, dstCount: frames)
             .map { spatialDownsample($0, srcSide: srcSide, dstSide: side) }
+    }
+
+    // MARK: Encode (the producer that ties reindex + collapse + GIFEncoder together)
+
+    /// The collapsed global leaves (Q16 OKLab) → a 256-entry sRGB Global Color Table,
+    /// padded with black if fewer than 256 (the GCT is always 256 entries).
+    static func paletteToSRGB8(_ leaves: [OKLabQ16]) -> [SIMD3<UInt8>] {
+        var out: [SIMD3<UInt8>] = leaves.map { leaf in
+            let f = SIMD3<Float>(Float(leaf.x), Float(leaf.y), Float(leaf.z)) / 65536
+            return ColorScience.okLabToSRGB8(OKLab(f))
+        }
+        if out.count < 256 {
+            out.append(contentsOf: Array(repeating: SIMD3<UInt8>(0, 0, 0), count: 256 - out.count))
+        }
+        return Array(out.prefix(256))
+    }
+
+    /// Produce a GLOBAL-palette GIF (GIFB / 16³ working copy) end-to-end: reindex the
+    /// cube against the collapsed `global` leaves, convert them to the sRGB Global Color
+    /// Table, and encode with `GIFEncoder.encodeGlobal`. Feed `global =
+    /// collapse(...,branching:).branchedLeaves` for the chosen radix. The whole burst
+    /// shares one table, so frames may use any subset — exactly what GIFB is.
+    static func encodeGlobalGIF(perFramePalettes: [[OKLabQ16]], frameIndices: [[UInt8]],
+                                global: [OKLabQ16], side: Int, fps: Int = 20,
+                                upscale: Int = 1, to url: URL, comment: String? = nil) throws {
+        let frames = reindexCubeToGlobal(perFramePalettes: perFramePalettes,
+                                         frameIndices: frameIndices, global: global)
+        let encoder = GIFEncoder(width: side, height: side, fps: fps, upscale: upscale)
+        try encoder.encodeGlobal(frames: frames, globalPalette: paletteToSRGB8(global),
+                                 to: url, comment: comment)
     }
 }

@@ -113,12 +113,15 @@ draft. The heavier rungs (64³, 256³) are the same gesture; they just cost more
   on the hero, mirrored in the Ladder sheet). The sheet lists the five rungs as
   cell-grid thumbnails; tap a rung → encode + system share; 16³ is always instant.
 - **The cut-lever (Family 2) sets where on the A↔B axis each global rung sits.**
-- **Status (scout-verified + this slice):** `64³-A` ships; **`LadderGIF.swift` landed**
-  the pure ladder math — `globalRemap`/`reindexCubeToGlobal` (the `64³-B` GIFB index
-  volume) and `workingCopy`/`spatialDownsample`/`temporalSubsample` (the 16³ snapshot),
-  all byte-exact + unit-gated. **TO BUILD next:** a global-color-table `GIFEncoder` mode
-  (today's encoder is per-frame-LCT-only, gated on `CompleteVoxelVolume`, so it *rejects*
-  a global table by design) + the export gesture UI + the 256³ tiled decode.
+- **Status (as-built 2026-06-12):** `64³-A` ships. The **`64³-B` / 16³ producer is
+  COMPLETE end-to-end and gated**: `LadderGIF` (`globalRemap`/`reindexCubeToGlobal`,
+  `workingCopy`/`spatialDownsample`/`temporalSubsample`, `paletteToSRGB8`,
+  `encodeGlobalGIF`) + a new **global-color-table `GIFEncoder.encodeGlobal` mode** that
+  drops the per-frame `CompleteVoxelVolume` brand (so frames may use a subset of one
+  global table) and writes a valid GCT GIF — verified by ImageIO round-trip. Feed
+  `collapse(...,branching:).branchedLeaves` and you get the GIFB table for any radix.
+  **TO BUILD next:** the export-gesture UI (wire `encodeGlobalGIF`/`workingCopy` to a
+  swipe/long-press + Ladder sheet) and the 256³ tiled decode.
 
 *Consolidates:* `FOUR-GIF-UIUX`, `PALETTE-STORY`, the export half of `COLLAPSE-LEVER`.
 

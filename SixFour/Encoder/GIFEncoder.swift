@@ -124,6 +124,66 @@ struct GIFEncoder {
         catch { throw GIFEncoderError.writeFailed(underlying: error) }
     }
 
+    /// **Global Color Table mode** (GIFB / 16³ working copies): ONE 256-entry palette
+    /// shared by every frame, written once as the GCT. Unlike `encode(volume:…)`, frames
+    /// may use any SUBSET of the table — there is **no completeness brand**, because a
+    /// global-collapse GIF (every frame re-indexed onto one palette, `LadderGIF
+    /// .reindexCubeToGlobal`) is precisely the case the per-frame mode rejects. This is
+    /// the encoder half of SIXFOUR-WIDGETS Family 1's global ladder rungs.
+    ///
+    /// `frames[i]`: `width·height` palette indices (each < 256), NOT gated for
+    /// completeness. `globalPalette`: 256 sRGB triplets, the Global Color Table.
+    func encodeGlobal(
+        frames: [[UInt8]],
+        globalPalette: [SIMD3<UInt8>],
+        to url: URL,
+        comment: String? = nil
+    ) throws {
+        guard globalPalette.count == 256 else {
+            throw GIFEncoderError.paletteWrongSize(expected: 256, got: globalPalette.count)
+        }
+        let pixelCount = width * height
+        for f in frames where f.count != pixelCount {
+            throw GIFEncoderError.wrongFrameSize(expected: pixelCount, got: f.count)
+        }
+        let outW = width * upscale
+        let outH = height * upscale
+
+        var data = Data()
+        data.append(contentsOf: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61])  // "GIF89a"
+
+        // Logical screen descriptor WITH a Global Color Table.
+        // Packed 0xF7: bit7 GCT=1, bits4-6 colorRes=7 (8 bits/primary), bit3 sort=0,
+        // bits0-2 GCT size=7 → 2^(7+1)=256 entries.
+        data.append(contentsOf: u16(outW))
+        data.append(contentsOf: u16(outH))
+        data.append(0xF7)
+        data.append(0x00)  // background color index (into the GCT)
+        data.append(0x00)  // pixel aspect ratio
+        data.append(contentsOf: colorTable(globalPalette))   // the 768-byte GCT
+
+        data.append(contentsOf: netscapeLoop(count: 0))
+        if let comment, !comment.isEmpty {
+            data.append(contentsOf: commentExtension(comment))
+        }
+
+        for frame in frames {
+            // 1→upscale² index replication (nearest, palette untouched); identity at upscale=1.
+            let emitted = upscale > 1
+                ? SixFourExport.replicate(frame, side: width, factor: upscale)
+                : frame
+            data.append(contentsOf: graphicsControl(delay: frameDelayCentiseconds))
+            // Image descriptor with NO Local Color Table (packed 0x00) — use the GCT.
+            data.append(contentsOf: imageDescriptor(width: outW, height: outH, packed: 0x00))
+            data.append(lzwEncode(emitted, minCodeSize: 8))
+        }
+
+        data.append(0x3B)
+
+        do { try data.write(to: url) }
+        catch { throw GIFEncoderError.writeFailed(underlying: error) }
+    }
+
     // MARK: - Block builders
 
     private func u16(_ v: Int) -> [UInt8] {
