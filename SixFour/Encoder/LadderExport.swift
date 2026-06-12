@@ -39,12 +39,15 @@ enum LadderExport {
                         palettesPerFrame: [[SIMD3<UInt8>]],
                         indexCube: [UInt8],
                         branching: PaletteBranching,
+                        override: [SIMD3<Int32>] = [],
                         srcSide: Int = SixFourShape.W,
                         srcFrames: Int = SixFourShape.T) throws -> URL {
         let perFrameQ16 = toQ16(palettesPerFrame)
-        let global = FarthestPointCollapse()
-            .collapse(perFramePalettes: perFrameQ16, k: SixFourShape.K, branching: branching)
-            .branchedLeaves
+        // The shipped global table = the SAME projection the preview shows (preview ≡ ship):
+        // flat maximin leaves → projectQ16 with the user's generator-space override.
+        let leaves = FarthestPointCollapse()
+            .collapse(perFramePalettes: perFrameQ16, k: SixFourShape.K).leaves
+        let global = BranchedPalette.projectQ16(leaves, branching: branching, override: override)
         let cube = chunkFrames(indexCube, side: srcSide, frames: srcFrames)
 
         switch rung {

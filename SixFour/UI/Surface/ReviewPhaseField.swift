@@ -66,6 +66,11 @@ struct ReviewPhaseField: View {
     /// The brushed genome leaf (nil = none). Lights that leaf full + recedes the rest by an
     /// OPAQUE darken (GRID Law #2); on the 2⁸ face it also lights the σ-partner (slot ^ 1).
     @State private var paletteBrush: Int?
+    /// The 2⁸ generator-space δ override (128 generators, all-zero = no edit). Mirrors
+    /// `Spec.LeafOverride`; threaded into BOTH the preview and the export (preview ≡ ship).
+    @State private var paletteOverride = [SIMD3<Int32>](repeating: .zero, count: 128)
+    /// Which OKLab channel the δ slider edits (0 = ΔL, 1 = Δa, 2 = Δb).
+    @State private var deltaChannel = 0
 
     /// The shared content edge — 64 cells × the 4 pt atom = 256 pt (same as the preview).
     private let gifEdge = GlobalLattice.gif(GlobalLattice.previewCells)
@@ -259,11 +264,13 @@ struct ReviewPhaseField: View {
         let palettes = surface.palettesPerFrame
         let cube = surface.indexCube
         let branching = settings.paletteBranching
+        let override = paletteOverride
         exporting = rung
         Task {
             let item = await Task.detached(priority: .userInitiated) {
                 (try? LadderExport.makeURL(rung: rung, palettesPerFrame: palettes,
-                                           indexCube: cube, branching: branching))
+                                           indexCube: cube, branching: branching,
+                                           override: override))
                     .map { LadderShareItem(url: $0) }
             }.value
             exporting = nil
@@ -325,6 +332,21 @@ struct ReviewPhaseField: View {
 
             CellText(paletteReadout, rows: 9, ink: Color(srgb8: SIMD3<UInt8>(140, 140, 140)))
 
+            // δ ROW (2⁸ LEARN face only, when a leaf is brushed): the user's OKLab colour
+            // delta on the brushed GENERATOR — σ-locked by construction (the partner mirrors).
+            // Threaded into BOTH preview and export (Spec.LeafOverride; preview ≡ ship).
+            if settings.paletteBranching == .b2, let brushed = paletteBrush {
+                let gen = brushed / 2
+                CellSelector(options: [(value: 0, label: "ΔL"),
+                                       (value: 1, label: "Δa"),
+                                       (value: 2, label: "Δb")],
+                             selection: $deltaChannel)
+                CellSlider(value: Binding(
+                               get: { Double(paletteOverride[gen][deltaChannel]) },
+                               set: { paletteOverride[gen][deltaChannel] = Int32($0) }),
+                           range: -8192 ... 8192, step: 256)
+            }
+
             // Export at THIS genome — the producer already reads settings.paletteBranching.
             HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
                 Button { exportRung(.working16) } label: {
@@ -351,7 +373,8 @@ struct ReviewPhaseField: View {
     private var paletteSurface: some View {
         let proj = globalLeaves.isEmpty
             ? []
-            : BranchedPalette.projectQ16(globalLeaves, branching: settings.paletteBranching)
+            : BranchedPalette.projectQ16(globalLeaves, branching: settings.paletteBranching,
+                                         override: paletteOverride)
         let srgb = proj.isEmpty ? [] : LadderGIF.paletteToSRGB8(proj)
         let grid = paletteGrid(proj, srgb: srgb)
         let brush = paletteBrush
