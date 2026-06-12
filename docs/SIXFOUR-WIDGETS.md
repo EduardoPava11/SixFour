@@ -101,10 +101,26 @@ displacement *is* the "palette is motion" field and the seed for the 256³ super
 **All five are trainable AND shareable** — no archival-only split; the A↔B pair is
 itself a training comparison (diversity-max vs coherent-global).
 
-**Widget:** one export/share sheet listing the five rungs as cell-grid thumbnails; tap
-to share, long-press to inspect. **The cut-lever (Family 2) sets where on the A↔B axis
-each global rung sits.** *Consolidates:* `FOUR-GIF-UIUX`, `PALETTE-STORY`, the export
-half of `COLLAPSE-LEVER`.
+**The export model — one gesture, any size (Decision, 2026-06-12).** The GIF is the
+product, so *getting one out is a single cheap gesture* over whatever the user is
+looking at, at whatever rung. There is no per-size export flow — one gesture, the size
+is just which rung. **16³ is the free "working copy"**: because it is a pure subsample of
+the cube (`LadderGIF.workingCopy` — temporal 64→16 + spatial 64→16, no re-extraction),
+the user can snapshot/save a 16³ GIF *any time, in any capacity*, the way you'd grab a
+draft. The heavier rungs (64³, 256³) are the same gesture; they just cost more to encode.
+
+- **Widget:** one export/share affordance reachable from any surface (a swipe/long-press
+  on the hero, mirrored in the Ladder sheet). The sheet lists the five rungs as
+  cell-grid thumbnails; tap a rung → encode + system share; 16³ is always instant.
+- **The cut-lever (Family 2) sets where on the A↔B axis each global rung sits.**
+- **Status (scout-verified + this slice):** `64³-A` ships; **`LadderGIF.swift` landed**
+  the pure ladder math — `globalRemap`/`reindexCubeToGlobal` (the `64³-B` GIFB index
+  volume) and `workingCopy`/`spatialDownsample`/`temporalSubsample` (the 16³ snapshot),
+  all byte-exact + unit-gated. **TO BUILD next:** a global-color-table `GIFEncoder` mode
+  (today's encoder is per-frame-LCT-only, gated on `CompleteVoxelVolume`, so it *rejects*
+  a global table by design) + the export gesture UI + the 256³ tiled decode.
+
+*Consolidates:* `FOUR-GIF-UIUX`, `PALETTE-STORY`, the export half of `COLLAPSE-LEVER`.
 
 ---
 
