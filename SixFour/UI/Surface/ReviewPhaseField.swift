@@ -63,6 +63,9 @@ struct ReviewPhaseField: View {
     /// The branching-INDEPENDENT flat global leaves (the ~seconds maximin), computed once
     /// off-thread on entry and re-projected cheaply per face — empty until cached.
     @State private var globalLeaves: [OKLabQ16] = []
+    /// The brushed genome leaf (nil = none). Lights that leaf full + recedes the rest by an
+    /// OPAQUE darken (GRID Law #2); on the 2⁸ face it also lights the σ-partner (slot ^ 1).
+    @State private var paletteBrush: Int?
 
     /// The shared content edge — 64 cells × the 4 pt atom = 256 pt (same as the preview).
     private let gifEdge = GlobalLattice.gif(GlobalLattice.previewCells)
@@ -351,19 +354,44 @@ struct ReviewPhaseField: View {
             : BranchedPalette.projectQ16(globalLeaves, branching: settings.paletteBranching)
         let srgb = proj.isEmpty ? [] : LadderGIF.paletteToSRGB8(proj)
         let grid = paletteGrid(proj, srgb: srgb)
+        let brush = paletteBrush
+        let isB2 = settings.paletteBranching == .b2
         return CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gifPx) { c, r in
             guard !grid.isEmpty else { return nil }   // ghost-fill until the maximin lands
             let slot = grid[r][c]
-            return slot < srgb.count ? srgb[slot] : nil
+            guard slot < srgb.count else { return nil }
+            let color = srgb[slot]
+            guard let b = brush else { return color }            // no brush → every cell full
+            let lit = slot == b || (isB2 && slot == (b ^ 1))     // σ-partner = slot ^ 1
+            return lit ? color : Self.darken(color)              // others recede (opaque, Law #2)
         }
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 0).onEnded { v in
+            guard !grid.isEmpty else { return }
+            let cell = GlobalLattice.gifPx
+            let col = max(0, min(15, Int(v.location.x / cell)))
+            let row = max(0, min(15, Int(v.location.y / cell)))
+            let hit = grid[row][col]
+            paletteBrush = (paletteBrush == hit) ? nil : hit     // tap again to release
+        })
         .accessibilityLabel("Global palette, \(settings.paletteBranching.label)")
+    }
+
+    /// Recede an unbrushed cell by an OPAQUE 35% darken — never alpha (GRID Law #2,
+    /// mirroring `PaletteGridView`'s darkenStep).
+    private static func darken(_ c: SIMD3<UInt8>) -> SIMD3<UInt8> {
+        SIMD3<UInt8>(UInt8(Int(c.x) * 35 / 100),
+                     UInt8(Int(c.y) * 35 / 100),
+                     UInt8(Int(c.z) * 35 / 100))
     }
 
     /// The 16×16 slot layout: 16² → GridLayout LAB rank (assignable X/Y); 4⁴/2⁸ → genome
     /// (leaf) order. (Per-face Quad4/σ-pair adjacency re-layout is the next refinement.)
     private func paletteGrid(_ proj: [OKLabQ16], srgb: [SIMD3<UInt8>]) -> [[Int]] {
         guard proj.count == 256, srgb.count == 256 else { return [] }
-        if settings.paletteBranching == .b16 {
+        switch settings.paletteBranching {
+        case .b16:
+            // SEE: honest L/a/b rank on the assignable X/Y axes.
             let colors = proj.enumerated().map { i, q in
                 IndexedColor(index: i,
                              oklab: SIMD3<Float>(Float(q.x), Float(q.y), Float(q.z)) / 65536,
@@ -371,21 +399,45 @@ struct ReviewPhaseField: View {
             }
             let g = GridLayout.layout(x: settings.gridAxisX, y: settings.gridAxisY, colors: colors)
             return g.isEmpty ? rowMajorGrid : g
+        case .b4:  return quadtreeGrid   // CONTROL: opponent-quadrant nesting
+        case .b2:  return rowMajorGrid    // LEARN: row-major already adjacents σ-pairs (2i,2i+1)
         }
-        return rowMajorGrid
     }
 
     private var rowMajorGrid: [[Int]] {
         (0 ..< 16).map { r in (0 ..< 16).map { c in r * 16 + c } }
     }
 
+    /// 4⁴ quadtree layout: each base-4 digit q → a 2×2 quadrant (row-bit `q>>1`, col-bit
+    /// `q&1`), nested 4 levels = 16×16, so every opponent-quadrant node's four children
+    /// occupy one 2×2 block (the Quad4 structure, made spatial).
+    private var quadtreeGrid: [[Int]] {
+        var grid = Array(repeating: Array(repeating: 0, count: 16), count: 16)
+        for i in 0 ..< 256 {
+            var row = 0, col = 0
+            for k in 0 ..< 4 {
+                let q = (i >> ((3 - k) * 2)) & 3   // k-th base-4 digit, most significant first
+                row = (row << 1) | (q >> 1)
+                col = (col << 1) | (q & 1)
+            }
+            grid[row][col] = i
+        }
+        return grid
+    }
+
     private var paletteReadout: String {
         if globalLeaves.isEmpty { return "collapsing…" }
+        let face: String
         switch settings.paletteBranching {
-        case .b16: return "256 leaves · X \(settings.gridAxisX.rawValue) · Y \(settings.gridAxisY.rawValue)"
-        case .b4:  return "256 leaves · 4⁴ opponent quadrants"
-        case .b2:  return "256 leaves · 2⁸ σ-pair genome"
+        case .b16: face = "X \(settings.gridAxisX.rawValue) · Y \(settings.gridAxisY.rawValue)"
+        case .b4:  face = "4⁴ opponent quadrants"
+        case .b2:  face = "2⁸ σ-pair genome"
         }
+        if let b = paletteBrush {
+            let grabbed = settings.paletteBranching == .b2 ? "σ-pair \(b / 2)" : "leaf \(b)"
+            return "\(face) · grabbed \(grabbed)"
+        }
+        return "256 leaves · \(face)"
     }
 
     // MARK: - Color Atlas curation sub-state (gated)
