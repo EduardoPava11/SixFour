@@ -28,6 +28,20 @@ residual head__ on a deterministic statistical base; every cell still emits an e
   * "SixFour.Spec.Preference", "SixFour.Spec.Look", "SixFour.Spec.Loom" — preference / authoring surface
   * "SixFour.Spec.LookCategory" — ★ north-star: named look taxonomy + on-device Bradley–Terry push-pull learning
 
+== ★★ The Color Atlas — on-device personalization (north-star training surface)
+The first spec footprint of the north-star: the user curates a 16³ board, picks become Bradley–Terry
+comparisons, and a small per-user delta head is updated on device (proven on hardware, see
+@docs/COLOR-ATLAS.md@ + the UPDATE block in @docs/STATUS.md@).
+
+  * "SixFour.Spec.AtlasBoard"      — the 16³ curation board state
+  * "SixFour.Spec.AtlasState"      — the Atlas session state
+  * "SixFour.Spec.AtlasMove"       — the Move ADT (the user's curation actions)
+  * "SixFour.Spec.AtlasOracle"     — the value oracle scoring board candidates
+  * "SixFour.Spec.AtlasCascade"    — the multi-stage proposal cascade
+  * "SixFour.Spec.DecisionLog"     — the replay-record wire format of picks
+  * "SixFour.Spec.DeltaCodebook"   — the per-user delta-head codebook
+  * "SixFour.Spec.PreferenceUpdate" — the on-device preference-update (gradient/weight) rule
+
 == 1. Numeric & colour core
 "SixFour.Spec.Shape", "SixFour.Spec.Color", "SixFour.Spec.ColorFixed", "SixFour.Spec.LinAlg",
 "SixFour.Spec.Tensor", "SixFour.Spec.Gauge".
@@ -50,7 +64,8 @@ barycenter / maximin; the NN learns this barycenter.)
 == 5. The authoring STORY (Acts I–IV) — the user-facing pipeline the NN lives in
 "SixFour.Spec.StageA" (Act I, @16²@ per-frame) · "SixFour.Spec.QuartetDelta" (Act II, @4⁴@ quartet core) ·
 "SixFour.Spec.HaarRibbon" (Act III, @2⁸@ Haar abstraction) · "SixFour.Spec.Export" (Act IV, the global pack
-@{16³,64³,256³}@). See @docs/SIXFOUR-PALETTE-STORY-WORKFLOW.md@.
+@{16³,64³,256³}@) · "SixFour.Spec.Upscale256" (Act IV, the residual-seeded @256³@ super-res of the export pack).
+See @docs/SIXFOUR-PALETTE-STORY-WORKFLOW.md@.
 
 == 6. Dither & index encoding
 "SixFour.Spec.Dither", "SixFour.Spec.SpatialDither", "SixFour.Spec.STBN3D", "SixFour.Spec.Indices",
