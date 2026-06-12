@@ -168,9 +168,10 @@ final class AppSettings {
     }
 
     /// Whether the global-palette CREATION control (the PALETTE sub-state: radix-face
-    /// selector + LAB rank axes + a live 16×16 preview that equals the exported GIFB) is
-    /// reachable from Review. Defaults **OFF** — the default render/UI path is
-    /// byte-identical with this false. SIXFOUR-WIDGETS Family 2 / docs/SIXFOUR-GLOBAL-PALETTE-CONTROL.md.
+    /// selector + LAB rank axes + σ-locked δ + a live 16×16 preview that equals the
+    /// exported GIFB) is reachable from Review. Defaults **ON** — it is the point of the
+    /// Family-2 work, so it is surfaced; no rendered bytes change (it only adds the Palette
+    /// entry button + an opt-in sub-state). SIXFOUR-WIDGETS Family 2 / docs/SIXFOUR-GLOBAL-PALETTE-CONTROL.md.
     var paletteControlEnabled: Bool {
         didSet { defaults.set(paletteControlEnabled, forKey: Key.paletteControlEnabled) }
     }
@@ -268,7 +269,7 @@ final class AppSettings {
         self.debugOwnershipOverlay = defaults.bool(forKey: Key.debugOwnershipOverlay)
         // Absent key → false ⇒ Color Atlas OFF (production path byte-identical).
         self.colorAtlasEnabled = defaults.bool(forKey: Key.colorAtlasEnabled)
-        self.paletteControlEnabled = defaults.bool(forKey: Key.paletteControlEnabled)
+        self.paletteControlEnabled = defaults.object(forKey: Key.paletteControlEnabled) as? Bool ?? true
 
         // Movable ColorWidget positions: parse each stored "col,row" (absent/garbage →
         // the generated spec dock).
