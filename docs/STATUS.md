@@ -81,21 +81,20 @@ do not re-research or re-derive it.
 ## BUILT / DESIGN-ONLY / MISSING ledger
 
 ### BUILT (verified on device path / in source)
-- **Global-palette CREATION control + shareable GIF ladder (Family 2, surfaced 2026-06-12).**
-  The user controls how the ONE global palette (GIFA→GIFB) is created, from a default-ON
-  `.review` sub-state (`paletteControlEnabled`, Settings toggle): a radix-FACE selector
-  (16²=SEE LAB-rank grid / 4⁴=quadtree / 2⁸=σ-pair) sets `settings.paletteBranching`, the
-  genome that reaches the GIFB bytes; a live 16×16 `CellSprite` shows it (preview ≡ export by
-  construction — same `BranchedPalette.projectQ16` on the same `LadderExport.flatGlobalLeaves`);
-  brush-select lights the leaf + (on 2⁸) its σ-partner. On 2⁸ a **σ-locked δ-row** (CellSelector
-  ΔL/Δa/Δb + CellSlider) nudges the brushed generator — partner = σ(cᵢ+δ) by construction
-  (`Spec.LeafOverride`, generator-space, byte-exact integer; 8 Haskell laws + 11 Swift tests,
-  adversarially verified HIGH assurance; release-`precondition` on the power-of-two contract).
-  Export = a "Save" cell-menu producing any ladder rung GIF (16³ working copy / 64³-B global)
-  via a global-color-table `GIFEncoder.encodeGlobal` (drops the per-frame completeness brand);
-  collapse off-thread (non-blocking). All cell-grid-native (`lint-grid` PASS). Branch-aware
-  collapse: `CollapsedPalette` carries `branching`+`branchedLeaves`. **Not yet:** 4⁴/16² δ
-  (Phase B.2/C), 256³ tiled rungs, real progress indicator.
+- **Global-palette BACKEND + shareable GIF ladder + Save export (Family 2, 2026-06-12).**
+  The byte-exact machinery to create + ship the ONE global palette (GIFA→GIFB): branch-aware
+  collapse (`CollapsedPalette` carries `branching`+`branchedLeaves`; `BranchedPalette.projectQ16`
+  for 16²/4⁴/2⁸); the **σ-locked generator-space δ** (`Spec.LeafOverride` — 8 Haskell laws + 11
+  Swift byte-exact tests, adversarially verified HIGH assurance, release-`precondition` on the
+  power-of-two contract; `projectQ16(_, override:)`); and the **Save** export (a cell-menu →
+  any ladder rung GIF: 16³ working copy / 64³-B global) via a global-color-table
+  `GIFEncoder.encodeGlobal` (drops the per-frame completeness brand), collapse off-thread.
+  `preview ≡ ship` by construction. All cell-grid-native (`lint-grid` PASS). **The creation
+  CONTROL UI was a `.review` VStack FORM (radix selector + axis buttons + display grid + δ
+  slider) — REJECTED + DELETED** (a form ≠ the cell-grid medium). Being rebuilt as
+  gesture-grid tools (Act III `.browsing`: 64 frames = 16 RGBT groups, swipe-pick) per
+  `docs/SIXFOUR-GESTURE-GRID-TOOLS.md`. **Not yet:** the gesture tools, Act III `.browsing`
+  phase, the picks→global `Spec.GroupRGBT` path, 256³ tiled rungs.
 - **Deterministic Zig render core.** Per-stage kernels (widen → linear→OKLab → quantize
   (maximin+Lloyd) → dither → significance fill → palette → LZW/GIF89a assemble) drive
   `DeterministicRenderer`; default path, GPU-float `GIFRenderer` is the throw-fallback.

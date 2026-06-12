@@ -173,10 +173,6 @@ struct SettingsPhaseField: View {
             tagline(settings.colorAtlasEnabled
                 ? "curate the global palette in review"
                 : "off · default render path")
-            CellToggle(label: "palette creation control", isOn: $settings.paletteControlEnabled)
-            tagline(settings.paletteControlEnabled
-                ? "choose the global palette genome (16²/4⁴/2⁸) in review"
-                : "off · default render path")
         }
     }
 
