@@ -30,11 +30,17 @@ enum BranchedPalette {
     /// the Haskell `Spec.Quad4Fixed` / `Spec.SigmaPairFixed` golden EXACTLY, so a 4⁴
     /// or 2⁸ GIFB global colour table is byte-exact across devices (Flat 16² already
     /// is). Quad4 is a pure-Swift integer port; σ-pair reuses the owned Zig `s4_haar`.
-    static func projectQ16(_ leaves: [SIMD3<Int32>], branching: PaletteBranching) -> [SIMD3<Int32>] {
+    /// `override` (2⁸ only): a generator-space δ — the byte-exact Swift twin of
+    /// `Spec.LeafOverride.applySigmaOverride`. Entry `i` is added to generator `cᵢ` before
+    /// the σ-interleave, so the σ-partner becomes σ(cᵢ + δᵢ) and the symmetry holds by
+    /// construction. Empty (the default) is the identity, so every existing caller is
+    /// unchanged. Ignored for `.b16`/`.b4` (their overrides are a later phase).
+    static func projectQ16(_ leaves: [SIMD3<Int32>], branching: PaletteBranching,
+                           override: [SIMD3<Int32>] = []) -> [SIMD3<Int32>] {
         switch branching {
-        case .b16: return leaves                       // Flat: identity
-        case .b4:  return quad4ProjectQ16(leaves)      // exact ÷4 opponent-quadrant
-        case .b2:  return sigmaPairProjectQ16(leaves)  // integer Haar + exact σ-reflect
+        case .b16: return leaves                                   // Flat: identity
+        case .b4:  return quad4ProjectQ16(leaves)                  // exact ÷4 opponent-quadrant
+        case .b2:  return sigmaPairProjectQ16(leaves, override: override)  // σ-locked δ
         }
     }
 
@@ -79,7 +85,8 @@ enum BranchedPalette {
     /// Exact integer σ-pair projection (mirrors `Spec.SigmaPairFixed`): the 128 even
     /// leaves through the owned Zig integer Haar (`s4_haar`), interleaved with their
     /// exact integer σ-reflection σ(L,a,b)=(L,−a,−b).
-    private static func sigmaPairProjectQ16(_ leaves: [SIMD3<Int32>]) -> [SIMD3<Int32>] {
+    private static func sigmaPairProjectQ16(_ leaves: [SIMD3<Int32>],
+                                            override: [SIMD3<Int32>] = []) -> [SIMD3<Int32>] {
         var evens: [SIMD3<Int32>] = []
         evens.reserveCapacity(leaves.count / 2)
         var i = 0
@@ -90,9 +97,12 @@ enum BranchedPalette {
         }
         var out: [SIMD3<Int32>] = []
         out.reserveCapacity(ci.count * 2)
-        for c in ci {
-            out.append(c)
-            out.append(SIMD3<Int32>(c.x, 0 &- c.y, 0 &- c.z))   // σ-reflect (exact)
+        // Generator-space override (Spec.LeafOverride.applySigmaOverride): gᵢ = cᵢ + δᵢ,
+        // partner = σ(gᵢ). Exact integer add + negate — a pure post-step on the Haar.
+        for (idx, c) in ci.enumerated() {
+            let g = idx < override.count ? c &+ override[idx] : c
+            out.append(g)
+            out.append(SIMD3<Int32>(g.x, 0 &- g.y, 0 &- g.z))   // σ-reflect (exact)
         }
         return out
     }
