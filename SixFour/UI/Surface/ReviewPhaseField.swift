@@ -45,6 +45,9 @@ struct ReviewPhaseField: View {
 
     /// The built `.cube` awaiting the share sheet (set by the Export LUT button).
     @State private var lutShare: LUTShareItem?
+    /// The produced ladder GIF awaiting the share sheet (set by the Save menu) — any
+    /// rung (16³ working copy / 64³-B global), one gesture. SIXFOUR-WIDGETS Family 1.
+    @State private var ladderShare: LadderShareItem?
 
     /// The shared content edge — 64 cells × the 4 pt atom = 256 pt (same as the preview).
     private let gifEdge = GlobalLattice.gif(GlobalLattice.previewCells)
@@ -88,6 +91,9 @@ struct ReviewPhaseField: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
+        .sheet(item: $ladderShare) { item in
+            ActivityView(items: [item.url])
+        }
         .sheet(item: $lutShare) { item in
             ActivityView(items: [item.url])
         }
@@ -153,6 +159,26 @@ struct ReviewPhaseField: View {
                 CellActionButton(icon: .share, title: "Share", prominent: true)
                     .accessibilityHidden(true)
             }
+
+            // Save a GIF at any size — one gesture, the size is just which rung
+            // (16³ working copy / 64³-B global). Deterministic producer (`LadderExport`),
+            // collapsed via the chosen radix; presents the system share sheet.
+            // SIXFOUR-WIDGETS Family 1 — the GIF is the product, getting one out is cheap.
+            Menu {
+                ForEach(LadderExport.Rung.allCases) { rung in
+                    Button(rung.title) {
+                        ladderShare = (try? LadderExport.makeURL(
+                            rung: rung,
+                            palettesPerFrame: surface.palettesPerFrame,
+                            indexCube: surface.indexCube,
+                            branching: settings.paletteBranching
+                        )).map { LadderShareItem(url: $0) }
+                    }
+                }
+            } label: {
+                CellActionButton(icon: .share, title: "Save")
+            }
+            .accessibilityLabel("Save GIF at any size")
 
             // Export the active LOOK as a .cube LUT for R3D (only when a grade is on;
             // `.off` would be an identity LUT). Builds via the deterministic Zig core

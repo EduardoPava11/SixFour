@@ -87,6 +87,26 @@ struct GIFEncoderGlobalTests {
         try? FileManager.default.removeItem(at: url)
     }
 
+    /// The Review-side producer (`LadderExport`) end-to-end on a full-shape cube: each
+    /// rung yields a valid GIF with the right frame count — 64³-B = 64 frames, 16³
+    /// working copy = 16 frames. This is the gesture's backend.
+    @Test func ladderExportProducesEachRung() throws {
+        let frames = SixFourShape.T, side = SixFourShape.W, k = SixFourShape.K
+        let palettesPerFrame: [[SIMD3<UInt8>]] = (0 ..< frames).map { f in
+            (0 ..< k).map { i in SIMD3<UInt8>(UInt8((i + f) & 0xFF), UInt8(i & 0xFF), 0) }
+        }
+        // A full side·side·frames index cube; every index addresses the 256-slot palette.
+        let cube: [UInt8] = (0 ..< side * side * frames).map { UInt8($0 & 0xFF) }
+
+        for rung in LadderExport.Rung.allCases {
+            let url = try LadderExport.makeURL(rung: rung, palettesPerFrame: palettesPerFrame,
+                                               indexCube: cube, branching: .b16)
+            let src = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+            #expect(CGImageSourceGetCount(src) == (rung == .working16 ? 16 : 64))
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     @Test func encodeGlobalRejectsWrongPaletteSize() {
         let enc = GIFEncoder(width: 2, height: 2)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("sixfour-bad.gif")

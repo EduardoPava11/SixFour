@@ -120,8 +120,16 @@ draft. The heavier rungs (64³, 256³) are the same gesture; they just cost more
   drops the per-frame `CompleteVoxelVolume` brand (so frames may use a subset of one
   global table) and writes a valid GCT GIF — verified by ImageIO round-trip. Feed
   `collapse(...,branching:).branchedLeaves` and you get the GIFB table for any radix.
-  **TO BUILD next:** the export-gesture UI (wire `encodeGlobalGIF`/`workingCopy` to a
-  swipe/long-press + Ladder sheet) and the 256³ tiled decode.
+- **Export gesture WIRED (2026-06-12):** Review's action row has a **"Save" menu**
+  (`LadderExport.Rung.allCases` → `16³ working copy` / `64³ global`) that produces the
+  rung via `LadderExport.makeURL` (collapse by `settings.paletteBranching` → reindex →
+  encode) and presents the system share sheet (`ActivityView`, mirroring the LUT path).
+  One gesture, any size — 16³ is the cheap working copy. Compile-gated + a producer
+  round-trip test (each rung → valid GIF with the right frame count).
+  **PERF CAVEAT:** `makeURL` runs the maximin collapse **synchronously** (~seconds for
+  64³ — the producer test takes 4.5 s) — must move off the main thread before ship.
+  **TO BUILD next:** offload the producer to a background task; hero-gesture trigger
+  (long-press is taken by widget-move, so a swipe); the 256³ tiled decode.
 
 *Consolidates:* `FOUR-GIF-UIUX`, `PALETTE-STORY`, the export half of `COLLAPSE-LEVER`.
 
