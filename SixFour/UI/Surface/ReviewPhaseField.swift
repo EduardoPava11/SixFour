@@ -38,6 +38,10 @@ struct ReviewPhaseField: View {
     /// hierarchy, so the sub-state and the session reset naturally on retake.
     @State private var atlasOpen = false
     @State private var atlas = AtlasState()
+    /// The on-device training session (the visible flywheel) — view-local like
+    /// `atlas`; its MPSGraph trainer lives on a confined worker actor and is
+    /// stopped when the curation sub-state leaves the hierarchy.
+    @State private var atlasTraining = AtlasTrainingSession()
 
     /// The built `.cube` awaiting the share sheet (set by the Export LUT button).
     @State private var lutShare: LUTShareItem?
@@ -199,10 +203,17 @@ struct ReviewPhaseField: View {
             AtlasBoardView(atlas: atlas)
             AtlasGalleryView(atlas: atlas)
 
+            // The on-device training instrument (the visible flywheel): loss
+            // sparkline + V(A)/V(B) + train/pause. Inert-labeled on simulator.
+            AtlasTrainingField(atlas: atlas, session: atlasTraining)
+
             CellText("moves \(atlas.log.entries.count) · compares \(atlas.log.compareCount)",
                      rows: 6, ink: Color(srgb8: SIMD3<UInt8>(140, 140, 140)))
 
-            Button { atlasOpen = false } label: {
+            Button {
+                atlasTraining.stop()
+                atlasOpen = false
+            } label: {
                 CellActionButton(icon: .none, title: "Done", prominent: true)
             }
             .buttonStyle(.plain)
@@ -210,5 +221,6 @@ struct ReviewPhaseField: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, GlobalLattice.gif(GlobalLattice.gutterCells))
+        .onDisappear { atlasTraining.stop() }   // leaving review halts the loop
     }
 }

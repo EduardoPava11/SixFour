@@ -117,6 +117,22 @@ final class AtlasTrainer {
     private let lossTensor: MPSGraphTensor
     private let updateOps: [MPSGraphOperation]
 
+    /// The eight trainable variable tensors, by role — kept for the forward-only
+    /// inference subgraphs (`evaluate`). Same `MPSGraphTensor` objects the SGD
+    /// assign ops update, so inference always reads the CURRENT weights.
+    private struct Weights {
+        let wBoard, bBoard, wGenome, bGenome, w1, b1, w2, b2: MPSGraphTensor
+    }
+    private let weights: Weights
+
+    /// Lazily-built forward-only entry points, one per batch size (the graph is
+    /// static-shape, so each distinct batch gets its own placeholders + value
+    /// tensor; all of them share `weights`). Confined with the trainer.
+    private struct InferenceEntry {
+        let board, genome, value: MPSGraphTensor
+    }
+    private var inferenceEntries: [Int: InferenceEntry] = [:]
+
     // MARK: Init — build the training graph once
 
     /// Fails (nil) when MPSGraph cannot execute here (no Metal/MPS device, or
@@ -187,6 +203,9 @@ final class AtlasTrainer {
         let w2 = variable(hDim, 1, "wValue2")         // value MLP 32→1
         let b2 = bias(1, "bValue2")
         let variables = [wBoard, bBoard, wGenome, bGenome, w1, b1, w2, b2]
+        self.weights = Weights(wBoard: wBoard, bBoard: bBoard,
+                               wGenome: wGenome, bGenome: bGenome,
+                               w1: w1, b1: b1, w2: w2, b2: b2)
         self.parameterCount =
             ch * mDim + mDim + gDim * mDim + mDim + cDim * hDim + hDim + hDim + 1
 
@@ -323,6 +342,108 @@ final class AtlasTrainer {
             onStep(AtlasTrainingTelemetry.Step(step: step, loss: loss, msPerStep: ms))
         }
         return losses
+    }
+
+    // MARK: Inference (additive — the training-widget read path)
+
+    /// Forward-only V(board, genome) for `count` samples — NO backward pass, NO
+    /// weight update. Added for the AtlasTrainingField widget (live V(A)/V(B)
+    /// readouts + the saliency sweep); the training graph above is untouched.
+    ///
+    /// The forward math is the SAME value path the loss trains (per-bin 6→64
+    /// linear → mean-pool → tanh ‖ genome 384→64 tanh → 128→32 tanh → 32→1),
+    /// reading the live variable tensors, so the numbers move as SGD steps land.
+    ///
+    /// - `boards`: `count × 24,576` floats, row-major bin × channel.
+    /// - `genomes`: `count × 384` floats.
+    /// - Returns `count` value scalars (NaN-filled on a readback failure).
+    func evaluate(boards: [Float], genomes: [Float], count: Int) -> [Float] {
+        precondition(count > 0, "evaluate needs at least one sample")
+        precondition(boards.count == count * Self.boardElementCount, "boards: \(boards.count)")
+        precondition(genomes.count == count * Self.genomeDim, "genomes: \(genomes.count)")
+
+        let entry = inferenceEntry(batch: count)
+        let feeds: [MPSGraphTensor: MPSGraphTensorData] = [
+            entry.board: makeTensorData(
+                boards,
+                shape: [NSNumber(value: count), NSNumber(value: Self.boardBins),
+                        NSNumber(value: Self.boardChannels)]),
+            entry.genome: makeTensorData(
+                genomes,
+                shape: [NSNumber(value: count), NSNumber(value: Self.genomeDim)]),
+        ]
+        let results = graph.run(
+            with: commandQueue, feeds: feeds,
+            targetTensors: [entry.value], targetOperations: nil)
+        var values = [Float](repeating: .nan, count: count)
+        results[entry.value]?.mpsndarray().readBytes(&values, strideBytes: nil)
+        return values
+    }
+
+    /// Build (once per batch size) the forward-only subgraph: fresh placeholders,
+    /// the SAME variable tensors. Mirrors the training branch's value math.
+    private func inferenceEntry(batch: Int) -> InferenceEntry {
+        if let hit = inferenceEntries[batch] { return hit }
+
+        let bins = Self.boardBins
+        let ch = Self.boardChannels
+        let gDim = Self.genomeDim
+        let mDim = Self.modelDim
+
+        let boardPH = graph.placeholder(
+            shape: [NSNumber(value: batch), NSNumber(value: bins), NSNumber(value: ch)],
+            dataType: .float32, name: "inferBoard\(batch)")
+        let genomePH = graph.placeholder(
+            shape: [NSNumber(value: batch), NSNumber(value: gDim)],
+            dataType: .float32, name: "inferGenome\(batch)")
+
+        // Board branch: [N,4096,6] → [N·4096,6] × [6,64] → mean over bins → tanh.
+        let boardFlat = graph.reshape(
+            boardPH, shape: [NSNumber(value: batch * bins), NSNumber(value: ch)], name: nil)
+        let boardProj = graph.matrixMultiplication(
+            primary: boardFlat, secondary: weights.wBoard, name: nil)
+        let boardCube = graph.reshape(
+            boardProj,
+            shape: [NSNumber(value: batch), NSNumber(value: bins), NSNumber(value: mDim)],
+            name: nil)
+        let boardPooled = graph.reshape(
+            graph.mean(of: boardCube, axes: [1], name: nil),
+            shape: [NSNumber(value: batch), NSNumber(value: mDim)], name: nil)
+        let boardCtx = graph.tanh(
+            with: graph.addition(boardPooled, weights.bBoard, name: nil), name: nil)
+
+        // Genome branch + value MLP.
+        let enc = graph.tanh(
+            with: graph.addition(
+                graph.matrixMultiplication(primary: genomePH, secondary: weights.wGenome, name: nil),
+                weights.bGenome, name: nil),
+            name: nil)
+        let ctx = graph.concatTensors([boardCtx, enc], dimension: 1, name: nil)
+        let h = graph.tanh(
+            with: graph.addition(
+                graph.matrixMultiplication(primary: ctx, secondary: weights.w1, name: nil),
+                weights.b1, name: nil),
+            name: nil)
+        let value = graph.addition(
+            graph.matrixMultiplication(primary: h, secondary: weights.w2, name: nil),
+            weights.b2, name: nil)                                   // [N,1]
+
+        let entry = InferenceEntry(board: boardPH, genome: genomePH, value: value)
+        inferenceEntries[batch] = entry
+        return entry
+    }
+
+    /// MPSNDArray-backed feed (the same construction `train` uses inline, and for
+    /// the same reason: `MPSGraphTensorData(device:data:shape:dataType:)` requires
+    /// an MPSGraphDevice, whose simulator init raises — MPSNDArray sidesteps it).
+    private func makeTensorData(_ values: [Float], shape: [NSNumber]) -> MPSGraphTensorData {
+        let descriptor = MPSNDArrayDescriptor(dataType: .float32, shape: shape)
+        let array = MPSNDArray(device: device, descriptor: descriptor)
+        values.withUnsafeBufferPointer { ptr in
+            array.writeBytes(UnsafeMutableRawPointer(mutating: ptr.baseAddress!),
+                             strideBytes: nil)
+        }
+        return MPSGraphTensorData(array)
     }
 }
 
