@@ -16,10 +16,19 @@ enum LadderExport {
         case global64      // 64³-B — the global GIFB
 
         var id: String { rawValue }
+        /// Full label for accessibility.
         var title: String {
             switch self {
             case .working16: "16³ working copy"
             case .global64:  "64³ global (GIFB)"
+            }
+        }
+        /// Short cell-grid label for the on-screen `CellActionButton` (the screen is the
+        /// cell grid — no long system-menu text).
+        var shortTitle: String {
+            switch self {
+            case .working16: "16³"
+            case .global64:  "64³"
             }
         }
     }

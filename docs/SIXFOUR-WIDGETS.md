@@ -120,10 +120,14 @@ draft. The heavier rungs (64³, 256³) are the same gesture; they just cost more
   drops the per-frame `CompleteVoxelVolume` brand (so frames may use a subset of one
   global table) and writes a valid GCT GIF — verified by ImageIO round-trip. Feed
   `collapse(...,branching:).branchedLeaves` and you get the GIFB table for any radix.
-- **Export gesture WIRED (2026-06-12):** Review's action row has a **"Save" menu**
-  (`LadderExport.Rung.allCases` → `16³ working copy` / `64³ global`) that produces the
-  rung via `LadderExport.makeURL` (collapse by `settings.paletteBranching` → reindex →
-  encode) and presents the system share sheet (`ActivityView`, mirroring the LUT path).
+- **Export gesture WIRED (2026-06-12), cell-grid-native:** Review's action row has a
+  **"Save" cell button** that reveals a `CellActionButton` per rung
+  (`LadderExport.Rung.allCases` → `16³` / `64³`) — **NOT a system `Menu`**: the screen is
+  the cell grid, so the picker is cell buttons (`CellText` labels via `GlobalLattice`
+  pitch), passing `scripts/lint-grid.sh`. Tapping a rung produces it via
+  `LadderExport.makeURL` (collapse by `settings.paletteBranching` → reindex → encode) and
+  presents the system share sheet (`ActivityView`, mirroring the LUT path — the OS share
+  sheet is the one sanctioned non-cell surface).
   One gesture, any size — 16³ is the cheap working copy. Compile-gated + a producer
   round-trip test (each rung → valid GIF with the right frame count).
 - **Non-blocking (2026-06-12):** the Save tap captures the surface data into value-type

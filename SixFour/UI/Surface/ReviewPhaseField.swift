@@ -51,6 +51,9 @@ struct ReviewPhaseField: View {
     /// The rung currently being produced off-thread (nil = idle). Drives the Save
     /// button's progress label + disables it so the maximin collapse can't double-fire.
     @State private var exporting: LadderExport.Rung?
+    /// Whether the cell-native rung picker is revealed (the Save button toggles it).
+    /// The picker is cell buttons, NOT a system `Menu` — the screen IS the cell grid.
+    @State private var rungPickerOpen = false
 
     /// The shared content edge — 64 cells × the 4 pt atom = 256 pt (same as the preview).
     private let gifEdge = GlobalLattice.gif(GlobalLattice.previewCells)
@@ -164,18 +167,28 @@ struct ReviewPhaseField: View {
             }
 
             // Save a GIF at any size — one gesture, the size is just which rung
-            // (16³ working copy / 64³-B global). Deterministic producer (`LadderExport`),
-            // collapsed via the chosen radix; presents the system share sheet.
+            // (16³ working copy / 64³-B global). The picker is CELL BUTTONS, not a system
+            // `Menu`: the screen IS the cell grid (GRID / total-pixelation law). Tapping
+            // Save reveals a cell button per rung; the producer is deterministic
+            // (`LadderExport`, collapsed via the chosen radix), then the share sheet.
             // SIXFOUR-WIDGETS Family 1 — the GIF is the product, getting one out is cheap.
-            Menu {
-                ForEach(LadderExport.Rung.allCases) { rung in
-                    Button(rung.title) { exportRung(rung) }
-                }
-            } label: {
-                CellActionButton(icon: .share, title: exporting != nil ? "…" : "Save")
+            Button { rungPickerOpen.toggle() } label: {
+                CellActionButton(icon: .share, title: exporting != nil ? "…" : "Save",
+                                 fillWidth: false)
             }
+            .buttonStyle(.plain)
             .disabled(exporting != nil)
             .accessibilityLabel("Save GIF at any size")
+
+            if rungPickerOpen && exporting == nil {
+                ForEach(LadderExport.Rung.allCases) { rung in
+                    Button { rungPickerOpen = false; exportRung(rung) } label: {
+                        CellActionButton(title: rung.shortTitle, fillWidth: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Save \(rung.title)")
+                }
+            }
 
             // Export the active LOOK as a .cube LUT for R3D (only when a grade is on;
             // `.off` would be an identity LUT). Builds via the deterministic Zig core
