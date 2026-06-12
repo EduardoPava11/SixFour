@@ -48,6 +48,9 @@ struct ReviewPhaseField: View {
     /// The produced ladder GIF awaiting the share sheet (set by the Save menu) — any
     /// rung (16³ working copy / 64³-B global), one gesture. SIXFOUR-WIDGETS Family 1.
     @State private var ladderShare: LadderShareItem?
+    /// The rung currently being produced off-thread (nil = idle). Drives the Save
+    /// button's progress label + disables it so the maximin collapse can't double-fire.
+    @State private var exporting: LadderExport.Rung?
 
     /// The shared content edge — 64 cells × the 4 pt atom = 256 pt (same as the preview).
     private let gifEdge = GlobalLattice.gif(GlobalLattice.previewCells)
@@ -166,18 +169,12 @@ struct ReviewPhaseField: View {
             // SIXFOUR-WIDGETS Family 1 — the GIF is the product, getting one out is cheap.
             Menu {
                 ForEach(LadderExport.Rung.allCases) { rung in
-                    Button(rung.title) {
-                        ladderShare = (try? LadderExport.makeURL(
-                            rung: rung,
-                            palettesPerFrame: surface.palettesPerFrame,
-                            indexCube: surface.indexCube,
-                            branching: settings.paletteBranching
-                        )).map { LadderShareItem(url: $0) }
-                    }
+                    Button(rung.title) { exportRung(rung) }
                 }
             } label: {
-                CellActionButton(icon: .share, title: "Save")
+                CellActionButton(icon: .share, title: exporting != nil ? "…" : "Save")
             }
+            .disabled(exporting != nil)
             .accessibilityLabel("Save GIF at any size")
 
             // Export the active LOOK as a .cube LUT for R3D (only when a grade is on;
@@ -212,6 +209,26 @@ struct ReviewPhaseField: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open color atlas")
             }
+        }
+    }
+
+    /// Produce a ladder rung OFF the main thread (the maximin collapse is ~seconds for
+    /// 64³), then present the share sheet — so the Save tap never blocks the UI. Surface
+    /// data is captured into value-type locals before the hop; `LadderShareItem` is
+    /// `Sendable`, so it returns cleanly to the main actor.
+    private func exportRung(_ rung: LadderExport.Rung) {
+        let palettes = surface.palettesPerFrame
+        let cube = surface.indexCube
+        let branching = settings.paletteBranching
+        exporting = rung
+        Task {
+            let item = await Task.detached(priority: .userInitiated) {
+                (try? LadderExport.makeURL(rung: rung, palettesPerFrame: palettes,
+                                           indexCube: cube, branching: branching))
+                    .map { LadderShareItem(url: $0) }
+            }.value
+            exporting = nil
+            ladderShare = item
         }
     }
 

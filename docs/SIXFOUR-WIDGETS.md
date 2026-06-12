@@ -126,9 +126,12 @@ draft. The heavier rungs (64³, 256³) are the same gesture; they just cost more
   encode) and presents the system share sheet (`ActivityView`, mirroring the LUT path).
   One gesture, any size — 16³ is the cheap working copy. Compile-gated + a producer
   round-trip test (each rung → valid GIF with the right frame count).
-  **PERF CAVEAT:** `makeURL` runs the maximin collapse **synchronously** (~seconds for
-  64³ — the producer test takes 4.5 s) — must move off the main thread before ship.
-  **TO BUILD next:** offload the producer to a background task; hero-gesture trigger
+- **Non-blocking (2026-06-12):** the Save tap captures the surface data into value-type
+  locals and runs `makeURL` on a detached `.userInitiated` task (the maximin collapse is
+  ~seconds for 64³), returning the `Sendable` `LadderShareItem` to the main actor to
+  present. The Save button shows `…` + disables while producing, so the UI never freezes
+  and the collapse can't double-fire. Compiles clean under Swift 6 strict concurrency.
+  **TO BUILD next:** a real progress indicator (not just `…`); hero-gesture trigger
   (long-press is taken by widget-move, so a swipe); the 256³ tiled decode.
 
 *Consolidates:* `FOUR-GIF-UIUX`, `PALETTE-STORY`, the export half of `COLLAPSE-LEVER`.

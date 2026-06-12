@@ -11,7 +11,7 @@ enum LadderExport {
     /// The rungs the deterministic producer can emit today. (Per-frame 64³-A is already
     /// the committed hero `Surface.gifURL`; the two 256³ rungs are the deferred tiled
     /// decode.) `16³` is the free, any-time working copy.
-    enum Rung: String, CaseIterable, Identifiable {
+    enum Rung: String, CaseIterable, Identifiable, Sendable {
         case working16     // 16³ working copy — global palette, cheap snapshot
         case global64      // 64³-B — the global GIFB
 
@@ -84,8 +84,9 @@ enum LadderExport {
     }
 }
 
-/// Share-sheet item for a produced ladder GIF (mirrors `LUTShareItem`).
-struct LadderShareItem: Identifiable {
+/// Share-sheet item for a produced ladder GIF (mirrors `LUTShareItem`). `Sendable` so the
+/// background producer task can hand it back to the main actor.
+struct LadderShareItem: Identifiable, Sendable {
     let id = UUID()
     let url: URL
 }
