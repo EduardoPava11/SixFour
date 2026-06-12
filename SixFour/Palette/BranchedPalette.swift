@@ -91,9 +91,30 @@ enum BranchedPalette {
         evens.reserveCapacity(leaves.count / 2)
         var i = 0
         while i < leaves.count { evens.append(leaves[i]); i += 2 }
+        // DOMAIN CONTRACT (byte-exactness vs Spec.LeafOverride.applySigmaOverride):
+        //   1. `evens.count` MUST be a power of two (the shipped path is 256 leaves ⇒
+        //      evens=128=2⁷; FarthestPointCollapse k=SixFourShape.K=256 guarantees it).
+        //      The Haskell twin has NO fallback: it always reconstructs+overrides. So the
+        //      `else { return leaves }` branch below is a Swift-ONLY divergence — it
+        //      returns the RAW INPUT leaves UNMIRRORED and DROPS the override. It is
+        //      UNREACHABLE for every real caller; if a future caller feeds a non-power-of-
+        //      two even-count (or empty) the two implementations disagree on both count
+        //      AND σ-symmetry. RELEASE-ENFORCED by the precondition below (fail loud, never
+        //      silently ship an un-projected/σ-broken table — matches the fail-loud brand).
+        //   2. The wrapping ops below (`c &+ δ`, `0 &- g.y`) are byte-exact to the
+        //      unbounded-Int Haskell only while |cᵢ|+|δ| < 2³¹. Real bound: |c.L|≤65536,
+        //      |c.a|,|c.b|≤26214, slider δ∈[±8192] ⇒ |g|≤~74k, ~5 orders below Int32.max.
+        //      Off-domain (e.g. an un-normalized OKLab scale) the value silently WRAPS and
+        //      diverges from Haskell; the per-pair σ-symmetry still holds bit-for-bit.
+        // Totality contract, RELEASE-enforced (verdict P2): evens.count is a non-zero power
+        // of two on every shipped path (256 leaves ⇒ 128). A violation is a caller bug that
+        // would otherwise silently ship an un-projected, un-overridden, σ-broken table — so
+        // fail loud here rather than diverge from Spec.LeafOverride. Never fires in practice.
+        precondition(!evens.isEmpty && (evens.count & (evens.count - 1)) == 0,
+                     "sigmaPairProjectQ16 requires a power-of-two even-count (got \(evens.count)); the shipped 256-leaf path guarantees 128.")
         guard let (root, offs) = SixFourNative.haarAnalyze(leaves: evens),
               let ci = SixFourNative.haarReconstruct(root: root, offsets: offs) else {
-            return leaves
+            return leaves   // defensive: unreachable given the power-of-two precondition above
         }
         var out: [SIMD3<Int32>] = []
         out.reserveCapacity(ci.count * 2)

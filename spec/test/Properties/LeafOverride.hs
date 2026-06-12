@@ -49,10 +49,7 @@ tests = testGroup "LeafOverride (generator-space σ-locked δ — EXACT, no tole
           forAll genDeltaI (lawSigmaOverrideScopedToGenerator hp i)
 
   , testProperty "every odd leaf is the σ-reflection of its even predecessor (post-override)" $
-      forAll genOverride $ \o -> forAll genHaarI $ \hp ->
-        let pal = applySigmaOverride o hp
-            n   = length pal `div` 2
-        in n == 0 || and [ pal !! (2*k+1) == sigmaReflectI (pal !! (2*k)) | k <- [0 .. n-1] ]
+      forAll genOverride $ \o -> forAll genHaarI (lawSigmaOverrideOddLeafCarriesSigmaOfNudged o)
 
   , testProperty "a nonzero δ on generator i DOES move its pair (the edit is real)" $
       forAll genHaarI $ \hp ->
@@ -64,4 +61,20 @@ tests = testGroup "LeafOverride (generator-space σ-locked δ — EXACT, no tole
                 pal  = applySigmaOverride o hp
             in pal !! (2*i) /= base !! (2*i)
             && pal !! (2*i+1) == sigmaReflectI (pal !! (2*i))
+
+  -- NEW adversarial laws ----------------------------------------------------
+
+  , testProperty "δ is ADDITIVE in generator space (apply o₁⊕o₂ == add δ₁+δ₂)" $
+      forAll genOverride $ \o1 -> forAll genOverride $ \o2 ->
+        forAll genHaarI (lawSigmaOverrideAdditive o1 o2)
+
+  , testProperty "override is IGNORED past the generator count (tail is inert)" $
+      forAll genOverride $ \o -> forAll genOverride $ \tl ->
+        forAll genHaarI (lawSigmaOverrideIgnoresTailPastGenerators o tl)
+
+  , testProperty "DIFFERENT generators get INDEPENDENT deltas (no cross-talk)" $
+      forAll genHaarI $ \hp ->
+        forAll (choose (0, 1000)) $ \i -> forAll (choose (0, 1000)) $ \j ->
+          forAll genDeltaI $ \di -> forAll genDeltaI $ \dj ->
+            lawSigmaOverrideGeneratorsIndependent hp i j di dj
   ]
