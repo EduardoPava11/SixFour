@@ -43,6 +43,7 @@ library
         SixFour.Spec.SigmaPairFixed
         SixFour.Spec.LeafOverride
         SixFour.Spec.PaletteGesture
+        SixFour.Spec.GroupRGBT
         SixFour.Spec.Quad4Fixed
         SixFour.Spec.GlobalVolume
         SixFour.Spec.SplitTree
@@ -292,6 +293,7 @@ test-suite spec-tests
         Properties.SigmaPairFixed
         Properties.LeafOverride
         Properties.PaletteGesture
+        Properties.GroupRGBT
         Properties.Quad4Fixed
         Properties.GlobalVolume
         Properties.SplitTree
