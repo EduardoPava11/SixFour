@@ -40,13 +40,20 @@ enum LadderExport {
                         indexCube: [UInt8],
                         branching: PaletteBranching,
                         override: [SIMD3<Int32>] = [],
+                        selectedGroups: [Bool] = [],
                         srcSide: Int = SixFourShape.W,
                         srcFrames: Int = SixFourShape.T) throws -> URL {
+        // ALL 64 frames' palettes drive the GIF's per-frame re-index (the cube has all 64);
+        // only the GLOBAL colour table is built from the SELECTED groups (empty = all),
+        // so the user's group picks shape the palette while the burst still plays in full.
         let perFrameQ16 = toQ16(palettesPerFrame)
+        let forGlobal = selectedGroups.isEmpty
+            ? palettesPerFrame
+            : GroupRGBT.selectedFrames(selectedGroups, palettesPerFrame)
         // The shipped global table = the SAME projection the preview shows (preview ≡ ship):
-        // flat maximin leaves → projectQ16 with the user's generator-space override.
+        // flat maximin leaves (over the picked groups) → projectQ16 with the override.
         let leaves = FarthestPointCollapse()
-            .collapse(perFramePalettes: perFrameQ16, k: SixFourShape.K).leaves
+            .collapse(perFramePalettes: toQ16(forGlobal), k: SixFourShape.K).leaves
         let global = BranchedPalette.projectQ16(leaves, branching: branching, override: override)
         let cube = chunkFrames(indexCube, side: srcSide, frames: srcFrames)
 

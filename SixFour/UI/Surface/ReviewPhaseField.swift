@@ -55,12 +55,19 @@ struct ReviewPhaseField: View {
     /// The picker is cell buttons, NOT a system `Menu` — the screen IS the cell grid.
     @State private var rungPickerOpen = false
 
-    // The global-palette CREATION control was a VStack FORM (radix selector + axis buttons
-    // + display grid + δ selector/slider) — rejected: the cell grid IS the widget, operated
-    // by gesture, never form controls beside it. Deleted; rebuilt as gesture-grid tools in
-    // Act III `.browsing` (64 frames = 16 RGBT groups). See docs/SIXFOUR-GESTURE-GRID-TOOLS.md.
-    // The byte-exact backend it used (BranchedPalette.projectQ16(override:), Spec.LeafOverride,
-    // LadderExport, the Save ladder) is KEPT for the gesture-tool rebuild.
+    // The global-palette CREATION control was a VStack FORM — rejected: the cell grid IS the
+    // widget, operated by gesture. Rebuilt as gesture-grid tools; the byte-exact backend
+    // (projectQ16(override:), Spec.LeafOverride, LadderExport, the Save ladder) is KEPT.
+
+    // GROUP-PICK tool (the first gesture-grid LAB tool): browse the 64-frame burst as 16 RGBT
+    // groups (a 4×4 macro-grid of 2×2 quads); TAP a group to include/exclude it from the
+    // global palette. The live 16×16 preview + the export rebuild from only the picked groups
+    // (Spec.GroupRGBT seam, byte-exact). docs/SIXFOUR-LAB-CHOICES.md.
+    @State private var groupPickOpen = false
+    @State private var selectedGroups = [Bool](repeating: true, count: GroupRGBT.numGroups)
+    @State private var frameMeans: [SIMD3<UInt8>] = []     // 64 per-frame mean colours (the rail)
+    @State private var groupGlobal: [SIMD3<UInt8>] = []    // live 256 global from picked groups
+    @State private var computingGroups = false
 
     /// The shared content edge — 64 cells × the 4 pt atom = 256 pt (same as the preview).
     private let gifEdge = GlobalLattice.gif(GlobalLattice.previewCells)
@@ -79,6 +86,9 @@ struct ReviewPhaseField: View {
                 // The Color Atlas curation sub-state (flag-gated; never reachable
                 // while `colorAtlasEnabled` is false — the default path is untouched).
                 atlasCurationField
+            } else if groupPickOpen {
+                // The GROUP-PICK gesture tool (browse 16 RGBT groups, tap to include/exclude).
+                groupPickField
             } else {
                 // All three ColorWidgets are PLACED at the ONE shared global position (no
                 // more VStack-centering) and movable — Field64's gif-render and Palette16's
@@ -229,6 +239,13 @@ struct ReviewPhaseField: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open color atlas")
             }
+
+            // GROUP-PICK entry: browse the burst as 16 RGBT groups, pick which shape the palette.
+            Button { openGroupPick() } label: {
+                CellActionButton(icon: .grid3x3, title: "Groups")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Pick RGBT groups for the palette")
         }
     }
 
@@ -236,7 +253,7 @@ struct ReviewPhaseField: View {
     /// 64³), then present the share sheet — so the Save tap never blocks the UI. Surface
     /// data is captured into value-type locals before the hop; `LadderShareItem` is
     /// `Sendable`, so it returns cleanly to the main actor.
-    private func exportRung(_ rung: LadderExport.Rung) {
+    private func exportRung(_ rung: LadderExport.Rung, selectedGroups groups: [Bool] = []) {
         let palettes = surface.palettesPerFrame
         let cube = surface.indexCube
         let branching = settings.paletteBranching
@@ -244,12 +261,119 @@ struct ReviewPhaseField: View {
         Task {
             let item = await Task.detached(priority: .userInitiated) {
                 (try? LadderExport.makeURL(rung: rung, palettesPerFrame: palettes,
-                                           indexCube: cube, branching: branching))
+                                           indexCube: cube, branching: branching,
+                                           selectedGroups: groups))
                     .map { LadderShareItem(url: $0) }
             }.value
             exporting = nil
             ladderShare = item
         }
+    }
+
+    // MARK: - Group-pick gesture tool (16 RGBT groups → the global palette)
+
+    /// Open the group-pick tool: compute the 64 per-frame mean colours (the rail) once, then
+    /// the live global preview from the current selection (all groups by default).
+    private func openGroupPick() {
+        groupPickOpen = true
+        frameMeans = surface.palettesPerFrame.map { meanColour($0) }
+        recomputeGroupGlobal()
+    }
+
+    /// Re-derive the live 256-colour global from ONLY the selected groups, off the main
+    /// thread (the maximin is the ~seconds step). The grid IS the feedback: the preview
+    /// repopulates with colours from the picked groups.
+    private func recomputeGroupGlobal() {
+        let palettes = surface.palettesPerFrame
+        let sel = selectedGroups
+        computingGroups = true
+        Task {
+            let leaves = await Task.detached(priority: .userInitiated) {
+                LadderExport.flatGlobalLeaves(palettesPerFrame: palettes, selectedGroups: sel)
+            }.value
+            groupGlobal = LadderGIF.paletteToSRGB8(leaves)
+            computingGroups = false
+        }
+    }
+
+    private func toggleGroup(_ g: Int) {
+        guard g >= 0 && g < selectedGroups.count else { return }
+        selectedGroups[g].toggle()
+        recomputeGroupGlobal()
+    }
+
+    /// The 4×4 macro-grid of 16 groups, each a 2×2 quad of its R/G/B/T frame means. TAP a
+    /// group to include/exclude it; deselected groups recede by an OPAQUE darken (Law #2).
+    private var groupGrid: some View {
+        let cell = GlobalLattice.gif(6)   // 24 pt/cell ⇒ each 2×2 group = 48 pt ≥ 44 pt floor
+        let means = frameMeans
+        let sel = selectedGroups
+        return CellSprite(cols: 8, rows: 8, cellPt: cell) { c, r in
+            let g = (r / 2) * 4 + (c / 2)            // group index 0..15
+            let role = (r % 2) * 2 + (c % 2)         // 0=R 1=G 2=B 3=T within the group
+            let f = g * 4 + role
+            guard f < means.count else { return SFTheme.ledGhost }
+            return (g < sel.count && sel[g]) ? means[f] : Self.darkenCell(means[f])
+        }
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 0).onEnded { v in
+            let col = max(0, min(7, Int(v.location.x / cell)))
+            let row = max(0, min(7, Int(v.location.y / cell)))
+            toggleGroup((row / 2) * 4 + (col / 2))
+        })
+        .accessibilityLabel("16 RGBT groups; tap to include or exclude")
+    }
+
+    /// The group-pick field: the 16-group macro-grid + the live global palette it builds.
+    private var groupPickField: some View {
+        let picked = selectedGroups.filter { $0 }.count
+        return VStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
+            CellText("PICK GROUPS · \(picked)/\(GroupRGBT.numGroups)\(computingGroups ? " ·…" : "")",
+                     rows: 11, ink: Color(srgb8: SIMD3<UInt8>(235, 235, 235)))
+
+            groupGrid
+
+            CellText("global palette ↓ (built from the picked groups)", rows: 9,
+                     ink: Color(srgb8: SIMD3<UInt8>(140, 140, 140)))
+            CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gifPx) { c, r in
+                let i = r * 16 + c
+                return i < groupGlobal.count ? groupGlobal[i] : nil
+            }
+            .accessibilityLabel("Live global palette from the picked groups")
+
+            HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
+                Button { exportRung(.global64, selectedGroups: selectedGroups) } label: {
+                    CellActionButton(icon: .share, title: "64³", fillWidth: false)
+                }
+                .buttonStyle(.plain).disabled(exporting != nil).accessibilityLabel("Export 64³ from picked groups")
+                Button { exportRung(.working16, selectedGroups: selectedGroups) } label: {
+                    CellActionButton(icon: .share, title: "16³", fillWidth: false)
+                }
+                .buttonStyle(.plain).disabled(exporting != nil).accessibilityLabel("Export 16³ from picked groups")
+                Button { groupPickOpen = false } label: {
+                    CellActionButton(title: "Done", prominent: true)
+                }
+                .buttonStyle(.plain).accessibilityLabel("Close group pick")
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, GlobalLattice.gif(GlobalLattice.gutterCells))
+    }
+
+    /// Mean sRGB8 colour of a frame's palette (the group rail's per-frame swatch).
+    private func meanColour(_ pal: [SIMD3<UInt8>]) -> SIMD3<UInt8> {
+        guard !pal.isEmpty else { return SFTheme.ledGhost }
+        var r = 0, g = 0, b = 0
+        for c in pal { r += Int(c.x); g += Int(c.y); b += Int(c.z) }
+        let n = pal.count
+        return SIMD3<UInt8>(UInt8(r / n), UInt8(g / n), UInt8(b / n))
+    }
+
+    /// Recede an unpicked group cell by an OPAQUE 35% darken — never alpha (GRID Law #2).
+    private static func darkenCell(_ c: SIMD3<UInt8>) -> SIMD3<UInt8> {
+        SIMD3<UInt8>(UInt8(Int(c.x) * 35 / 100),
+                     UInt8(Int(c.y) * 35 / 100),
+                     UInt8(Int(c.z) * 35 / 100))
     }
 
     // MARK: - Color Atlas curation sub-state (gated)
