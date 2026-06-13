@@ -80,6 +80,18 @@ enum LadderExport {
             .leaves
     }
 
+    /// GROUP-SELECT flat global leaves (byte-exact twin of `Spec.GroupRGBT.groupCollapseQ16`):
+    /// pool ONLY the selected RGBT groups, then the same maximin. This is the seam the
+    /// group-pick LAB choice drives — it makes the picks REAL (the no-arg version pools all
+    /// 64; an all-true mask here is byte-identical to it). `mask` = one Bool per group.
+    static func flatGlobalLeaves(palettesPerFrame: [[SIMD3<UInt8>]],
+                                 selectedGroups mask: [Bool]) -> [OKLabQ16] {
+        let selected = GroupRGBT.selectedFrames(mask, palettesPerFrame)
+        return FarthestPointCollapse()
+            .collapse(perFramePalettes: toQ16(selected), k: SixFourShape.K)
+            .leaves
+    }
+
     // MARK: - Helpers
 
     /// sRGB8 per-frame palettes → Q16 OKLab (mirrors `FarthestPointCollapse
