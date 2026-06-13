@@ -1,13 +1,16 @@
-name: gates (docs + grid lint)
+name: gate (grid lint)
 
-# Dependency-free gates that run on every push/PR. Both scripts use only
-# grep/test/find over committed files (Generated/ is committed — see the
-# spec-codegen drift job), so they need no toolchain. They run on macos-14 to
-# match the dev platform exactly (the scripts were authored against BSD
-# grep/find on darwin). The heavier `s4` gates — Zig `native` (needs a
-# Python-produced fixture under the gitignored trainer/out/) and the iOS
-# `build` (needs Xcode 26.2 / iOS 26) — are not runnable on hosted runners and
-# stay local-only via scripts/s4.sh.
+# The GRID design-language lint is dependency-free (grep/test over committed
+# SixFour/UI + Generated/ + Spec sources) and safe on a clean checkout, so it
+# runs on every push/PR. It runs on macos-14 to match the dev platform (the
+# script was authored against BSD grep/find on darwin).
+#
+# The other s4 gates are NOT checkout-safe and stay local-only via scripts/s4.sh:
+#   doc     — verify-doc-claims.sh asserts local generated/trained artifacts
+#             (e.g. trainer/out/look_net_trained.s4ln, which is gitignored), so a
+#             clean CI checkout would fail it; it is wired into `s4 all` locally.
+#   native  — zig build test needs a Python-produced fixture under trainer/out/.
+#   build   — xcodebuild needs Xcode 26.2 / iOS 26, absent on hosted runners.
 
 on:
   push:
@@ -15,14 +18,6 @@ on:
   pull_request:
 
 jobs:
-  doc-claims:
-    name: docs/STATUS.md claims gate
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify load-bearing STATUS facts
-        run: bash scripts/verify-doc-claims.sh
-
   grid-lint:
     name: GRID design-language lint
     runs-on: macos-14

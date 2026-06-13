@@ -174,13 +174,13 @@ scripts/s4.sh doc          # verify docs/STATUS.md claims (grep/test/find only)
 ```
 
 `s4 all` runs the verbs in the order recorded in `scripts/gate-order.txt`. The
-`doc` gate (`verify-doc-claims.sh`, dependency-free) is wired in right after
-`codegen`, so the canonical `docs/STATUS.md` facts are re-asserted on every full
-run. CI (`.github/workflows/`) additionally runs the spec-codegen drift check +
-Haskell tests, the doc-claims gate, and the GRID lint on every push/PR; the Zig
-`native` test and the iOS `build` stay local-only (they need a Python-produced
-fixture and Xcode 26.2 / iOS 26 respectively, neither available on hosted CI
-runners).
+`doc` gate (`verify-doc-claims.sh`) is wired in right after `codegen`, so the
+canonical `docs/STATUS.md` facts are re-asserted on every full **local** run.
+CI (`.github/workflows/`) runs the checkout-safe gates — the spec-codegen drift
+check + Haskell tests, and the GRID lint — on every push/PR. The `doc`, `native`,
+and `build` gates stay **local-only**: `doc` and `native` assert local
+generated/trained artifacts (e.g. the gitignored `trainer/out/` fixtures), and
+`build` needs Xcode 26.2 / iOS 26, none of which exist on hosted CI runners.
 
 ## Status
 
