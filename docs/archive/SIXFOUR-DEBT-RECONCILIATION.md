@@ -1,4 +1,4 @@
-> **ARCHIVED 2026-06-05 — superseded by [docs/STATUS.md](STATUS.md).**
+> **ARCHIVED 2026-06-05 — superseded by [docs/STATUS.md](../STATUS.md).**
 > Retained for history only. Do NOT use for current status: the live debt/ethos ledger now lives
 > in docs/STATUS.md. For current truth, read docs/STATUS.md and run scripts/verify-doc-claims.sh.
 

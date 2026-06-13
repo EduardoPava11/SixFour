@@ -1,4 +1,4 @@
-> **⚠ SUPERSEDED (2026-05-30) by [`L-NN-MASTER-DESIGN.md`](L-NN-MASTER-DESIGN.md), the design of record.**
+> **⚠ SUPERSEDED (2026-05-30) by [`L-NN-MASTER-DESIGN.md`](../L-NN-MASTER-DESIGN.md), the design of record.**
 > The σ-eigenspace cascade and the decoder-factoring plan (§5: `D_L ⊕ D_A ⊕ D_B` + grounding laws)
 > are KEEP. Corrected by the master: the "256-distinct-L via depth-8" claim (§3.2) is RETIRED (a §8
 > fork), "A/B never re-index" is now Thm 18 *stability*, and the `[4,2,1]` metric is dropped (PairTree

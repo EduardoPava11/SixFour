@@ -4,7 +4,7 @@
 
 # SixFour LAB Color-Volume Renderer — Implementation Design
 
-> Reviewed code design (2026-05-30). Built from [`ios26-render-survey.md`](./ios26-render-survey.md)
+> Reviewed code design (2026-05-30). Built from [`ios26-render-survey.md`](../ios26-render-survey.md)
 > + [`lab-volume-render-plan.md`](./lab-volume-render-plan.md). 5 components designed + adversarially
 > critiqued against the survey constraints AND the real codebase; blocker/major fixes folded in.
 

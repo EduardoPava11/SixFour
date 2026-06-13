@@ -1,4 +1,4 @@
-> **⚠ SUPERSEDED (2026-05-30) by [`L-NN-MASTER-DESIGN.md`](L-NN-MASTER-DESIGN.md), the design of record.**
+> **⚠ SUPERSEDED (2026-05-30) by [`L-NN-MASTER-DESIGN.md`](../L-NN-MASTER-DESIGN.md), the design of record.**
 > The **MERGE-as-Haar verb** (`m=½(c₀+c₁)`, retain `d`; lossless split) survives as the *within-step*
 > verb. RECAST: the single loom becomes **three steps** (L tonal / A red-green / B blue-yellow), each a
 > 256-palette + GIF. The "Phase-L vs future A/B" and "merge-toward-grey vacuous" framings are revised

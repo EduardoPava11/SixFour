@@ -1,4 +1,4 @@
-> **⚠ SUPERSEDED (2026-05-30) by [`L-NN-MASTER-DESIGN.md`](L-NN-MASTER-DESIGN.md), the design of record.**
+> **⚠ SUPERSEDED (2026-05-30) by [`L-NN-MASTER-DESIGN.md`](../L-NN-MASTER-DESIGN.md), the design of record.**
 > The **construct↔user-meaning traceability table (§3) survives** (re-cut to three steps + the funnel).
 > RETIRED: the passive slider/chip UI (Layers 1–2) and the single-slider "Maya" story — replaced by the
 > active three-step L→A→B authoring. See the master §6 supersession map.

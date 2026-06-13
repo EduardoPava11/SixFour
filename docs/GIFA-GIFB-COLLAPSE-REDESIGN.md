@@ -18,7 +18,7 @@ The app extracts a **per-frame** 256-colour palette per frame (`Spec/StageA.hs`)
 result **GIFA**. The product promise is a single **global** 256-colour palette over the whole
 64³ cube — **GIFB**. Today **GIFB is never produced**: `s4_global_collapse` exists in Zig and is
 wrapped in Swift (`SixFourNative.globalCollapse`) but has **zero callers**; `DeterministicRenderer`
-ships per-frame palettes only (see `SIXFOUR-ARCHITECTURE-MAP.md` §4, build-order step 1).
+ships per-frame palettes only (see `docs/STATUS.md` for built/design/missing; lineage `docs/archive/SIXFOUR-ARCHITECTURE-MAP.md` §4, build-order step 1).
 
 The collapse — *how 64 per-frame palettes become one global palette* — is the unbuilt keystone.
 Everything else (the σ-pair genome, the Haar tree, the dither) is downstream of it.

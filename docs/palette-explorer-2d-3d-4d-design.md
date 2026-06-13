@@ -10,10 +10,10 @@
 > volume-render plans are folded in as sub-modes and **archived**: `archive/lab-volume-render-design.md`
 > + `archive/lab-volume-render-plan.md` (the LabVolumeView renderer) and
 > `archive/SIXFOUR-VOXEL-CUBE.md` (the 64³ raymarcher — **shelved, orient-only**, see
-> `SIXFOUR-ARCHITECTURE-MAP.md` §3). The competing one-surface proposal
+> `docs/STATUS.md` for status; lineage `docs/archive/SIXFOUR-ARCHITECTURE-MAP.md` §3). The competing one-surface proposal
 > `archive/SIXFOUR-REPRESENTATION-UNIFICATION.md` is superseded by this umbrella. Distinct
 > sibling concerns stay separate: addressing (`SIXFOUR-HIGHDIM-UIUX.md`,
-> `SIXFOUR-RADIX-CONTROLS.md`), controls audit (`SIXFOUR-CONTROL-AUDIT.md`), playback
+> `SIXFOUR-RADIX-CONTROLS.md`), controls audit (`docs/archive/SIXFOUR-CONTROL-AUDIT.md`), playback
 > (`SIXFOUR-UNIFIED-PLAYER.md`).
 **Contract:** Tier-2 (ships) — zero third-party deps, Apple frameworks + `simd` only; all numerics trace to the Haskell spec and are golden-pinned before any Swift lands.
 
@@ -135,7 +135,7 @@ The three "branchings" reorganise the **same 256 OKLab leaves**:
 ## 7. Build plan (spec-first, ordered)
 
 1. **Spec — `Spec.GridAxis`** (Haskell, golden vectors): scalar projections (L/a/b/chroma; **hue with pinned wrap-origin**), fixed-canonical-range balanced-quantile binning, deterministic O(256) nearest-empty-cell collision resolution reusing the `(coord, index)` tie-break. `cabal test` green.
-2. **Spec — genome ghost path:** confirm/expose `Quad4.quad4Analyze`/`reconstruct` and `PairTree.sigmaReflect` actions with golden vectors for the cloud's 4⁴ projection-error and σ-mirror. Fix `global-palette-skeleton-design.md` drift (§6.4).
+2. **Spec — genome ghost path:** confirm/expose `Quad4.quad4Analyze`/`reconstruct` and `PairTree.sigmaReflect` actions with golden vectors for the cloud's 4⁴ projection-error and σ-mirror. Fix `docs/archive/global-palette-skeleton-design.md` drift (§6.4).
 3. **Codegen + gate:** `cabal run spec-codegen` → regenerate contracts; do not hand-edit `SixFour/Generated/`.
 4. **Doc-drift fixes** (§6.1–6.3, 6.5) — independent, land immediately.
 5. **Swift — grid:** `SixFour/Palette/GridLayout.swift` (pure `GridAxis` + `bin(...)`, verified bit-for-bit vs goldens) → `SixFour/UI/Components/PaletteGridView.swift` (Canvas + per-frame scalar cache + per-cell a11y).

@@ -1,4 +1,4 @@
-> **Status/built-state:** see [docs/STATUS.md](STATUS.md) (canonical, gated by `scripts/verify-doc-claims.sh`). This document is design rationale, not a status ledger.
+> **Status/built-state:** see [docs/STATUS.md](../STATUS.md) (canonical, gated by `scripts/verify-doc-claims.sh`). This document is design rationale, not a status ledger.
 
 # SixFour: Per-Frame → Global Palette Collapse
 

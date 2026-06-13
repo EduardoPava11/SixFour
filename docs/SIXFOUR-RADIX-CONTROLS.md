@@ -206,7 +206,7 @@ re-index, Review editor) must consume the branching-aware genome, not just displ
   112-116`). What is **missing in spec** is a σ-pair *forward analyser*
   (`leaves → SigmaPairTree`); add it with a round-trip law before porting.
 - Introduce a `BranchedPalette` genome type (`.flat | .quad4 | .haar`) — **does
-  not exist in any tier yet** (proposed in `docs/global-palette-skeleton-design.md`).
+  not exist in any tier yet** (proposed in `docs/archive/global-palette-skeleton-design.md`).
 - Add a branching-aware collapse: extend `PaletteCollapse`
   (`PaletteCollapse.swift:13-15`) and `CollapsedPalette`
   (`PaletteCollapse.swift:20-23`) to carry `branching` + the genome. Route
@@ -287,6 +287,6 @@ work, not a description of the present.**
 - `/Users/daniel/SixFour/spec/src/SixFour/Spec/GridAxis.hs`
 - `/Users/daniel/SixFour/spec/src/SixFour/Spec/Quad4.hs`
 - `/Users/daniel/SixFour/spec/src/SixFour/Spec/SigmaPairHead.hs`
-- `/Users/daniel/SixFour/docs/global-palette-skeleton-design.md`
+- `/Users/daniel/SixFour/docs/archive/global-palette-skeleton-design.md`
 - `/Users/daniel/SixFour/docs/SIXFOUR-HIGHDIM-UIUX.md`
 - (new) `/Users/daniel/SixFour/SixFour/UI/Components/Quad4DrillView.swift`

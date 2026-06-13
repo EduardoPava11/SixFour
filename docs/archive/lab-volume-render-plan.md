@@ -4,7 +4,7 @@
 
 # LAB Color-Volume Renderer — Swift Integration Plan
 
-> Companion to [`ios26-render-survey.md`](./ios26-render-survey.md). Grounded in a 2026-05-30
+> Companion to [`ios26-render-survey.md`](../ios26-render-survey.md). Grounded in a 2026-05-30
 > read of the actual codebase. **Correction vs. memory:** `PaletteSphereView` does **not** exist
 > today — the existing analog is `PaletteStripView` (1D). This plan builds the renderer fresh.
 

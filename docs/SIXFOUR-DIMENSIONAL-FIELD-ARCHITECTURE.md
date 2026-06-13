@@ -8,7 +8,7 @@
 to answer "what IS the 16×16 ⇄ 64×64 relationship?" and re-plan the render architecture around the
 answer. Companion to `SIXFOUR-CAPTURE-FLUIDITY-SYSTEMS.md` (why CPU baking is wrong),
 `SIXFOUR-METAL-FIELD-SPEC-ALIGNMENT.md` (the spec contract, S1 done), `SIXFOUR-HIGHDIM-UIUX.md` /
-`SIXFOUR-REPRESENTATION-UNIFICATION.md` / `SIXFOUR-VISION.md` (the "one cube, projected honestly"
+`docs/archive/SIXFOUR-REPRESENTATION-UNIFICATION.md` / `SIXFOUR-VISION.md` (the "one cube, projected honestly"
 vision this formalises). Branch `feat/metal-field-render`.
 
 ---

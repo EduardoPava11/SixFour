@@ -1,4 +1,4 @@
-> **⚠ SUPERSEDED (2026-05-30) by [`L-NN-MASTER-DESIGN.md`](L-NN-MASTER-DESIGN.md), the design of record.**
+> **⚠ SUPERSEDED (2026-05-30) by [`L-NN-MASTER-DESIGN.md`](../L-NN-MASTER-DESIGN.md), the design of record.**
 > This doc's *research verdicts* (deterministic argmin index, Lloyd-Max MSE ceiling, OT-not-GAN,
 > GAN-by-scale) are KEEP and still cited by the master. Its top-level "the L-NN is the deliverable"
 > framing is RETIRED — L is **Step 1 of 3** (L→A→B). See the master §6 supersession map.

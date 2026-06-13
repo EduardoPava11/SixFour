@@ -1,4 +1,4 @@
-> **ARCHIVED 2026-06-05 — superseded by [docs/STATUS.md](STATUS.md).**
+> **ARCHIVED 2026-06-05 — superseded by [docs/STATUS.md](../STATUS.md).**
 > Retained for history only. Do NOT use for current status: the live open-debt table now lives
 > in docs/STATUS.md, and §A1 items #5–#8 audit NOTES.md phrases that were already annotated
 > CLOSED inline (self-referential drift). For current truth, read docs/STATUS.md and run
