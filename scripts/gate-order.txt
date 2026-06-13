@@ -1,12 +1,15 @@
 # SixFour gate order — the sequence `scripts/s4.sh all` runs, one verb per line.
 # Rationale for the ordering (each step depends on artifacts the previous produced):
 #   codegen → regenerates SixFour/Generated/* + trainer/generated/* from the spec.
+#   doc     → verify-doc-claims.sh; asserts docs/STATUS.md's load-bearing facts.
+#             Greps Generated/, so runs AFTER codegen; dependency-free (grep/test/find).
 #   verify  → cabal test: proves every Spec law + per-kernel s4_* law (the source of truth).
 #   native  → zig build test (host fixtures cross-check Haskell goldens) + device static lib.
 #   lint    → lint-grid.sh; READS Generated/, so must run AFTER codegen.
 #   gen     → xcodegen + pbxproj patch; produces the .xcodeproj Swift will build.
 #   build   → xcodebuild; Swift imports the generated contracts, so it runs LAST.
 codegen
+doc
 verify
 native
 lint

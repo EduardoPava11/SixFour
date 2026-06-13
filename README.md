@@ -169,12 +169,18 @@ python train_metric.py     # reads generated/stages.py + net_shape.py
 
 ### Full gate
 ```bash
-scripts/s4.sh all          # codegen → verify → native → lint → gen → build
+scripts/s4.sh all          # codegen → doc → verify → native → lint → gen → build
 scripts/s4.sh doc          # verify docs/STATUS.md claims (grep/test/find only)
 ```
 
-(The `doc` verb is currently standalone; it is not yet in `scripts/gate-order.txt`,
-so `s4 all` does not run it.)
+`s4 all` runs the verbs in the order recorded in `scripts/gate-order.txt`. The
+`doc` gate (`verify-doc-claims.sh`, dependency-free) is wired in right after
+`codegen`, so the canonical `docs/STATUS.md` facts are re-asserted on every full
+run. CI (`.github/workflows/`) additionally runs the spec-codegen drift check +
+Haskell tests, the doc-claims gate, and the GRID lint on every push/PR; the Zig
+`native` test and the iOS `build` stay local-only (they need a Python-produced
+fixture and Xcode 26.2 / iOS 26 respectively, neither available on hosted CI
+runners).
 
 ## Status
 

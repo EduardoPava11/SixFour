@@ -3,8 +3,8 @@
 #
 # Each verb is purely additive: it delegates to the existing canonical script or
 # command, which remains individually invocable. `s4.sh all` runs the verbs in
-# the order recorded in scripts/gate-order.txt (codegen → verify → native → lint
-# → gen → build), because each step consumes artifacts the previous produced.
+# the order recorded in scripts/gate-order.txt (codegen → doc → verify → native →
+# lint → gen → build), because each step consumes artifacts the previous produced.
 #
 # Usage:
 #   scripts/s4.sh <verb> [args…]
@@ -19,7 +19,7 @@
 #   build     xcodebuild (iPhone 17 Pro Simulator)
 #   device    scripts/run-on-device.sh — build/sign/install/launch on a connected iPhone
 #   doc       scripts/verify-doc-claims.sh
-#   all       run codegen→verify→native→lint→gen→build per scripts/gate-order.txt
+#   all       run codegen→doc→verify→native→lint→gen→build per scripts/gate-order.txt
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

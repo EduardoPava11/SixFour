@@ -1,0 +1,32 @@
+name: gates (docs + grid lint)
+
+# Dependency-free gates that run on every push/PR. Both scripts use only
+# grep/test/find over committed files (Generated/ is committed — see the
+# spec-codegen drift job), so they need no toolchain. They run on macos-14 to
+# match the dev platform exactly (the scripts were authored against BSD
+# grep/find on darwin). The heavier `s4` gates — Zig `native` (needs a
+# Python-produced fixture under the gitignored trainer/out/) and the iOS
+# `build` (needs Xcode 26.2 / iOS 26) — are not runnable on hosted runners and
+# stay local-only via scripts/s4.sh.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  doc-claims:
+    name: docs/STATUS.md claims gate
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify load-bearing STATUS facts
+        run: bash scripts/verify-doc-claims.sh
+
+  grid-lint:
+    name: GRID design-language lint
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint GRID placement / single-pitch invariants
+        run: bash scripts/lint-grid.sh
