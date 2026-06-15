@@ -1,0 +1,12 @@
+sixfour-spec:7884:failed to parse:     type In tag :: Type;
+sixfour-spec:7885:failed to parse:     type Out tag :: Type;
+sixfour-spec:7886:failed to parse: }
+sixfour-spec:9448:failed to parse:     type NumChannels t :: Nat;
+sixfour-spec:9449:failed to parse:     type ChannelLength t :: Nat;
+sixfour-spec:9450:failed to parse:     type Scalar t :: Type;
+sixfour-spec:9451:failed to parse: }
+sixfour-spec:11045:failed to parse:     -- | The input type the layer consumes.
+sixfour-spec:11046:failed to parse:     type In l :: Type;
+sixfour-spec:11048:failed to parse:     -- | The output type the layer produces.
+sixfour-spec:11049:failed to parse:     type Out l :: Type;
+sixfour-spec:11050:failed to parse: }

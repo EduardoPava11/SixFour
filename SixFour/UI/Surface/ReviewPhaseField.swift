@@ -58,6 +58,14 @@ struct ReviewPhaseField: View {
     /// quartet slots so the low-displacement "core" colours stand out (a cell-brightness split,
     /// no strokes/text). Pure projection of `QuartetDelta`; default off ⇒ strip is byte-identical.
     @State private var motionOutlineOn = false
+    /// The live motion-threshold override (nil = use the median default). The Review
+    /// motion-threshold `CellSlider` writes here; `motionCoreSet` reads it to re-threshold
+    /// the core/motion split live (the paletteStrip re-renders every tick).
+    @State private var motionThreshold: Double? = nil
+    /// The last knob CELL column we flushed a frame-locked detent tick on. The
+    /// `.onChange(of: clock.tick)` flush fires ONE `Haptics.play(1)` per crossed cell,
+    /// coalesced to ≤1 Taptic per 20 fps frame (the 32 Hz-safe `lawTicksFrameMonotone`).
+    @State private var lastFlushedKnobCell: Int = 0
 
     // The global-palette CREATION control was a VStack FORM — rejected: the cell grid IS the
     // widget, operated by gesture. Rebuilt as gesture-grid tools; the byte-exact backend
@@ -182,6 +190,19 @@ struct ReviewPhaseField: View {
     /// whichever colour each core slot holds at the current cursor. Empty (no recede) when fewer than
     /// 4 frames exist. Only evaluated while `motionOutlineOn`.
     private var motionCoreSet: Set<Int> {
+        let slots = motionSlots
+        guard !slots.isEmpty else { return [] }
+        // The slider value (if any) OVERRIDES the median default, so the overlay
+        // re-thresholds live as the user drags (paletteStrip reads this every render).
+        let thr = motionThreshold ?? QuartetDelta.medianDisplacementThreshold(slots)
+        return Set(QuartetDelta.coreColors(thr, slots))
+    }
+
+    /// The 256 OKLab quartet trajectories for the FIXED `[0,21,42,63]` frames — factored
+    /// out of `motionCoreSet` so the threshold slider's range can read the slot
+    /// displacements without recomputing the quartet. Computed (never stored) to stay
+    /// in sync with `surface.palettesPerFrame`. Empty when fewer than 4 frames exist.
+    private var motionSlots: [[SIMD3<Double>]] {
         let idx = [0, 21, 42, 63].filter { $0 < surface.palettesPerFrame.count }
         guard idx.count == 4 else { return [] }
         let fourFrames: [[SIMD3<Double>]] = idx.map { f in
@@ -191,9 +212,62 @@ struct ReviewPhaseField: View {
                 return SIMD3<Double>(ColorScience.srgb8ToOKLab(c.x, c.y, c.z).simd)
             }
         }
-        let slots = QuartetDelta.toSlots(fourFrames)
-        let thr = QuartetDelta.medianDisplacementThreshold(slots)
-        return Set(QuartetDelta.coreColors(thr, slots))
+        return QuartetDelta.toSlots(fourFrames)
+    }
+
+    /// The threshold slider's value range: from the smallest to the largest slot
+    /// displacement in the current quartet (so the slider spans exactly the meaningful
+    /// cut points). Degenerate-safe (`0...1` fallback when no quartet / a flat spread).
+    private var motionThresholdRange: ClosedRange<Double> {
+        let ds = motionSlots.map(QuartetDelta.slotDisplacement)
+        let lo = ds.min() ?? 0
+        let hi = ds.max() ?? 1
+        return lo < hi ? lo...hi : 0...1
+    }
+
+    /// The slider step — the range split into `cols` cells (the M of the M×11 slider), so
+    /// one cell = one detent. Keeps `CellSlider.set`'s quantisation aligned with the cell
+    /// columns the detent flush counts.
+    private var motionThresholdStep: Double {
+        let r = motionThresholdRange
+        let span = r.upperBound - r.lowerBound
+        let cells = max(1, GlobalLattice.shutterCells - 1)
+        return span > 0 ? span / Double(cells) : 1
+    }
+
+    /// A non-optional bridge for the `CellSlider`: reads the live threshold (falling back
+    /// to the median when unset), writes back into the `motionThreshold` override.
+    private var motionThresholdBinding: Binding<Double> {
+        Binding(
+            get: { motionThreshold ?? QuartetDelta.medianDisplacementThreshold(motionSlots) },
+            set: { motionThreshold = $0 }
+        )
+    }
+
+    /// The knob's current CELL column — the same `frac * (cols-1)` rounding `CellSlider`
+    /// uses, so the frame-locked flush counts exactly the cells the knob has crossed.
+    private var thresholdKnobCell: Int {
+        let r = motionThresholdRange
+        let span = max(r.upperBound - r.lowerBound, 0.0001)
+        let value = motionThreshold ?? QuartetDelta.medianDisplacementThreshold(motionSlots)
+        let frac = (value - r.lowerBound) / span
+        let cols = GlobalLattice.shutterCells
+        return max(0, min(cols - 1, Int((frac * Double(cols - 1)).rounded())))
+    }
+
+    /// FRAME-LOCKED detent flush: called on each 20 fps clock tick. Fires exactly ONE
+    /// `cellTick` (`Haptics.play(1)`) per frame in which the knob crossed ≥1 cell —
+    /// coalesced regardless of how many cells the drag covered that frame (the 32 Hz-safe
+    /// `lawTicksFrameMonotone`). `cellsCrossed` is the generated spec contract.
+    private func flushDetentTick() {
+        guard motionOutlineOn else { return }
+        let knobNow = thresholdKnobCell
+        let crossed = SixFourCellMechanics.cellsCrossed((col: lastFlushedKnobCell, row: 0),
+                                                        (col: knobNow, row: 0))
+        if crossed > 0 {
+            Haptics.play(1)            // cellTick — one Taptic per frame, the detent
+            lastFlushedKnobCell = knobNow
+        }
     }
 
     // MARK: - Actions
@@ -255,11 +329,34 @@ struct ReviewPhaseField: View {
             // Act II motion outline — recolours `paletteStrip` to separate the structural
             // "core" colours from the high-motion ones (a cell-brightness split). Immovable
             // chrome: it modulates an existing widget's paint, it is NOT a movable widget.
-            Button { motionOutlineOn.toggle() } label: {
+            Button {
+                motionOutlineOn.toggle()
+                if motionOutlineOn {
+                    // Seed the slider at the current overlay state (the median cut), and
+                    // re-baseline the detent flush so re-opening never bursts ticks.
+                    if motionThreshold == nil {
+                        motionThreshold = QuartetDelta.medianDisplacementThreshold(motionSlots)
+                    }
+                    lastFlushedKnobCell = thresholdKnobCell
+                }
+            } label: {
                 CellActionButton(icon: .grid3x3, title: "Motion")
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Outline motion vs core colours")
+
+            // The motion-threshold slider — reuses the M×11 `CellSlider` (one lit knob
+            // cell). Shown only while the overlay is on; dragging re-thresholds the
+            // core/motion split live. ONE frame-locked `Haptics.play(1)` (cellTick) per
+            // crossed cell, flushed on the 20 fps clock tick (≤1 Taptic/frame).
+            if motionOutlineOn {
+                CellSlider(value: motionThresholdBinding,
+                           range: motionThresholdRange,
+                           step: motionThresholdStep,
+                           cols: GlobalLattice.shutterCells)
+                    .onChange(of: clock.tick) { _, _ in flushDetentTick() }
+                    .accessibilityLabel("Motion threshold")
+            }
 
             Button { surface.step(.retake) } label: {
                 CellActionButton(icon: .retake, title: "Retake")

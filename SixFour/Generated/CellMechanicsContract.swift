@@ -54,6 +54,24 @@ public enum SixFourCellMechanics {
         abs(b.col - a.col) + abs(b.row - a.row)
     }
 
+    /// One clock-frame step in an n-frame loop (== Spec.PlaybackClock.frameAfter).
+    @inline(__always)
+    static func frameAfterN(_ n: Int, _ f: Int) -> Int {
+        n <= 0 ? 0 : (f + 1) % n
+    }
+    /// The CLOCK FRAME each detent cell lands on: from cursor f0 in an n-frame loop,
+    /// one frameAfter step per cell crossed (Manhattan walk, cols then rows). One cell =
+    /// one frame = one tick — frame-locked to the 20 fps refresh (lawTicksFrameMonotone).
+    public static func tickFrames(_ n: Int, _ f0: Int,
+                                  _ a: (col: Int, row: Int), _ b: (col: Int, row: Int)) -> [Int] {
+        let count = cellsCrossed(a, b)
+        var out: [Int] = []
+        out.reserveCapacity(count)
+        var f = f0
+        for _ in 0..<count { f = frameAfterN(n, f); out.append(f) }
+        return out
+    }
+
     // MARK: the drop verdict — closed over the proven move (THE green-frame fix)
     /// True iff dropping `identity` by (dCol,dRow) in `placement` will be accepted by
     /// MoveContract.move (or is a no-op). The drop outline reads THIS, so green/red can
@@ -148,6 +166,7 @@ public enum SixFourCellMechanics {
     public static let goldenHaptics: [Int] = [-1, 0, -1, -1, 3, -1]
     public static let goldenDragMag: [Int] = [0, 0, 3, 7, 7, 7]
     public static let goldenPulse: [Int] = [10922, 12014, 13106, 14198, 15291, 16383, 17475, 18568]
+    public static let goldenTickFrames: [Int] = [1, 2, 3, 4, 5, 6, 7]
 
     /// Re-folds the golden gesture through `step`, re-derives the golden haptics +
     /// pulse, and re-checks the pulse band — the live Haskell↔Swift parity gate.
@@ -175,6 +194,8 @@ public enum SixFourCellMechanics {
             let s = pulseSampleQ16(period: pulseBasePeriod(i), lo: pulseBaseLo(i), hi: pulseBaseHi(i), tick: t)
             if s < pulseBaseLo(i) || s > pulseBaseHi(i) { return false }
         }
+        // Golden frame-locked detent: the 7-cell golden drag lands on frames [1..7].
+        if tickFrames(64, 0, (col: 0, row: 0), (col: 7, row: 0)) != goldenTickFrames { return false }
         return true
     }
 }

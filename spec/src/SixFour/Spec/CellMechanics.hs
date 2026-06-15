@@ -52,6 +52,8 @@ module SixFour.Spec.CellMechanics
   , hapticOnTransition
     -- * The detent (cell-crossing ticks)
   , cellsCrossed, tickPath
+    -- * The frame-locked detent (the 20 fps clock axis)
+  , FrameIndex, tickFrames
     -- * The drop verdict (closed over the proven move)
   , DropVerdict(..), dropVerdict, verdictName, verdictInk
     -- * Reactive color + pulse
@@ -61,7 +63,7 @@ module SixFour.Spec.CellMechanics
   , Mechanics(..), mechanicsFor
     -- * The golden cross-language trace
   , goldenGesture, goldenPhaseTrace, goldenHaptics
-  , goldenPulse, goldenDragMag
+  , goldenPulse, goldenDragMag, goldenTickFrames
     -- * Laws
   , lawGestureTotal
   , lawGestureNoOrphan
@@ -74,12 +76,25 @@ module SixFour.Spec.CellMechanics
   , lawPulseBounded
   , lawPulsePeriodic
   , lawReactiveFaster
+  , lawTicksFrameMonotone
+  , lawDetentTriadCoincident
   ) where
 
 import Data.List (nub)
 
 import SixFour.Spec.MovableLayout
   ( ColorIdentity(..), allIdentities, Placement, move )
+
+import SixFour.Spec.PlaybackClock
+  ( FrameCount, frameAfter )
+
+-- | A playback frame index — the @Z_N@ cursor the 20 fps clock advances
+-- ('SixFour.Spec.Display.logicRateHz'). A bare 'Int' (no newtype: it is the same
+-- 'Int' that 'pulseSampleQ16' samples and 'frameAfter' advances; a wrapper would only
+-- churn the golden tables, per the SPEC-METHODOLOGY \"no ceremony\" rule). The alias is
+-- documentation: where a function reads a 'FrameIndex' it means \"a clock frame\", not a
+-- cell coordinate.
+type FrameIndex = Int
 
 -- =============================================================================
 -- The interaction lifetime — the FSM (Σ = GesturePhase)
@@ -213,6 +228,24 @@ tickPath (c0, r0) (c1, r1) =
     between a b
       | a <= b    = [a + 1 .. b]      -- the cells STEPPED INTO (excludes the origin)
       | otherwise = reverse [b .. a - 1]
+
+-- =============================================================================
+-- The frame-locked detent — the spatial walk lifted onto the 20 fps clock axis
+-- =============================================================================
+
+-- | Assign each cell of the detent walk ('tickPath') its CLOCK FRAME: starting from
+-- cursor @f0@ in an @n@-frame loop, each crossed cell advances the cursor exactly one
+-- frame ('SixFour.Spec.PlaybackClock.frameAfter'). One cell = one frame = one tick — the
+-- temporal bridge from the spatial detent ('cellsCrossed' \/ 'tickPath') to the
+-- 'SixFour.Spec.Display' 20 fps cell-field refresh ('logicRateHz'). Its length is exactly
+-- 'cellsCrossed' ('lawTickConservation'), so a renderer that flushes one 'CellTick' per
+-- frame fires exactly the felt count, in frame order, never out of band
+-- ('lawTicksFrameMonotone').
+tickFrames :: FrameCount -> FrameIndex -> (Int, Int) -> (Int, Int) -> [FrameIndex]
+tickFrames n f0 a b =
+  -- one frame step per crossed cell; drop the seed cursor so element k is the frame
+  -- the k-th boundary is felt ON (the repaint that shows it).
+  drop 1 (scanl (\f _ -> frameAfter n f) f0 (tickPath a b))
 
 -- =============================================================================
 -- The drop verdict — closed over the proven move (the green-frame correctness)
@@ -350,6 +383,13 @@ goldenHaptics =
 goldenPulse :: [Int]
 goldenPulse = [ pulseSampleQ16 (mcPulse (mechanicsFor Field64)) t | t <- [0 .. 7] ]
 
+-- | The clock frames the golden drag's detent walk lands on: the @0 -> 7@-cell drag
+-- ('goldenDragMag' peaks at 7) lifted onto a 64-frame loop from cursor 0 — i.e.
+-- @tickFrames 64 0 (0,0) (7,0) == [1,2,3,4,5,6,7]@. The Swift @selfCheck@ re-derives this,
+-- pinning 'tickFrames' (and thus the frame-locked detent) cross-language.
+goldenTickFrames :: [FrameIndex]
+goldenTickFrames = tickFrames 64 0 (0, 0) (7, 0)
+
 -- =============================================================================
 -- Laws
 -- =============================================================================
@@ -442,3 +482,46 @@ lawReactiveFaster mc m1 m2 =
     d2 = max 0 m2
     v  = Accept
     implies a b = not a || b
+
+-- | FRAME MONOTONE — the detent is locked to the 20 fps clock. The frame list a drag
+-- produces ('tickFrames') (1) has exactly 'cellsCrossed' entries (one owed 'CellTick' per
+-- crossed cell — the temporal half of 'lawTickConservation'); (2) every entry is a frame the
+-- renderer can actually paint (@0 <= f < n@ when @n > 0@); and (3) while the walk does not lap
+-- the loop (@f0 + cellsCrossed a b < n@) the frames are EXACTLY @[f0+1 .. f0+k]@ — one
+-- contiguous @+1@ step per cell, no skip, no reorder, no early wrap. So the renderer can never
+-- emit a tick out of frame order, and at most one boundary lands per frame slot (the 32 Hz-safe
+-- coalescing the Swift flush relies on). The contiguity clause is FALSIFIABLE: a 'tickFrames'
+-- that double-stepped, dropped a cell, or wrapped early would break it. At @n <= 0@
+-- ('frameAfter' pins every step to @0@) only conservation is asserted (the no-lap guard is
+-- false, the paintable guard vacuous) — the witness test pins that degenerate shape directly.
+lawTicksFrameMonotone :: FrameCount -> FrameIndex -> (Int, Int) -> (Int, Int) -> Bool
+lawTicksFrameMonotone n f0 a b =
+  let fs = tickFrames n f0 a b
+      k  = cellsCrossed a b
+  in    length fs == k                                   -- conservation (temporal)
+     && all (\f -> n <= 0 || (f >= 0 && f < n)) fs        -- every tick frame is paintable
+     && ((n > 0 && f0 + k < n) `implies` (fs == [f0 + 1 .. f0 + k]))
+        -- no lap => EXACTLY one contiguous frame per cell (no skip / reorder / early wrap)
+  where
+    implies p q = not p || q
+
+-- | DETENT TRIAD CONSISTENT — on each crossed boundary the three reactions key the SAME
+-- frame @f@: the haptic 'CellTick' fires on @f@, the field repaint paints the cursor @f@,
+-- and the reactive pulse shows 'pulseSampleQ16' @pulse f@. Sharing the index is structural
+-- (all three read 'tickFrames'); what this law CHECKS — and can fail — is that the shared
+-- frame is mutually CONSISTENT: the repaint cursor @f@ is a real, paintable frame
+-- (@0 <= f < n@), and the pulse the user sees paired with the felt tick is a VALID in-band
+-- sample (@psMin <= sample <= psMax@). A 'tickFrames' frame the renderer cannot paint, or a
+-- pulse that escapes its band at a tick frame, breaks the triad. The frame-locked sibling of
+-- 'lawDropColorMatchesMove' — the felt tick, the seen pulse, and the painted frame can never
+-- disagree. (Degenerate band @psMin > psMax@: nothing to assert, as in 'lawPulseBounded'.)
+lawDetentTriadCoincident
+  :: FrameCount -> FrameIndex -> PulseSpec -> (Int, Int) -> (Int, Int) -> Bool
+lawDetentTriadCoincident n f0 pulse a b =
+  psMinQ16 pulse > psMaxQ16 pulse
+    || all triadConsistent (tickFrames n f0 a b)
+  where
+    triadConsistent f =
+      let paintable = n <= 0 || (f >= 0 && f < n)   -- repaint: a cursor the field can paint
+          s = pulseSampleQ16 pulse f                -- pulse: sampled AT the felt tick frame
+      in paintable && s >= psMinQ16 pulse && s <= psMaxQ16 pulse

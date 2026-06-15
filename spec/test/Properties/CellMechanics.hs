@@ -23,6 +23,18 @@ genIdentity = elements allIdentities
 genCell :: Gen (Int, Int)
 genCell = (,) <$> choose (-200, 200) <*> choose (-200, 200)
 
+genFrameCount :: Gen Int
+genFrameCount = choose (1, 256)
+
+genFrameIndex :: Gen Int
+genFrameIndex = choose (0, 255)
+
+-- A small drag, so its 'cellsCrossed' fits inside a loop and the NO-LAP contiguity
+-- clause of 'lawTicksFrameMonotone' is actually exercised (the broad 'genCell' almost
+-- always laps the 64-frame loop, leaving that clause vacuous).
+genSmallCell :: Gen (Int, Int)
+genSmallCell = (,) <$> choose (-30, 30) <*> choose (-30, 30)
+
 -- | A random well-formed pulse (psMin ≤ psMax, period ≥ 2) for the pulse laws.
 genPulse :: Gen PulseSpec
 genPulse = do
@@ -55,6 +67,32 @@ tests = testGroup "CellMechanics (grid-cell interaction: lifetime, detent, hapti
 
   , testProperty "lawTickSymmetric: cellsCrossed symmetric, zero on the diagonal" $
       forAll genCell $ \a -> forAll genCell $ \b -> lawTickSymmetric a b
+
+  , testProperty "lawTicksFrameMonotone: detent ticks advance one clock frame per cell, in order" $
+      forAll genFrameCount $ \n -> forAll genFrameIndex $ \f0 ->
+      forAll genCell $ \a -> forAll genCell $ \b -> lawTicksFrameMonotone n f0 a b
+
+  , testProperty "lawTicksFrameMonotone NO-LAP: a drag that fits the loop tick-walks frames [f0+1 .. f0+k] contiguously" $
+      forAll genSmallCell $ \a -> forAll genSmallCell $ \b ->
+        let k = cellsCrossed a b
+        in forAll (choose (k + 1, k + 257)) $ \n ->     -- n >= k+1
+           forAll (choose (0, n - k - 1)) $ \f0 ->       -- f0 + k < n, so the walk never laps
+             lawTicksFrameMonotone n f0 a b
+               && tickFrames n f0 a b == [f0 + 1 .. f0 + k]
+
+  , testProperty "lawTicksFrameMonotone n<=0 WITNESS: an empty loop pins every tick to frame 0" $
+      forAll genFrameIndex $ \f0 -> forAll genCell $ \a -> forAll genCell $ \b ->
+        lawTicksFrameMonotone 0 f0 a b
+          && all (== 0) (tickFrames 0 f0 a b)
+          && length (tickFrames 0 f0 a b) == cellsCrossed a b
+
+  , testProperty "lawDetentTriadCoincident: haptic, pulse, repaint share one frame index" $
+      forAll genFrameCount $ \n -> forAll genFrameIndex $ \f0 ->
+      forAll genPulse $ \pulse ->
+      forAll genCell $ \a -> forAll genCell $ \b -> lawDetentTriadCoincident n f0 pulse a b
+
+  , testProperty "golden tickFrames: the 7-cell golden drag lands on frames [1..7] (cursor 0, loop 64)" $
+      once (goldenTickFrames == [1,2,3,4,5,6,7])
 
     -- The green-frame law (verdict ≡ move) ----------------------------------------
   , testProperty "lawDropColorMatchesMove: the drop verdict equals what move will do (∀ p i d)" $

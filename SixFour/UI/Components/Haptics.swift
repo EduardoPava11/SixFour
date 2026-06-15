@@ -23,9 +23,21 @@ enum Haptics {
         }
     }
 
+    /// A single retained, PREPARED selection generator (the per-cell detent fires up to
+    /// once per 20 fps frame, so a warm engine matters). Re-`prepare()`d after each tick to
+    /// keep the Taptic engine ready for the next frame's `cellTick` — far crisper than
+    /// allocating a fresh unprepared generator per call. Delivery is still a MainActor hop
+    /// (UIKit generators are main-actor-bound); the *decision* is frame-locked upstream.
+    @MainActor private static let selector: UISelectionFeedbackGenerator = {
+        let g = UISelectionFeedbackGenerator()
+        g.prepare()
+        return g
+    }()
+
     static func selection() {
         Task { @MainActor in
-            UISelectionFeedbackGenerator().selectionChanged()
+            selector.selectionChanged()
+            selector.prepare()              // warm for the next frame's detent tick
         }
     }
 

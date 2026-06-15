@@ -72,7 +72,8 @@ struct CellSymbol: View {
 /// `CellIcon` + optional `CellText` label, all rendered at the 2 pt master pitch
 /// (commensurate with the 6 pt GIF content). The caller wraps it in a
 /// `Button`/`ShareLink` so the hit-rect equals the painted cell-rect; the visible
-/// touch floor is pinned in POINTS (≥ 44 pt), not cells.
+/// touch floor is pinned in CELLS (touchFloorCells = 11 = 44pt), per
+/// docs/SIXFOUR-CELL-WIDGET-LANGUAGE.md.
 struct CellActionButton: View {
     enum Icon { case share, grid3x3, retake, none }
     var icon: Icon = .none
@@ -82,6 +83,11 @@ struct CellActionButton: View {
     var prominent: Bool = false
     /// Expand to fill the row (Share/Retake) vs hug the icon (contact sheet).
     var fillWidth: Bool = true
+    /// The button's CELL footprint height (the N×M language): default `touchFloorCells`
+    /// (11 cells = 44 pt), the HIG touch floor expressed in lattice atoms.
+    var heightCells: Int = GlobalLattice.touchFloorCells
+    /// The minimum CELL footprint width — icon-only buttons stay tappable at the floor.
+    var minWidthCells: Int = GlobalLattice.touchFloorCells
 
     private var ground: SIMD3<UInt8> { prominent ? SIMD3(245, 245, 245) : SFTheme.ledGhost }
     private var fg: SIMD3<UInt8> { prominent ? SIMD3(20, 20, 20) : SIMD3(235, 235, 235) }
@@ -92,9 +98,9 @@ struct CellActionButton: View {
             if let title { CellText(title, rows: 11, ink: Color(srgb8: fg)) }
         }
         .padding(.horizontal, GlobalLattice.pt(6))
-        .frame(minHeight: 44)                            // touch floor in POINTS
+        .frame(minHeight: GlobalLattice.gif(heightCells))    // touch floor in CELLS (11 = 44pt)
         .frame(maxWidth: fillWidth ? .infinity : nil)
-        .frame(minWidth: 44)                             // icon-only buttons stay tappable
+        .frame(minWidth: GlobalLattice.gif(minWidthCells))   // icon-only buttons stay tappable
         .background(Color(srgb8: ground))                // flat opaque cell ground, square corners
         .accessibilityHidden(true)                       // the caller supplies the real label
     }
@@ -119,8 +125,11 @@ struct CellSlider: View {
     let range: ClosedRange<Double>
     var step: Double = 1
     var tint: SIMD3<UInt8> = SIMD3(96, 165, 250)
-    /// Track length in cells.
+    /// Track length in cells (the M of the M×11 footprint).
     var cols: Int = 56
+    /// The slider's CELL footprint height (the touch floor): default `touchFloorCells`
+    /// (11 cells = 44 pt). The visible track keeps `rows` lit; this is the tappable floor.
+    var heightCells: Int = GlobalLattice.touchFloorCells
     var cell: CGFloat = GlobalLattice.pt(1)
     private let rows = 6
 
@@ -135,7 +144,7 @@ struct CellSlider: View {
             return (r == rows / 2 - 1 || r == rows / 2) ? ghost : nil      // baseline track
         }
         .frame(width: cell * CGFloat(cols), height: cell * CGFloat(rows))
-        .frame(minHeight: 44)                                             // touch floor (points)
+        .frame(minHeight: GlobalLattice.gif(heightCells))                // touch floor in CELLS (11 = 44pt)
         .contentShape(Rectangle())
         .gesture(DragGesture(minimumDistance: 0).onChanged { v in
             let f = max(0, min(1, v.location.x / (cell * CGFloat(cols))))
