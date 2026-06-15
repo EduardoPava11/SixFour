@@ -68,7 +68,6 @@ library
         SixFour.Spec.CellShapes
         SixFour.Spec.SevenSeg
         SixFour.Spec.CloudProjection
-        SixFour.Spec.AddressPicker
         SixFour.Spec.PaletteSearch
         SixFour.Spec.PaletteOracle
         SixFour.Spec.Dither
@@ -317,7 +316,6 @@ test-suite spec-tests
         Properties.CellShapes
         Properties.SevenSeg
         Properties.CloudProjection
-        Properties.AddressPicker
         Properties.PaletteSearch
         Properties.PaletteOracle
         Properties.LookCategory

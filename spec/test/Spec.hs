@@ -46,7 +46,6 @@ import qualified Properties.VoxelFit     as VoxelFit
 import qualified Properties.CellShapes   as CellShapes
 import qualified Properties.SevenSeg     as SevenSeg
 import qualified Properties.CloudProjection as CloudProjection
-import qualified Properties.AddressPicker as AddressPicker
 import qualified Properties.PaletteSearch as PaletteSearch
 import qualified Properties.LookCategory as LookCategory
 import qualified Properties.HaarRibbon as HaarRibbon
@@ -139,7 +138,6 @@ main = defaultMain $ testGroup "sixfour-spec"
   , CellShapes.tests
   , SevenSeg.tests
   , CloudProjection.tests
-  , AddressPicker.tests
   , PaletteSearch.tests
   , PaletteOracle.tests
   , LookCategory.tests

@@ -59,7 +59,7 @@ barycenter / maximin; the NN learns this barycenter.)
 "SixFour.Spec.SplitTree", "SixFour.Spec.PairTree", "SixFour.Spec.PairTreeFixed",
 "SixFour.Spec.SigmaPairFixed", "SixFour.Spec.SigmaPairHead", "SixFour.Spec.SigmaDecomp",
 "SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Bottleneck16",
-"SixFour.Spec.AddressPicker", "SixFour.Spec.LeafOverride", "SixFour.Spec.PaletteGesture", "SixFour.Spec.GroupRGBT".
+"SixFour.Spec.LeafOverride", "SixFour.Spec.PaletteGesture", "SixFour.Spec.GroupRGBT".
 
 == 5. The authoring STORY (Acts I–IV) — the user-facing pipeline the NN lives in
 "SixFour.Spec.StageA" (Act I, @16²@ per-frame) · "SixFour.Spec.QuartetDelta" (Act II, @4⁴@ quartet core) ·
