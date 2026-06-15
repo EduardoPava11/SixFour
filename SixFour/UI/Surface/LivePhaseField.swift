@@ -60,7 +60,7 @@ struct LivePhaseField: View {
             // first — else each widget's hit area becomes the whole screen and the top one
             // swallows every touch (only one widget grabbable). Scoped here to the footprint.
             previewHero
-                .movable(.field64, settings: settings, surface: surface)
+                .movable(.field64, settings: settings, surface: surface, clock: clock)
                 .place(region(for: .field64, at: placement))
 
             // Palette16 — the 16-cell live palette = THE capture button, at its shared
@@ -151,7 +151,7 @@ struct LivePhaseField: View {
             let rank = r * 16 + c
             return rank < ordered.count ? ordered[rank] : ghost
         }
-        .movable(.palette16, settings: settings, surface: surface,
+        .movable(.palette16, settings: settings, surface: surface, clock: clock,
                  enabled: surface.phase == .live,
                  onTap: { surface.step(.shutterTap) })
         .accessibilityLabel("Capture 64-frame burst")

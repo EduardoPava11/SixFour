@@ -54,7 +54,7 @@ struct CapturingPhaseField: View {
             // live camera. Movable in every phase that shows it (so it can be repositioned
             // right after capture) — `.movable` BEFORE `.place` (footprint-scoped gesture).
             previewHero
-                .movable(.field64, settings: settings, surface: surface)
+                .movable(.field64, settings: settings, surface: surface, clock: clock)
                 .place(region(for: .field64, at: placement))
 
             // The palette-as-progress, at the SAME movable position the live shutter occupies

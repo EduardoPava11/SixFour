@@ -62,10 +62,6 @@ struct ReviewPhaseField: View {
     /// motion-threshold `CellSlider` writes here; `motionCoreSet` reads it to re-threshold
     /// the core/motion split live (the paletteStrip re-renders every tick).
     @State private var motionThreshold: Double? = nil
-    /// The last knob CELL column we flushed a frame-locked detent tick on. The
-    /// `.onChange(of: clock.tick)` flush fires ONE `Haptics.play(1)` per crossed cell,
-    /// coalesced to ≤1 Taptic per 20 fps frame (the 32 Hz-safe `lawTicksFrameMonotone`).
-    @State private var lastFlushedKnobCell: Int = 0
 
     // The global-palette CREATION control was a VStack FORM — rejected: the cell grid IS the
     // widget, operated by gesture. Rebuilt as gesture-grid tools; the byte-exact backend
@@ -109,11 +105,11 @@ struct ReviewPhaseField: View {
                 // greedy `.position` in `.place` makes it full-screen and the top widget
                 // eats every touch — the reason the hero would not move after capture).
                 gifaHero
-                    .movable(.field64, settings: settings, surface: surface)
+                    .movable(.field64, settings: settings, surface: surface, clock: clock)
                     .place(region(for: .field64, at: placement))
 
                 paletteStrip
-                    .movable(.palette16, settings: settings, surface: surface)
+                    .movable(.palette16, settings: settings, surface: surface, clock: clock)
                     .place(region(for: .palette16, at: placement))
 
                 // Immovable bottom chrome (NOT a ColorWidget): the action row, pinned to
@@ -255,20 +251,6 @@ struct ReviewPhaseField: View {
         return max(0, min(cols - 1, Int((frac * Double(cols - 1)).rounded())))
     }
 
-    /// FRAME-LOCKED detent flush: called on each 20 fps clock tick. Fires exactly ONE
-    /// `cellTick` (`Haptics.play(1)`) per frame in which the knob crossed ≥1 cell —
-    /// coalesced regardless of how many cells the drag covered that frame (the 32 Hz-safe
-    /// `lawTicksFrameMonotone`). `cellsCrossed` is the generated spec contract.
-    private func flushDetentTick() {
-        guard motionOutlineOn else { return }
-        let knobNow = thresholdKnobCell
-        let crossed = SixFourCellMechanics.cellsCrossed((col: lastFlushedKnobCell, row: 0),
-                                                        (col: knobNow, row: 0))
-        if crossed > 0 {
-            Haptics.play(1)            // cellTick — one Taptic per frame, the detent
-            lastFlushedKnobCell = knobNow
-        }
-    }
 
     // MARK: - Actions
 
@@ -331,13 +313,11 @@ struct ReviewPhaseField: View {
             // chrome: it modulates an existing widget's paint, it is NOT a movable widget.
             Button {
                 motionOutlineOn.toggle()
-                if motionOutlineOn {
-                    // Seed the slider at the current overlay state (the median cut), and
-                    // re-baseline the detent flush so re-opening never bursts ticks.
-                    if motionThreshold == nil {
-                        motionThreshold = QuartetDelta.medianDisplacementThreshold(motionSlots)
-                    }
-                    lastFlushedKnobCell = thresholdKnobCell
+                if motionOutlineOn, motionThreshold == nil {
+                    // Seed the slider at the current overlay state (the median cut). The
+                    // `.cellDetent` anchors itself on its first tick, so no re-baseline is
+                    // needed — re-opening never bursts ticks.
+                    motionThreshold = QuartetDelta.medianDisplacementThreshold(motionSlots)
                 }
             } label: {
                 CellActionButton(icon: .grid3x3, title: "Motion")
@@ -354,7 +334,9 @@ struct ReviewPhaseField: View {
                            range: motionThresholdRange,
                            step: motionThresholdStep,
                            cols: GlobalLattice.shutterCells)
-                    .onChange(of: clock.tick) { _, _ in flushDetentTick() }
+                    // The SAME frame-locked detent as the movable widgets (one mechanism):
+                    // ≤1 cellTick per 20 fps frame as the knob crosses cells.
+                    .cellDetent(tick: clock.tick, every: 1, position: { (col: thresholdKnobCell, row: 0) })
                     .accessibilityLabel("Motion threshold")
             }
 

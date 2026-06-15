@@ -60,6 +60,10 @@ private struct MovableModifier: ViewModifier {
     let identity: ColorIdentity
     @Bindable var settings: AppSettings
     let surface: Surface
+    /// The 20 fps heartbeat — drives the FRAME-LOCKED detent flush (`.cellDetent`), so the
+    /// drag haptic is coalesced to ≤1 tick/frame (`lawTicksFrameMonotone`) instead of firing
+    /// per touch-move event.
+    let clock: SurfaceClock
     /// Whether this widget is movable in the CURRENT phase. The shutter is movable only
     /// while `.live`; the heroes are always movable. A non-movable phase = no gesture +
     /// no overlay (byte-identical to the pre-feature view).
@@ -75,9 +79,10 @@ private struct MovableModifier: ViewModifier {
     @GestureState private var drag: CGSize = .zero
     /// True once the long-press has completed and the lift is active (drives the overlay).
     @State private var lifted = false
-    /// The detent counter: cells crossed at the last `CellTick`, so we fire one tick per
-    /// `tickEvery` boundary the finger crosses (the spec's `cellsCrossed` made felt).
-    @State private var lastTickCells = 0
+    /// The lifted widget's current cell offset from the lift origin, or `nil` when not
+    /// dragging. The frame-locked `.cellDetent` reads this each 20 fps tick and fires one
+    /// coalesced `cellTick` per `tickEvery` cells crossed — never per touch-move event.
+    @State private var dragCell: (col: Int, row: Int)?
 
     private var atomInt: Int { SixFourLattice.gifPx }
 
@@ -92,6 +97,11 @@ private struct MovableModifier: ViewModifier {
             // Give the gesture a solid hittable area even if the content opts out of hit
             // testing (the preview hero sets `.allowsHitTesting(false)` for a focus layer).
             .contentShape(Rectangle())
+            // FRAME-LOCKED detent: the drag records `dragCell`; this flushes ≤1 cellTick per
+            // 20 fps frame (shared with the Review slider — one mechanism, lawTicksFrameMonotone).
+            .cellDetent(tick: clock.tick,
+                        every: max(1, SixFourCellMechanics.tickEvery(identity)),
+                        position: { dragCell })
         // The shutter tap MUST be bulletproof (this IS the camera button). A plain
         // `.onTapGesture` fires capture on a quick tap; the SEPARATE `.gesture(liftDrag)`
         // needs a 0.3 s hold first, so the two are mutually exclusive by timing and never
@@ -121,20 +131,18 @@ private struct MovableModifier: ViewModifier {
                 guard case .second(true, let dOpt) = value else { return }
                 if !lifted {                          // Pressed → Lifted (the hold armed)
                     lifted = true
-                    lastTickCells = 0
+                    dragCell = (col: 0, row: 0)        // anchor the detent at the lift origin
                     surface.liftedWidget = identity    // calm the radiation while lifting
-                    Haptics.play(0)                    // liftPop
+                    Haptics.play(0)                    // liftPop (a discrete event, not a detent)
                 }
                 guard let d = dOpt else { return }
-                // CellTick: one detent per `tickEvery` cell-boundary the finger crosses.
-                let cell = snapCells(d.translation)
-                let crossed = SixFourCellMechanics.cellsCrossed((col: 0, row: 0), cell)
-                let every = max(1, SixFourCellMechanics.tickEvery(identity))
-                if crossed / every != lastTickCells / every { Haptics.play(1) }   // cellTick
-                lastTickCells = crossed
+                // Record the cell the finger is over; the frame-locked `.cellDetent` (above)
+                // turns the crossings into ≤1 felt cellTick per 20 fps frame.
+                dragCell = snapCells(d.translation)
             }
             .onEnded { value in
                 lifted = false
+                dragCell = nil                         // end the detent (resets the flush anchor)
                 surface.liftedWidget = nil             // restore the radiation on drop
                 guard case .second(true, let d?) = value else { return }
                 commit(d.translation)
@@ -221,8 +229,9 @@ extension View {
     /// Make this view a movable ColorWidget (long-press lift → drag → snap). `enabled`
     /// gates movability per-phase (the shutter is movable only while `.live`).
     func movable(_ identity: ColorIdentity, settings: AppSettings, surface: Surface,
+                 clock: SurfaceClock,
                  enabled: Bool = true, onTap: (() -> Void)? = nil) -> some View {
         modifier(MovableModifier(identity: identity, settings: settings, surface: surface,
-                                 enabled: enabled, onTap: onTap))
+                                 clock: clock, enabled: enabled, onTap: onTap))
     }
 }

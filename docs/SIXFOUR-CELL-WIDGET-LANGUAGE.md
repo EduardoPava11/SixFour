@@ -103,21 +103,19 @@ selector — each `N · (segW × 11 H)`, tap.
 3D (orbit drag, *not* cell-quantised — a continuous 3-D rotation, deliberately
 outside the detent contract) · the 64² GIFA hero.
 
-### Detent consistency gap (the next build-on)
-Three widgets cross cells on drag, but only ONE is frame-locked:
-- **Motion threshold slider** — frame-locked ✓ (flushes on `clock.tick`, §4).
-- **`CellSlider`** (generic) — supports the drag + `step` quantisation, but detent
-  firing is **caller-added**; it should frame-lock natively so every slider inherits
-  the contract.
-- **`MovableColorWidget`** — fires `Haptics.play(1)` per `cellsCrossed` boundary
-  *directly*, gated only by `tickEvery`, **not coalesced to the 20 fps frame**. It
-  predates the contract and should be brought under `lawTicksFrameMonotone`.
+### Detent consistency — UNIFIED ✅
+One reusable mechanism now backs every drag widget: **`.cellDetent(tick:every:position:)`**
+(`Components/CellDetent.swift`). On each 20 fps `clock.tick` it fires exactly one
+`cellTick` if `position` has crossed `≥ every` cells since the last flushed frame, then
+re-anchors — coalesced to ≤1 Taptic/frame (`lawTicksFrameMonotone`), `position`→nil resets
+on drag end.
+- **Motion threshold slider** — uses `.cellDetent` (every=1). ✅
+- **`MovableColorWidget`** — now records `dragCell` in `.onChanged` and routes through
+  `.cellDetent` (every=`tickEvery`); the per-touch-event `Haptics.play(1)` is gone, so a
+  fast drag can no longer outrun the frame. ✅ (`clock` threaded through `.movable`.)
+- liftPop / dropAccept / dropReject stay discrete (they are events, not detents).
 
-So "defining the widgets in this framework" is footprint-complete; the open work is
-**unifying the detent**: factor the slider's frame-locked flush into one reusable
-mechanism (a `.cellDetent(on: clock)` modifier or native `CellSlider` flush) and route
-`MovableColorWidget` through it — then every drag widget obeys one cell = one frame =
-one tick.
+So every drag widget now obeys **one cell = one frame = one tick**, by the same code.
 
 ---
 
@@ -180,15 +178,17 @@ device-reproducible haptic detent for an N×M cell-grid UI**, built on the same
 (`lawTicksFrameMonotone` + `lawDetentTriadCoincident` on `Spec.CellMechanics`,
 golden-pinned). (3) The QuartetDelta threshold slider is the first frame-locked widget.
 
-**Open — unify the detent (the registry's §3 gap):**
-1. **Factor one reusable flush.** Extract the Motion slider's `clock.tick` flush into a
-   `.cellDetent(on:clock, cellsCrossed:)` modifier (or a native `CellSlider` flush) so
-   detent firing is not re-hand-rolled per call site.
-2. **Frame-lock `MovableColorWidget`.** Route its per-`cellsCrossed` `Haptics.play(1)`
-   through that mechanism so the drag haptic is coalesced to ≤1/frame — bringing the
-   oldest detent widget under `lawTicksFrameMonotone`. Device-feel-verify on iPhone.
-3. **Lint.** A grep lint that flags any new `minHeight:`/point literal on an interactive
+**Done:** (4) the detent is **unified** — `.cellDetent` (`Components/CellDetent.swift`)
+backs both the slider and `MovableColorWidget`; every drag widget is frame-locked by one
+mechanism (§3). Device-feel-verify the movable-widget drag on iPhone (the haptic cadence
+changed from per-touch to per-frame).
+
+**Open:**
+1. **Lint.** A grep lint flagging any new `minHeight:`/point literal on an interactive
    widget (keep the registry footprint-complete as the app grows).
+2. **`Spec` the detent count.** Optionally drive `.cellDetent`'s `every` and the tick
+   schedule from a golden so the Swift cadence is pinned to `lawTicksFrameMonotone`, not
+   just informed by it.
 
 Sources: [UXPin](https://www.uxpin.com/studio/blog/ui-grids-how-to-guide/) ·
 [Smashing](https://www.smashingmagazine.com/2017/12/building-better-ui-designs-layout-grids/) ·

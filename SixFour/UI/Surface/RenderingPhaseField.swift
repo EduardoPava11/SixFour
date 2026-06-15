@@ -46,7 +46,7 @@ struct RenderingPhaseField: View {
             // `.movable` BEFORE `.place` (footprint-scoped gesture — a greedy `.position`
             // otherwise makes the gesture full-screen and the hero ungrabbable).
             resolveHero
-                .movable(.field64, settings: settings, surface: surface)
+                .movable(.field64, settings: settings, surface: surface, clock: clock)
                 .place(region(for: .field64, at: placement))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
