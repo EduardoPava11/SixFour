@@ -18,12 +18,25 @@
 | **Source LOC reclaimable (src `.hs` only)** | **1,240 LOC** across 7 src modules |
 | Plus their Properties tests (deleted in lockstep) | 7 test files |
 
-> **CORRECTION (2026-06-14, post-review):** `SixFour.Spec.LookNetCompose` (214 LOC) was originally
-> proposed as the #1 deletion (TEST_ONLY) but has been **moved to [Contested / KEEP](#contested--keep)**.
-> It is the home of the σ-equivariance theorem of the NN core, cited **by name in `CLAUDE.md`**, and is
-> referenced in the generated `look_net_{mlx,torch}.py` contracts via `Codegen/{MLX,CoreML}.hs`. In a
-> Haskell-*verified* repo a proven core theorem is load-bearing even with no runtime importer — the
-> "TEST_ONLY ⇒ bloat" heuristic does not apply to NN-core proof modules. Totals above already exclude it.
+> **EXECUTION STATUS (2026-06-15):** branch `cleanup/haskell-bloat`. Only **`Spec.AddressPicker`
+> (191 LOC) was deleted** — gate green (777→772 tests, build + doc-claims pass). The remaining
+> candidates were re-verified and split into KEEP (core/north-star) and JUDGMENT-CALL (active design
+> directions); see the per-tier notes. The "1,240 LOC" headline below is the *pre-review* figure and is
+> superseded by this status block.
+>
+> **CORRECTION 1 (post-review):** `SixFour.Spec.LookNetCompose` (214 LOC) — **moved to
+> [Contested / KEEP](#contested--keep)**. Home of the σ-equivariance theorem of the NN core, cited **by
+> name in `CLAUDE.md`**, referenced in the generated `look_net_{mlx,torch}.py` contracts.
+>
+> **CORRECTION 2 (post-review):** `SixFour.Spec.LookCategory` (190 LOC) — **moved to KEEP**. Its header
+> declares it "the north-star foundation — a named look taxonomy + per-user push-pull learning"; it is
+> the verified source of truth for the on-device Bradley–Terry SGD step (`btGradStep`/`trainPairs`) and
+> cites `CLAUDE.md` Tier 2. TEST_ONLY here means *spec written ahead of its Swift port* — the repo's
+> stated methodology — not bloat.
+>
+> **ROOT-CAUSE:** the audit equated "no importer" with "bloat", but this is a spec-ahead-of-
+> implementation repo: importer-less modules are frequently intentional (a proven invariant or a
+> north-star seed awaiting its Swift port). Honest reclaimable bloat is far below 1,240 LOC.
 
 **Reclaimable src LOC by module** (Properties tests removed alongside, not counted here):
 
@@ -129,20 +142,12 @@ Haskell-verified repo regardless of runtime importers. Moved to Contested / KEEP
 
 ---
 
-#### 3c. SixFour.Spec.LookCategory — 190 src LOC
+#### 3c. ~~SixFour.Spec.LookCategory~~ — WITHDRAWN, see [Contested / KEEP](#contested--keep)
 
-- **spec.cabal:** remove library other-module **`SixFour.Spec.LookCategory`** (~line 80); remove
-  test-suite other-module `Properties.LookCategory` (line **323**).
-- **Delete files:** `spec/src/SixFour/Spec/LookCategory.hs`,
-  `spec/test/Properties/LookCategory.hs`.
-- **test/Spec.hs:** remove `import qualified Properties.LookCategory as LookCategory` (~line 51) and
-  the `, LookCategory.tests` entry (~line 145).
-- **Cosmetic/doc:** drop `Map.hs:29` Haddock bullet; update `README.md:216` (the "74 properties"
-  count); note in `docs/SIXFOUR-DEBT-CLEANUP-REPORT.md:333`; prune the name in
-  `scripts/wf-haskell-bloat-audit.js:29`.
-- Sole importer is its own test (`grep -rln "import.*SixFour.Spec.LookCategory"`). Declares zero
-  instances → no load-bearing orphan-instance import. `Preference` (which it imports) has 5 other
-  importers, so it is NOT orphaned by this removal.
+**Do NOT delete.** It is the **north-star foundation** module (`Description: "The north-star foundation
+— a named look taxonomy + per-user push-pull learning"`): the verified source of truth for the
+on-device Bradley–Terry SGD step (`btGradStep`/`trainPairs`), citing `CLAUDE.md` Tier 2. Its single
+importer being its own test reflects spec-ahead-of-port, the repo's methodology — not bloat.
 
 ---
 
@@ -192,7 +197,9 @@ Haskell-verified repo regardless of runtime importers. Moved to Contested / KEEP
 
 ---
 
-#### 3g. SixFour.Spec.AddressPicker — 191 src LOC
+#### 3g. SixFour.Spec.AddressPicker — 191 src LOC ✅ DONE (commit on `cleanup/haskell-bloat`)
+
+Executed 2026-06-15. Gate green: build all OK, 777→772 tests, doc-claims pass. Steps that were applied:
 
 - **spec.cabal:** remove exposed-module line **71**; remove test-suite other-module line **320**.
 - **Delete files:** `spec/src/SixFour/Spec/AddressPicker.hs`,
@@ -269,6 +276,8 @@ any would break `cabal build` and/or `cabal test` (the gate), or a live cross-la
 | **SixFour.Spec.Look** | `studio/analysis-core/src/look.rs` is a 1:1 Rust mirror (re-exported in `lib.rs:24`, consumed by `viz`/`explore`/`look-nn-baseline`). Per "Haskell = source of truth, Rust mirrors it", `Spec.Look` is the law oracle backing the live Rust port. |
 | **SixFour.Spec.HaarRibbon** | Act III `.browsing` is ALIVE (`docs/STATUS.md:95-96`); the project already adjudicated this exact removal on **2026-06-10** and chose to KEEP it (wrote `Properties/HaarRibbon.hs`, un-orphaned it). `spec-docs.sh §0b` lint requires its `Properties.HaarRibbon` test to exist. |
 | **SixFour.Spec.LookNetCompose** | **Withdrawn from Tier 3 on review.** Proves the NN core's end-to-end σ-equivariance theorem (`lookNetSigmaTheorem`, `src/SixFour/Spec/LookNetCompose.hs:33-63`). Cited **by name in `CLAUDE.md`** ("σ-equivariance theorem in `Spec/LookNetCompose.hs`") and referenced in the emitted contracts `Codegen/MLX.hs:58,212` + `Codegen/CoreML.hs:134,323` → `trainer/generated/look_net_{mlx,torch}.py`. In a Haskell-verified repo a proven core theorem is load-bearing even with no runtime importer; "TEST_ONLY" misclassifies it. |
+| **SixFour.Spec.LookCategory** | **Withdrawn from Tier 3 on review.** The north-star foundation module (`Description:` "The north-star foundation — a named look taxonomy + per-user push-pull learning"); verified source of truth for the on-device Bradley–Terry SGD step (`btGradStep`/`trainPairs`), cites `CLAUDE.md` Tier 2. Spec-ahead-of-port, not bloat. |
+| *WidgetDescriptor / PaletteGesture / QuartetDelta / Scale+Dither* | **JUDGMENT CALL — awaiting user decision.** Not auto-deleted: each backs an active design direction (widgets / gesture invariant / Act II motion) or a working dev exe (`spec-gif`). Only the user can declare these directions abandoned. |
 
 > Reminder for **Tier 3e**: `HaarRibbon` only references `QuartetDelta` in a doc-comment, so deleting
 > `QuartetDelta` does not break the KEPT `HaarRibbon` compile — but reword the comment to avoid a
