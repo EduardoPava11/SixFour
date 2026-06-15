@@ -46,6 +46,7 @@ import SixFour.Codegen.MLX    (emitLookNetMLX)
 import SixFour.Codegen.Golden (emitLookNetGolden, emitAxisNetGolden)
 import SixFour.Codegen.Collapse (emitCollapseGolden)
 import SixFour.Codegen.PairTree (emitPairTreeGolden)
+import SixFour.Codegen.QuartetDelta (emitQuartetDeltaGolden)
 import SixFour.Codegen.PaletteValue (emitPaletteValueGolden)
 import SixFour.Codegen.Genome (emitGenomeGolden)
 import SixFour.Codegen.GenomeFixed (emitGenomeFixedGolden)
@@ -87,6 +88,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "OwnershipContract.swift")     emitOwnershipContract
   writeUtf8 (swiftOutDir   </> "CollapseGolden.swift")       emitCollapseGolden
   writeUtf8 (swiftOutDir   </> "PairTreeGolden.swift")       emitPairTreeGolden
+  writeUtf8 (swiftOutDir   </> "QuartetDeltaGolden.swift")   emitQuartetDeltaGolden
   writeUtf8 (swiftOutDir   </> "PaletteValueGolden.swift")   emitPaletteValueGolden
   writeUtf8 (swiftOutDir   </> "GenomeGolden.swift")         emitGenomeGolden
   writeUtf8 (swiftOutDir   </> "GenomeFixedGolden.swift")    emitGenomeFixedGolden
