@@ -63,6 +63,24 @@ struct ReviewPhaseField: View {
     /// the core/motion split live (the paletteStrip re-renders every tick).
     @State private var motionThreshold: Double? = nil
 
+    /// CUT-LEVER tool: collapse the global palette to a SHALLOWER tree depth and PREVIEW it.
+    /// `cutLeverOn` reveals the toggle's slider + 16×16 preview; `cutDepth` is the depth the
+    /// slider cuts to (nil = full depth); `cutGlobal` is the live 256 sRGB8 painted from the
+    /// cut groups. This is PREVIEW-ONLY — it does NOT touch the Save/export path. At full depth
+    /// the cut yields the same 256-colour SET as the shipped global palette, but NOT index-for-
+    /// index identical: it reads the no-mask `flatGlobalLeaves` (all 64 frames, vs the shipped
+    /// `groupGlobal` which honours `selectedGroups`) and `SplitTree.build` median-sorts the
+    /// leaves, permuting vs the shipped maximin order. Order/mask don't matter for a swatch.
+    /// (No `Spec.CollapseLever`: a Swift clamp on `PaletteBranching.depth` over the proven
+    /// `SplitTree.collapse`/`descendants`.)
+    @State private var cutLeverOn = false
+    @State private var cutDepth: Int? = nil
+    @State private var cutGlobal: [SIMD3<UInt8>] = []
+    /// Cached flat maximin leaves for the cut tool — the ~seconds maximin runs ONCE on
+    /// open; each drag re-projects only `SplitTree.build` + `collapse` (cheap), so the
+    /// frame-locked haptic never lags behind the maximin.
+    @State private var cutFlatLeaves: [OKLabQ16] = []
+
     // The global-palette CREATION control was a VStack FORM — rejected: the cell grid IS the
     // widget, operated by gesture. Rebuilt as gesture-grid tools; the byte-exact backend
     // (projectQ16(override:), Spec.LeafOverride, LadderExport, the Save ladder) is KEPT.
@@ -251,6 +269,43 @@ struct ReviewPhaseField: View {
         return max(0, min(cols - 1, Int((frac * Double(cols - 1)).rounded())))
     }
 
+    // MARK: - Cut-lever helpers
+
+    /// The branching the cut tool reads (the shared settings choice — the same tree the
+    /// Save ladder + structure view use). The cut never re-roots the tree; it only chooses
+    /// how deep to merge along the radix the user already picked.
+    private var cutBranching: PaletteBranching { settings.paletteBranching }
+
+    /// The cut slider's range: `0 … depth`. `depth` (the upper bound) = no levels merged =
+    /// the full palette (same colour set as shipped); lower values merge more levels (fewer,
+    /// broader colours). One cell per integer depth ⇒ `cols = depth + 1`.
+    private var cutRange: ClosedRange<Double> { 0 ... Double(cutBranching.depth) }
+
+    /// A non-optional bridge for the cut `CellSlider`: reads `cutDepth` (full depth when
+    /// unset ⇒ the full colour set), writes back the clamped integer depth + recomputes the
+    /// cut preview off the main thread (the maximin is cached, so this is the cheap path).
+    private var cutBinding: Binding<Double> {
+        Binding(
+            get: { Double(cutDepth ?? cutBranching.depth) },
+            set: { raw in
+                let d = max(0, min(cutBranching.depth, Int(raw.rounded())))
+                cutDepth = d
+                recomputeCutGlobal()
+            }
+        )
+    }
+
+    /// The cut knob's current CELL column — the SAME `frac * (cols-1)` rounding `CellSlider`
+    /// uses (here `cols = depth + 1`), so the frame-locked flush counts exactly the depth
+    /// cells the knob has crossed.
+    private var cutKnobCell: Int {
+        let cols = cutBranching.depth + 1
+        let span = max(Double(cutBranching.depth), 0.0001)
+        let value = Double(cutDepth ?? cutBranching.depth)
+        let frac = value / span
+        return max(0, min(cols - 1, Int((frac * Double(cols - 1)).rounded())))
+    }
+
 
     // MARK: - Actions
 
@@ -340,6 +395,52 @@ struct ReviewPhaseField: View {
                     .accessibilityLabel("Motion threshold")
             }
 
+            // CUT-LEVER — collapse the global palette to a shallower tree depth and PREVIEW
+            // it (preview-only; does NOT change Save/export). Same shape as the Motion block
+            // (a toggle + a frame-locked cell slider + an inline preview), dogfooding the SAME
+            // `.cellDetent` mechanism. Off ⇒ this branch is inert and the row is byte-identical;
+            // full depth ⇒ the preview shows the full colour set (same set as shipped, swatch only).
+            Button {
+                if cutLeverOn {
+                    cutLeverOn = false
+                } else {
+                    openCutLever()
+                }
+            } label: {
+                CellActionButton(icon: .grid3x3, title: "Cut")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Collapse the global palette to a shallower depth")
+
+            if cutLeverOn {
+                // The radix the cut walks (16²/4⁴/2⁸) — the SAME shared settings choice the
+                // Save ladder + structure view use. Changing it re-seeds the cut to full
+                // depth and recomputes (the new radix has a new depth ceiling). Kept in the
+                // ACTION row (chrome), never in the cell-field preview (cell-field law).
+                BranchingSelector(selection: Binding(
+                    get: { settings.paletteBranching },
+                    set: { settings.paletteBranching = $0; cutDepth = $0.depth; recomputeCutGlobal() }
+                ))
+                .accessibilityLabel("Cut radix")
+
+                CellSlider(value: cutBinding,
+                           range: cutRange,
+                           step: 1,
+                           cols: cutBranching.depth + 1)
+                    // The SAME frame-locked detent as the movable widgets + the motion
+                    // slider: ≤1 cellTick per 20 fps frame as the knob crosses depth cells.
+                    .cellDetent(tick: clock.tick, every: 1, position: { (col: cutKnobCell, row: 0) })
+                    .accessibilityLabel("Cut depth")
+
+                // The live cut preview — a flat 16×16 cell palette from `cutGlobal` (copy of
+                // the group-pick preview 458-461), cells only.
+                CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gifPx) { c, r in
+                    let i = r * 16 + c
+                    return i < cutGlobal.count ? cutGlobal[i] : nil
+                }
+                .accessibilityLabel("Live cut palette preview")
+            }
+
             Button { surface.step(.retake) } label: {
                 CellActionButton(icon: .retake, title: "Retake")
             }
@@ -413,6 +514,68 @@ struct ReviewPhaseField: View {
             }.value
             groupGlobal = LadderGIF.paletteToSRGB8(leaves)
             computingGroups = false
+        }
+    }
+
+    // MARK: - Cut-lever tool (collapse the global palette to a shallower tree depth)
+
+    /// Open the cut tool: run the ~seconds maximin ONCE to cache the flat global leaves,
+    /// seed the slider at full depth (the full colour set), then paint the first preview.
+    /// Every later drag re-projects only `SplitTree.build` + `collapse`.
+    private func openCutLever() {
+        cutLeverOn = true
+        cutDepth = cutBranching.depth
+        let palettes = surface.palettesPerFrame
+        Task {
+            let leaves = await Task.detached(priority: .userInitiated) {
+                LadderExport.flatGlobalLeaves(palettesPerFrame: palettes)
+            }.value
+            cutFlatLeaves = leaves
+            recomputeCutGlobal()
+        }
+    }
+
+    /// Re-derive the live 256-colour cut preview from the CACHED flat leaves. The cut merges
+    /// `max(0, depth - k)` view levels (`k = cutDepth`), i.e. `levelsToMerge` BINARY levels
+    /// (× `collapseK`), via the proven `SplitTree.collapse`; each cut group is painted with
+    /// its FIRST leaf's colour and expanded back to 256 (one entry per original leaf), so the
+    /// preview is a flat 256-cell palette. `k == depth` ⇒ zero levels merged ⇒ the full colour
+    /// set (preview only; index order/mask may differ from the shipped table — see the state
+    /// doc). Off the main thread (tree+collapse is cheap but not free).
+    private func recomputeCutGlobal() {
+        let leaves = cutFlatLeaves
+        let k = cutDepth ?? cutBranching.depth
+        let branching = cutBranching
+        Task {
+            let painted = await Task.detached(priority: .userInitiated) { () -> [SIMD3<UInt8>] in
+                guard !leaves.isEmpty else { return [] }
+                // Flat leaves → IndexedColor (OKLab for the split, sRGB8 for the fill).
+                let ics: [IndexedColor] = leaves.enumerated().map { i, leaf in
+                    let f = SIMD3<Float>(Float(leaf.x), Float(leaf.y), Float(leaf.z)) / 65536
+                    return IndexedColor(index: i,
+                                        oklab: f,
+                                        srgb: ColorScience.okLabToSRGB8(OKLab(f)))
+                }
+                let tree = SplitTree.build(ics)
+                // The cut keeps `k` VIEW levels of detail (× collapseK BINARY levels each),
+                // merging everything below. `SplitTree.descendants(at:)` yields the cut
+                // GROUPS directly: the subtrees rooted at that binary depth, canonical
+                // in-order. `k == depth` ⇒ binary depth `depth·collapseK == 8` ⇒ 256
+                // singleton groups ⇒ the full colour set; `k == 0` ⇒ one group ⇒ a single
+                // colour. (`depth − k` is the count of merged levels.)
+                let keepBinaryLevels = max(0, min(branching.depth, k)) * branching.collapseK
+                let groups = tree.descendants(at: keepBinaryLevels)
+                // Paint each cut group with its FIRST leaf; expand back to one entry per
+                // leaf so the preview stays a flat 256-cell palette (in-order alignment).
+                var out = [SIMD3<UInt8>](); out.reserveCapacity(ics.count)
+                for g in groups {
+                    let groupLeaves = g.leaves
+                    let first = groupLeaves.first?.srgb ?? SFTheme.ledGhost
+                    for _ in groupLeaves { out.append(first) }
+                }
+                return out
+            }.value
+            cutGlobal = painted
         }
     }
 

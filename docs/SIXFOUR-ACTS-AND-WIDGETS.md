@@ -101,7 +101,7 @@ sub-acts** — the user steers the global palette, then ships a rung or retakes.
 |---|---|---|---|---|
 | **16²** per-frame | the Palette16 strip | 16×16 | ✅ | the atom: one frame's 256 colours |
 | **4⁴** quartet core/motion | **Motion toggle** + **threshold slider** | 11×N + 16×11 | ✅ | core (low-displacement) vs motion colours — *the QuartetDelta widget shipped this session*; the slider is the first **frame-locked-detent** widget |
-| **2⁸** Haar abstraction | collapse lever: radix grid + scope/branching `CellSelector` + **CUT slider** | tree + M×11 | 🔲 | scroll the Haar level to collapse → global 256 |
+| **2⁸** Haar abstraction | collapse lever: `BranchingSelector` + **CUT slider** (frame-locked `.cellDetent`) + 16² preview | M×11 + 16² | 🔶 | drag the cut depth `0…branching.depth` → `SplitTree.collapse` → live preview of the collapsed colour set. **Preview-only** (export still byte-identical); threading `cut:` into Save/export is the open follow-on |
 | **export** | Save rung picker {16³/64³/256³} | 11×N + N·(N×11) | ✅ | the global pack result |
 
 *Data:* `palettesPerFrame`, `indexCube`, `cursor` (user-driven Z₆₄), `gifURL`.
