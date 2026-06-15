@@ -64,6 +64,15 @@ struct QuartetDeltaGoldenTests {
         #expect(!got.isEmpty && got.count < slots.count, "median threshold should split the slots")
     }
 
+    /// Swift `medianDisplacementThreshold` reproduces the spec-emitted `coreThreshold`
+    /// (the relative core/motion cut the Review overlay recomputes per run — pinned so it can't drift).
+    @Test func medianThresholdMatchesGolden() {
+        let slots = QuartetDelta.toSlots(QuartetDeltaGolden.palettes)
+        let thr = QuartetDelta.medianDisplacementThreshold(slots)
+        #expect(abs(thr - QuartetDeltaGolden.coreThreshold) <= Self.tol,
+                "median threshold drift: \(thr) vs \(QuartetDeltaGolden.coreThreshold)")
+    }
+
     /// Every core slot genuinely has displacement ≤ threshold (the outline is honest —
     /// the spec's `lawCoreIsLowDisplacement`, re-checked on the port).
     @Test func coreIsLowDisplacement() {

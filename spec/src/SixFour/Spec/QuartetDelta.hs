@@ -34,6 +34,7 @@ module SixFour.Spec.QuartetDelta
     -- * The core outline (Act II → Act III protect-set)
   , corenessRanked
   , coreColors
+  , medianDisplacementThreshold
     -- * Laws (predicates; QuickCheck'd in Properties.QuartetDelta)
   , lawStaticSlotZeroDisplacement
   , lawDisplacementGeqEndpoints
@@ -43,7 +44,7 @@ module SixFour.Spec.QuartetDelta
   , lawCoreIsLowDisplacement
   ) where
 
-import Data.List (sortBy, foldl')
+import Data.List (sort, sortBy, foldl')
 import Data.Ord  (comparing)
 
 import SixFour.Spec.Color (OKLab(..), okLabDistanceSquared)
@@ -102,6 +103,15 @@ corenessRanked ss =
 -- outlines as structural / closest to the core, and the protect-set passed to Act III.
 coreColors :: Double -> [QSlot] -> [Int]
 coreColors thr ss = [ i | (i, dsp) <- zip [0 ..] (map slotDisplacement ss), dsp <= thr ]
+
+-- | The median per-slot displacement — the relative core/motion cut used by the Review overlay and
+-- pinned by 'SixFour.Codegen.QuartetDelta' (so the emitter and the Swift port share one rule). On a
+-- spread of displacements this guarantees a non-trivial split (some slots core, some motion).
+-- Recomputed per quartet; @0@ for the empty quartet.
+medianDisplacementThreshold :: [QSlot] -> Double
+medianDisplacementThreshold ss =
+  let ds = sort (map slotDisplacement ss)
+  in if null ds then 0 else ds !! (length ds `div` 2)
 
 --------------------------------------------------------------------------------
 -- internal OKLab vector helpers

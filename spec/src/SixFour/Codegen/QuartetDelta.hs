@@ -23,13 +23,13 @@ module SixFour.Codegen.QuartetDelta
   ( emitQuartetDeltaGolden
   ) where
 
-import           Data.List (sort)
 import qualified Data.Text as T
 import           Data.Text (Text)
 
 import SixFour.Spec.Color       (OKLab(..))
 import SixFour.Spec.QuartetDelta
-  ( toSlots, slotMean, slotDisplacement, quartetCore, coreColors )
+  ( toSlots, slotMean, slotDisplacement, quartetCore, coreColors
+  , medianDisplacementThreshold )
 
 -- | A deterministic 4×16 OKLab quartet fixture: four 16-slot palettes, one per
 -- frame, each from its own LCG seed so the slots genuinely move (non-zero
@@ -85,9 +85,9 @@ emitQuartetDeltaGolden = T.unlines
   where
     palettes = quartetGoldenPalettes
     slots    = toSlots palettes
-    disps    = sort (map slotDisplacement slots)
-    -- median displacement: guarantees coreColors splits the slots (some in, some out).
-    thr      = disps !! (length disps `div` 2)
+    -- the relative core/motion cut, owned by Spec.QuartetDelta (the Swift port shares it);
+    -- median displacement guarantees coreColors splits the slots (some in, some out).
+    thr      = medianDisplacementThreshold slots
 
 -- ---------------------------------------------------------------------------
 -- Swift-literal emitters (same forms as Codegen.PairTree)

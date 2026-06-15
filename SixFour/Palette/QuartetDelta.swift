@@ -58,6 +58,14 @@ enum QuartetDelta {
             .sorted { ($0.1, $0.0) < ($1.1, $1.0) }
     }
 
+    /// Median per-slot displacement — the relative core/motion cut (mirrors
+    /// `Spec.QuartetDelta.medianDisplacementThreshold`, golden-pinned). Recomputed per quartet;
+    /// `0` for an empty quartet. On a spread of displacements it splits the slots non-trivially.
+    static func medianDisplacementThreshold(_ slots: [[SIMD3<Double>]]) -> Double {
+        let ds = slots.map { slotDisplacement($0) }.sorted()
+        return ds.isEmpty ? 0 : ds[ds.count / 2]
+    }
+
     /// The core-colour set: slot indices whose displacement is `<=` the threshold — the
     /// colours the UI outlines as structural, and the protect-set passed to Act III.
     static func coreColors(_ threshold: Double, _ slots: [[SIMD3<Double>]]) -> [Int] {

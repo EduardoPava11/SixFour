@@ -54,6 +54,10 @@ struct ReviewPhaseField: View {
     /// Whether the cell-native rung picker is revealed (the Save button toggles it).
     /// The picker is cell buttons, NOT a system `Menu` — the screen IS the cell grid.
     @State private var rungPickerOpen = false
+    /// Act II motion outline: when on, `paletteStrip` recedes the high-displacement ("motion")
+    /// quartet slots so the low-displacement "core" colours stand out (a cell-brightness split,
+    /// no strokes/text). Pure projection of `QuartetDelta`; default off ⇒ strip is byte-identical.
+    @State private var motionOutlineOn = false
 
     // The global-palette CREATION control was a VStack FORM — rejected: the cell grid IS the
     // widget, operated by gesture. Rebuilt as gesture-grid tools; the byte-exact backend
@@ -155,13 +159,41 @@ struct ReviewPhaseField: View {
         let frame = surface.cursor < surface.palettesPerFrame.count
             ? surface.palettesPerFrame[surface.cursor] : []
         let padded: [SIMD3<UInt8>] = (0 ..< 256).map { $0 < frame.count ? frame[$0] : ghost }
-        let ordered = GridScript.capture(side: 16).surfaceColors(palette: padded)
+        // Act II motion outline: recede high-displacement ("motion") slots in ORIGINAL slot order,
+        // BEFORE the grid permutation, so the recede carries through `surfaceColors` cell-for-cell
+        // (coreColors returns ORIGINAL-order indices; surfaceColors permutes to grid-rank order).
+        // Off ⇒ `shown == padded`, so the strip is byte-identical to the plain per-frame palette.
+        let core = motionOutlineOn ? motionCoreSet : []
+        let shown: [SIMD3<UInt8>] = motionOutlineOn
+            ? padded.enumerated().map { core.contains($0.offset) ? $0.element : Self.darkenCell($0.element) }
+            : padded
+        let ordered = GridScript.capture(side: 16).surfaceColors(palette: shown)
         return CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gifPx) { c, r in
             let rank = r * 16 + c
             return rank < ordered.count ? ordered[rank] : ghost
         }
         .frame(width: paletteEdge, height: paletteEdge)
-        .accessibilityLabel("Per-frame palette, 256 colours")
+        .accessibilityLabel(motionOutlineOn ? "Per-frame palette, core colours outlined" : "Per-frame palette, 256 colours")
+    }
+
+    /// The Act II "core" slot indices for the FIXED quartet `[0,21,42,63]` — low-displacement
+    /// (structural) colours, per `QuartetDelta` (the motion residual the global collapse discards).
+    /// Cursor-INDEPENDENT: the quartet is built once from those 4 frames; `paletteStrip` then shows
+    /// whichever colour each core slot holds at the current cursor. Empty (no recede) when fewer than
+    /// 4 frames exist. Only evaluated while `motionOutlineOn`.
+    private var motionCoreSet: Set<Int> {
+        let idx = [0, 21, 42, 63].filter { $0 < surface.palettesPerFrame.count }
+        guard idx.count == 4 else { return [] }
+        let fourFrames: [[SIMD3<Double>]] = idx.map { f in
+            let pal = surface.palettesPerFrame[f]
+            return (0 ..< 256).map { i -> SIMD3<Double> in
+                let c = i < pal.count ? pal[i] : SIMD3<UInt8>(20, 20, 24)
+                return SIMD3<Double>(ColorScience.srgb8ToOKLab(c.x, c.y, c.z).simd)
+            }
+        }
+        let slots = QuartetDelta.toSlots(fourFrames)
+        let thr = QuartetDelta.medianDisplacementThreshold(slots)
+        return Set(QuartetDelta.coreColors(thr, slots))
     }
 
     // MARK: - Actions
@@ -219,6 +251,15 @@ struct ReviewPhaseField: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Export 3D LUT for R3D")
             }
+
+            // Act II motion outline — recolours `paletteStrip` to separate the structural
+            // "core" colours from the high-motion ones (a cell-brightness split). Immovable
+            // chrome: it modulates an existing widget's paint, it is NOT a movable widget.
+            Button { motionOutlineOn.toggle() } label: {
+                CellActionButton(icon: .grid3x3, title: "Motion")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Outline motion vs core colours")
 
             Button { surface.step(.retake) } label: {
                 CellActionButton(icon: .retake, title: "Retake")
