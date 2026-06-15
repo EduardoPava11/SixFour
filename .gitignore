@@ -33,3 +33,7 @@ build-device/
 spec/spec-graph*.svg
 spec/spec-graph*.png
 spec/spec.hoo
+
+# Hoogle / Haddock local search artifacts (spec/scripts/spec-docs.sh)
+spec/spec.warn
+spec/spec.hoo
