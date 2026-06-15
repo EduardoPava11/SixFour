@@ -23,6 +23,7 @@ enum SurfacePhase: Equatable {
     case settings
     case locking
     case capturing
+    case browsing
     case review
     case error
     case rendering(RenderStage)
@@ -41,6 +42,7 @@ enum SurfacePhase: Equatable {
         case .settings:         return "settings"
         case .locking:          return "locking"
         case .capturing:        return "capturing"
+        case .browsing:         return "browsing"
         case .review:           return "review"
         case .error:            return "error"
         case .rendering(let s): return "rendering:\(s.rawValue)"
@@ -60,6 +62,8 @@ enum SurfaceEvent: Equatable {
     case closeSettings
     case lockComplete
     case burstComplete
+    case selectFrame
+    case picked4
     case committed
     case retake
     case fault
@@ -75,6 +79,8 @@ enum SurfaceEvent: Equatable {
         case .closeSettings:   return "closeSettings"
         case .lockComplete:    return "lockComplete"
         case .burstComplete:   return "burstComplete"
+        case .selectFrame:     return "selectFrame"
+        case .picked4:         return "picked4"
         case .committed:       return "committed"
         case .retake:          return "retake"
         case .fault:           return "fault"
@@ -102,7 +108,14 @@ func surfaceStep(_ phase: SurfacePhase, _ event: SurfaceEvent) -> SurfacePhase {
     case (.settings, .closeSettings):   return .live
 
     case (.locking, .lockComplete):     return .capturing
-    case (.capturing, .burstComplete):  return .rendering(.quantize)
+    // Act III: the burst no longer wires straight to render — it lands in `.browsing`,
+    // where the user scrubs the 64-frame burst and picks 4 anchor frames. The exactly-4
+    // gate lives in the Continue button (`picks.count == 4`), NOT here: surfaceStep is a
+    // pure (phase, event) -> phase mirror of the spec `step`, with no Surface access, so
+    // `.picked4` is UNCONDITIONAL exactly as the Haskell δ models it (δ stays total).
+    case (.capturing, .burstComplete):  return .browsing
+    case (.browsing, .selectFrame):     return .browsing               // self-loop; picks mutate in Σ
+    case (.browsing, .picked4):         return .rendering(.quantize)   // the old burst target
 
     // The verified Zig pipeline advances stage by stage.
     case (.rendering(.quantize), .stageDone(.quantize)):           return .rendering(.dither)
@@ -164,6 +177,18 @@ final class Surface {
     /// The Z₆₄ playback cursor — the current frame `0..<64`. Advanced by κ each tick.
     var cursor: Int = 0
 
+    /// OUT-OF-BAND Σ (NOT in the FSM alphabet) — the 4 ORDERED anchor frames the user
+    /// picks in `.browsing` (Act III). Cap 4, ordered; these are the 4⁴ quad anchors
+    /// (USER DECISION 2026-06-08). CONSUMER (today): the Review **4⁴ quartet** —
+    /// `ReviewPhaseField.motionSlots` reads `surface.picks` to choose the 4 frames the
+    /// QuartetDelta motion outline analyses (the Browse → 4⁴ loop). NOTE: the picks do NOT
+    /// (yet) shape the rendered GIF bytes — the deterministic render runs autonomously from
+    /// `.shutterTap`; wiring picks into the quantize/collapse pivot is a separate follow-on.
+    /// Same out-of-band category as `palettesPerFrame`/`indexCube`/`cursor`/`liftedWidget`:
+    /// the FSM math never touches it (`SelectFrame` carries no payload in the alphabet; the
+    /// frame index lives here in σ). Reset to `[]` on `.live`.
+    var picks: [Int] = []
+
     /// OUT-OF-BAND UI state (NOT in the FSM alphabet): which ColorWidget is currently LIFTED for
     /// a move, or `nil`. The influence-field ground reads this to CALM the radiation while a
     /// widget is being lifted out of the field (order is being rearranged → the chaos recedes).
@@ -192,6 +217,31 @@ final class Surface {
     /// `surfaceStep` and is the only writer of `phase`.
     func step(_ event: SurfaceEvent) {
         phase = surfaceStep(phase, event)
+        // Out-of-band Σ housekeeping: a fresh burst starts unselected (retake → `.live`
+        // clears the anchors so Continue is disabled until the user authors 4 again).
+        if phase == .live { picks = [] }
+    }
+
+    // MARK: - Browsing picks (out-of-band Σ — Act III)
+
+    /// Toggle frame `f` in the ordered pick list: a re-tap REMOVES it; otherwise it is
+    /// APPENDED (preserving pick order) while fewer than 4 are chosen — the 5th tap is
+    /// rejected (the cap is 4, the quad). The `.selectFrame` event is fired by the caller
+    /// (the FSM self-loop); this mutates only the out-of-band σ field, never `phase`.
+    func togglePick(_ f: Int) {
+        guard f >= 0, f < SixFourPlaybackClock.frameCount else { return }
+        if let i = picks.firstIndex(of: f) {
+            picks.remove(at: i)
+        } else if picks.count < 4 {
+            picks.append(f)
+        }
+    }
+
+    /// Move the playback cursor to frame `f` directly (the finger-driven scrub in
+    /// `.browsing`). Clamps to `0..<64`; writes `cursor` with NO FSM event (κ does not
+    /// auto-advance the cursor while browsing — the rail drives it).
+    func scrubCursor(to f: Int) {
+        cursor = max(0, min(SixFourPlaybackClock.frameCount - 1, f))
     }
 
     // MARK: κ-fed cursor advance (Z₆₄)
@@ -334,6 +384,8 @@ extension SurfaceEvent {
         case "closeSettings": return .closeSettings
         case "lockComplete":  return .lockComplete
         case "burstComplete": return .burstComplete
+        case "selectFrame":   return .selectFrame
+        case "picked4":       return .picked4
         case "committed":     return .committed
         case "retake":        return .retake
         case "fault":         return .fault

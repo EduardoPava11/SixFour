@@ -212,12 +212,16 @@ struct ReviewPhaseField: View {
         return Set(QuartetDelta.coreColors(thr, slots))
     }
 
-    /// The 256 OKLab quartet trajectories for the FIXED `[0,21,42,63]` frames — factored
-    /// out of `motionCoreSet` so the threshold slider's range can read the slot
-    /// displacements without recomputing the quartet. Computed (never stored) to stay
-    /// in sync with `surface.palettesPerFrame`. Empty when fewer than 4 frames exist.
+    /// The 256 OKLab quartet trajectories for the quartet's 4 anchor frames — factored out of
+    /// `motionCoreSet` so the threshold slider's range can read the slot displacements without
+    /// recomputing the quartet. The anchors are the user's **Act III pick-four** (`surface.picks`,
+    /// in pick order) when present, else the default `[0,21,42,63]` — this is the Browse → 4⁴
+    /// loop: the frames chosen in `.browsing` decide which 4 the motion outline analyses.
+    /// Computed (never stored) to stay in sync with `surface.palettesPerFrame`. Empty when fewer
+    /// than 4 valid frames exist.
     private var motionSlots: [[SIMD3<Double>]] {
-        let idx = [0, 21, 42, 63].filter { $0 < surface.palettesPerFrame.count }
+        let anchors = surface.picks.count == 4 ? surface.picks : [0, 21, 42, 63]
+        let idx = anchors.filter { $0 < surface.palettesPerFrame.count }
         guard idx.count == 4 else { return [] }
         let fourFrames: [[SIMD3<Double>]] = idx.map { f in
             let pal = surface.palettesPerFrame[f]

@@ -33,6 +33,8 @@ enum PhaseField {
             CapturingPhaseField(surface: surface, clock: clock, settings: settings)
         case .capturing:
             CapturingPhaseField(surface: surface, clock: clock, settings: settings)
+        case .browsing:
+            BrowsingPhaseField(surface: surface, clock: clock, settings: settings)
         case .rendering(let stage):
             RenderingPhaseField(stage: stage, surface: surface, clock: clock, settings: settings)
         case .review:

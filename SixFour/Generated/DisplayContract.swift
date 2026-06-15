@@ -41,13 +41,13 @@ public enum SixFourDisplay {
     /// screen (`SixFour.Spec.Display.lawPhaseIsCellGrid`): capture → render → review
     /// are cell updates on the ONE surface. The Swift `Surface.phase` port uses these
     /// exact tokens.
-    public static let phases: [String] = ["bootstrap", "unauthorized", "live", "settings", "locking", "capturing", "review", "error", "rendering:quantize", "rendering:dither", "rendering:significance", "rendering:palette", "rendering:encode"]
+    public static let phases: [String] = ["bootstrap", "unauthorized", "live", "settings", "locking", "capturing", "browsing", "review", "error", "rendering:quantize", "rendering:dither", "rendering:significance", "rendering:palette", "rendering:encode"]
     /// The FSM events (transition triggers only; out-of-band data lives in Σ).
-    public static let events: [String] = ["sessionReady", "authDenied", "shutterTap", "openSettings", "closeSettings", "lockComplete", "burstComplete", "committed", "retake", "fault", "stageDone:quantize", "stageDone:dither", "stageDone:significance", "stageDone:palette", "stageDone:encode"]
+    public static let events: [String] = ["sessionReady", "authDenied", "shutterTap", "openSettings", "closeSettings", "lockComplete", "burstComplete", "selectFrame", "picked4", "committed", "retake", "fault", "stageDone:quantize", "stageDone:dither", "stageDone:significance", "stageDone:palette", "stageDone:encode"]
     /// The canonical happy-path event sequence + its phase trace (scanl step
     /// Bootstrap). The cross-language pin: the Swift `step` port must reproduce it.
-    public static let goldenHappyPathEvents: [String] = ["sessionReady", "shutterTap", "lockComplete", "burstComplete", "stageDone:quantize", "stageDone:dither", "stageDone:significance", "stageDone:palette", "stageDone:encode", "committed", "retake"]
-    public static let goldenHappyPathTrace: [String] = ["bootstrap", "live", "locking", "capturing", "rendering:quantize", "rendering:dither", "rendering:significance", "rendering:palette", "rendering:encode", "rendering:encode", "review", "live"]
+    public static let goldenHappyPathEvents: [String] = ["sessionReady", "shutterTap", "lockComplete", "burstComplete", "selectFrame", "selectFrame", "selectFrame", "selectFrame", "picked4", "stageDone:quantize", "stageDone:dither", "stageDone:significance", "stageDone:palette", "stageDone:encode", "committed", "retake"]
+    public static let goldenHappyPathTrace: [String] = ["bootstrap", "live", "locking", "capturing", "browsing", "browsing", "browsing", "browsing", "browsing", "rendering:quantize", "rendering:dither", "rendering:significance", "rendering:palette", "rendering:encode", "rendering:encode", "review", "live"]
 
     /// T4 — the pitch of a governed view = atomPt × b_i (there is no free cellPt).
     @inline(__always)
