@@ -467,7 +467,7 @@ struct PaletteCloudView: View {
                 } label: {
                     CellText(plane.label, rows: 9, ink: isSel ? .white : Color(srgb8: SIMD3(140, 140, 140)))
                         .padding(.horizontal, GlobalLattice.pt(3))
-                        .frame(minHeight: 44)
+                        .frame(minHeight: GlobalLattice.gif(GlobalLattice.touchFloorCells))  // 11 cells = 44pt (was a point literal)
                         .background(Color(srgb8: SFTheme.ledGhost))
                         .border(Color(srgb8: isSel ? SIMD3(96, 165, 250) : SFTheme.ledGhost),
                                 width: GlobalLattice.pt(1))

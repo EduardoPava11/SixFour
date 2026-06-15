@@ -66,24 +66,58 @@ because `11·4 = 44` lands the HIG floor on a whole-cell boundary.
 
 ---
 
-## 3. The utility-widget vocabulary, in N×M
+## 3. The widget REGISTRY — every current widget, in N×M
 
-Canonical chrome widgets, authored as cell blocks (not points):
+Surveyed 2026-06-15 against the live app. **Every interactive widget is now
+cell-authored** (the lone point-literal holdout, `PaletteCloudView` plane buttons
+`minHeight: 44`, was migrated to `gif(touchFloorCells)`). Footprint = `W × H` cells
+at the 4 pt atom; `detent` = does dragging it cross cell boundaries that should fire
+a frame-locked `CellTick` (§4).
 
-| Widget | Footprint (cells) | Notes |
-|---|---|---|
-| Square icon toggle (gear, Motion) | **12 × 12** | secondary control; icon centered, 48 pt |
-| Labelled action button (Save, Retake, **Motion**) | **11 H × N W** | height = touch floor; width hugs content in whole cells (icon 11 + gutter + label) |
-| Segmented selector (K-means / Wu / Octree) | **3 · (11 H × s W)** | each segment ≥ 11×11; lit segment = active |
-| Cell slider (threshold, percentile) | **M W × 11 H** | 3-cell-tall lit track centred in an 11-cell touch band; **knob = 1 lit cell**; drag quantises to `step` cells |
-| Data widgets (see `SIXFOUR-WIDGETS.md`) | 16² / 4⁴ / 2⁸ | the palette/cube surfaces |
+### Chrome / utility widgets (`Components/CellChrome.swift`, `CellControls.swift`)
+| Widget | File | Footprint (cells) | Gesture | Detent |
+|---|---|---|---|---|
+| `CellActionButton` | CellChrome.swift:77 | **11 H × N W** | tap | — |
+| `CellSlider` | CellChrome.swift:123 | **M W × 11 H**, knob = 1 lit cell | **drag** | **yes** (caller-flushed today) |
+| `CellSelector` (segmented) | CellControls.swift:14 | **N · (segW × 11 H)** | tap | — |
+| `CellToggle` | CellControls.swift:51 | **11 H × N W** | tap | — |
+| `CellSymbol` / `CellIcon` | CellChrome.swift:10 / CellSprite.swift:124 | **12 × 12** (gear 24×24 @ subPt) | — | — |
+| `CellButton` (shutter) | CellSprite.swift:84 | **34 × 34** (`shutterCells`) | tap | — |
+| `CellText` / `CellDigits` / `CellRing` | CellText/CellGlyph/CellSprite | content-sized in cells | — | — |
+| `GlassIconButton` | GlassControls.swift:26 | **11 × 11** (44 pt, `glassIconButtonSize`) | tap | — |
 
-**Worked example — the shipped "Motion" toggle** (`ReviewPhaseField.actionRow`,
-`CellActionButton(icon: .grid3x3, title: "Motion")`): today it is a labelled action
-button whose height is set by `minHeight: 44` (= **11 cells**, correct) but is *point-
-authored*, not cell-authored. Under this language it is an **`11 H × N W`** block; the
-next refactor is to express `CellActionButton` footprints as `N×M` cells directly
-(see §5), so the chrome is counted in the same atom as the hero and the palette strip.
+### Surface widgets (`UI/Surface/*PhaseField.swift`, `MovableColorWidget`)
+| Widget | File | Footprint (cells) | Gesture | Detent |
+|---|---|---|---|---|
+| Motion toggle | ReviewPhaseField.swift:332 | **11 H × N W** (`CellActionButton`) | tap | — |
+| **Motion threshold slider** | ReviewPhaseField.swift:353 | **16 W × 11 H** (`CellSlider`) | **drag** | **yes — frame-locked ✓** (the reference impl) |
+| `MovableColorWidget` (Field64/Palette16) | MovableColorWidget.swift | **64²** / **16²** footprint | long-press → **drag** | **yes — per `cellsCrossed`, NOT yet frame-locked** |
+| group-pick macro-grid | ReviewPhaseField groupPickField | **16 cells** (4×4 of 2×2 quads) | tap | — |
+
+### Selectors built on `CellSelector` (all cell-authored, 11 H)
+`RepresentationSelector`, `BranchingSelector`, `ScopeSelector`, `CloudProjection`
+selector — each `N · (segW × 11 H)`, tap.
+
+### Data surfaces (the picture, not chrome — see `SIXFOUR-WIDGETS.md`)
+`PaletteGridView` 16² · `PaletteTreeView` 16² treemap · `PaletteCloudView` 256-dot
+3D (orbit drag, *not* cell-quantised — a continuous 3-D rotation, deliberately
+outside the detent contract) · the 64² GIFA hero.
+
+### Detent consistency gap (the next build-on)
+Three widgets cross cells on drag, but only ONE is frame-locked:
+- **Motion threshold slider** — frame-locked ✓ (flushes on `clock.tick`, §4).
+- **`CellSlider`** (generic) — supports the drag + `step` quantisation, but detent
+  firing is **caller-added**; it should frame-lock natively so every slider inherits
+  the contract.
+- **`MovableColorWidget`** — fires `Haptics.play(1)` per `cellsCrossed` boundary
+  *directly*, gated only by `tickEvery`, **not coalesced to the 20 fps frame**. It
+  predates the contract and should be brought under `lawTicksFrameMonotone`.
+
+So "defining the widgets in this framework" is footprint-complete; the open work is
+**unifying the detent**: factor the slider's frame-locked flush into one reusable
+mechanism (a `.cellDetent(on: clock)` modifier or native `CellSlider` flush) and route
+`MovableColorWidget` through it — then every drag widget obeys one cell = one frame =
+one tick.
 
 ---
 
@@ -139,17 +173,22 @@ device-reproducible haptic detent for an N×M cell-grid UI**, built on the same
 
 ---
 
-## 5. Next steps (not yet built)
-1. **Author chrome in cells.** Give `CellActionButton` / selectors an explicit
-   `N×M` footprint API (cells, not `minHeight: 44`), so every widget is counted in
-   `gifPx`. The Motion toggle is the first migration.
-2. **Spec the frame-locked detent.** Add `lawTicksFrameMonotone` +
-   `lawDetentTriadCoincident` to `Spec.CellMechanics`, golden-pin, port the Swift
-   scheduler leaf onto the existing 20 fps clock.
-3. **First haptic widget = the threshold slider** for the QuartetDelta overlay
-   (`M×11`, knob = 1 lit cell): each cell the knob crosses re-thresholds the core
-   set *and* fires one frame-locked tick — the smallest end-to-end demo of the
-   contract.
+## 5. Status & next steps
+**Done:** (1) chrome authored in cells — `CellActionButton`/`CellSlider`/`CellSelector`/
+`CellToggle` carry explicit `N×M` footprint params; the last point-literal holdout
+(`PaletteCloudView` plane buttons) is migrated. (2) The frame-locked detent is spec'd
+(`lawTicksFrameMonotone` + `lawDetentTriadCoincident` on `Spec.CellMechanics`,
+golden-pinned). (3) The QuartetDelta threshold slider is the first frame-locked widget.
+
+**Open — unify the detent (the registry's §3 gap):**
+1. **Factor one reusable flush.** Extract the Motion slider's `clock.tick` flush into a
+   `.cellDetent(on:clock, cellsCrossed:)` modifier (or a native `CellSlider` flush) so
+   detent firing is not re-hand-rolled per call site.
+2. **Frame-lock `MovableColorWidget`.** Route its per-`cellsCrossed` `Haptics.play(1)`
+   through that mechanism so the drag haptic is coalesced to ≤1/frame — bringing the
+   oldest detent widget under `lawTicksFrameMonotone`. Device-feel-verify on iPhone.
+3. **Lint.** A grep lint that flags any new `minHeight:`/point literal on an interactive
+   widget (keep the registry footprint-complete as the app grows).
 
 Sources: [UXPin](https://www.uxpin.com/studio/blog/ui-grids-how-to-guide/) ·
 [Smashing](https://www.smashingmagazine.com/2017/12/building-better-ui-designs-layout-grids/) ·
