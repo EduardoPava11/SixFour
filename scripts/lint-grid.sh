@@ -14,6 +14,9 @@
 #   LINT-SINGLE-PITCH  — (capture HUD, hard) every dimension goes through
 #                        GlobalLattice.pt()/.gif(); (other screens, WARN) legacy
 #                        bare-literal debt is reported, not yet failed.
+#   LINT-DETENT        — the cellTick haptic (`Haptics.play(1)`) is fired ONLY by the
+#                        frame-locked flush in CellDetent.swift (≤1/20fps-frame); a direct
+#                        `play(1)` elsewhere is an un-frame-locked detent.
 #   LINT-GOLDEN        — the Spec.* sources of truth + generated contracts exist.
 #
 # SCOPE: the composition layer (screens that ASSEMBLE widgets). Primitive internals
@@ -137,6 +140,23 @@ if [ -n "$(printf '%s' "$pitch_hits" | tr -d '[:space:]')" ]; then
   note "bare point literal bypassing GlobalLattice.pt()/.gif() (shipped, non-preview):"
   printf '%s' "$pitch_hits" | sed 's/^/      /'
 else ok "every shipped dimension goes through GlobalLattice.pt()/.gif() (single pitch)"; fi
+
+# ── LINT-DETENT ────────────────────────────────────────────────────────────
+# The frame-locked cell detent (Spec.CellMechanics.lawTicksFrameMonotone): the
+# cellTick haptic `Haptics.play(1)` may be fired ONLY by the one coalescing flush
+# in CellDetent.swift (≤1 Taptic per 20 fps frame). A direct `play(1)` anywhere
+# else is an un-frame-locked detent that can outrun the tick on a fast drag —
+# route it through `.cellDetent(tick:every:position:)`, or, if it is a DISCRETE
+# event (not a per-cell detent), use `Haptics.selection()`/`.impact()`.
+# See docs/SIXFOUR-CELL-WIDGET-LANGUAGE.md §4.
+echo "GRID lint — frame-locked detent (cellTick via .cellDetent only)"
+detent_hits=$(grep -rn 'Haptics\.play(1)' "$UI_DIR" --include='*.swift' 2>/dev/null \
+  | grep -v 'CellDetent.swift' \
+  | grep -vE ':[0-9]+:[[:space:]]*//')      # ignore comment lines that merely mention it
+if [ -n "$detent_hits" ]; then
+  note "cellTick play(1) fired outside CellDetent.swift (un-frame-locked detent):"
+  printf '%s\n' "$detent_hits" | sed 's/^/      /'
+else ok "cellTick play(1) is fired only by the frame-locked .cellDetent flush"; fi
 
 # ── LINT-GOLDEN ────────────────────────────────────────────────────────────
 echo "GRID lint — golden sources of truth"

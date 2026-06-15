@@ -97,7 +97,8 @@ struct LivePhaseField: View {
                 let dy = value.translation.height
                 guard abs(dx) > abs(dy), abs(dx) >= GlobalLattice.gif(6) else { return }
                 settings.captureLook = dx < 0 ? settings.captureLook.next : settings.captureLook.prev
-                Haptics.play(1)
+                Haptics.selection()   // discrete look-CHANGE confirmation — NOT a cell detent
+                                      // (cellTick `play(1)` is reserved for the frame-locked .cellDetent)
             }
     }
 

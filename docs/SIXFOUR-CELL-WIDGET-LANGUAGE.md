@@ -183,10 +183,15 @@ backs both the slider and `MovableColorWidget`; every drag widget is frame-locke
 mechanism (§3). Device-feel-verify the movable-widget drag on iPhone (the haptic cadence
 changed from per-touch to per-frame).
 
+**Done:** (5) **`LINT-DETENT`** added to `scripts/lint-grid.sh` (the CI gate): the cellTick
+haptic `Haptics.play(1)` may be fired ONLY by the frame-locked flush in `CellDetent.swift`;
+a direct `play(1)` anywhere else is an un-frame-locked detent and fails the build. (Point
+literals were already policed by `LINT-SINGLE-PITCH`.) The new rule immediately caught a real
+misuse — the look-swipe commit in `LivePhaseField` was firing the *cellTick* token for a
+discrete event; fixed to `Haptics.selection()`.
+
 **Open:**
-1. **Lint.** A grep lint flagging any new `minHeight:`/point literal on an interactive
-   widget (keep the registry footprint-complete as the app grows).
-2. **`Spec` the detent count.** Optionally drive `.cellDetent`'s `every` and the tick
+1. **`Spec` the detent count.** Optionally drive `.cellDetent`'s `every` and the tick
    schedule from a golden so the Swift cadence is pinned to `lawTicksFrameMonotone`, not
    just informed by it.
 
