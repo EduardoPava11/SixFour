@@ -64,6 +64,10 @@ enum SurfaceEvent: Equatable {
     case burstComplete
     case selectFrame
     case picked4
+    case lookSwipe
+    case scrubTick
+    case cutLever
+    case exportLut
     case committed
     case retake
     case fault
@@ -81,6 +85,10 @@ enum SurfaceEvent: Equatable {
         case .burstComplete:   return "burstComplete"
         case .selectFrame:     return "selectFrame"
         case .picked4:         return "picked4"
+        case .lookSwipe:       return "lookSwipe"
+        case .scrubTick:       return "scrubTick"
+        case .cutLever:        return "cutLever"
+        case .exportLut:       return "exportLut"
         case .committed:       return "committed"
         case .retake:          return "retake"
         case .fault:           return "fault"
@@ -386,6 +394,10 @@ extension SurfaceEvent {
         case "burstComplete": return .burstComplete
         case "selectFrame":   return .selectFrame
         case "picked4":       return .picked4
+        case "lookSwipe":     return .lookSwipe
+        case "scrubTick":     return .scrubTick
+        case "cutLever":      return .cutLever
+        case "exportLut":     return .exportLut
         case "committed":     return .committed
         case "retake":        return .retake
         case "fault":         return .fault

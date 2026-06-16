@@ -64,7 +64,8 @@ barycenter / maximin; the NN learns this barycenter.)
 == 5. The authoring STORY (Acts I–IV) — the user-facing pipeline the NN lives in
 "SixFour.Spec.StageA" (Act I, @16²@ per-frame) · "SixFour.Spec.QuartetDelta" (Act II, @4⁴@ quartet core) ·
 "SixFour.Spec.HaarRibbon" (Act III, @2⁸@ Haar abstraction) · "SixFour.Spec.Export" (Act IV, the global pack
-@{16³,64³,256³}@) · "SixFour.Spec.Upscale256" (Act IV, the residual-seeded @256³@ super-res of the export pack).
+@{16³,64³,256³}@) · "SixFour.Spec.Upscale256" (Act IV, the residual-seeded @256³@ super-res of the export pack) ·
+"SixFour.Spec.ActDecisions" (the per-act decision table, each act <= 3 real Display events).
 See @docs/SIXFOUR-PALETTE-STORY-WORKFLOW.md@.
 
 == 6. Dither & index encoding

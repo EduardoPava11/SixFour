@@ -144,7 +144,7 @@ data Event
   = SessionReady | AuthDenied
   | ShutterTap | OpenSettings | CloseSettings
   | LockComplete | BurstComplete
-  | SelectFrame | Picked4
+  | SelectFrame | Picked4 | LookSwipe | ScrubTick | CutLever | ExportLut
   | StageDone RenderStage | Committed
   | Retake | Fault
   deriving (Eq, Show)
@@ -160,7 +160,8 @@ allPhases =
 allEvents :: [Event]
 allEvents =
   [ SessionReady, AuthDenied, ShutterTap, OpenSettings, CloseSettings
-  , LockComplete, BurstComplete, SelectFrame, Picked4, Committed, Retake, Fault ]
+  , LockComplete, BurstComplete, SelectFrame, Picked4, Committed, Retake, Fault
+  , LookSwipe, ScrubTick, CutLever, ExportLut ]
   ++ [ StageDone st | st <- [minBound .. maxBound] ]
 
 -- | The successor render stage, or @Nothing@ at the last (@Encode@).
@@ -239,6 +240,10 @@ eventName LockComplete   = "lockComplete"
 eventName BurstComplete  = "burstComplete"
 eventName SelectFrame    = "selectFrame"
 eventName Picked4        = "picked4"
+eventName LookSwipe      = "lookSwipe"
+eventName ScrubTick      = "scrubTick"
+eventName CutLever       = "cutLever"
+eventName ExportLut      = "exportLut"
 eventName (StageDone st) = "stageDone:" ++ stageName st
 eventName Committed      = "committed"
 eventName Retake         = "retake"
