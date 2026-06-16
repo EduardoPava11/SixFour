@@ -46,6 +46,7 @@ import qualified Properties.CellMechanics as CellMechanics
 import qualified Properties.WidgetDescriptor as WidgetDescriptor
 import qualified Properties.Ownership    as Ownership
 import qualified Properties.Display      as Display
+import qualified Properties.ActDecisions as ActDecisions
 import qualified Properties.FrontProjection as FrontProjection
 import qualified Properties.VoxelFit     as VoxelFit
 import qualified Properties.CellShapes   as CellShapes
@@ -143,6 +144,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , WidgetDescriptor.tests
   , Ownership.tests
   , Display.tests
+  , ActDecisions.tests
   , FrontProjection.tests
   , VoxelFit.tests
   , CellShapes.tests

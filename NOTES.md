@@ -7,6 +7,66 @@ newest first.
 
 ---
 
+## 2026-06-15 — Spec-first declutter: from a Haskell bloat audit to a decisions-per-act cap law
+
+> **Session theme:** the cluttered Review screen is a *symptom of a flat spec*. The fix is
+> not rearranging buttons — it is adding the missing spec **layer** that bounds how many
+> decisions an act may expose. Heavily workflow-driven (multi-agent ground → design →
+> implement → **adversarial review**); the review repeatedly caught vacuous laws / false
+> "byte-identical" / decorative controls before they reached a commit. **All on master,
+> 785 Haskell tests + simulator BUILD SUCCEEDED.**
+
+### The arc (what shipped to master)
+- **Bloat audit** (`wf-haskell-bloat-audit`) → the spec is **not** bloated, it is
+  *spec-ahead-of-implementation*. Deleted only 1 genuinely stranded module
+  (`Spec.AddressPicker`); KEPT core proofs (`LookNetCompose` σ-equivariance, `LookCategory`
+  north-star). **Lesson: TEST_ONLY ≠ bloat in a verified repo.**
+- **Activate, don't delete.** `Spec.QuartetDelta` (palette-story Act II, 4⁴) shipped as the
+  Review **motion-outline overlay** + its **frame-locked threshold slider**.
+- **Cell-widget framework.** Utility widgets = **N×M GIF-pixel cells** (`docs/SIXFOUR-CELL-WIDGET-LANGUAGE.md`
+  registry; app is 100% cell-authored). The **frame-locked 20 fps detent** (`CellDetent` +
+  `lawTicksFrameMonotone`/`lawDetentTriadCoincident`) unified across every drag widget;
+  **`LINT-DETENT`** gates it (caught a real cellTick misuse on first run).
+- **Acts × Widget matrix** (`docs/SIXFOUR-ACTS-AND-WIDGETS.md`) — reconciled the two "Act"
+  numbering systems: lifecycle acts (Live→Capture→Browse→Render→Review) vs palette-story acts
+  (16²/4⁴/2⁸/export = the **curation sub-acts inside Review**).
+- **2⁸ collapse-lever cut slider** (preview-only). cut→export found to need a **byte-exact
+  genome-contract extension** (Swift-only, b16-first) — designed (`docs/SIXFOUR-CUT-EXPORT-CONTRACT.md`),
+  deferred behind greenlight.
+- **Form-follows-function reshape** (`docs/SIXFOUR-HOLISTIC-FORM-FUNCTION.md`): Review's
+  8-button toolbar → **Ship · Refine · Retake**. "One cube, two gestures": SEARCH (navigate)
+  + MODIFY (write the table).
+- **THE KEYSTONE — `Spec.ActDecisions`** (`docs/SIXFOUR-LAYERED-ACTS-AND-SCREEN-MAP.md`).
+  The clutter hole was a *void* between `Spec.Display` (which act?) and `Spec.CellMechanics`
+  (how does one touch feel?): **no law bounded an act's decision count** — Review's 8 buttons
+  violated zero laws. New layer `Act → ≤3 Decisions → Surface → one Completion` with the
+  keystone **`maxDecisionsPerAct = 3`**, EMPIRICALLY proven (a 4th decision fails `cabal test`).
+  8 laws, all skeptic-verified non-vacuous (golden = hand-written literals; `lawNoButtons`
+  asserts exactly 4 cell-field surfaces; `ShutterTap` dropped from Live's decisions = the
+  completer). **Spec-first: NO UI router yet.**
+- **Act III browsing** = a real `Browsing` Display phase + `BrowsingPhaseField` + `picks→4⁴`
+  wiring (merged from `feat/act3-browsing`).
+- **Build/signing.** Pinned `DEVELOPMENT_TEAM` in `project.yml` (xcodegen was wiping it);
+  documented the gitignored-pbxproj-drift + the vanishing-sim-runtime traps (compile via
+  `generic/platform=iOS Simulator ARCHS=arm64`).
+
+### ⚠ Caveats for the next session
+- **Act III flow is DEVICE-UNVERIFIED.** Re-targeting `BurstComplete→Browsing` inserts a
+  mandatory browse step + a `SurfaceView.pendingOutput` engine deferral that the simulator
+  cannot exercise (no camera/burst). Merged per user request; if it misbehaves on device,
+  revert `e7bc25d`'s flow change (the spec/UI scaffold can stay).
+- **Device build** needs the Apple ID in Xcode → Accounts (team `QFTX3897B7` is pinned but
+  the account must be logged in) + `xcodegen generate` after any branch switch.
+
+### Next
+1. **The router slice** — wire the Swift UI to render affordances ONLY from
+   `ActDecisionsContract.swift`, so a control with no `Decision` row is *unrepresentable*
+   (the spec stops describing the UI and starts generating it; the payoff of the cap law).
+2. cut→export byte-exact contract extension (greenlit design, Swift-only b16-first).
+3. The deferred Refine wizard sub-FSM (one decision per screen, Search→Modify).
+
+---
+
 ## 2026-06-10 — Swipe-to-LOOK + R3D `.cube` LUT extraction (one transform, two projections)
 
 > **Session theme:** "a look IS a LUT." Brought the GIF→LUT idea from

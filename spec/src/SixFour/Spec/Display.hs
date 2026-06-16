@@ -131,6 +131,7 @@ data Phase
   | Settings               -- ^ in-surface settings (a phase, not a screen)
   | Locking                -- ^ exposure / focus / white-balance locking
   | Capturing              -- ^ the 64-frame burst in flight
+  | Browsing               -- ^ scrub the 64-frame burst, pick 4 anchor frames (Act III)
   | Rendering RenderStage  -- ^ the Zig kernels emitting bytes, stage by stage
   | Review                 -- ^ the committed GIF / cube, scrubbing on κ
   | Error                  -- ^ a faulted kernel / session
@@ -143,6 +144,7 @@ data Event
   = SessionReady | AuthDenied
   | ShutterTap | OpenSettings | CloseSettings
   | LockComplete | BurstComplete
+  | SelectFrame | Picked4 | LookSwipe | ScrubTick | CutLever | ExportLut
   | StageDone RenderStage | Committed
   | Retake | Fault
   deriving (Eq, Show)
@@ -151,14 +153,15 @@ data Event
 -- and reachability laws + the codegen contract.
 allPhases :: [Phase]
 allPhases =
-  [ Bootstrap, Unauthorized, Live, Settings, Locking, Capturing, Review, Error ]
+  [ Bootstrap, Unauthorized, Live, Settings, Locking, Capturing, Browsing, Review, Error ]
   ++ [ Rendering st | st <- [minBound .. maxBound] ]
 
 -- | Every event (finite — 'StageDone' expands over the 5 stages).
 allEvents :: [Event]
 allEvents =
   [ SessionReady, AuthDenied, ShutterTap, OpenSettings, CloseSettings
-  , LockComplete, BurstComplete, Committed, Retake, Fault ]
+  , LockComplete, BurstComplete, SelectFrame, Picked4, Committed, Retake, Fault
+  , LookSwipe, ScrubTick, CutLever, ExportLut ]
   ++ [ StageDone st | st <- [minBound .. maxBound] ]
 
 -- | The successor render stage, or @Nothing@ at the last (@Encode@).
@@ -177,7 +180,9 @@ step ph ev = case (ph, ev) of
   (Live,        OpenSettings)  -> Settings
   (Settings,    CloseSettings) -> Live
   (Locking,     LockComplete)  -> Capturing
-  (Capturing,   BurstComplete) -> Rendering minBound               -- → Quantize
+  (Capturing,   BurstComplete) -> Browsing                         -- Act III: scrub & pick 4
+  (Browsing,    SelectFrame)   -> Browsing                         -- self-loop; picks mutate in Σ
+  (Browsing,    Picked4)       -> Rendering minBound               -- the OLD burst target → Quantize
   (Rendering s, StageDone s')
     | s == s'                  -> maybe ph Rendering (nextStage s)  -- advance; hold at Encode
   (Rendering _, Committed)     -> Review                           -- the ONLY edge into Review
@@ -200,7 +205,7 @@ phaseField ph s = take n (content ++ repeat neutral)
       Bootstrap    -> []
       Unauthorized -> []
       Error        -> []
-      _            -> projGif s
+      _            -> projGif s   -- incl. Browsing (the scrub view): a full cell-field
 
 -- | Stable string name of a render stage (the cross-language contract token).
 stageName :: RenderStage -> String
@@ -219,6 +224,7 @@ phaseName Live           = "live"
 phaseName Settings       = "settings"
 phaseName Locking        = "locking"
 phaseName Capturing      = "capturing"
+phaseName Browsing       = "browsing"
 phaseName (Rendering st) = "rendering:" ++ stageName st
 phaseName Review         = "review"
 phaseName Error          = "error"
@@ -232,17 +238,24 @@ eventName OpenSettings   = "openSettings"
 eventName CloseSettings  = "closeSettings"
 eventName LockComplete   = "lockComplete"
 eventName BurstComplete  = "burstComplete"
+eventName SelectFrame    = "selectFrame"
+eventName Picked4        = "picked4"
+eventName LookSwipe      = "lookSwipe"
+eventName ScrubTick      = "scrubTick"
+eventName CutLever       = "cutLever"
+eventName ExportLut      = "exportLut"
 eventName (StageDone st) = "stageDone:" ++ stageName st
 eventName Committed      = "committed"
 eventName Retake         = "retake"
 eventName Fault          = "fault"
 
 -- | The canonical happy-path event sequence: bootstrap → live → lock → burst →
--- render(5 stages) → commit → review → retake. Emitted as 'goldenPhaseTrace' for the
--- cross-language @step@ pin.
+-- browse (scrub + pick 4) → render(5 stages) → commit → review → retake. Emitted as
+-- 'goldenPhaseTrace' for the cross-language @step@ pin.
 goldenHappyPath :: [Event]
 goldenHappyPath =
   [ SessionReady, ShutterTap, LockComplete, BurstComplete
+  , SelectFrame, SelectFrame, SelectFrame, SelectFrame, Picked4
   , StageDone Quantize, StageDone Dither, StageDone Significance
   , StageDone Palette, StageDone Encode, Committed, Retake ]
 
