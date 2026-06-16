@@ -51,9 +51,13 @@ struct ReviewPhaseField: View {
     /// The rung currently being produced off-thread (nil = idle). Drives the Save
     /// button's progress label + disables it so the maximin collapse can't double-fire.
     @State private var exporting: LadderExport.Rung?
-    /// Whether the cell-native rung picker is revealed (the Save button toggles it).
-    /// The picker is cell buttons, NOT a system `Menu` — the screen IS the cell grid.
-    @State private var rungPickerOpen = false
+    /// Holistic form-follows-function reshape (docs/SIXFOUR-HOLISTIC-FORM-FUNCTION.md):
+    /// the Review chrome is ONE primary row {Ship · Refine · Retake}. `shipOpen` discloses
+    /// the export options (share the committed GIF + the ladder rungs); `refineOpen` reveals
+    /// the optional palette SEARCH + MODIFY tools (one at a time). Default = both closed, so
+    /// Review reads as "here is your GIF — Ship it, Refine it, or Retake."
+    @State private var shipOpen = false
+    @State private var refineOpen = false
     /// Act II motion outline: when on, `paletteStrip` recedes the high-displacement ("motion")
     /// quartet slots so the low-displacement "core" colours stand out (a cell-brightness split,
     /// no strokes/text). Pure projection of `QuartetDelta`; default off ⇒ strip is byte-identical.
@@ -309,164 +313,167 @@ struct ReviewPhaseField: View {
 
     // MARK: - Actions
 
-    /// Share + Retake. Retake fires `.retake` (→ `.live`, the only modelled review exit).
-    /// Share's source is the engine's `gifURL` (not on σ); until that seam is threaded it
-    /// renders as a cell button placeholder, keeping the row visually intact.
+    /// The Review chrome — FORM FOLLOWS FUNCTION (docs/SIXFOUR-HOLISTIC-FORM-FUNCTION.md).
+    /// ONE primary row of three clear choices — **Ship** (export), **Refine** (optional
+    /// palette search + modify), **Retake** — replacing the old 8-button co-equal toolbar.
+    /// Ship & Refine progressively disclose their controls in panels BELOW the row, so the
+    /// default screen reads "here is your GIF: ship it, refine it, or retake."
     private var actionRow: some View {
-        HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
-            if let url = surface.gifURL {
-                ShareLink(item: url) {
-                    CellActionButton(icon: .share, title: "Share", prominent: true)
+        VStack(spacing: GlobalLattice.pt(GlobalLattice.gutterCells)) {
+            // ── PRIMARY: Ship · Refine · Retake ──────────────────────────────────────
+            HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
+                // SHIP — the one export (merges Share + Save). Tap discloses {Share the
+                // committed GIF, + the ladder rungs}. The GIF is the product; getting one out
+                // is the primary action that COMPLETES Review.
+                Button { shipOpen.toggle(); refineOpen = false } label: {
+                    CellActionButton(icon: .share, title: exporting != nil ? "…" : "Ship",
+                                     prominent: true)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Share GIF")
-            } else {
-                // No committed GIF on disk yet — inert placeholder, same footprint.
-                CellActionButton(icon: .share, title: "Share", prominent: true)
-                    .accessibilityHidden(true)
+                .disabled(exporting != nil)
+                .accessibilityLabel("Ship the GIF")
+
+                // REFINE — optional palette SEARCH + MODIFY (the curation tools live behind
+                // this, one at a time). Secondary weight; never competes with Ship.
+                Button { refineOpen.toggle(); shipOpen = false } label: {
+                    CellActionButton(icon: .grid3x3, title: "Refine")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Refine the colour palette")
+
+                // RETAKE — the other completion of Review; demoted (hugs, not full-width).
+                Button { surface.step(.retake) } label: {
+                    CellActionButton(icon: .retake, title: "Retake", fillWidth: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retake")
             }
 
-            // Save a GIF at any size — one gesture, the size is just which rung
-            // (16³ working copy / 64³-B global). The picker is CELL BUTTONS, not a system
-            // `Menu`: the screen IS the cell grid (GRID / total-pixelation law). Tapping
-            // Save reveals a cell button per rung; the producer is deterministic
-            // (`LadderExport`, collapsed via the chosen radix), then the share sheet.
-            // SIXFOUR-WIDGETS Family 1 — the GIF is the product, getting one out is cheap.
-            Button { rungPickerOpen.toggle() } label: {
-                CellActionButton(icon: .share, title: exporting != nil ? "…" : "Save",
-                                 fillWidth: false)
+            // ── SHIP disclosure: share the committed GIF + the ladder rungs (16³/64³). ──
+            if shipOpen, exporting == nil {
+                HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
+                    if let url = surface.gifURL {
+                        ShareLink(item: url) {
+                            CellActionButton(icon: .share, title: "Share", fillWidth: false)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Share the committed GIF")
+                    }
+                    ForEach(LadderExport.Rung.allCases) { rung in
+                        Button { shipOpen = false; exportRung(rung) } label: {
+                            CellActionButton(title: rung.shortTitle, fillWidth: false)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Save \(rung.title)")
+                    }
+                }
             }
-            .buttonStyle(.plain)
-            .disabled(exporting != nil)
-            .accessibilityLabel("Save GIF at any size")
 
-            if rungPickerOpen && exporting == nil {
-                ForEach(LadderExport.Rung.allCases) { rung in
-                    Button { rungPickerOpen = false; exportRung(rung) } label: {
-                        CellActionButton(title: rung.shortTitle, fillWidth: false)
+            // ── REFINE: the palette tools — SEARCH (Depth/Motion, preview) + MODIFY ──────
+            // (Groups/Look write the table). One tool's controls show at a time (the panel
+            // below), so the row never balloons. SEARCH is PREVIEW-ONLY navigation.
+            if refineOpen {
+                HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
+                    // SEARCH — the collapse-depth lever (preview/navigation, does NOT ship).
+                    Button { toggleTool(.depth) } label: {
+                        CellActionButton(icon: .grid3x3, title: "Depth", fillWidth: false)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Save \(rung.title)")
+                    .accessibilityLabel("Search palette depth (preview only)")
+
+                    // SEARCH — the motion/core overlay on the palette strip.
+                    Button { toggleTool(.motion) } label: {
+                        CellActionButton(icon: .grid3x3, title: "Motion", fillWidth: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Outline motion vs core colours")
+
+                    // MODIFY — pick which RGBT groups feed the shipped table (full-screen).
+                    Button { refineOpen = false; openGroupPick() } label: {
+                        CellActionButton(icon: .grid3x3, title: "Groups", fillWidth: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Pick RGBT groups for the palette")
+
+                    // MODIFY — the active Look's `.cube` LUT (only when a grade is on; it is
+                    // the export form of the Look axis, not a peer button).
+                    if settings.captureLook != .off {
+                        Button {
+                            lutShare = LUTFile.makeShareItem(palette: lutPalette, look: settings.captureLook)
+                        } label: {
+                            CellActionButton(icon: .share, title: "LUT", fillWidth: false)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Export 3D LUT for R3D")
+                    }
+
+                    // Advanced — Color Atlas (flag-gated), behind Refine, never on the main row.
+                    if settings.colorAtlasEnabled {
+                        Button {
+                            atlas.loadIfNeeded(palettesPerFrame: surface.palettesPerFrame,
+                                               indexCube: surface.indexCube)
+                            atlasOpen = true
+                        } label: {
+                            CellActionButton(icon: .grid3x3, title: "Atlas", fillWidth: false)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open color atlas")
+                    }
                 }
-            }
 
-            // Export the active LOOK as a .cube LUT for R3D (only when a grade is on;
-            // `.off` would be an identity LUT). Builds via the deterministic Zig core
-            // from the clip-wide palette, then shares the file.
-            if settings.captureLook != .off {
-                Button {
-                    lutShare = LUTFile.makeShareItem(palette: lutPalette, look: settings.captureLook)
-                } label: {
-                    CellActionButton(icon: .share, title: "LUT")
+                // ── The ACTIVE tool's controls — a dedicated panel, never inline with the
+                // primary actions. At most one tool is active (toggleTool is exclusive).
+                if motionOutlineOn {
+                    CellSlider(value: motionThresholdBinding,
+                               range: motionThresholdRange,
+                               step: motionThresholdStep,
+                               cols: GlobalLattice.shutterCells)
+                        .cellDetent(tick: clock.tick, every: 1, position: { (col: thresholdKnobCell, row: 0) })
+                        .accessibilityLabel("Motion threshold")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Export 3D LUT for R3D")
-            }
-
-            // Act II motion outline — recolours `paletteStrip` to separate the structural
-            // "core" colours from the high-motion ones (a cell-brightness split). Immovable
-            // chrome: it modulates an existing widget's paint, it is NOT a movable widget.
-            Button {
-                motionOutlineOn.toggle()
-                if motionOutlineOn, motionThreshold == nil {
-                    // Seed the slider at the current overlay state (the median cut). The
-                    // `.cellDetent` anchors itself on its first tick, so no re-baseline is
-                    // needed — re-opening never bursts ticks.
-                    motionThreshold = QuartetDelta.medianDisplacementThreshold(motionSlots)
-                }
-            } label: {
-                CellActionButton(icon: .grid3x3, title: "Motion")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Outline motion vs core colours")
-
-            // The motion-threshold slider — reuses the M×11 `CellSlider` (one lit knob
-            // cell). Shown only while the overlay is on; dragging re-thresholds the
-            // core/motion split live. ONE frame-locked `Haptics.play(1)` (cellTick) per
-            // crossed cell, flushed on the 20 fps clock tick (≤1 Taptic/frame).
-            if motionOutlineOn {
-                CellSlider(value: motionThresholdBinding,
-                           range: motionThresholdRange,
-                           step: motionThresholdStep,
-                           cols: GlobalLattice.shutterCells)
-                    // The SAME frame-locked detent as the movable widgets (one mechanism):
-                    // ≤1 cellTick per 20 fps frame as the knob crosses cells.
-                    .cellDetent(tick: clock.tick, every: 1, position: { (col: thresholdKnobCell, row: 0) })
-                    .accessibilityLabel("Motion threshold")
-            }
-
-            // CUT-LEVER — collapse the global palette to a shallower tree depth and PREVIEW
-            // it (preview-only; does NOT change Save/export). Same shape as the Motion block
-            // (a toggle + a frame-locked cell slider + an inline preview), dogfooding the SAME
-            // `.cellDetent` mechanism. Off ⇒ this branch is inert and the row is byte-identical;
-            // full depth ⇒ the preview shows the full colour set (same set as shipped, swatch only).
-            Button {
                 if cutLeverOn {
-                    cutLeverOn = false
-                } else {
-                    openCutLever()
+                    // SEARCH is PREVIEW-ONLY navigation — it re-projects the preview swatch
+                    // but does NOT change what Ship exports (only Groups + Look write the
+                    // table). The radix bands switch reconstructor (16²/4⁴/2⁸ are not one
+                    // continuous axis); the depth slider navigates within a band.
+                    BranchingSelector(selection: Binding(
+                        get: { settings.paletteBranching },
+                        set: { settings.paletteBranching = $0; cutDepth = $0.depth; recomputeCutGlobal() }
+                    ))
+                    .accessibilityLabel("Search radix band (16²/4⁴/2⁸)")
+
+                    CellSlider(value: cutBinding,
+                               range: cutRange,
+                               step: 1,
+                               cols: cutBranching.depth + 1)
+                        .cellDetent(tick: clock.tick, every: 1, position: { (col: cutKnobCell, row: 0) })
+                        .accessibilityLabel("Search depth (preview)")
+
+                    CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gifPx) { c, r in
+                        let i = r * 16 + c
+                        return i < cutGlobal.count ? cutGlobal[i] : nil
+                    }
+                    .accessibilityLabel("Live palette preview (search)")
                 }
-            } label: {
-                CellActionButton(icon: .grid3x3, title: "Cut")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Collapse the global palette to a shallower depth")
+        }
+    }
 
-            if cutLeverOn {
-                // The radix the cut walks (16²/4⁴/2⁸) — the SAME shared settings choice the
-                // Save ladder + structure view use. Changing it re-seeds the cut to full
-                // depth and recomputes (the new radix has a new depth ceiling). Kept in the
-                // ACTION row (chrome), never in the cell-field preview (cell-field law).
-                BranchingSelector(selection: Binding(
-                    get: { settings.paletteBranching },
-                    set: { settings.paletteBranching = $0; cutDepth = $0.depth; recomputeCutGlobal() }
-                ))
-                .accessibilityLabel("Cut radix")
-
-                CellSlider(value: cutBinding,
-                           range: cutRange,
-                           step: 1,
-                           cols: cutBranching.depth + 1)
-                    // The SAME frame-locked detent as the movable widgets + the motion
-                    // slider: ≤1 cellTick per 20 fps frame as the knob crosses depth cells.
-                    .cellDetent(tick: clock.tick, every: 1, position: { (col: cutKnobCell, row: 0) })
-                    .accessibilityLabel("Cut depth")
-
-                // The live cut preview — a flat 16×16 cell palette from `cutGlobal` (copy of
-                // the group-pick preview 458-461), cells only.
-                CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gifPx) { c, r in
-                    let i = r * 16 + c
-                    return i < cutGlobal.count ? cutGlobal[i] : nil
-                }
-                .accessibilityLabel("Live cut palette preview")
+    /// The Refine tools that disclose an in-panel control. Mutually EXCLUSIVE — opening one
+    /// closes the other, so only ONE decision is on screen at a time (the holistic
+    /// one-step-at-a-time rule). Groups/Atlas are full-screen sub-states handled separately.
+    private enum RefineTool { case depth, motion }
+    private func toggleTool(_ tool: RefineTool) {
+        switch tool {
+        case .motion:
+            cutLeverOn = false                         // close SEARCH-depth
+            motionOutlineOn.toggle()
+            if motionOutlineOn, motionThreshold == nil {
+                motionThreshold = QuartetDelta.medianDisplacementThreshold(motionSlots)
             }
-
-            Button { surface.step(.retake) } label: {
-                CellActionButton(icon: .retake, title: "Retake")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Retake")
-
-            // Color Atlas entry (flag-gated): off ⇒ this branch is EmptyView and
-            // the action row is byte-identical to the pre-Atlas screen.
-            if settings.colorAtlasEnabled {
-                Button {
-                    atlas.loadIfNeeded(palettesPerFrame: surface.palettesPerFrame,
-                                       indexCube: surface.indexCube)
-                    atlasOpen = true
-                } label: {
-                    CellActionButton(icon: .grid3x3, title: "Atlas")
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Open color atlas")
-            }
-
-            // GROUP-PICK entry: browse the burst as 16 RGBT groups, pick which shape the palette.
-            Button { openGroupPick() } label: {
-                CellActionButton(icon: .grid3x3, title: "Groups")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Pick RGBT groups for the palette")
+        case .depth:
+            motionOutlineOn = false                    // close the overlay
+            if cutLeverOn { cutLeverOn = false } else { openCutLever() }
         }
     }
 
