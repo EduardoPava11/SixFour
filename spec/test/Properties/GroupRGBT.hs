@@ -63,4 +63,30 @@ tests = testGroup "GroupRGBT (64 frames = 16 RGBT groups; group-SELECT drives th
         in n > 0 ==> forAll (choose (0, n - 1)) (\j ->
              let mask = [ i == j | i <- [0 .. n - 1] ]
              in groupCollapseQ16 k mask fs == globalCollapseQ16 k (groups !! j))
+
+    -- The circular RGBT buffer (Phase 1) — stride-1 width-4 sliding window
+  , testProperty "buffer: one window per frame (|circularWindows 4| = |frames|)" $
+      forAll genWidth $ \w -> forAll (listOf genPxI) (lawWindowCount w)
+
+  , testProperty "buffer: every window is a full width-4 quartet" $
+      forAll genWidth $ \w -> forAll (listOf genPxI) (lawWindowWidth w)
+
+  , testProperty "buffer: each frame appears in EXACTLY 4 windows (w<=n)" $
+      forAll genWidth $ \w -> forAll (choose (1, 40)) (lawEachFrameInWindowCount w)
+
+  , testProperty "buffer: ROLE-ORBIT — each frame visits R,G,B,T exactly once" $
+      forAll genWidth $ \w -> forAll (choose (1, 40)) (lawRoleOrbitComplete w)
+
+  , testProperty "buffer: windows tile the cycle (map head = frames)" $
+      forAll genWidth $ \w -> forAll (listOf genPxI) (lawWindowsCoverCycle w)
+
+  , testProperty "buffer: the loop wraps (last window includes frame 0)" $
+      forAll (listOf genPxI) lawCircularWrap
+
+  , testProperty "buffer: rotation-equivariant (respects the C_n loop gauge)" $
+      forAll genWidth $ \w -> \(k :: Int) -> forAll (listOf genPxI) (lawWindowsRotationEquivariant w k)
   ]
+
+-- window widths around the RGBT default (1..6 exercises w<n, w=n, w>n)
+genWidth :: Gen Int
+genWidth = choose (1, 6)

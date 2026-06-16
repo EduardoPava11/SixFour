@@ -50,6 +50,14 @@ surface; the Swift/Metal port is verified **bit-for-bit** against them. No law w
 
 ## 4. Phases
 
+> **Progress (2026-06-16):** keystone **RGBTLift** ✅ — the `(2×2)↔1` bijection, `lawLiftUnliftExact`,
+> exact in Q16. **Phase 0 `CanonicalPhase`** ✅ — necklace gauge-fix, rotation-invariant
+> (`lawCanonicalGaugeFixed`); proving it caught the naïve argmax+lowest-index rule failing under
+> ties. **Phase 1 circular buffer** ✅ — `GroupRGBT.circularWindows` (stride-1 width-4, the SIMT
+> buffer) with role-orbit, wrap, and rotation-equivariance laws. All golden-gated; 820 spec tests
+> green. Next: Phase 2 feature map (entropy-weighted, completeness-preserving) → Phase 3 tiers →
+> Phase 4/5 Q16+port → Phase 6 validation.
+
 ### Phase 0 — Gauge-fixing contract (THE keystone; tames the 2b symmetry break)
 Because 2b needs a privileged phase, define a **canonical-phase rule**: a deterministic rotation
 of the 64‑cycle that fixes which frame is "phase 0", so the R/G/B/T assignment is reproducible

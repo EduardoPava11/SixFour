@@ -18,6 +18,17 @@ include/exclude per group: pooling only the selected groups changes the candidat
 genuinely changes the 256 surviving leaves. (Continuous per-group weighting waits for the
 k-means / coverage↔fidelity path, where multiplicity actually moves centroids.)
 
+== The circular RGBT buffer (the SIMT sliding window) ==
+
+'circularWindows' is the stride-1, width-4 CIRCULAR sliding window: @n@ overlapping windows, one
+per frame, wrapping through @[frame n-1, frame 0, …]@ — keeping the per-frame structure intact
+while giving each frame its 4-frame RGBT neighbourhood, and respecting the GIF loop. This is the
+SIMT buffer: @n@ window-threads, each a width-4 (R/G/B/T) SIMD lane group. The staggering is the
+elegant part — across the four windows a frame belongs to, it occupies each of the R, G, B, T lanes
+EXACTLY ONCE ('lawRoleOrbitComplete'), so the role assignment is balanced and @C_n@-gauge-consistent
+('lawWindowsRotationEquivariant', tying the buffer to "SixFour.Spec.CanonicalPhase"). See
+@docs/SIXFOUR-RGBT4D-BUFFER-HARDENING-WORKFLOW.md@ Phase 1.
+
 Laws (QuickCheck'd in @Properties.GroupRGBT@, EXACT — no tolerance):
   * selecting ALL groups is byte-identical to today's 'globalCollapseQ16' (backward-compat);
   * the selected candidate pool is a SUBSET of the full pool (selection only removes);
@@ -34,16 +45,27 @@ module SixFour.Spec.GroupRGBT
   , allSelected
   , selectedFrames
   , groupCollapseQ16
+    -- * The circular RGBT buffer (stride-1 sliding window)
+  , circularWindows
+  , rgbtWindows
     -- * Laws (QuickCheck'd in Properties.GroupRGBT)
   , lawAllSelectedEqualsToday
   , lawSelectedPoolIsSubset
   , lawDeselectExcludesGroupFrames
   , lawEmptySelectionEmptyPool
+  , lawWindowCount
+  , lawWindowWidth
+  , lawEachFrameInWindowCount
+  , lawRoleOrbitComplete
+  , lawWindowsCoverCycle
+  , lawCircularWrap
+  , lawWindowsRotationEquivariant
   ) where
 
-import Data.List (isSubsequenceOf)
+import Data.List (isSubsequenceOf, sort)
 
-import SixFour.Spec.Collapse (PxQ16, pooledCandidatesQ16, globalCollapseQ16)
+import SixFour.Spec.Collapse      (PxQ16, pooledCandidatesQ16, globalCollapseQ16)
+import SixFour.Spec.CanonicalPhase (rotateBy)
 
 -- | Frames per RGBT group (R, G, B, T).
 groupSize :: Int
@@ -113,3 +135,75 @@ lawEmptySelectionEmptyPool :: [[PxQ16]] -> Bool
 lawEmptySelectionEmptyPool frames =
   let mask = replicate (length (groupsOf4 frames)) False
   in null (pooledCandidatesQ16 (selectedFrames mask frames))
+
+-- ---------------------------------------------------------------------------
+-- The circular RGBT buffer (stride-1 sliding window) — Phase 1
+-- ---------------------------------------------------------------------------
+
+-- | Stride-1, width-@w@ CIRCULAR sliding windows over a cyclic sequence: window @i@ is
+-- @[xs!!i, xs!!(i+1), …, xs!!(i+w-1)]@ taken mod @n@, so the loop wraps. Produces exactly
+-- @n@ windows (one per frame) — the per-frame structure is preserved. Content-independent
+-- index structure: works over any element type.
+circularWindows :: Int -> [a] -> [[a]]
+circularWindows w xs
+  | w <= 0 || null xs = []
+  | otherwise =
+      let n = length xs
+      in [ [ xs !! ((i + j) `mod` n) | j <- [0 .. w - 1] ] | i <- [0 .. n - 1] ]
+
+-- | The RGBT circular buffer: width-'groupSize' (= 4) 'circularWindows'. Each window's
+-- four cells are the @R, G, B, T@ lanes; the staggering gives every frame all four roles
+-- exactly once ('lawRoleOrbitComplete').
+rgbtWindows :: [a] -> [[a]]
+rgbtWindows = circularWindows groupSize
+
+-- | One window per frame: @|circularWindows w xs| = |xs|@.
+lawWindowCount :: Int -> [a] -> Bool
+lawWindowCount w xs =
+  w <= 0 || null xs || length (circularWindows w xs) == length xs
+
+-- | Every window is a full width-@w@ quartet — no partial windows (the wrap fills them).
+lawWindowWidth :: Int -> [a] -> Bool
+lawWindowWidth w xs =
+  w <= 0 || null xs || all ((== w) . length) (circularWindows w xs)
+
+-- | Each frame appears in EXACTLY @w@ windows (when @w ≤ n@) — it is the lane-@j@ entry of
+-- window @(k−j) mod n@ for each @j@. Counted over the position structure.
+lawEachFrameInWindowCount :: Int -> Int -> Bool
+lawEachFrameInWindowCount w n =
+  w <= 0 || n <= 0 || w > n ||
+  let wins = circularWindows w [0 .. n - 1]
+  in all (\k -> length (filter (k `elem`) wins) == w) [0 .. n - 1]
+
+-- | THE role-orbit law: across the @w@ windows it belongs to, each frame occupies each
+-- lane position @0..w-1@ EXACTLY ONCE. For RGBT (@w=4@) every frame is R, then G, then B,
+-- then T across its windows — the balanced, @C_n@-gauge-symmetric staggering.
+lawRoleOrbitComplete :: Int -> Int -> Bool
+lawRoleOrbitComplete w n =
+  w <= 0 || n <= 0 || w > n ||
+  let wins        = circularWindows w [0 .. n - 1]
+      positionsOf k = [ j | win <- wins, (j, e) <- zip [0 ..] win, e == k ]
+  in all (\k -> sort (positionsOf k) == [0 .. w - 1]) [0 .. n - 1]
+
+-- | The windows tile the cycle in order: the head of each window recovers the source
+-- sequence (@map head (circularWindows w xs) = xs@) — one window per frame, starting there.
+lawWindowsCoverCycle :: Eq a => Int -> [a] -> Bool
+lawWindowsCoverCycle w xs =
+  w <= 0 || null xs || map head (circularWindows w xs) == xs
+
+-- | The loop closes: the last window wraps to include frame 0
+-- (@last win = [xs!!(n-1), xs!!0, …]@), for width ≥ 2 and @n ≥ 2@.
+lawCircularWrap :: Eq a => [a] -> Bool
+lawCircularWrap xs =
+  null xs || length xs < 2 ||
+  let n       = length xs
+      lastWin = last (circularWindows groupSize xs)
+  in head lastWin == xs !! (n - 1) && (lastWin !! 1) == head xs
+
+-- | Rotation-equivariance — the buffer respects the loop gauge:
+-- @circularWindows w (rotateBy k xs) = rotateBy k (circularWindows w xs)@. So canonicalising
+-- the frame phase ("SixFour.Spec.CanonicalPhase") canonicalises the whole buffer.
+lawWindowsRotationEquivariant :: Eq a => Int -> Int -> [a] -> Bool
+lawWindowsRotationEquivariant w k xs =
+  w <= 0 || null xs ||
+  circularWindows w (rotateBy k xs) == rotateBy k (circularWindows w xs)
