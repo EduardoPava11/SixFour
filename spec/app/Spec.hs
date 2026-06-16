@@ -37,7 +37,7 @@ import SixFour.Codegen.Swift
   , emitFieldTuningContract, emitFieldTuningMetalHeader, emitInfluenceFieldGolden
   , emitCellShapesContract
   , emitSevenSegContract, emitPlaybackClockContract, emitCellContract
-  , emitDisplayContract, emitFrontProjectionGolden, emitVoxelFitContract, emitOrderContract, emitExportContract
+  , emitDisplayContract, emitActDecisionsContract, emitFrontProjectionGolden, emitVoxelFitContract, emitOrderContract, emitExportContract
   , emitGridLayoutContract, emitMoveContract, emitCellMechanicsContract, emitOwnershipContract )
 import SixFour.Codegen.Shapes (emitStagesPy,      emitNetShapePy)
 import SixFour.Codegen.Burn   (emitBurnContract)
@@ -78,6 +78,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "PlaybackClockContract.swift") emitPlaybackClockContract
   writeUtf8 (swiftOutDir   </> "CellContract.swift")          emitCellContract
   writeUtf8 (swiftOutDir   </> "DisplayContract.swift")       emitDisplayContract
+  writeUtf8 (swiftOutDir   </> "ActDecisionsContract.swift") emitActDecisionsContract
   writeUtf8 (swiftOutDir   </> "FrontProjectionGolden.swift") emitFrontProjectionGolden
   writeUtf8 (swiftOutDir   </> "VoxelFitContract.swift")     emitVoxelFitContract
   writeUtf8 (swiftOutDir   </> "OrderContract.swift")         emitOrderContract
@@ -117,7 +118,7 @@ main = do
   let Mask3D maskBytes = generateSTBN3D @8 @8 @8
   writeBinary (resourceOutDir </> "stbn3d-8.bin") maskBytes
 
-  putStrLn "spec-codegen: wrote 26 files + 1 resource."
+  putStrLn "spec-codegen: wrote 27 files + 1 resource."
   putStrLn $ "  swift   : " <> swiftOutDir
   putStrLn $ "  mlx     : " <> mlxOutDir
   putStrLn $ "  burn    : " <> burnOutDir

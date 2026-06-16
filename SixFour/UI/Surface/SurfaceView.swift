@@ -21,6 +21,11 @@ struct SurfaceView: View {
     @State private var surface = Surface()
     @State private var clock = SurfaceClock()
     @State private var engine = CaptureViewModel()
+    /// Act III handoff: the engine renders autonomously, so a finished GIFA can arrive
+    /// while σ is still in `.browsing` (the user is picking anchors). Hold it here and
+    /// replay `commit` once the user fires `.picked4` and σ enters the render family —
+    /// otherwise `.committed` is a δ no-op in `.browsing` and the surface would stall.
+    @State private var pendingOutput: CaptureOutput?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
@@ -78,6 +83,11 @@ struct SurfaceView: View {
                     switch surface.phase {
                     case .capturing, .rendering:
                         surface.advanceCursorReverse()
+                    case .browsing:
+                        // Act III: the cursor is FINGER-driven via the scrub rail, not
+                        // auto-advanced by κ. No-op the per-tick advance here (mirrors the
+                        // .capturing/.rendering reverse-sweep gating).
+                        break
                     default:
                         surface.advanceCursor()
                     }
@@ -101,6 +111,12 @@ struct SurfaceView: View {
                     Task { await engine.capture() }
                 case (.review, .live):
                     engine.reset()
+                case (.browsing, .rendering):
+                    // Act III: the user fired `.picked4` (Continue). If the engine already
+                    // finished rendering while browsing, replay the held commit now so the
+                    // surface advances through the render stages into review. `surface.picks`
+                    // (the 4 ordered anchors) is the render INPUT, already in σ.
+                    if let out = pendingOutput { pendingOutput = nil; commit(out) }
                 default:
                     break
                 }
@@ -149,7 +165,13 @@ struct SurfaceView: View {
             // The finished GIFA → σ (palette + index cube), then the explicit commit
             // (`lawReviewExplicit`: review is reached ONLY via `.committed`).
             .onChange(of: engine.primaryOutput) { _, out in
-                if let out { commit(out) }
+                if let out {
+                    // If σ is still browsing (the user hasn't fired `.picked4` yet), hold the
+                    // finished GIFA — `commit` would no-op `.committed` from `.browsing`.
+                    // It is replayed when `.picked4` lands in `.rendering` (see the phase
+                    // onChange below). Otherwise commit immediately (normal render path).
+                    if case .browsing = surface.phase { pendingOutput = out } else { commit(out) }
+                }
             }
             // Debug-only ownership overlay (full-lattice identity-badge bitmap). The
             // outermost slot, above every phase; off by default ⇒ the branch is
