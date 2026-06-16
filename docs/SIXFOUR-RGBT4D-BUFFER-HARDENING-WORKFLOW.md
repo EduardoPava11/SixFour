@@ -59,7 +59,9 @@ surface; the Swift/Metal port is verified **bit-for-bit** against them. No law w
 > the buffer (per-frame-count, completeness/in-gamut, R-weight-identity, gauge-equivariance laws);
 > 824 spec tests green. **Phase 3 `CubeLadder`** ✅ — the 16³/64³/256³ tiers as reversible 2-D-Haar views (LADDER BIJECTIVE
 > within capture, synthBeyond = nearest-neighbour floor, gamut-closed distill); 830 spec tests green.
-> Next: Phase 4/5
+> **Phase 4 golden vectors** ✅ — FNV-1a-64 Q16 pins for the cube-ladder distill/synthBeyond and the
+> necklace canonical form (byte-exact targets a Swift/Metal port must reproduce); 834 spec tests
+> green. Next: Phase 5 — the hand-written Swift/Metal simdgroup port (the shipped-app step)
 > Q16+port → Phase 6 validation.
 
 ### Phase 0 — Gauge-fixing contract (THE keystone; tames the 2b symmetry break)

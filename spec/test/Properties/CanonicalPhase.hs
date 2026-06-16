@@ -2,8 +2,17 @@ module Properties.CanonicalPhase (tests) where
 
 import Test.Tasty
 import Test.Tasty.QuickCheck
+import Data.Word (Word64)
 
 import SixFour.Spec.CanonicalPhase
+import SixFour.Spec.Upscale256 (fnv1a64)
+
+-- A fixed cyclic sequence (with a tied max, exercising the necklace rule) — golden anchor.
+goldenSeq :: [Int]
+goldenSeq = [5, 3, 5, 9, 2, 9, 1, 7]
+
+chk :: Show a => a -> Word64
+chk x = fnv1a64 (map (fromIntegral . fromEnum) (show x))
 
 -- Small Q16-ish key lists, value range chosen to MIX distinct and tied elements so the
 -- gauge law is exercised on periodic loops too.
@@ -45,4 +54,8 @@ tests = testGroup "CanonicalPhase (loop gauge-fix: necklace canonical form)"
     testProperty "tie counterexample [5,3,5]: gauge-fixed where naive argmax fails" $
       once (and [ canonicalRotation (rotateBy k [5,3,5 :: Int]) == canonicalRotation [5,3,5]
                 | k <- [0,1,2] ])
+
+  , -- GOLDEN (Phase 4): the necklace canonical form of a fixed sequence (cross-language pin).
+    testProperty "GOLDEN: canonicalRotation of the fixed sequence (FNV-1a-64 pin)" $
+      once (chk (canonicalRotation goldenSeq) == (0x8b786b27a72ef2ba :: Word64))
   ]
