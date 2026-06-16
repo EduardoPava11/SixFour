@@ -52,6 +52,11 @@ So σ on the 10-D token is a fixed diagonal orthogonal involution; the trainer's
 'gmmTokenSigma' exposes the action; 'lawGmmTokenSigmaInvolution' /
 'lawGmmTokenSigmaOrthogonal' pin its algebraic properties (involution + isometry).
 
+The shipped net enforces this STRUCTURALLY (hard block-diagonal masks — see
+'sigma64Mask'); @docs/EQUIVARIANCE-TRAINING-NOTES.md@ records two optional /Mac-side/
+ways the trainer could fit the non-zero weights better (soft-relaxation-then-project;
+EMLP basis derivation) without touching the exactly-equivariant on-device forward pass.
+
 == Why this module is small
 
 The spec's existing modules use bare @[OKLab]@ / @U.Vector Double@. Lifting them

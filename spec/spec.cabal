@@ -38,8 +38,13 @@ library
         SixFour.Spec.SpatialDither
         SixFour.Spec.GMM
         SixFour.Spec.Bures
+        SixFour.Spec.Sinkhorn
+        SixFour.Spec.Barycenter
+        SixFour.Spec.Entropy
         SixFour.Spec.PairTree
         SixFour.Spec.PairTreeFixed
+        SixFour.Spec.RGBTLift
+        SixFour.Spec.CanonicalPhase
         SixFour.Spec.SigmaPairFixed
         SixFour.Spec.LeafOverride
         SixFour.Spec.PaletteGesture
@@ -288,8 +293,13 @@ test-suite spec-tests
         Properties.Diversity
         Properties.GMM
         Properties.Bures
+        Properties.Sinkhorn
+        Properties.Barycenter
+        Properties.Entropy
         Properties.PairTree
         Properties.PairTreeFixed
+        Properties.RGBTLift
+        Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride
         Properties.PaletteGesture

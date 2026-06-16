@@ -45,6 +45,18 @@ SIGNAL (large offsets), fine levels carry NOISE (offsets shrinking by 1/φ per
 level), so adaptive depth = adaptive wavelet truncation — halt early on the fine
 (noise) levels, ponder on the coarse (signal) levels.
 
+DESIGN VALIDATION (2025–2026 literature, adversarially verified): reuse-one-block-
+@N@× with adaptive halting is the right family for a tiny net. Mixture-of-Recursions
+(Bae et al., NeurIPS 2025) "reuses a shared stack of layers across recursion steps to
+achieve parameter efficiency, while lightweight routers dynamically assign different
+recursion depths"; at equal FLOPs and SMALLER model sizes it improves accuracy and
+throughput. Controlled looped-LM experiments in the 1M–40M-parameter regime — the
+closest published scale to this net's ~115K — find the advantage "stems not from
+increased knowledge capacity, but from superior knowledge MANIPULATION" (Zhu et al.,
+2025): i.e. the gain is from /computation reuse/, exactly what a 2248-free block reused
+8× buys. Caveat: those models halt PER-TOKEN; this core halts PER-GIF (the σ-invariant
+@λ_ℓ@ schedule below), so the endorsement is at the mechanism level, not the granularity.
+
 CRITICAL σ-CONSTRAINT: @λ_ℓ@ must be **σ-INVARIANT** — sign-flipping the chroma
 channels (red↔green, blue↔yellow) must NOT change how many levels we generate.
 'sigmaInvariantFeatures' projects the context onto @(‖achromatic‖², ‖chromatic‖²)@,

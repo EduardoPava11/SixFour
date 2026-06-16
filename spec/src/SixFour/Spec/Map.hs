@@ -44,7 +44,9 @@ comparisons, and a small per-user delta head is updated on device (proven on har
 
 == 1. Numeric & colour core
 "SixFour.Spec.Shape", "SixFour.Spec.Color", "SixFour.Spec.ColorFixed", "SixFour.Spec.LinAlg",
-"SixFour.Spec.Tensor", "SixFour.Spec.Gauge".
+"SixFour.Spec.Tensor", "SixFour.Spec.Gauge", "SixFour.Spec.Sinkhorn" (entropic OT + the
+debiased Sinkhorn divergence — the discrete-measure fidelity that tightens the Bures
+Gaussian-summary; shared by "SixFour.Spec.Loss" and "SixFour.Spec.Barycenter").
 
 == 2. Per-frame palette — the NN INPUT
 "SixFour.Spec.StageA", "SixFour.Spec.Palette", "SixFour.Spec.QuantFixed", "SixFour.Spec.GMM",
@@ -52,11 +54,21 @@ comparisons, and a small per-user delta head is updated on device (proven on har
 "SixFour.Spec.SignificanceFixed".
 
 == 3. Collapse → the global palette
-"SixFour.Spec.Collapse", "SixFour.Spec.GlobalVolume", "SixFour.Spec.Cyclic". (Baseline = sliced-W₂
-barycenter / maximin; the NN learns this barycenter.)
+"SixFour.Spec.Collapse", "SixFour.Spec.GlobalVolume", "SixFour.Spec.Cyclic",
+"SixFour.Spec.Barycenter", "SixFour.Spec.Entropy". (Baseline = maximin pick;
+"SixFour.Spec.Barycenter" is the free-support W₂ /particle-flow/ move — the next rung of the
+GIFA→GIFB redesign — that lets atoms transport, not merely select; "SixFour.Spec.Entropy" is the
+capture information analysis — RGBT pool weights + the per-frame↔global scope cost — that DECIDES
+where global vs per-frame is justified, see @docs/SIXFOUR-CUBE-LADDER-GAP-ANALYSIS.md@. The NN
+learns this barycenter.)
 
 == 4. Palette structure / genome — the NN OUTPUT space (16² / 4⁴ / 2⁸)
 "SixFour.Spec.SplitTree", "SixFour.Spec.PairTree", "SixFour.Spec.PairTreeFixed",
+"SixFour.Spec.RGBTLift" (the @2×2 ↔ RGBT@ reversible integer lifting — the spatial sibling of the
+1-D PairTreeFixed S-transform; the @(2×2)<->1@ bijection that makes the cube ladder lossless, see
+@docs/SIXFOUR-RGBT4D-BUFFER-HARDENING-WORKFLOW.md@), "SixFour.Spec.CanonicalPhase" (the loop
+gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
+reproducible phase on the C₆₄-symmetric GIF loop),
 "SixFour.Spec.SigmaPairFixed", "SixFour.Spec.SigmaPairHead", "SixFour.Spec.SigmaDecomp",
 "SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Bottleneck16",
 "SixFour.Spec.LeafOverride", "SixFour.Spec.PaletteGesture", "SixFour.Spec.GroupRGBT".

@@ -12,6 +12,11 @@ module pins WHAT a "good" palette /means/ relative to its input capture:
   1. __'fidelityLoss'__ — how well the decoded palette reconstructs the input
      GMM. Uses 'SixFour.Spec.Bures.buresDistanceSq' between the input mixture
      and the palette's induced point-mass mixture. Lower = closer reconstruction.
+     A tighter, multi-modal-aware alternative is 'fidelityLossSinkhorn' (the
+     debiased Sinkhorn divergence of "SixFour.Spec.Sinkhorn"): it keeps both sides
+     as discrete measures instead of collapsing them to one moment-matched
+     Gaussian — the replacement @mixtureAsGaussian@ explicitly flags. The trainer
+     picks one; the Bures form stays the cheap default.
 
   2. __'coverageLoss'__ — how much of the OKLab gamut the palette spans. Uses
      'SixFour.Spec.Coverage.gamutCoverageFraction' on the 16³ voxel grid;
@@ -77,6 +82,7 @@ silent training instability.
 module SixFour.Spec.Loss
   ( -- * Component losses
     fidelityLoss
+  , fidelityLossSinkhorn
   , coverageLoss
   , beautyLoss
     -- * Total
@@ -104,6 +110,8 @@ module SixFour.Spec.Loss
   , sigmaPairLeaves'
     -- * Laws (predicates; QuickCheck'd in Properties.Loss)
   , lawFidelityNonNegative
+  , lawFidelitySinkhornNonNegative
+  , lawFidelitySinkhornSelfZero
   , lawCoverageBounded
   , lawBeautyMonotonicInChromaticSimilarity
   , lawBeautyMonotonicInLightnessSum
@@ -121,6 +129,7 @@ import           Data.List           (foldl')
 import SixFour.Spec.Color    (OKLab(..))
 import SixFour.Spec.GMM      (Gaussian(..), GMM, pointMassGMM, mixtureMean, mixtureCovariance)
 import SixFour.Spec.Bures    (buresDistanceSq)
+import SixFour.Spec.Sinkhorn (Measure, defaultSinkhornParams, sinkhornDivergence)
 import SixFour.Spec.Coverage (gamutCoverageFraction)
 import SixFour.Spec.Palette  (mkPalette)
 import SixFour.Spec.PairTree (HaarPalette(..), reconstruct, pairOffsets, levels, root)
@@ -160,6 +169,22 @@ fidelityLossLeaves leaves inputGmm =
       g_in      = mixtureAsGaussian inputGmm
       g_out     = mixtureAsGaussian outputGmm
   in buresDistanceSq g_in g_out
+
+-- | Discrete-OT fidelity: the debiased Sinkhorn divergence
+-- ('SixFour.Spec.Sinkhorn.sinkhornDivergence') between the decoded palette — a
+-- UNIFORM measure over its leaves — and the input capture — the WEIGHTED point cloud
+-- of its mixture-component means. Unlike 'fidelityLossLeaves', which collapses both
+-- sides to one moment-matched Gaussian (blind to multi-modality), this keeps the
+-- palette's distinct colour modes, so it penalises a palette that matches the
+-- capture's mean+spread yet misses a separate mode. Non-negative
+-- ('lawFidelitySinkhornNonNegative'); exactly zero when the palette equals the
+-- capture support ('lawFidelitySinkhornSelfZero'). This is the tighter alternative
+-- the @mixtureAsGaussian@ note flags; the cheaper Bures form stays the default.
+fidelityLossSinkhorn :: [OKLab] -> GMM -> Double
+fidelityLossSinkhorn leaves inputGmm =
+  let palMeasure = [ (c, 1) | c <- leaves ]                       :: Measure
+      inMeasure  = [ (gMean g, gWeight g) | g <- inputGmm ]       :: Measure
+  in sinkhornDivergence defaultSinkhornParams palMeasure inMeasure
 
 -- | Coverage loss on a bare 256-leaf list: @1 − gamutCoverageFraction@. Mirrors
 -- 'coverageLoss' but takes the reconstructed leaves directly.
@@ -384,6 +409,21 @@ lookNetLoss (LossWeights wF wC wB) hp stack =
 -- | Bures-Wasserstein squared distance is non-negative.
 lawFidelityNonNegative :: HaarPalette -> CyclicStack t k -> Bool
 lawFidelityNonNegative hp stack = fidelityLoss hp stack >= 0
+
+-- | The Sinkhorn fidelity is non-negative (finite-iteration slack), for any palette
+-- and any positive-mass input mixture.
+lawFidelitySinkhornNonNegative :: [OKLab] -> GMM -> Bool
+lawFidelitySinkhornNonNegative leaves gmm =
+  null leaves || sum (map gWeight gmm) <= 0
+    || fidelityLossSinkhorn leaves gmm >= -1e-6
+
+-- | The Sinkhorn fidelity is EXACTLY zero when the palette IS the capture support:
+-- leaves equal to the (uniformly-weighted) component means give a self-divergence of
+-- exactly 0 ('SixFour.Spec.Sinkhorn.lawSinkhornSelfDivergenceZero'). The fidelity
+-- floor is reachable, not just approached.
+lawFidelitySinkhornSelfZero :: [OKLab] -> Bool
+lawFidelitySinkhornSelfZero pts =
+  null pts || fidelityLossSinkhorn pts (pointMassGMM [ (p, 1) | p <- pts ]) == 0
 
 -- | Coverage loss is in @[0, 1]@ (it's 1 minus a fraction in [0, 1]).
 lawCoverageBounded :: HaarPalette -> Bool

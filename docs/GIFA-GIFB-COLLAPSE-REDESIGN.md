@@ -54,10 +54,27 @@ These are deliberately **unanswered** here — each is a research+spec task, not
 1. **Move set.** What is the legal-move alphabet of the collapse? (pairwise merge, mass-transport
    reassignment, σ-balanced subtree fusion, prune-and-resplit?) Survey OT barycenter / k-means
    merge / palette-quantization-under-motion literature before fixing it.
+
+   > **Update 2026-06-15 — first candidate move spec'd.** The OT-barycenter survey is underway
+   > (verified 2024–2026 literature sweep; deep-research review this session). The first executable
+   > candidate now lives in the spec:
+   > **`Spec.Barycenter.freeSupportBarycenter`** — a free-support Wasserstein barycenter
+   > (Cuturi–Doucet 2014; the 2025 particle-flow framing) built on the new **`Spec.Sinkhorn`**
+   > entropic-OT kernel. It is a *mass-transport reassignment* move: seeded from the maximin pick,
+   > the global atoms flow to the OT-average of the 64 per-frame palettes. Proven gamut-closed (stays
+   > in the inputs' convex hull), support-size-preserving, and translation-equivariant
+   > (`Properties.Barycenter`). This does NOT fix the alphabet — it adds ONE transport-based move to
+   > score against maximin via `PaletteOracle` / `PaletteSearch`. The byte-exact shipped collapse
+   > remains `Collapse.globalCollapseQ16` until a move is settled.
 2. **Value target.** What does the value head actually score? In self-supervised palette land there
    is **no label `y`** (open Q flagged in the GRAM mapping note). Candidate signals: Bures fidelity,
    coverage (the spec metric, *not* MSE — see `sixfour-diversity-spec`), Ou-Luo pair beauty,
    flicker variance. Which combination, and is it learned or fixed?
+
+   > **Update 2026-06-15.** A tighter fidelity signal is now available: **`Loss.fidelityLossSinkhorn`**
+   > (debiased Sinkhorn divergence, `Spec.Sinkhorn`) keeps the palette + capture as discrete measures
+   > instead of collapsing them to one moment-matched Gaussian (the Bures baseline), so it penalises a
+   > palette that matches mean+spread yet misses a colour mode — a candidate value-target component.
 3. **Search ↔ UI coupling.** How does the user experience the search? GIFB is the product, but the
    candidates are the *choice*. The UI/UX redesign and the collapse mechanic must be co-designed
    (this brief's reason for existing) — see `SIXFOUR-VISION.md` and the GRID design language.

@@ -14,6 +14,7 @@ import           Data.Maybe          (fromJust)
 import SixFour.Spec.Color    (OKLab(..))
 import SixFour.Spec.Palette  (mkPalette)
 import SixFour.Spec.Cyclic   (CyclicStack(..))
+import SixFour.Spec.GMM      (GMM, pointMassGMM)
 import SixFour.Spec.PairTree (HaarPalette(..))
 import SixFour.Spec.Loss
 
@@ -31,6 +32,13 @@ genBoundedHaar = do
               [0 .. 2]
   pure (HaarPalette rt lvs)
 
+-- A small positive-mass point-mass GMM (1–4 components) for the Sinkhorn fidelity.
+genSmallGMM :: Gen GMM
+genSmallGMM = do
+  k  <- choose (1, 4)
+  cs <- vectorOf k ((,) <$> genOKLabInGamut <*> choose (0.1, 2.0))
+  pure (pointMassGMM cs)
+
 -- A trivial CyclicStack with a single 4-colour frame (lets us call
 -- fidelityLoss without huge generation cost). Type-level T=1, K=4.
 genTinyStack :: Gen (CyclicStack 1 4)
@@ -46,6 +54,13 @@ tests = testGroup "Loss (math-first training loss: fidelity + coverage + Ou-Luo 
   [ testProperty "fidelity loss is non-negative (Bures-Wasserstein squared)" $
       forAll genBoundedHaar $ \hp ->
         forAll genTinyStack (lawFidelityNonNegative hp)
+
+  , testProperty "Sinkhorn fidelity is non-negative" $
+      forAll (vectorOf 4 genOKLabInGamut) $ \leaves ->
+        forAll genSmallGMM (lawFidelitySinkhornNonNegative leaves)
+
+  , testProperty "Sinkhorn fidelity is exactly zero when the palette IS the capture support" $
+      forAll (vectorOf 4 genOKLabInGamut) lawFidelitySinkhornSelfZero
 
   , testProperty "coverage loss ∈ [0, 1]" $
       forAll genBoundedHaar lawCoverageBounded

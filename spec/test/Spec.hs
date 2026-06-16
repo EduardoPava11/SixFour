@@ -17,8 +17,13 @@ import qualified Properties.Collapse     as Collapse
 import qualified Properties.Diversity    as Diversity
 import qualified Properties.GMM          as GMM
 import qualified Properties.Bures        as Bures
+import qualified Properties.Sinkhorn     as Sinkhorn
+import qualified Properties.Barycenter   as Barycenter
+import qualified Properties.Entropy      as Entropy
 import qualified Properties.PairTree     as PairTree
 import qualified Properties.PairTreeFixed as PairTreeFixed
+import qualified Properties.RGBTLift     as RGBTLift
+import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
 import qualified Properties.PaletteGesture as PaletteGesture
@@ -109,8 +114,13 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Diversity.tests
   , GMM.tests
   , Bures.tests
+  , Sinkhorn.tests
+  , Barycenter.tests
+  , Entropy.tests
   , PairTree.tests
   , PairTreeFixed.tests
+  , RGBTLift.tests
+  , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests
   , PaletteGesture.tests
