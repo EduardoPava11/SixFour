@@ -61,7 +61,10 @@ surface; the Swift/Metal port is verified **bit-for-bit** against them. No law w
 > within capture, synthBeyond = nearest-neighbour floor, gamut-closed distill); 830 spec tests green.
 > **Phase 4 golden vectors** ✅ — FNV-1a-64 Q16 pins for the cube-ladder distill/synthBeyond and the
 > necklace canonical form (byte-exact targets a Swift/Metal port must reproduce); 834 spec tests
-> green. Next: Phase 5 — the hand-written Swift/Metal simdgroup port (the shipped-app step)
+> green. **Phase 5 (Swift)** ✅ — `SixFour/RGBT4D/RGBT4DLift.swift` ports the lift + cube ladder (zero-dep,
+> flag-gated `rgbt4dEnabled` default-off); standalone-verified bit-exact to the Haskell golden
+> (floor-div parity) and compiles in-target. Pending: the Metal `simd_shuffle` kernel + the on-device
+> golden run (`RGBT4DGoldenTests`, needs an arm64 simulator/device). Next: Phase 6 validation.
 > Q16+port → Phase 6 validation.
 
 ### Phase 0 — Gauge-fixing contract (THE keystone; tames the 2b symmetry break)

@@ -44,6 +44,9 @@ final class AppSettings {
         // (docs/COLOR-ATLAS.md). Default OFF: the production path is
         // byte-identical while false.
         static let colorAtlasEnabled      = "sixfour.colorAtlas.v1"
+        // The RGBT-4D cube-ladder power mode (docs/SIXFOUR-RGBT4D-BUFFER-HARDENING-WORKFLOW.md).
+        // Default OFF: no consumer is wired yet, so the shipped render path is byte-identical.
+        static let rgbt4dEnabled          = "sixfour.rgbt4d.v1"
         // Movable ColorWidget positions (col,row in atoms). Defaults = the spec docks.
         static let field64Position        = "sixfour.field64Position.v1"
         static let palette16Position      = "sixfour.palette16Position.v1"
@@ -166,6 +169,13 @@ final class AppSettings {
         didSet { defaults.set(colorAtlasEnabled, forKey: Key.colorAtlasEnabled) }
     }
 
+    /// Whether the RGBT-4D cube-ladder power mode is enabled (`RGBT4DLift` et al.).
+    /// Defaults **OFF** — no consumer is wired yet, so the rendered bytes are
+    /// byte-identical to the pre-RGBT-4D app while this is false.
+    var rgbt4dEnabled: Bool {
+        didSet { defaults.set(rgbt4dEnabled, forKey: Key.rgbt4dEnabled) }
+    }
+
     // MARK: - Movable ColorWidget positions (the ONE shared layout)
 
     /// A user-set widget position, in lattice atoms (col,row). Stored as a small
@@ -259,6 +269,8 @@ final class AppSettings {
         self.debugOwnershipOverlay = defaults.bool(forKey: Key.debugOwnershipOverlay)
         // Absent key → false ⇒ Color Atlas OFF (production path byte-identical).
         self.colorAtlasEnabled = defaults.bool(forKey: Key.colorAtlasEnabled)
+        // Absent key → false ⇒ RGBT-4D OFF (production path byte-identical).
+        self.rgbt4dEnabled = defaults.bool(forKey: Key.rgbt4dEnabled)
 
         // Movable ColorWidget positions: parse each stored "col,row" (absent/garbage →
         // the generated spec dock).
