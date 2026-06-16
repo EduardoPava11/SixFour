@@ -42,6 +42,7 @@ library
         SixFour.Spec.Barycenter
         SixFour.Spec.Entropy
         SixFour.Spec.RGBTFeature
+        SixFour.Spec.CubeLadder
         SixFour.Spec.PairTree
         SixFour.Spec.PairTreeFixed
         SixFour.Spec.RGBTLift
@@ -299,6 +300,7 @@ test-suite spec-tests
         Properties.Barycenter
         Properties.Entropy
         Properties.RGBTFeature
+        Properties.CubeLadder
         Properties.PairTree
         Properties.PairTreeFixed
         Properties.RGBTLift

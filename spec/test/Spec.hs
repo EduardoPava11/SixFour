@@ -21,6 +21,7 @@ import qualified Properties.Sinkhorn     as Sinkhorn
 import qualified Properties.Barycenter   as Barycenter
 import qualified Properties.Entropy      as Entropy
 import qualified Properties.RGBTFeature  as RGBTFeature
+import qualified Properties.CubeLadder   as CubeLadder
 import qualified Properties.PairTree     as PairTree
 import qualified Properties.PairTreeFixed as PairTreeFixed
 import qualified Properties.RGBTLift     as RGBTLift
@@ -120,6 +121,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Barycenter.tests
   , Entropy.tests
   , RGBTFeature.tests
+  , CubeLadder.tests
   , PairTree.tests
   , PairTreeFixed.tests
   , RGBTLift.tests

@@ -57,7 +57,9 @@ surface; the Swift/Metal port is verified **bit-for-bit** against them. No law w
 > buffer) with role-orbit, wrap, and rotation-equivariance laws. All golden-gated; 820 spec tests
 > green. **Phase 2 `RGBTFeature`** ✅ — the 1b feature layer: entropy-weighted temporal coherence over
 > the buffer (per-frame-count, completeness/in-gamut, R-weight-identity, gauge-equivariance laws);
-> 824 spec tests green. Next: Phase 3 tiers (the cube ladder over this substrate) → Phase 4/5
+> 824 spec tests green. **Phase 3 `CubeLadder`** ✅ — the 16³/64³/256³ tiers as reversible 2-D-Haar views (LADDER BIJECTIVE
+> within capture, synthBeyond = nearest-neighbour floor, gamut-closed distill); 830 spec tests green.
+> Next: Phase 4/5
 > Q16+port → Phase 6 validation.
 
 ### Phase 0 — Gauge-fixing contract (THE keystone; tames the 2b symmetry break)
