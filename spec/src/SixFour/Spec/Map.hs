@@ -69,6 +69,8 @@ learns this barycenter.)
 @docs/SIXFOUR-RGBT4D-BUFFER-HARDENING-WORKFLOW.md@), "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),
+"SixFour.Spec.RGBTFeature" (the 1b feature layer — entropy-weighted temporal coherence over the
+circular buffer, the substrate every tier reads),
 "SixFour.Spec.SigmaPairFixed", "SixFour.Spec.SigmaPairHead", "SixFour.Spec.SigmaDecomp",
 "SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Bottleneck16",
 "SixFour.Spec.LeafOverride", "SixFour.Spec.PaletteGesture", "SixFour.Spec.GroupRGBT".

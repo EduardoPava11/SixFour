@@ -41,6 +41,7 @@ library
         SixFour.Spec.Sinkhorn
         SixFour.Spec.Barycenter
         SixFour.Spec.Entropy
+        SixFour.Spec.RGBTFeature
         SixFour.Spec.PairTree
         SixFour.Spec.PairTreeFixed
         SixFour.Spec.RGBTLift
@@ -297,6 +298,7 @@ test-suite spec-tests
         Properties.Sinkhorn
         Properties.Barycenter
         Properties.Entropy
+        Properties.RGBTFeature
         Properties.PairTree
         Properties.PairTreeFixed
         Properties.RGBTLift
