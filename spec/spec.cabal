@@ -46,9 +46,13 @@ library
         SixFour.Spec.PairTree
         SixFour.Spec.PairTreeFixed
         SixFour.Spec.RGBTLift
+        SixFour.Spec.TemporalLoop
         SixFour.Spec.CanonicalPhase
         SixFour.Spec.SigmaPairFixed
         SixFour.Spec.LeafOverride
+        SixFour.Spec.GenomePair
+        SixFour.Spec.GenomeBlend
+        SixFour.Spec.GenomeCarrier
         SixFour.Spec.PaletteGesture
         SixFour.Spec.GroupRGBT
         SixFour.Spec.Quad4Fixed
@@ -115,6 +119,7 @@ library
         SixFour.Spec.DeltaCodebook
         SixFour.Spec.AtlasOracle
         SixFour.Spec.PreferenceUpdate
+        SixFour.Spec.PersonalGenome
         SixFour.Spec.DecisionLog
         SixFour.Spec.AtlasCascade
         SixFour.Spec.Upscale256

@@ -7,6 +7,60 @@ newest first.
 
 ---
 
+## 2026-06-16 (later) — Genome-A/B "taste camera" pivot: design + 5 spec keystones implemented
+
+> **Session theme:** a hard product simplify — **the NN genome is front-and-center, the UI collapses
+> to capture → A/B(two competing 16³) → export-family {16³,64³,256³}**, every device trains its own
+> genome on-device, and exported GIFs CARRY the genome (federated transport). Done spec-first via
+> three multi-agent workflows, then 5 of the 6 new `Spec.*` modules IMPLEMENTED (not stubs).
+> **All Haskell spec (Tier 0). Zig/Swift untouched — `zig build` still passes standalone.**
+
+### The arc (three workflows → design docs)
+- **Whole-repo map refresh** (workflow): the archived `APP-MAP.md` / `SIXFOUR-ARCHITECTURE-MAP.md`
+  were stale post-RGBT-4D; refreshed both into `docs/` (un-archived) with a 13-item stale-claims
+  ledger (e.g. "GIFB has 0 callers" → FALSE; VoxelCubeView DELETED not shelved; maximin-is-canon).
+- **Genome-A/B pivot design** (workflow, 16 agents w/ adversarial critique): `docs/SIXFOUR-GENOME-AB-
+  PIVOT-WORKFLOW.md` (8-phase `Spec.ABSurface` FSM, 6 spec modules, gated build order, decision
+  ledger). Critics caught 5 real blockers, resolved: orthogonality lives in the **384-D Haar-
+  COEFFICIENT** space by **band-disjoint support** (exact-0, no Gram-Schmidt); carrier is **Int32
+  Q16** not int16; federated adoption is **one logged Compare**, never a θ splice; 64³ hero on base
+  genome g0; "sub-band axes" are palette-Haar only (NOT coupled to spatial RGBT).
+- **Research integration** (workflow): mined `~/CubeGIF` (a working float/NEAT predecessor of this
+  exact A/B loop) + its 9 papers → `docs/SIXFOUR-GENOME-AB-PIVOT-RESEARCH-AMENDMENT.md` +
+  `docs/SIXFOUR-RESEARCH-PAPERS-INDEX.md`. Verdict: R1/R2 are NOT gaps (σ-pair=generator, band-
+  disjoint=orthogonality already decided); real wins = KataGo **aux-targets** + **gated promotion**
+  (R3) + a new period-64 Q16 **`Spec.TemporalLoop`** for exact loop closure (R5).
+
+### Implemented this session (each: full impl, `-Wall` clean own-file, all laws `True` in GHCi, wired into `spec.cabal` + `Spec.Map`)
+- **`Spec.GenomePair`** (keystone) — `sampleOrthogonalPair`: two band-disjoint σ-valid candidate
+  displacements; exact-0 `genomeInner`; θ-independent `captureMeasureRanking` cold start. 10 laws.
+  (Inner A·B = 0.0 exactly; norms = 1024·√24 ≈ 5016 on a 128-generator palette.)
+- **`Spec.TemporalLoop`** (NEW, R5) — period-64 Q16 cosine LUT, `loopIndex = mod 64 = .&.63`, exact
+  `temporalCos(t+64)==temporalCos t`; low-freq temporal residual = owned integer-Haar low band
+  (`liftPairT` pinned byte-equal to `analyzeFixed`). 8 laws. Distinct from float `Spec.Cyclic`.
+- **`Spec.PersonalGenome`** — per-device θ lifecycle over real `PreferenceUpdate.btUpdate`; cold
+  start, `replay`≡`btFit`, `personalBeta`=n/(n+50), KataGo gated promotion (`gatePasses` strict
+  majority on last K=8). 8 laws (incl. `lawRegularizedObjectiveDecreases` via L-smoothness η≤1/L).
+- **`Spec.GenomeBlend`** — federated receiver: foreign genome enters as ONE gated `applyPick`
+  Compare, never a splice; `Extracted`=Present/Absent/Corrupt → outcomes. Gate resists *regression*
+  not mere disagreement (both branches verified). 6 laws.
+- **`Spec.GenomeCarrier`** — boot-only GIF89a S4GN byte codec: 24B header + 384×Int32-LE-Q16 + CRC32
+  → 1564 body / 7 sub-blocks; total NoBlock/Corrupt/VersionMismatch extraction. 6 laws; **CRC32
+  validated against the canonical `crc32 "123456789"==0xCBF43926`** vector.
+
+### Build-order correction & open items
+- **None of the 5 needed the planned step-1 `Quad4.paletteToVec` refactor** — their import cones are
+  all pre-existing (LeafOverride/SigmaPairFixed/PairTreeFixed/Preference/PreferenceUpdate).
+- **Documented stubs (parse-verified, NOT wired into cabal):** `Spec.ABSurface`, `Spec.ExportFamily`
+  — the larger FSM + R-operator-ladder modules, for the next session. `ABSurface` needs the
+  `Display.hs` clock-half split first.
+- **VERIFICATION LEVEL (honest):** per-module `ghc -Wall -fno-code` typecheck + GHCi law evaluation
+  + `cabal build --dry-run` (config resolves). The **full `cabal build` / `cabal test` gate was NOT
+  run** this session, and no `Properties.*` test modules or codegen/Zig twins were written yet.
+  STATUS.md not touched (this is design+spec scaffold, not shipped behaviour).
+
+---
+
 ## 2026-06-16 — Tensor-math SOTA → the RGBT-4D reversible cube-ladder pivot (spec → shipped Swift)
 
 > **Session theme:** a deep tensor-math SOTA review became an architectural pivot. The capture is a

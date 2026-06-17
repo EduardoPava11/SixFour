@@ -38,6 +38,8 @@ comparisons, and a small per-user delta head is updated on device (proven on har
   * "SixFour.Spec.AtlasMove"       — the Move ADT (the user's curation actions)
   * "SixFour.Spec.AtlasOracle"     — the value oracle scoring board candidates
   * "SixFour.Spec.AtlasCascade"    — the multi-stage proposal cascade
+  * "SixFour.Spec.PersonalGenome"  — ★ pivot: the per-device θ lifecycle (cold start, per-pick
+    learning, deterministic replay, KataGo-gated promotion) wrapping "SixFour.Spec.PreferenceUpdate"
   * "SixFour.Spec.DecisionLog"     — the replay-record wire format of picks
   * "SixFour.Spec.DeltaCodebook"   — the per-user delta-head codebook
   * "SixFour.Spec.PreferenceUpdate" — the on-device preference-update (gradient/weight) rule
@@ -72,10 +74,18 @@ reproducible phase on the C₆₄-symmetric GIF loop),
 "SixFour.Spec.RGBTFeature" (the 1b feature layer — entropy-weighted temporal coherence over the
 circular buffer, the substrate every tier reads), "SixFour.Spec.CubeLadder" (the 16³/64³/256³ tiers
 as reversible 2D-Haar views on that substrate — lossless within capture via "SixFour.Spec.RGBTLift",
-predictive only beyond),
+predictive only beyond), "SixFour.Spec.TemporalLoop" (EXACT 64-frame GIF-loop closure — a
+period-2⁶ Q16 cosine LUT whose wrap is an integer identity — plus the low-frequency temporal
+residual over the owned integer Haar; the shipped Q16 twin of the float "SixFour.Spec.Cyclic"),
 "SixFour.Spec.SigmaPairFixed", "SixFour.Spec.SigmaPairHead", "SixFour.Spec.SigmaDecomp",
 "SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Bottleneck16",
-"SixFour.Spec.LeafOverride", "SixFour.Spec.PaletteGesture", "SixFour.Spec.GroupRGBT".
+"SixFour.Spec.LeafOverride", "SixFour.Spec.GenomePair" (★ pivot KEYSTONE — two orthogonal-by-
+disjoint-support σ-valid A/B candidate displacements from the base genome, with a θ-independent
+cold-start ranking), "SixFour.Spec.GenomeBlend" (★ pivot: federated transport — an extracted
+foreign genome enters as ONE gated Bradley–Terry Compare, never a θ splice),
+"SixFour.Spec.GenomeCarrier" (★ pivot: the genome-in-GIF S4GN byte codec — Int32 LE Q16 in a
+GIF89a Application-Extension, CRC32-checked, total Absent\/Corrupt\/VersionMismatch extraction),
+"SixFour.Spec.PaletteGesture", "SixFour.Spec.GroupRGBT".
 
 == 5. The authoring STORY (Acts I–IV) — the user-facing pipeline the NN lives in
 "SixFour.Spec.StageA" (Act I, @16²@ per-frame) · "SixFour.Spec.QuartetDelta" (Act II, @4⁴@ quartet core) ·
