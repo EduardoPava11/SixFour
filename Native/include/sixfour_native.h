@@ -161,6 +161,23 @@ int32_t s4_haar_level_nodes(int32_t level, const int32_t *root_q16,
                             const int32_t *offsets_q16, int32_t n,
                             int32_t *out_nodes_q16);
 
+// Reversible RGBT-4D / cube-ladder lift (the spatial+temporal S-transform that
+// underlies the {16³,64³,256³} cube ladder). Bijective integer lifting in Q16;
+// matches Spec.RGBTLift / Spec.CubeLadder (lawLadderBijective) bit-for-bit and is
+// the seam where Metal (2-D threads) and Zig (loops) must agree on tiling order.
+//
+// 2×2 → RGBT lift on one block: 4 ints in, 4 ints out. Bijective with s4_rgbt_unlift_quad.
+int32_t s4_rgbt_lift_quad(const int32_t *in_q16, int32_t *out_q16);
+// Inverse of s4_rgbt_lift_quad.
+int32_t s4_rgbt_unlift_quad(const int32_t *in_q16, int32_t *out_q16);
+// One 2-D-Haar level over a side×side row-major grid (side even): tile into 2×2
+// blocks → coarse (side/2)² plane + (side/2)² detail triples (G,B,T).
+int32_t s4_cube_lift_level(int32_t side, const int32_t *grid,
+                           int32_t *out_coarse, int32_t *out_details);
+// Exact inverse of s4_cube_lift_level: coarse h² + details h²·3 → 2h×2h grid.
+int32_t s4_cube_unlift_level(int32_t half, const int32_t *coarse,
+                             const int32_t *details, int32_t *out_grid);
+
 int32_t s4_dither_frame(const int32_t *oklab_q16, const int32_t *centroids_q16,
                         int32_t p, int32_t k, int32_t dither_mode, int32_t serpentine,
                         const uint8_t *stbn_slice, uint8_t *out_indices,

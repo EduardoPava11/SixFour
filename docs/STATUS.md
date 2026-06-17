@@ -3,7 +3,11 @@
 > **NOTES.md = history; STATUS.md = current truth.**
 > The load-bearing facts in this file are gated by `scripts/verify-doc-claims.sh` — run it
 > before trusting a status claim. If a claim here disagrees with another doc, this file wins;
-> the other doc is stale. Last reconciled 2026-06-09 (debt-cleanup pass: archived 10 docs
+> the other doc is stale. Last reconciled 2026-06-17 (state-inspection pass: verified test
+> counts to **834 Haskell / 29 Zig** — both gates green; closed the Zig-export-surface debt
+> by declaring the 4 `s4_cube/rgbt_lift` symbols in the header + lighting the previously-skipped
+> `rgbt4d_fixture_test`; see `docs/SIXFOUR-STATE-INSPECTION-2026-06-17.md`). Prior reconcile
+> 2026-06-09 (debt-cleanup pass: archived 10 docs
 > superseded by the 4 pt GRID v3 atom / deleted views, recorded on-device-personalization
 > feasibility, and added orphan-spec + Zig-export-surface debt rows — see
 > `docs/SIXFOUR-DEBT-CLEANUP-REPORT.md`). Prior reconcile 2026-06-05 (merged the former
@@ -111,9 +115,9 @@ do not re-research or re-derive it.
   untouched ⇒ cell-grid law intact; transient `CellText` look name), and Review **Export LUT**
   bakes a 65³ `.cube` (`LUTFile`, Q16 6-decimal, Log3G10/RWGRGB→Rec.709) for grading R3D in
   Resolve. Spec source of truth: `Spec.{ZoneProfile,LookTransfer,RedFrontEnd,CubeLut}` (★ laws:
-  luminance-preservation, preview≡cube, .cube grid ordering; 750 Haskell tests). Zig kernels
+  luminance-preservation, preview≡cube, .cube grid ordering; 834 Haskell tests). Zig kernels
   `s4_zone_profile_q16`/`s4_look_transfer_q16`/`s4_build_cube_q16` are byte-exact to the spec
-  (`lut_fixture_test.zig`, 28 Zig tests); transcendentals (Log3G10 decode, filmic exp) +sRGB
+  (`lut_fixture_test.zig`, 29 Zig tests); transcendentals (Log3G10 decode, filmic exp) +sRGB
   encode are spec-generated embedded 1-D LUTs (`{log3g10_decode,filmic_tonemap,srgb_encode}_lut.bin`).
   Swift bridge `SixFourNative.{lookZoneProfile,lookTransfer,extractLUT}`. iOS build SUCCEEDED
   (compile-checked; on-device swipe/look + Resolve LUT verification is the user's step).
@@ -127,7 +131,8 @@ do not re-research or re-derive it.
   per-stage kernels, returns `s4_gif_assemble`); `s4_widen_half_to_q16` and
   `s4_linear_to_oklab_q16` are implemented with golden anchors. (NOT stubs.)
 - **Cross-language parity gates.** Collapse, value head, color, quantize, dither, GridAxis,
-  CloudProjection, VoxelFit goldens green; spec suite **595 tests pass**.
+  CloudProjection, VoxelFit, RGBT-4D cube-ladder goldens green; spec suite **834 tests pass**
+  (Haskell), **29 Zig tests pass** (incl. the now-live `rgbt4d_fixture_test` cross-language gate).
 - **Capture→GIFA morph on the one surface (2026-06-07).** The live hero paints the REAL
   camera (`σ.previewTile` index cells, not a synthetic scroll); the loading sweep streams the
   REAL deterministic partials (`raw→quantize→dither→palette`) in true colour via
@@ -177,8 +182,14 @@ do not re-research or re-derive it.
   reduce-motion. The opaque heroes draw on top. Pure UI off the deterministic path.
 - **Look-NN forward path proven in Haskell** (LookNetE/R/D, 384-DOF SigmaPairTree decoder,
   Obfuscation keystone, PairTree round-trip) — proven, but **nothing runs it on device**.
-- **Trained grayscale-L deploy blob** `trainer/out/look_net_trained.s4ln` (133,923 B) exists
-  and the Zig `s4_load_look_net` loader is fixture-verified.
+- **Supervised MLX look-net ABANDONED (2026-06-17).** The grayscale-L training did not converge
+  to a usable look; the trained outputs (`look_net_trained.s4ln`, `atlas_net_trained.npz`,
+  `synth_looknet_grayscale.gif`) were DELETED. The Zig `s4_load_look_net` loader CODE is kept and
+  still fixture-verified against the regenerable golden `look_net.s4ln` (not a trained artifact).
+  The core is reframing AlphaZero-shaped: a policy+value net over the reversible 2x2->1 LAB-collapse
+  turn-based state machine (Atlas board/move/state), Bradley-Terry A/B preference as the reward,
+  built bare-metal SIMT+Metal. Design: `docs/SIXFOUR-ALPHAZERO-COLLAPSE-DESIGN.md`. The
+  sigma-pair / sigma-equivariant trunk ideas are ported, the MLX weights are not.
 
 ### DESIGN-ONLY (spec'd / written, not on the live render or UI path)
 - **Learned global palette (the NN genome).** No on-device Swift forward pass; `loadLookNet`

@@ -89,6 +89,11 @@ import qualified Properties.LookNetCompose as LookNetCompose
 import qualified Properties.CoreMLContract as CoreMLContract
 import qualified Properties.MLXContract  as MLXContract
 import qualified Properties.GoldenForward as GoldenForward
+import qualified Properties.AtlasNetEval as AtlasNetEval
+import qualified Properties.AtlasGame    as AtlasGame
+import qualified Properties.BoardQ16     as BoardQ16
+import qualified Properties.GLRM         as GLRM
+import qualified Properties.GumbelSearch as GumbelSearch
 import qualified Properties.Loss         as Loss
 import qualified Properties.AtlasBoard   as AtlasBoard
 import qualified Properties.AtlasMove    as AtlasMove
@@ -189,6 +194,11 @@ main = defaultMain $ testGroup "sixfour-spec"
   , CoreMLContract.tests
   , MLXContract.tests
   , GoldenForward.tests
+  , AtlasNetEval.tests
+  , AtlasGame.tests
+  , BoardQ16.tests
+  , GLRM.tests
+  , GumbelSearch.tests
   , Loss.tests
   , AtlasBoard.tests
   , AtlasMove.tests
