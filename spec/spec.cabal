@@ -111,6 +111,11 @@ library
         SixFour.Spec.LookNetD
         SixFour.Spec.LookNetCompose
         SixFour.Spec.LookNetEval
+        SixFour.Spec.AtlasNetEval
+        SixFour.Spec.AtlasGame
+        SixFour.Spec.BoardQ16
+        SixFour.Spec.GLRM
+        SixFour.Spec.GumbelSearch
         SixFour.Spec.Loss
         SixFour.Spec.STBN3D
         SixFour.Spec.AtlasBoard
@@ -374,6 +379,11 @@ test-suite spec-tests
         Properties.CoreMLContract
         Properties.MLXContract
         Properties.GoldenForward
+        Properties.AtlasNetEval
+        Properties.AtlasGame
+        Properties.BoardQ16
+        Properties.GLRM
+        Properties.GumbelSearch
         Properties.Loss
         Properties.AtlasBoard
         Properties.AtlasMove

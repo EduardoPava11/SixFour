@@ -7,6 +7,66 @@ newest first.
 
 ---
 
+## 2026-06-17 — MLX look-net ABANDONED; AlphaZero reframe; Haskell backbone built (S2/S3/M2/M4/M5)
+
+> **Session theme:** the supervised MLX look-net did not train well and was abandoned (trained
+> outputs deleted). The core reframes AlphaZero-shaped: a policy+value net over a turn-based state
+> machine where the moves are the reversible 2x2->1 LAB-collapse, the cube ladder 16^3<->64^3<->256^3
+> is the abstraction, and a Bradley-Terry A/B preference is the reward. Everything bare-metal on
+> SIMT + Metal (Zig CPU reference, MSL GPU, golden-vector parity; never mlx-swift, never CoreML).
+> Done spec-first: the entire FULLY-VERIFIABLE lane is complete in Haskell (Tier 0). Suite
+> **834 -> 870** tests; Zig 29/29; doc gate green throughout.
+
+### The arc (workflows -> design docs -> build)
+- **State inspection** (exhaustive workflow, 57 agents): `docs/SIXFOUR-STATE-INSPECTION-2026-06-17.md`.
+  Verdict: deterministic spine shipped; learned + super-res halves spec-only/dormant. Also closed
+  the Zig-export-surface debt (declared the 4 `s4_cube/rgbt_lift` header symbols, lit the skipped
+  `rgbt4d_fixture_test` so Zig 28+skip becomes 29/29) and reconciled STATUS counts.
+- **Look+value unification** design: `docs/SIXFOUR-LOOK-VALUE-UNIFICATION.md` (shared sigma-trunk +
+  equivariant-policy / invariant-value heads). The merge-decision ADR
+  (`docs/SIXFOUR-MERGE-DECISION-ADR.md`) is now OBSOLETE: it assumed reusable MLX weights.
+- **AlphaZero collapse** design (exhaustive workflow, 36 agents): `docs/SIXFOUR-ALPHAZERO-COLLAPSE-
+  DESIGN.md`. Resolved 4 cross-facet conflicts (one V, not three; determinism at the Q16 terminal,
+  not per-move; one `GameMove` ADT; policy half honestly unbuilt so v1 = value-only + frozen policy).
+  Algorithm: Gumbel-AlphaZero (Sequential Halving over <=8) + KataGo aux targets + GLRM kill-switch;
+  MuZero rejected (dynamics are known + reversible).
+- **SIMT/Metal web research** (recorded in design section 5.5): Zig does NOT compile to Metal (its
+  GPU backend is SPIR-V/Vulkan; bridging needs banned deps) so "Zig + Metal" IS the golden-parity
+  gate; MSL signed `/` truncates toward zero (the `@divFloor` trap); `simd_sum` reassociates floats,
+  so the cross-tier contract is a Q16 integer key on a fixed-order reduction, not a float.
+
+### Teardown (executed, gate-safe)
+Deleted `trainer/out/{look_net_trained.s4ln, atlas_net_trained.npz, synth_looknet_grayscale.gif}`.
+The doc gate PINNED `look_net_trained.s4ln` at 133923 B (removed that check first, isolating cause),
+and `fixture_test.zig` loads `look_net.s4ln` (the regenerable GOLDEN fixture, KEPT, byte-different
+from the trained blob; the loader test still passes). Stale dead-MLX prose corrected in 4 maps;
+`HANDOFF-LNN-app-io-and-ui.md` deleted (verified referenced by no gate). STATUS line 185 reframed.
+
+### Built this session (Tier 0 Haskell, +36 properties, all green)
+- `Spec.AtlasNetEval` (S2, +5): the policy/value head forward oracle ported from `atlas_net_mlx.py`;
+  sigma-invariant value + sigma-equivariant (delta-row-swap) policy PROVEN exactly.
+- `Spec.AtlasGame` (S3, +8): the unified `GameMove = Edit | Curate | Rung` over PaletteSearch /
+  AtlasMove / CubeLadder (non-invasive). `Compare` lifted out as reward; `applyRung Ascend T64 =
+  Nothing` (synth-beyond forbidden); determinism anchored at `lawTerminalQuantizationIdempotent`.
+- `Spec.BoardQ16` (M2, +8): integer binning + integer counts (permutation-invariant, proven via
+  shuffle) + one-rounding Q16 mass, replacing the float `1/n` histogram that leaked into the argmax.
+- `Spec.GLRM` (M4, +8): the preference-training KILL-SWITCH (hand-written OLS; STOP unless a stable
+  fit over [coverage, beauty, ||chroma||^2] clears the R^2 floor; degenerate gallery pairs to 0
+  weight). This is the brake the failed MLX run never had.
+- `Spec.GumbelSearch` (M5, +7): Sequential-Halving root selection + the Q16 cross-tier key.
+  `lawArgmaxKeyDependsOnlyOnKeys`: a GPU float that differs sub-key from the CPU still picks the same
+  move (the formal antidote to `simd_sum` reassociation).
+
+### NEXT (device-only; design section 5.5 says what to honor)
+S4 `Cube.metal` byte-exact parity gate (floor-div helper, negative-fixture round-trip); M1 rewrite
+`AtlasTrainer` value graph to linear-770 (MPSGraph on-device, re-measure ms/step); M3 hand-Metal
+forward gated ordinally vs `Spec.AtlasNetEval`; then L-phase (policy head + corrected sigma
+involution, KataGo aux heads, Mac expert iteration with true visit-count targets).
+
+See memory: `sixfour-alphazero-pivot.md`.
+
+---
+
 ## 2026-06-16 (later) — Genome-A/B "taste camera" pivot: design + 5 spec keystones implemented
 
 > **Session theme:** a hard product simplify — **the NN genome is front-and-center, the UI collapses

@@ -37,6 +37,16 @@ comparisons, and a small per-user delta head is updated on device (proven on har
   * "SixFour.Spec.AtlasState"      — the Atlas session state
   * "SixFour.Spec.AtlasMove"       — the Move ADT (the user's curation actions)
   * "SixFour.Spec.AtlasOracle"     — the value oracle scoring board candidates
+  * "SixFour.Spec.AtlasNetEval"    — ★ AlphaZero reframe: concrete forward for the policy/value
+    heads (golden-vector oracle, ported from atlas_net_mlx.py); see SIXFOUR-ALPHAZERO-COLLAPSE-DESIGN
+  * "SixFour.Spec.AtlasGame"       — ★ AlphaZero reframe: the unified GameMove ADT (Edit|Curate|Rung)
+    over PaletteSearch/AtlasMove/CubeLadder; Compare lifted out as reward; Q16 terminal determinism
+  * "SixFour.Spec.BoardQ16"        — ★ AlphaZero reframe: deterministic integer board-mass derivation
+    (integer binning + counts + one-rounding Q16 mass) closing the float input gap to the policy argmax
+  * "SixFour.Spec.GLRM"            — ★ AlphaZero reframe: the preference-training kill-switch (OLS over
+    [coverage,beauty,‖chroma‖²]; STOP on no signal; drop degenerate gallery pairs)
+  * "SixFour.Spec.GumbelSearch"    — ★ AlphaZero reframe: Sequential-Halving root selection + the Q16
+    cross-tier comparison key (CPU tree ≡ GPU float value decision; sub-key wobble cannot flip a move)
   * "SixFour.Spec.AtlasCascade"    — the multi-stage proposal cascade
   * "SixFour.Spec.PersonalGenome"  — ★ pivot: the per-device θ lifecycle (cold start, per-pick
     learning, deterministic replay, KataGo-gated promotion) wrapping "SixFour.Spec.PreferenceUpdate"

@@ -301,13 +301,14 @@ The archived APP-MAP and several memory/NOTES claims are stale. Current truth:
 - **The product is three GIFs** (16³/64³/256³ ladder), with the 64³ GIF as the
   native middle rung — *but* the three-GIF export action does not yet exist
   (G6), so the shipped app still emits one GIF.
-- **Decoder is 384-DOF** (σ-pair genome); 768 is the flat leaf space. A trainer
-  EXISTS (`trainer/train_look_net_mlx.py`; `out/look_net_trained.s4ln`, 133,923 B
-  on disk), and `Spec.Loss` is ported (`look_net_loss_mlx.py`) — but it learns
-  grayscale-L only and the running trainer minimizes a different (GAN/soft-OT/Bures)
-  loss than the canonical `Spec.Loss`. (Drift: `studio/look-nn-baseline/lib.rs`
-  still runs the OLD 768-flat genome via 1+1-ES despite `contract.rs` exposing
-  `SIGMA_PAIR_DOF=384`.)
+- **Decoder is 384-DOF** (σ-pair genome); 768 is the flat leaf space. The
+  supervised MLX trainer (`trainer/train_look_net_mlx.py`) was ABANDONED in the
+  2026-06-17 AlphaZero reframe and its trained outputs (`look_net_trained.s4ln`,
+  `atlas_net_trained.npz`) were DELETED; only the regenerable GOLDEN loader
+  fixture `out/look_net.s4ln` and the Zig loader CODE remain. The core is reframed
+  AlphaZero-shaped (policy+value over the LAB-collapse state machine, Bradley-Terry
+  A/B reward). (Drift: `studio/look-nn-baseline/lib.rs` still runs the OLD 768-flat
+  genome via 1+1-ES despite `contract.rs` exposing `SIGMA_PAIR_DOF=384`.)
 - **Maximin is canon** for the deterministic path (the "maximin ≠ Wu bug" note is
   DISPROVEN); Wu/KMeans/Octree live only on the demoted float fallback.
 - **No barycenter on device.** Post-ADR-014, full discrete `buresBarycenter` is

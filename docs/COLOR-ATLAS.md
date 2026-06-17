@@ -82,6 +82,13 @@ replayability.
 | `Cube256` | [256,256,256] | uint8 | slot into `outPalettes[f′]` | prior-weighted nearest quantizer | GIF assembly |
 | `.s4ln` v2 | 13 LookNet + 7 atlas tensors | float32 LE | raw **pre-σ-mask** | `export_look_net_blob.py` extension | `s4_load_look_net` v2, Swift forward |
 
+> **Note (2026-06-17 AlphaZero reframe):** the `.s4ln` v2 FORMAT, `export_look_net_blob.py`,
+> and the `s4_load_look_net` loader are DESIGN/CODE kept as ideas. The supervised MLX trained
+> instance `atlas_net_trained.npz` (and `look_net_trained.s4ln`) were DELETED and are
+> regenerable; nothing on disk is a trained artifact except the regenerable GOLDEN loader
+> fixture `look_net.s4ln`. This doc's policy/value net is what the sanctioned MPSGraph trainer
+> now produces.
+
 > **RESOLUTION (judge: P0's ExitState fields summed to 16 B, not the claimed 12).** The layout
 > is now 16 B/slot by construction: 4+6+4+2 = 16, no pad. Compile-time sum check
 > `256 × 16 = 4096` in `AtlasCascade.hs`, mirrored byte-for-byte in Swift.

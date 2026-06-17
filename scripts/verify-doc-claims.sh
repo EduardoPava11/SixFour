@@ -83,16 +83,14 @@ check "trainer is grayscale-L-only nucleus" \
   grep -q 'grayscale' trainer/train_look_net_mlx.py
 check "no look-net weight .blob is bundled in the app target" \
   test -z "$(find SixFour -iname '*.blob' 2>/dev/null)"
-check "trained deploy blob exists (133923 bytes) and Zig loader is fixture-tested" \
-  test "$(stat -f%z trainer/out/look_net_trained.s4ln 2>/dev/null || echo 0)" = "133923"
 check "Zig blob loader verified by fixture test" \
   grep -q 's4_load_look_net' Native/src/fixture_test.zig
 
 # --- BUILT: deterministic core implementations are real, not stubs ---
 check "s4_gif_encode_burst is a real impl (folds and returns s4_gif_assemble)" \
   grep -q 'return s4_gif_assemble' Native/src/kernels.zig
-check "Native header declares all 24 distinct s4_* symbols (21 shipped + 3 tooling)" \
-  test "$(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u | wc -l | tr -d ' ')" -eq 24
+check "Native header declares all 28 distinct s4_* symbols (25 shipped + 3 tooling)" \
+  test "$(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u | wc -l | tr -d ' ')" -eq 28
 check "header s4_* symbol set == Zig export set (no undeclared exports)" \
   bash -c "diff <(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u) <(grep -hoE 'export fn (s4_[a-z_0-9]+)' Native/src/*.zig | sed 's/export fn //' | sort -u) >/dev/null"
 

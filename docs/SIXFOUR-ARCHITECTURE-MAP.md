@@ -91,18 +91,24 @@ Gaussian mixture of the 64 input palettes. σ-equivariance forces the block bloc
 6. **Zig** — `s4_palette_oklab_to_srgb8` + `s4_gif_assemble` emit the final GIFB.
 
 Zig is the integer-exact floor at steps 3, 5, 6; Swift is the host orchestrator and (future)
-learned core at steps 2, 4. **CRITICAL:** the trained core does not yet consume the Zig floor —
-the trained blob is *loaded* but has no render-path consumer, and the running trainer learns
-**grayscale-L only** (a=b=0). Step 4 is therefore design-quality on device; step 5 ships as
-the deterministic `FarthestPointCollapse`, not a learned barycenter (see §5, §6).
+learned core at steps 2, 4. **CRITICAL:** there is no learned core consuming the Zig floor.
+The Zig `s4_load_look_net` loader CODE is kept (it parses the regenerable GOLDEN fixture
+`look_net.s4ln`) but has zero production callers, and the supervised MLX trained weights were
+abandoned/deleted in the 2026-06-17 AlphaZero reframe. Step 4 is therefore design-quality on
+device; step 5 ships as the deterministic `FarthestPointCollapse`, not a learned barycenter
+(see §5, §6).
 
 **(d) The trainer (Mac, never shipped).** `regimen.py` is the one-command L-NN protocol
 (gates → train → quality-gate → export blob). `train_look_net_mlx.py` is the **real, run
 trainer** (GAN + PonderNet halt + Bures anchor, soft-OT). `zig_native.py` is the ctypes data
 engine: `s4_synth_burst` + `gif_to_tokens` produce the (16384, 10) GMM tensor-of-the-GIF the
-device sees. `export_look_net_blob.py` writes the **S4LN** blob
-(`out/look_net_trained.s4ln`, 133,923 bytes on disk) loaded by Zig `s4_load_look_net`.
-`gates.py` demands beating the 256-level Wasserstein barycenter on EVERY SynthClass. The Rust
+device sees. `export_look_net_blob.py` writes the **S4LN** blob format loaded by Zig
+`s4_load_look_net`; the surviving on-disk instance is the regenerable GOLDEN fixture
+`out/look_net.s4ln` (NOT a trained artifact). The supervised MLX trained outputs
+(`look_net_trained.s4ln`, `atlas_net_trained.npz`) were ABANDONED and DELETED in the
+2026-06-17 AlphaZero reframe; the loader CODE, spec, codegen, and the σ-pair / σ-equivariant
+trunk are KEPT as ideas. `gates.py` demanded beating the 256-level Wasserstein barycenter on
+EVERY SynthClass. The Rust
 **studio** is a separate Mac sidecar: `analysis-core` (golden-checked 1e-6 math),
 `look-nn-baseline` (gradient-free 1+1-ES = the non-NN floor), `explore` (writes FINDINGS.md).
 
@@ -187,8 +193,11 @@ captured palette → `s4_zone_profile_q16` → `s4_look_transfer_q16` (live prev
 
 **TRAINER (Mac, offline).** seed + SynthClass → `s4_synth_burst` → `Burst.gif` →
 `gif_to_tokens` (16384,10 GMM tokens) → generated LookNet → 384-DOF σ-pair genome →
-`export_look_net_blob` → `look_net_trained.s4ln` (133,923 B) → on-device `s4_load_look_net`
-(aliasing pointers) → hand-written Swift forward pass — **NOT YET wired into render.**
+`export_look_net_blob` → S4LN blob → on-device `s4_load_look_net` (aliasing pointers). The
+supervised MLX path that produced `look_net_trained.s4ln` was ABANDONED/DELETED in the
+2026-06-17 AlphaZero reframe; only the regenerable GOLDEN fixture `look_net.s4ln` survives, the
+loader code consumes it, and there is no hand-written render-path forward pass. **NOT wired
+into render; supervised trained weights abandoned, loader code kept.**
 
 ## 5. The cross-language byte-alignment contract
 
@@ -258,10 +267,14 @@ hand-optimizes the OLD 768-flat-coefficient genome via 1+1-ES even though its ow
 `contract.rs` exposes `SIGMA_PAIR_DOF = 384` / `DECODER_IO out_dim = 384` — **the Rust baseline
 is genome-incompatible with the current MLX decoder.**
 
-**A look-NN trainer DOES exist.** `train_look_net_mlx.py` is real and run; `out/look_net_trained.s4ln`
-(133,923 B) and `out/atlas_net_trained.npz` are on disk. The trainer has produced a deploy blob.
-The remaining gap: the blob has **no on-device render consumer** (`s4_load_look_net` aliasing-parses
-it, nothing renders from it), and the trainer learns **grayscale-L only** (a=b=0, chroma deferred).
+**The supervised look-NN trainer was ABANDONED (2026-06-17).** `train_look_net_mlx.py` was real
+and run, but its trained outputs (`out/look_net_trained.s4ln`, `out/atlas_net_trained.npz`) were
+DELETED in the AlphaZero reframe and are NOT on disk. No supervised deploy blob exists. What
+survives: the regenerable GOLDEN loader fixture `out/look_net.s4ln` (NOT a trained artifact), the
+Zig `s4_load_look_net` loader CODE (zero production callers), the spec, and the codegen. The core
+is reframed AlphaZero-shaped: a policy+value net over the reversible LAB-collapse turn-based state
+machine, Bradley-Terry A/B preference as reward. The σ-pair / σ-equivariant trunk are ported as
+IDEAS; the MLX weights are not.
 
 **`Spec.Loss` is ported but unused by the runner.** `Properties.Loss` is wired into
 `test/Spec.hs`; `look_net_loss_mlx.py` is the gated MLX port. BUT it defines the training
