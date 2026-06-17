@@ -99,7 +99,7 @@ See @docs/SIXFOUR-PALETTE-STORY-WORKFLOW.md@.
 "SixFour.Spec.Laws" — shared law combinators.
 
 == 9. Codegen — emitters to the app (Swift / Zig / Python), golden-pinned
-@SixFour.Codegen.Swift@, @.Shapes@, @.Golden@, @.Collapse@, @.PairTree@, @.QuartetDelta@, @.Genome@,
+@SixFour.Codegen.Swift@, @.Shapes@, @.Golden@, @.Collapse@, @.RGBT4D@, @.PairTree@, @.QuartetDelta@, @.Genome@,
 @.GenomeFixed@, @.PaletteValue@, @.MLX@, @.CoreML@, @.Burn@.
 
 == 10. Look transfer / LUT extraction (R3D .cube)

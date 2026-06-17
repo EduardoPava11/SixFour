@@ -4,18 +4,37 @@ import Testing
 /// Byte-exact gate for the RGBT-4D integer port.
 ///
 /// `RGBT4DLift` is the hand-written Swift port of `SixFour.Spec.RGBTLift` and
-/// `SixFour.Spec.CubeLadder`. Because the lifting is pure integer (Q16) math, the
-/// port must reproduce the spec EXACTLY — no tolerance. These mirror the spec's
-/// QuickCheck laws and pin the same golden values (notably the floor-division
-/// parity that Haskell `div` and Swift `/` disagree on for negatives).
+/// `SixFour.Spec.CubeLadder`. `RGBT4DGolden` is GENERATED from those specs by
+/// `cabal run spec-codegen` (`SixFour.Codegen.RGBT4D`), so the port rides the same
+/// drift gate as `CollapseGolden`. Because the lifting is pure integer (Q16) math,
+/// every value must match EXACTLY — no tolerance (notably the floor-division parity
+/// that Haskell `div` and Swift `/` disagree on for negatives).
 struct RGBT4DGoldenTests {
 
-    // The fixed 8×8 grid behind the spec's FNV golden pins (Properties.CubeLadder).
-    static let goldenGrid: [Int] = (0..<64).map { ((($0 * 37 + 11) % 251)) - 125 }
+    /// Flatten cube-ladder detail planes to `[Int]` (R/G/B per triple) for comparison
+    /// against the generated `distillDetailsFlat` (tuple arrays aren't Equatable).
+    private func flatten(_ dets: [[(Int, Int, Int)]]) -> [Int] {
+        dets.flatMap { $0.flatMap { [$0.0, $0.1, $0.2] } }
+    }
 
-    @Test func liftQuadMatchesSpecGolden() {
-        // SixFour.Spec.RGBTLift golden: liftQuad (10,20,30,44) = (26,-22,-12,4).
-        #expect(RGBT4DLift.liftQuad((10, 20, 30, 44)) == (26, -22, -12, 4))
+    @Test func liftQuadMatchesGeneratedGolden() {
+        let (r, g, b, t) = RGBT4DLift.liftQuad((10, 20, 30, 44))
+        #expect([r, g, b, t] == RGBT4DGolden.liftQuad_10_20_30_44)
+    }
+
+    @Test func distillMatchesGeneratedGolden() {
+        let (coarse, dets) = RGBT4DLift.distill(2, 8, RGBT4DGolden.grid)
+        #expect(coarse == RGBT4DGolden.distillCoarse)
+        #expect(flatten(dets) == RGBT4DGolden.distillDetailsFlat)
+    }
+
+    @Test func synthBeyondMatchesGeneratedGolden() {
+        #expect(RGBT4DLift.synthBeyond(8, 1, RGBT4DGolden.grid) == RGBT4DGolden.synthBeyond_8_1)
+    }
+
+    @Test func ladderIsBijectiveWithinCapture() {
+        let (coarse, dets) = RGBT4DLift.distill(2, 8, RGBT4DGolden.grid)
+        #expect(RGBT4DLift.synthesize(2, coarse, dets) == RGBT4DGolden.grid)
     }
 
     @Test func quadRoundTripsExactlyIncludingNegatives() {
@@ -23,29 +42,9 @@ struct RGBT4DGoldenTests {
         #expect(RGBT4DLift.unliftQuad(RGBT4DLift.liftQuad(q)) == q)
     }
 
-    @Test func ladderIsBijectiveWithinCapture() {
-        let (coarse, dets) = RGBT4DLift.distill(2, 8, Self.goldenGrid)
-        #expect(RGBT4DLift.synthesize(2, coarse, dets) == Self.goldenGrid)
-    }
-
-    @Test func oneLevelReversible() {
-        let (c, d) = RGBT4DLift.liftLevel(8, Self.goldenGrid)
-        #expect(RGBT4DLift.unliftLevel(4, c, d) == Self.goldenGrid)
-    }
-
     @Test func coarsePlaneIsGamutClosed() {
-        let (coarse, _) = RGBT4DLift.liftLevel(8, Self.goldenGrid)
-        let lo = Self.goldenGrid.min()!, hi = Self.goldenGrid.max()!
+        let (coarse, _) = RGBT4DLift.liftLevel(8, RGBT4DGolden.grid)
+        let lo = RGBT4DGolden.grid.min()!, hi = RGBT4DGolden.grid.max()!
         #expect(coarse.allSatisfy { $0 >= lo && $0 <= hi })
-    }
-
-    @Test func synthBeyondIsNearestNeighbourReplication() {
-        let h = 4
-        let coarse = (0..<(h * h)).map { $0 * 7 - 50 }
-        // nearest-neighbour ×2 replication, the deterministic floor.
-        let side = 2 * h
-        var expected = [Int](repeating: 0, count: side * side)
-        for oy in 0..<side { for ox in 0..<side { expected[oy * side + ox] = coarse[(oy / 2) * h + (ox / 2)] } }
-        #expect(RGBT4DLift.synthBeyond(h, 1, coarse) == expected)
     }
 }

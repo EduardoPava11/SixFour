@@ -45,6 +45,7 @@ import SixFour.Codegen.CoreML (emitLookNetTorch,  emitBuildMlpackage)
 import SixFour.Codegen.MLX    (emitLookNetMLX)
 import SixFour.Codegen.Golden (emitLookNetGolden, emitAxisNetGolden)
 import SixFour.Codegen.Collapse (emitCollapseGolden)
+import SixFour.Codegen.RGBT4D (emitRGBT4DGolden)
 import SixFour.Codegen.PairTree (emitPairTreeGolden)
 import SixFour.Codegen.QuartetDelta (emitQuartetDeltaGolden)
 import SixFour.Codegen.PaletteValue (emitPaletteValueGolden)
@@ -88,6 +89,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "CellMechanicsContract.swift") emitCellMechanicsContract
   writeUtf8 (swiftOutDir   </> "OwnershipContract.swift")     emitOwnershipContract
   writeUtf8 (swiftOutDir   </> "CollapseGolden.swift")       emitCollapseGolden
+  writeUtf8 (swiftOutDir   </> "RGBT4DGolden.swift")         emitRGBT4DGolden
   writeUtf8 (swiftOutDir   </> "PairTreeGolden.swift")       emitPairTreeGolden
   writeUtf8 (swiftOutDir   </> "QuartetDeltaGolden.swift")   emitQuartetDeltaGolden
   writeUtf8 (swiftOutDir   </> "PaletteValueGolden.swift")   emitPaletteValueGolden
@@ -118,7 +120,7 @@ main = do
   let Mask3D maskBytes = generateSTBN3D @8 @8 @8
   writeBinary (resourceOutDir </> "stbn3d-8.bin") maskBytes
 
-  putStrLn "spec-codegen: wrote 27 files + 1 resource."
+  putStrLn "spec-codegen: wrote 28 files + 1 resource."
   putStrLn $ "  swift   : " <> swiftOutDir
   putStrLn $ "  mlx     : " <> mlxOutDir
   putStrLn $ "  burn    : " <> burnOutDir

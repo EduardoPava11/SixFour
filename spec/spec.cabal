@@ -125,6 +125,7 @@ library
         SixFour.Codegen.MLX
         SixFour.Codegen.Golden
         SixFour.Codegen.Collapse
+        SixFour.Codegen.RGBT4D
         SixFour.Codegen.PairTree
         SixFour.Codegen.QuartetDelta
         SixFour.Codegen.PaletteValue
