@@ -7,6 +7,60 @@ newest first.
 
 ---
 
+## 2026-06-16 — Tensor-math SOTA → the RGBT-4D reversible cube-ladder pivot (spec → shipped Swift)
+
+> **Session theme:** a deep tensor-math SOTA review became an architectural pivot. The capture is a
+> 64³ space-time colour mass; **RGBT IS the reversible 4-channel lifting** that makes a *lossless*
+> 16³/64³/256³ cube ladder (and 256³ synthesis from the coarse tier) possible. Built spec-first,
+> golden-gated, to a flag-gated Swift port. **All on master; 834 Haskell tests; the Swift port is
+> standalone-verified + compiles in-target.**
+
+### The arc (what shipped to master)
+- **Tensor-math SOTA review** (deep-research, adversarially verified): adopted **`Sinkhorn`**
+  (debiased divergence — discrete-OT fidelity tightening Bures), **`Barycenter`** (free-support W₂
+  particle-flow collapse move), **`Entropy`** (the capture's information coordinates: RGBT pool
+  weights + per-frame↔global scope cost). MoR design validated (NeurIPS 2025). Seams 4/5 = gaps.
+- **The pivot = 1b + 2b** (`docs/SIXFOUR-CUBE-LADDER-GAP-ANALYSIS.md` + the hardening workflow): a
+  *universal feature layer* (1b) with *semantic 4D R/G/B/T axes* (2b). Justification: **RGBT is the
+  reversible `(2×2)↔1` lifting** — the semantic distinctness of the 4 sub-bands IS the invertibility;
+  2a (symmetric) cannot be reversible.
+- **Keystones, proven:** `RGBTLift` (the `(2×2)↔1` integer bijection, exact), `CanonicalPhase` (the
+  loop gauge-fix via the necklace canonical form — proving it CAUGHT the naïve argmax+lowest-index
+  rule failing under ties).
+- **The pipeline:** `GroupRGBT.circularWindows` (stride-1 width-4 SIMT buffer; role-orbit +
+  rotation-equivariance), `RGBTFeature` (1b layer, completeness-preserving), `CubeLadder`
+  (16³/64³/256³ tiers — **LADDER BIJECTIVE within capture**, loss isolated to NN synthesis beyond
+  capture). Q16 FNV golden pins.
+- **Phase 5 (shipped iOS):** `SixFour/RGBT4D/RGBT4DLift.swift` — hand-written zero-dep port,
+  flag-gated `AppSettings.rgbt4dEnabled` (default OFF ⇒ bytes unchanged). `floorDiv` restores
+  Haskell's floor division (the one cross-language hazard).
+- **Codegen golden (debt D1 closed):** `Codegen.RGBT4D` emits `RGBT4DGolden.swift`; the Swift test
+  rides the spec-codegen drift gate instead of hardcoding values.
+
+### Topology / findings worth keeping
+- **Time is a circle.** Because the GIF loops, the data lives in **R³ × S¹** — the buffer must wrap,
+  there is no privileged frame (gauge), and 2b's semantic phase needs `CanonicalPhase` to fix it.
+- **The `wT` flicker blind spot:** the temporal weight is centroid-trajectory variance, so it reads
+  ~0 on mean-preserving hue-flip flicker. FIX: define `wT` from mean inter-frame Sinkhorn divergence.
+- **Entropy analysis (first measurement):** scope + RGBT weights are **capture-dependent** (adaptive
+  justified); pool strategy is **regime-dependent** (centroid for smooth drift, OT-barycenter for
+  multi-modal/burst); `color-burst` flips PerFrame@64³ → Global@16³ (scope is tier-dependent).
+
+### ⚠ Caveats for the next session
+- **Phase 5 is DEVICE-UNVERIFIED.** No simulators in this env; the build was forced to x86_64 while
+  the prebuilt Native lib is arm64-only → link fails *here*. The port compiles in-target and its
+  logic is standalone-verified exact; run `RGBT4DGoldenTests` on the iPhone 17 Pro simulator.
+- **No consumer is wired** — `rgbt4dEnabled` is dormant; the shipped render path is byte-identical.
+- **The Metal `simd_shuffle` kernel (Phase 5b) is unbuilt** (needs GPU); the seam-5 color-harmony
+  loss remains an open evidence gap.
+
+### Next (see `docs/SIXFOUR-RGBT4D-REMAINING-WORKFLOW.md`)
+1. End-to-end `Spec.RGBT4D` pipeline (buffer→feature→ladder) — the remaining verifiable spec step.
+2. The Metal kernel (device), then a consumer behind the flag (the three GIF89a products).
+3. Fix `wT` (inter-frame divergence); Phase 6 statistical sweep; follow-up research on seams 4/5.
+
+---
+
 ## 2026-06-15 — Spec-first declutter: from a Haskell bloat audit to a decisions-per-act cap law
 
 > **Session theme:** the cluttered Review screen is a *symptom of a flat spec*. The fix is
