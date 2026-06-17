@@ -32,6 +32,19 @@ standalone-verified + compiles in-target.
    ([CubeLadderEntropyExperiments](../spec/experiments/CubeLadderEntropyExperiments.hs)) over the
    full pipeline with CIs + pre-registered criteria.
 
+## Cross-port alignment (Metal ⟂ Zig) — the contract
+
+Going past the spec means two ports; they align ONLY by both gating on the **one spec golden**,
+never on each other. As of 2026-06-16:
+- **Spec emits the golden from one source, two ways:** `RGBT4DGolden.swift` (codegen, for
+  Swift/Metal) and `rgbt4d_golden.json` (`spec-fixtures`, for Zig).
+- **Zig port ✅** — `Native/src/kernels.zig` (`s4_rgbt_lift_quad`, `s4_cube_lift_level` + inverses)
+  verified bit-for-bit against `rgbt4d_golden.json` by `rgbt4d_fixture_test.zig`
+  (`zig build test`: 28/29 pass, 1 unrelated skip).
+- **Metal port (pending, device)** — must verify against the SAME golden. The arithmetic is shared
+  (`@divFloor` = Haskell `div` = Swift `floorDiv`); the real divergence risk is the 2×2 **tiling
+  layout**, which the level golden (`level_coarse` / `level_details`) pins exactly.
+
 ## Debt register (incurred building Phases 0–5)
 
 | # | Debt | Severity | Plan |

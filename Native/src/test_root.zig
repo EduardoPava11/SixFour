@@ -17,6 +17,7 @@ test {
     _ = @import("quant_fixture_test.zig"); // cross-language quantizer golden
     _ = @import("collapse_fixture_test.zig"); // cross-language global-collapse golden (GIFA→GIFB)
     _ = @import("haar_fixture_test.zig"); // cross-language integer-Haar golden (reversible lifting)
+    _ = @import("rgbt4d_fixture_test.zig"); // cross-language RGBT-4D lift + cube-ladder golden (Metal/Zig alignment)
     _ = @import("gif_fixture_test.zig"); // cross-language full-burst GIF golden (Stage 6)
     _ = @import("lut_fixture_test.zig"); // cross-language look transfer + LUT-extraction golden
     _ = @import("fixture_test.zig"); // cross-language Python-fixture check

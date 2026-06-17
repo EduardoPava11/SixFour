@@ -618,6 +618,119 @@ pub export fn s4_haar_level_nodes(
     return RC_OK;
 }
 
+// ── RGBT-4D reversible lifting (mirror of SixFour.Spec.RGBTLift / .CubeLadder) ──
+// The 2-D-Haar S-transform with floor division (@divFloor) — IDENTICAL arithmetic to
+// the integer Haar above, the Swift RGBT4DLift port, and the spec. The Metal kernel
+// must match this byte-for-byte; all three gate on the spec golden (rgbt4d_golden.json
+// for Zig, RGBT4DGolden.swift for Swift) — never against each other directly.
+
+// 2×2 block (a,b,c,d) → sub-bands (R,G,B,T)=(LL,LH,HL,HH).
+fn rgbtLiftQuad(q: *const [4]i32, out: *[4]i32) void {
+    const la = q[1] + @divFloor(q[0] - q[1], 2);
+    const ha = q[0] - q[1];
+    const lc = q[3] + @divFloor(q[2] - q[3], 2);
+    const hc = q[2] - q[3];
+    out[0] = lc + @divFloor(la - lc, 2); // ll = R
+    out[1] = la - lc; // lh = G
+    out[2] = hc + @divFloor(ha - hc, 2); // hl = B
+    out[3] = ha - hc; // hh = T
+}
+
+// Exact inverse of rgbtLiftQuad: (R,G,B,T) → (a,b,c,d).
+fn rgbtUnliftQuad(r: *const [4]i32, out: *[4]i32) void {
+    const yla = r[0] - @divFloor(r[1], 2);
+    const la = yla + r[1];
+    const lc = yla;
+    const yha = r[2] - @divFloor(r[3], 2);
+    const ha = yha + r[3];
+    const hc = yha;
+    const ya = la - @divFloor(ha, 2);
+    out[0] = ya + ha; // a
+    out[1] = ya; // b
+    const yc = lc - @divFloor(hc, 2);
+    out[2] = yc + hc; // c
+    out[3] = yc; // d
+}
+
+/// 2×2 → RGBT lift on one block (4 ints in, 4 ints out). Bijective with s4_rgbt_unlift_quad.
+pub export fn s4_rgbt_lift_quad(in_q16: [*c]const i32, out_q16: [*c]i32) i32 {
+    if (in_q16 == null or out_q16 == null) return RC_NULL_PTR;
+    const q = [4]i32{ in_q16[0], in_q16[1], in_q16[2], in_q16[3] };
+    var o: [4]i32 = undefined;
+    rgbtLiftQuad(&q, &o);
+    out_q16[0] = o[0];
+    out_q16[1] = o[1];
+    out_q16[2] = o[2];
+    out_q16[3] = o[3];
+    return RC_OK;
+}
+
+/// Inverse of s4_rgbt_lift_quad.
+pub export fn s4_rgbt_unlift_quad(in_q16: [*c]const i32, out_q16: [*c]i32) i32 {
+    if (in_q16 == null or out_q16 == null) return RC_NULL_PTR;
+    const r = [4]i32{ in_q16[0], in_q16[1], in_q16[2], in_q16[3] };
+    var o: [4]i32 = undefined;
+    rgbtUnliftQuad(&r, &o);
+    out_q16[0] = o[0];
+    out_q16[1] = o[1];
+    out_q16[2] = o[2];
+    out_q16[3] = o[3];
+    return RC_OK;
+}
+
+/// One 2-D-Haar level over a side×side row-major grid (side even): tile into 2×2
+/// blocks, lift each → coarse (side/2)² plane + (side/2)² detail triples (G,B,T).
+/// The TILING is where Metal (2-D threads) and Zig (loops) could diverge — pinned here.
+pub export fn s4_cube_lift_level(side: i32, grid: [*c]const i32, out_coarse: [*c]i32, out_details: [*c]i32) i32 {
+    if (grid == null or out_coarse == null or out_details == null) return RC_NULL_PTR;
+    if (side <= 0 or @rem(side, 2) != 0) return RC_BAD_SHAPE;
+    const s: usize = @intCast(side);
+    const h = s / 2;
+    var by: usize = 0;
+    while (by < h) : (by += 1) {
+        var bx: usize = 0;
+        while (bx < h) : (bx += 1) {
+            const q = [4]i32{
+                grid[(2 * by) * s + 2 * bx],
+                grid[(2 * by) * s + 2 * bx + 1],
+                grid[(2 * by + 1) * s + 2 * bx],
+                grid[(2 * by + 1) * s + 2 * bx + 1],
+            };
+            var o: [4]i32 = undefined;
+            rgbtLiftQuad(&q, &o);
+            const bi = by * h + bx;
+            out_coarse[bi] = o[0];
+            out_details[bi * 3 + 0] = o[1];
+            out_details[bi * 3 + 1] = o[2];
+            out_details[bi * 3 + 2] = o[3];
+        }
+    }
+    return RC_OK;
+}
+
+/// Exact inverse of s4_cube_lift_level: coarse h² + details h²·3 → 2h×2h grid.
+pub export fn s4_cube_unlift_level(half: i32, coarse: [*c]const i32, details: [*c]const i32, out_grid: [*c]i32) i32 {
+    if (coarse == null or details == null or out_grid == null) return RC_NULL_PTR;
+    if (half <= 0) return RC_BAD_SHAPE;
+    const h: usize = @intCast(half);
+    const s = 2 * h;
+    var by: usize = 0;
+    while (by < h) : (by += 1) {
+        var bx: usize = 0;
+        while (bx < h) : (bx += 1) {
+            const bi = by * h + bx;
+            const r = [4]i32{ coarse[bi], details[bi * 3 + 0], details[bi * 3 + 1], details[bi * 3 + 2] };
+            var q: [4]i32 = undefined;
+            rgbtUnliftQuad(&r, &q);
+            out_grid[(2 * by) * s + 2 * bx] = q[0];
+            out_grid[(2 * by) * s + 2 * bx + 1] = q[1];
+            out_grid[(2 * by + 1) * s + 2 * bx] = q[2];
+            out_grid[(2 * by + 1) * s + 2 * bx + 1] = q[3];
+        }
+    }
+    return RC_OK;
+}
+
 // Error-diffusion taps: (dx, dy, num, den). FS = 7/3/5/1 ÷ 16; Atkinson = 6 × 1/8.
 const FS_TAPS = [4][4]i32{ .{ 1, 0, 7, 16 }, .{ -1, 1, 3, 16 }, .{ 0, 1, 5, 16 }, .{ 1, 1, 1, 16 } };
 const ATKINSON_TAPS = [6][4]i32{ .{ 1, 0, 1, 8 }, .{ 2, 0, 1, 8 }, .{ -1, 1, 1, 8 }, .{ 0, 1, 1, 8 }, .{ 1, 1, 1, 8 }, .{ 0, 2, 1, 8 } };
