@@ -78,7 +78,6 @@ library
         SixFour.Spec.WidgetDescriptor
         SixFour.Spec.Ownership
         SixFour.Spec.Display
-        SixFour.Spec.ActDecisions
         SixFour.Spec.FrontProjection
         SixFour.Spec.VoxelFit
         SixFour.Spec.CellShapes
@@ -351,7 +350,6 @@ test-suite spec-tests
         Properties.WidgetDescriptor
         Properties.Ownership
         Properties.Display
-        Properties.ActDecisions
         Properties.FrontProjection
         Properties.VoxelFit
         Properties.CellShapes

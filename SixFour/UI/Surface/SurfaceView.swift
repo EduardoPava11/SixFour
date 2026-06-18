@@ -127,8 +127,6 @@ struct SurfaceView: View {
                     surface.previewPalette = engine.settings.captureLook.apply(to: engine.previewPalette)
                 }
             }
-            // REAL render progress → σ (kept harmless; the field still carries it).
-            .onChange(of: engine.loadingProgress) { _, p in surface.renderProgress = p }
             // The finished GIFA → σ. If the engine's `.done` edge raced ahead of this
             // observer the commit already ran in `mapEnginePhase`; folding again is
             // idempotent (it overwrites σ with the same bytes) and `.burstComplete` is a
@@ -196,7 +194,7 @@ struct SurfaceView: View {
     // MARK: - commit (engine output → σ)
 
     /// Fold the finished GIFA into σ — the per-frame palette series, the GIF URL, frame-0's
-    /// palette (the `cellGlobal` accessor), and the flat 64³ index cube the A/B heroes read.
+    /// palette (the `surface.palette` accessor), and the flat 64³ index cube the A/B heroes read.
     /// The engine's `CaptureOutput` carries the per-frame palettes + per-pixel indices; the
     /// caller fires `.burstComplete` AFTER this (so σ already has the data when `.captured`
     /// mounts the A/B field).
@@ -218,6 +216,5 @@ struct SurfaceView: View {
         if let tiles = engine.currentBundle?.tiles {
             surface.framePixelsQ16 = tiles.map { SixFourNative.oklabToQ16($0.pixels) }
         }
-        surface.settings.useDeterministicCore = out.deterministic
     }
 }

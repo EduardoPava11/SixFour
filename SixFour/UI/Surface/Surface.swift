@@ -30,7 +30,7 @@ final class Surface {
     // MARK: the field's data (out-of-band Σ)
 
     /// The current 256-colour palette (sRGB8) the surface paints — the live per-frame
-    /// palette during capture, frame-0's palette in review (the `cellGlobal` accessor).
+    /// palette during capture, frame-0's palette after a commit (the `palette` accessor).
     var palette: [SIMD3<UInt8>] = []
 
     /// The full PER-FRAME palette series (64 × 256 sRGB8) of the GIFA, populated at commit.
@@ -66,12 +66,6 @@ final class Surface {
     /// The Z₆₄ playback cursor — the current frame `0..<64`. Advanced by κ each tick.
     var cursor: Int = 0
 
-    // DEPRECATED (browse flow cut; kept so unrouted fields compile) — the 4 ORDERED anchor
-    // frames the old `.browsing` flow let the user pick. The browse phase is gone under
-    // ABSurface; this field stays only so the unrouted Browsing/Review fields still build.
-    // Reset to `[]` on `.live`.
-    var picks: [Int] = []
-
     /// OUT-OF-BAND UI state (NOT in the FSM alphabet): which ColorWidget is currently LIFTED for
     /// a move, or `nil`. The influence-field ground reads this to CALM the radiation while a
     /// widget is being lifted out of the field (order is being rearranged → the chaos recedes).
@@ -85,45 +79,12 @@ final class Surface {
     var phaseEnteredTick: Int = 0
     var liftChangedTick: Int = 0
 
-    /// REAL render progress 0→1 (the deterministic core's `loadingProgress`), bridged from the engine
-    /// while `.rendering`. Drives the GIFA construction reveal (`RenderingPhaseField`) — monotonic
-    /// across the whole render, NOT a per-stage clock timer (which snapped back to black each stage).
-    var renderProgress: Double = 0
-
-
-    /// The surface settings (dither / deterministic-core toggles), integer-encoded.
-    var settings: SurfaceSettings = .init()
-
     // MARK: δ
 
     /// Apply one event — the single mutation point for the phase. Mirrors
     /// `abStep` (`ABSurfaceMachine.swift`) and is the only writer of `phase`.
     func step(_ event: ABEvent) {
         phase = abStep(phase, event)
-        // Out-of-band Σ housekeeping: returning to `.live` clears any vestigial picks.
-        if phase == .live { picks = [] }
-    }
-
-    // MARK: - Browsing picks (out-of-band Σ — vestigial)
-
-    // DEPRECATED (browse flow cut; kept so unrouted fields compile).
-    /// Toggle frame `f` in the ordered pick list: a re-tap REMOVES it; otherwise it is
-    /// APPENDED (preserving pick order) while fewer than 4 are chosen — the 5th tap is
-    /// rejected (the cap is 4, the quad). Mutates only the out-of-band σ field, never `phase`.
-    func togglePick(_ f: Int) {
-        guard f >= 0, f < SixFourPlaybackClock.frameCount else { return }
-        if let i = picks.firstIndex(of: f) {
-            picks.remove(at: i)
-        } else if picks.count < 4 {
-            picks.append(f)
-        }
-    }
-
-    // DEPRECATED (browse flow cut; kept so unrouted fields compile).
-    /// Move the playback cursor to frame `f` directly (the old finger-driven browse scrub).
-    /// Clamps to `0..<64`; writes `cursor` with NO FSM event.
-    func scrubCursor(to f: Int) {
-        cursor = max(0, min(SixFourPlaybackClock.frameCount - 1, f))
     }
 
     // MARK: κ-fed cursor advance (Z₆₄)
@@ -132,14 +93,6 @@ final class Surface {
     /// `SixFourPlaybackClock.frameAfter` (the ONE κ math). Called by `SurfaceClock`.
     func advanceCursor() {
         cursor = SixFourPlaybackClock.frameAfter(cursor, count: SixFourPlaybackClock.frameCount)
-    }
-
-    /// Advance the cursor one frame BACKWARDS — the Act-II no-freeze reverse playback.
-    /// While `.capturing` / `.rendering` the surface sweeps the assembling GIFA backwards
-    /// (`SixFourPlaybackClock.frameBefore`, the spec-pinned inverse of `frameAfter`)
-    /// instead of holding a frozen frame. Same single κ, opposite direction.
-    func advanceCursorReverse() {
-        cursor = SixFourPlaybackClock.frameBefore(cursor, count: SixFourPlaybackClock.frameCount)
     }
 }
 
@@ -150,25 +103,6 @@ extension Surface {
     /// row-major `t·side² + y·side + x` layout every reader of the cube shares.
     var cubeSide: Int { SixFourShape.W }
 
-    /// THE addressing function: the colour of voxel `(x, y, t)` in the review/loading
-    /// cube — a WHERE `(x,y)` at a WHEN `t`. Reads `indexCube` (row-major `t,y,x`) through
-    /// the global `palette`. Returns `nil` when the cube isn't populated at `(x,y,t)` yet,
-    /// so the caller lets the live ground show through (no flat fill).
-    ///
-    /// Named `cellGlobal` because `palette` is the single REVIEW palette; the per-frame
-    /// live tile and the per-frame palette series carry their own bytes. This is the one
-    /// place the cube's index layout lives — `RenderingPhaseField` (loading) and the
-    /// review-flat path read through it, not their own inline `t*4096+y*64+x`.
-    func cellGlobal(_ x: Int, _ y: Int, _ t: Int) -> SIMD3<UInt8>? {
-        let side = cubeSide
-        guard x >= 0, x < side, y >= 0, y < side, t >= 0 else { return nil }
-        let offset = t * side * side + y * side + x
-        guard offset >= 0, offset < indexCube.count else { return nil }
-        let i = Int(indexCube[offset])
-        guard i >= 0, i < palette.count else { return nil }
-        return palette[i]
-    }
-
     /// THE 2D GIFA reader — the colour of pixel `(x, y)` in frame `t` of the committed
     /// GIFA, read through the TRUE per-frame palette (`palettesPerFrame[t]`), one cell per
     /// GIF pixel. This is the flat 2D animation the review hero plays (the cube reveal is
@@ -176,13 +110,33 @@ extension Surface {
     /// until a GIFA commits (the live ground shows through), so no flat fill is ever drawn.
     func gifCell(_ x: Int, _ y: Int, _ t: Int) -> SIMD3<UInt8>? {
         let side = cubeSide
-        guard x >= 0, x < side, y >= 0, y < side, t >= 0, t < palettesPerFrame.count else { return nil }
-        let offset = t * side * side + y * side + x
-        guard offset >= 0, offset < indexCube.count else { return nil }
-        let pal = palettesPerFrame[t]
-        let i = Int(indexCube[offset])
-        guard i >= 0, i < pal.count else { return nil }
-        return pal[i]
+        guard t >= 0, t < palettesPerFrame.count else { return nil }
+        return gifCell(x, y, t, palette: palettesPerFrame[t])
+    }
+
+    /// THE 2D GIFA reader, generalized over an EXPLICIT per-frame palette + index buffer —
+    /// so the A/B game's two competing candidate looks read the SAME cube projection the
+    /// review hero does (the `t·side² + y·side + x` offset is the one cube-index law). `palette`
+    /// is the candidate's frame-`t` 256 sRGB8; `indexFrame` (when non-empty) is that candidate's
+    /// RE-QUANTIZED frame indices (`y·side + x`, P3 — A and B are genuinely different cubes),
+    /// falling back to the shared `indexCube` when the candidate cube isn't available. Returns
+    /// `nil` (the live ground shows through, no flat fill) for any out-of-range address.
+    func gifCell(_ x: Int, _ y: Int, _ t: Int,
+                 palette: [SIMD3<UInt8>], indexFrame: [UInt8] = []) -> SIMD3<UInt8>? {
+        let side = cubeSide
+        guard x >= 0, x < side, y >= 0, y < side, t >= 0 else { return nil }
+        let i: Int
+        if !indexFrame.isEmpty {
+            let off = y * side + x
+            guard off >= 0, off < indexFrame.count else { return nil }
+            i = Int(indexFrame[off])
+        } else {
+            let offset = t * side * side + y * side + x
+            guard offset >= 0, offset < indexCube.count else { return nil }
+            i = Int(indexCube[offset])
+        }
+        guard i >= 0, i < palette.count else { return nil }
+        return palette[i]
     }
 }
 
@@ -190,13 +144,6 @@ extension Surface {
 // is RETIRED — the review hero is now the flat 2D GIFA animation (`gifCell`). The cube
 // geometry remains proven in `SixFour.Spec.VoxelFit` for the (deferred) authoring tool;
 // the live render path no longer consumes it. (Simplify the 2D animation; harden the flow.)
-
-/// Integer-encoded surface settings (no floats on the state spine). Expanded as
-/// the per-phase renderers wire real options through.
-struct SurfaceSettings: Equatable {
-    /// Whether the deterministic fixed-point Zig core (vs the GPU float path) renders.
-    var useDeterministicCore: Bool = true
-}
 
 // MARK: - Spec parity gate (debug)
 

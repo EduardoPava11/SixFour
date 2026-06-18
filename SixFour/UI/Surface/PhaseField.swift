@@ -36,7 +36,7 @@ enum PhaseField {
         case .exporting:
             ExportingPhaseField(surface: surface, clock: clock)
         case .done:
-            DonePhaseField(surface: surface, clock: clock)
+            DonePhaseField(surface: surface, clock: clock, settings: settings)
         case .error:
             ErrorPhaseField(surface: surface, clock: clock)
         }
@@ -77,6 +77,21 @@ struct ExportingPhaseField: View {
 struct DonePhaseField: View {
     let surface: Surface
     let clock: SurfaceClock
+    /// The shared AppSettings — read only for the active Look (the `.cube` LUT is the export
+    /// form of the Look axis, surfaced only when a grade is on).
+    @Bindable var settings: AppSettings
+
+    /// The built `.cube` awaiting the share sheet (set by the Export LUT button). Ported out
+    /// of the retired `ReviewPhaseField`: the .cube LUT export now lives on the Done screen,
+    /// beside the GIF Share, so the only worked LUT path survives the Review deletion.
+    @State private var lutShare: LUTShareItem?
+
+    /// The colours the LUT grades toward: ALL frames' palettes pooled into one cloud (a
+    /// clip-wide profile), falling back to the single review palette. (Ported from Review.)
+    private var lutPalette: [SIMD3<UInt8>] {
+        let pooled = surface.palettesPerFrame.flatMap { $0 }
+        return pooled.isEmpty ? surface.palette : pooled
+    }
 
     var body: some View {
         ZStack {
@@ -93,6 +108,19 @@ struct DonePhaseField: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Share the exported GIF")
                 }
+                // The active Look's `.cube` LUT (only when a grade is on; it is the export form
+                // of the Look axis). Ported verbatim from Review — `LUTFile.makeShareItem` + the
+                // pooled `lutPalette` + the `ActivityView` sheet, all unchanged.
+                if settings.captureLook != .off {
+                    Button {
+                        lutShare = LUTFile.makeShareItem(palette: lutPalette, look: settings.captureLook)
+                    } label: {
+                        CellActionButton(icon: .none, title: "EXPORT LUT",
+                                         prominent: false, fillWidth: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Export 3D LUT for R3D")
+                }
                 Button { surface.step(.retake) } label: {
                     CellActionButton(icon: .none, title: "NEW SHOT",
                                      prominent: true, fillWidth: false)
@@ -102,5 +130,8 @@ struct DonePhaseField: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(item: $lutShare) { item in
+            ActivityView(items: [item.url])
+        }
     }
 }

@@ -100,25 +100,15 @@ struct ABCandidatePhaseField: View {
     /// pick. `nil` cells (out-of-range cursor / palette) fall through to the live ground.
     private func hero(palettes: [[SIMD3<UInt8>]], indices: [[UInt8]], label: String, _ onPick: @escaping () -> Void) -> some View {
         let t = surface.cursor
-        let base = t * side * side
         let pal = (t >= 0 && t < palettes.count) ? palettes[t] : []
         let idxFrame = (t >= 0 && t < indices.count) ? indices[t] : []
         return Button(action: onPick) {
             VStack(spacing: GlobalLattice.pt(1)) {
                 CellSprite(cols: side, rows: side, cellPt: heroCellPt) { c, r in
-                    let off = r * side + c
-                    // Genome-specific re-quantized index (P3 — A and B are different cubes);
-                    // fall back to the shared base cube when the candidate cube isn't available.
-                    let i: Int
-                    if off < idxFrame.count {
-                        i = Int(idxFrame[off])
-                    } else {
-                        let g = base + off
-                        guard g >= 0, g < surface.indexCube.count else { return nil }
-                        i = Int(surface.indexCube[g])
-                    }
-                    guard i >= 0, i < pal.count else { return nil }
-                    return pal[i]
+                    // THE one cube reader (`Surface.gifCell`): the candidate's re-quantized
+                    // index frame (P3 — A and B are different cubes) through its per-frame
+                    // palette, falling back to the shared `indexCube` when no candidate cube.
+                    surface.gifCell(c, r, t, palette: pal, indexFrame: idxFrame)
                 }
                 CellText(label, rows: 8, ink: .white)
             }

@@ -39,10 +39,6 @@ genInput = do
 genPerm256 :: Gen [Int]
 genPerm256 = shuffle [0 .. 255]
 
--- | A random FSM event (for the goldenPhaseTrace scanl property).
-genEvent :: Gen Event
-genEvent = elements allEvents
-
 -- | A small Grid for the T9 citation (built via the public claim API, like
 -- Properties.CellGrid).
 genColor :: Gen Color
@@ -108,28 +104,4 @@ tests = testGroup "Display (the FSM M = (Σ, ι, δ, λ, Π, κ) — T1..T9 + co
         let trace = goldenTickTrace [(s, i)]
         in length trace == 1
            && dsCursor (head trace) == (dsCursor s + 1) `mod` frameCount
-
-    -- ===== The phase FSM (one surface, no screens) =====
-
-    -- PHASE-T1 — step is total over every (phase, event)
-  , testProperty "PHASE-T1 lawPhaseTotal (step total ∀ phase×event)" $
-      once lawPhaseTotal
-
-    -- PHASE-T2 — every phase reachable from Bootstrap (no dead UI)
-  , testProperty "PHASE-T2 lawNoOrphanPhase (every phase reachable from Bootstrap)" $
-      once lawNoOrphanPhase
-
-    -- PHASE-T3 — the cell-field law: every phase IS a full cell-field config (no screens)
-  , testProperty "PHASE-T3 lawPhaseIsCellGrid (|phaseField p| == |allPlaces| ∀ phase)" $
-      forAllBlind genState lawPhaseIsCellGrid
-
-    -- PHASE-T4 — Review is entered ONLY via Committed
-  , testProperty "PHASE-T4 lawReviewExplicit (Review ⟸ only Committed)" $
-      once lawReviewExplicit
-
-    -- golden phase-trace: scanl step Bootstrap reproduces the FSM
-  , testProperty "goldenPhaseTrace: |trace| == |events|+1; starts at Bootstrap" $
-      forAll (listOf genEvent) $ \evs ->
-        let tr = goldenPhaseTrace evs
-        in length tr == length evs + 1 && head tr == Bootstrap
   ]
