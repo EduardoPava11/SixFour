@@ -147,7 +147,7 @@ struct ReviewPhaseField: View {
                 // Pillar B: the orthogonal A/B game (per-frame). OFF in MVP1. Each pick folds θ and
                 // re-proposes a taste-shifted pair (the loop); Export ends the game.
                 CandidatePickView(
-                    candidateA: cands.a.rgb, candidateB: cands.b.rgb,
+                    candidateA: cands.a.rgb, candidateB: cands.b.rgb, round: abPickCount,
                     onPick: { recordABPick($0, cands) },
                     onExport: { /* G3: ABExportFamily {16³,64³,256³} carrying the genome — workflow §3 */ })
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
