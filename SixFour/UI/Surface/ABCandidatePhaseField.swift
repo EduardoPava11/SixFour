@@ -79,9 +79,15 @@ struct ABCandidatePhaseField: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
-        .onAppear(perform: recompute)
-        // Recompute the pair when the committed palette series changes (a fresh capture).
-        .onChange(of: surface.palettesPerFrame.count) { _, _ in recompute() }
+        // Recompute OFF the main actor whenever the capture or the pick count changes (the
+        // heavy 64×(palette + 2 dither) FFI would hitch the κ clock if run on `pick`). `.task`
+        // cancels + restarts on `recomputeKey` change, so a rapid pick supersedes the prior round.
+        .task(id: recomputeKey) { await recomputeAsync() }
+    }
+
+    /// The recompute trigger: a fresh capture (palette/pixel series changed) or a new pick.
+    private var recomputeKey: String {
+        "\(surface.palettesPerFrame.count)·\(surface.framePixelsQ16.count)·\(abPickCount)"
     }
 
     /// "PICK A LOOK · ROUND n" — the game progress.
@@ -138,36 +144,56 @@ struct ABCandidatePhaseField: View {
                 loser:  PersonalTaste.embedding(leaves: loser.leaves))
             PersonalTasteStore.save(abTheta)
         }
-        abPickCount += 1
-        recompute()
+        abPickCount += 1   // bumps `recomputeKey` → `.task` re-fires the next round off-main
         surface.step(pickedA ? .pickA : .pickB)
     }
 
-    /// Recompute the per-frame candidate palettes from the committed per-frame series tinted
-    /// by the current θ — A and B are the orthogonal `GenomePair` pair for each frame. Cheap
-    /// enough to run all 64 frames on every pick. Stores frame-0's candidates for the embedding.
-    private func recompute() {
-        guard Feature.abCandidatePicker else { candA = []; candB = []; candAIdx = []; candBIdx = []; frame0 = nil; return }
-        let frames = surface.palettesPerFrame
-        guard !frames.isEmpty else { candA = []; candB = []; candAIdx = []; candBIdx = []; frame0 = nil; return }
-        let pixels = surface.framePixelsQ16   // original per-frame Q16 OKLab, for re-quantization
+    /// The off-actor compute result — A and B per-frame palettes + re-quantized index cubes,
+    /// plus frame-0's candidates for the θ embedding. `Sendable` so it crosses the actor hop.
+    private struct CandidateSet: Sendable {
+        let a: [[SIMD3<UInt8>]]; let b: [[SIMD3<UInt8>]]
+        let ai: [[UInt8]]; let bi: [[UInt8]]
+        let frame0A: ABCandidates.Candidate?; let frame0B: ABCandidates.Candidate?
+    }
 
+    /// Snapshot σ on the main actor, run the heavy per-frame FFI OFF it, then apply the result.
+    /// Cancellation (a rapid pick) is checked before the @State write so a superseded round is
+    /// dropped. Empty inputs / the gate off ⇒ clears the caches (the hero shows the ground).
+    private func recomputeAsync() async {
+        guard Feature.abCandidatePicker, !surface.palettesPerFrame.isEmpty else {
+            candA = []; candB = []; candAIdx = []; candBIdx = []; frame0 = nil; return
+        }
+        let frames = surface.palettesPerFrame
+        let pixels = surface.framePixelsQ16
+        let theta = abTheta
+        let set = await Task.detached(priority: .userInitiated) {
+            Self.computeCandidates(frames: frames, pixels: pixels, theta: theta)
+        }.value
+        guard !Task.isCancelled else { return }
+        candA = set.a; candB = set.b
+        candAIdx = set.ai; candBIdx = set.bi
+        if let fa = set.frame0A, let fb = set.frame0B { frame0 = (a: fa, b: fb) } else { frame0 = nil }
+    }
+
+    /// Per-frame candidate compute (nonisolated — safe off the main actor; pure FFI on value
+    /// types). For each frame: the orthogonal `GenomePair` pair tinted by θ → A/B palettes, then
+    /// RE-QUANTIZE the original pixels against each candidate's leaves (`s4_dither_frame`) so A
+    /// and B are genuinely different index cubes (P3). No retained pixels ⇒ empty index frame
+    /// (the hero recolours the shared base cube).
+    nonisolated private static func computeCandidates(frames: [[SIMD3<UInt8>]], pixels: [[Int32]],
+                                                      theta: [Double]) -> CandidateSet {
         var a = [[SIMD3<UInt8>]](); a.reserveCapacity(frames.count)
         var b = [[SIMD3<UInt8>]](); b.reserveCapacity(frames.count)
         var ai = [[UInt8]](); ai.reserveCapacity(frames.count)
         var bi = [[UInt8]](); bi.reserveCapacity(frames.count)
-        var first: (a: ABCandidates.Candidate, b: ABCandidates.Candidate)?
+        var f0a: ABCandidates.Candidate?; var f0b: ABCandidates.Candidate?
         for (t, pal) in frames.enumerated() {
-            guard let pair = ABCandidates.fromPalette(pal, theta: abTheta) else {
-                // FFI failure on this frame: empty palettes ⇒ this frame falls through to ground.
+            guard let pair = ABCandidates.fromPalette(pal, theta: theta) else {
                 a.append([]); b.append([]); ai.append([]); bi.append([])
                 continue
             }
             a.append(pair.a.rgb)
             b.append(pair.b.rgb)
-            // P3 — genome shapes the bytes: re-assign THIS frame's original pixels to each
-            // candidate's displaced palette (`s4_dither_frame`), so A and B are genuinely
-            // different index cubes. No retained pixels ⇒ empty (the hero recolours the base).
             if t < pixels.count, !pixels[t].isEmpty {
                 let cA = pair.a.leaves.flatMap { [$0.x, $0.y, $0.z] }
                 let cB = pair.b.leaves.flatMap { [$0.x, $0.y, $0.z] }
@@ -178,10 +204,8 @@ struct ABCandidatePhaseField: View {
             } else {
                 ai.append([]); bi.append([])
             }
-            if t == 0 { first = pair }
+            if t == 0 { f0a = pair.a; f0b = pair.b }
         }
-        candA = a; candB = b
-        candAIdx = ai; candBIdx = bi
-        frame0 = first
+        return CandidateSet(a: a, b: b, ai: ai, bi: bi, frame0A: f0a, frame0B: f0b)
     }
 }
