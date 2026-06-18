@@ -94,6 +94,8 @@ named operator composing the spatial "SixFour.Spec.CubeLadder" per channel with 
 "SixFour.Spec.DivergenceSchedule" (the A/B divergence schedule @Δ = |r_A − r_B|@ — the policy:value
 mix-ratio gap that starts wide and narrows as Compares accrue, floored @> 0@ so A and B never
 collapse; the start-diverse-then-converge knob + the MAP-Elites descriptor axis),
+"SixFour.Spec.ABSurface" (the simplified 8-phase capture→A/B→export FSM = the user story; total δ,
+Pick* self-loop in Picked, Export gated on a prior pick, the two 16×16 candidate cell rectangles),
 "SixFour.Spec.SigmaPairFixed", "SixFour.Spec.SigmaPairHead", "SixFour.Spec.SigmaDecomp",
 "SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Bottleneck16",
 "SixFour.Spec.LeafOverride", "SixFour.Spec.ThetaToDelta" (★ canonical-path n=0: the closed-form

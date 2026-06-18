@@ -49,6 +49,7 @@ library
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
+        SixFour.Spec.ABSurface
         SixFour.Spec.CanonicalPhase
         SixFour.Spec.SigmaPairFixed
         SixFour.Spec.LeafOverride
@@ -141,6 +142,7 @@ library
         SixFour.Codegen.RGBT4D
         SixFour.Codegen.VoxelReduce
         SixFour.Codegen.GenomePair
+        SixFour.Codegen.GenomeCarrier
         SixFour.Codegen.PairTree
         SixFour.Codegen.QuartetDelta
         SixFour.Codegen.PaletteValue
@@ -319,6 +321,8 @@ test-suite spec-tests
         Properties.CubeLadder
         Properties.VoxelReduce
         Properties.DivergenceSchedule
+        Properties.ABSurface
+        Properties.GenomeCarrier
         Properties.PairTree
         Properties.PairTreeFixed
         Properties.RGBTLift
