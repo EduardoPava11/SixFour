@@ -140,6 +140,7 @@ library
         SixFour.Codegen.Collapse
         SixFour.Codegen.RGBT4D
         SixFour.Codegen.VoxelReduce
+        SixFour.Codegen.GenomePair
         SixFour.Codegen.PairTree
         SixFour.Codegen.QuartetDelta
         SixFour.Codegen.PaletteValue

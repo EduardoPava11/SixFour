@@ -104,6 +104,15 @@ struct ReviewPhaseField: View {
     /// The palette edge — 16 cells × 4 pt = 64 pt (the GIF's first abstraction = the shutter).
     private let paletteEdge = GlobalLattice.gif(GlobalLattice.shutterCells)
 
+    // Pillar B — the orthogonal A/B candidate picker (gated OFF in MVP1 by Feature.abCandidatePicker).
+    @State private var abPickedA: Bool? = nil
+
+    /// The two orthogonal candidate looks derived from the committed per-frame palette (cold start).
+    /// Only evaluated when the picker flag is on (short-circuited otherwise), so MVP1 pays nothing.
+    private var abCandidates: (a: [SIMD3<UInt8>], b: [SIMD3<UInt8>])? {
+        ABCandidates.fromPalette(surface.palettesPerFrame.first ?? [])
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             // The influence-field ground is the ONE persistent surface in `SurfaceView` (behind
@@ -119,6 +128,17 @@ struct ReviewPhaseField: View {
             } else if groupPickOpen {
                 // The GROUP-PICK gesture tool (browse 16 RGBT groups, tap to include/exclude).
                 groupPickField
+            } else if Feature.abCandidatePicker, let cands = abCandidates {
+                // Pillar B: the orthogonal A/B candidate picker (per-frame). OFF in MVP1.
+                Group {
+                    if let picked = abPickedA {
+                        Text("PICKED \(picked ? "A" : "B")").font(.caption.monospaced())
+                    } else {
+                        CandidatePickView(candidateA: cands.a, candidateB: cands.b) { abPickedA = $0 }
+                        // TODO(Phase 3+): record the Compare → btUpdate θ (PersonalTaste), as AtlasState.choose does.
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             } else {
                 // All three ColorWidgets are PLACED at the ONE shared global position (no
                 // more VStack-centering) and movable — Field64's gif-render and Palette16's
