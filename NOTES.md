@@ -7,6 +7,53 @@ newest first.
 
 ---
 
+## 2026-06-18 (late) — Per-frame PIVOT: VoxelReduce, global→V2 deferral, the A/B game (merged `e2b812c`)
+
+> **Session theme (Daniel's direction):** the global-palette collapse "takes away from the
+> spatio-temporal" — retire it from MVP1 and build the real product: capture → two ORTHOGONAL 16×16
+> candidate looks A and B → user plays the game (each pick folds taste, the next pair narrows) →
+> export the full {16³,64³,256³} stack carrying the genome → learnings persist. ~13 commits across
+> two merges (`b232bb2`, `e2b812c`); spec suite 877 → **911**; iOS BUILD + GRID lint green throughout.
+
+**The reframe.** The product is NOT one global palette. It is per-frame palettes reduced by a
+reversible `(2×2)×(2×2)→1` lift into a PAIR of orthogonal 16³ genomes the user A/B-tests, with a
+learned reversal to 256³. Most of it already existed as buried/ungated spec. Four workflow docs map
+it: `SIXFOUR-PER-FRAME-GENOME-AB-MIGRATION-WORKFLOW` (pillars + phases), `-REUSE-FIRST-NO-NEW-DEBT`
+(compose owned primitives, don't re-port), `-GLOBAL-PALETTE-RETIREMENT` (the V2-deferral map),
+`-AB-GAME-EXPORT-LEARNINGS` (the user story + G1–G7).
+
+**Built (each: gate the spec → reuse-first port → golden/laws → honest doc):**
+- **Phase 1 — `VoxelReduce`** (64³↔16³ reversible) owned in ALL FOUR languages: Haskell
+  (`lawVoxelReduceBijective`), Zig (`s4_haar_split_level` reusing a factored-out `sLift`; −4 inline
+  S-transform copies), Swift (reuses the golden-gated `RGBT4DLift`). Composition of owned bijections.
+- **Global → V2 deferral (NO deletion).** ONE gate `Feature.globalPaletteV2 = false` makes MVP1
+  per-frame ONLY. A reachability re-map found **FIVE** entry points (capture router + Review
+  Ship/group-pick/cut-lever/Atlas), all guarded + a stale-`.global` sanitizer. Retagged
+  DEPRECATED→V2-DEFERRED; freeze-lint stays a freeze; `verify-doc-claims` ANCHOR-1b asserts the flag
+  ships OFF. Per-frame path proven independent → gating can't break it.
+- **The A/B game (G1–G7).** `DivergenceSchedule` (Δ=|r_A−r_B| start-wide-converge); `GenomePair`
+  Swift port (EXACT-orthogonal, `genomeInner δ_A δ_B == 0`); `ABCandidates` + `CandidatePickView`
+  (16×16 `CellSprite` tiles, GRID-conformant) wired to the BUILT n=0 taste loop (pick→`btUpdate`
+  θ→re-propose); `ABExportFamily` {16³,64³,256³}+genome; `GenomeCarrier` S4GN codec; `GeneArchive`
+  warm-start; `NetSynth256` SCAFFOLD; `ABSurface` 8-phase FSM.
+
+**Findings worth keeping:**
+- **Silent orphan specs.** `GenomePair`, `ABSurface`, `GenomeCarrier` were in `spec.cabal` but had no
+  `Properties.*` test — their laws (incl. the A/B orthogonality KEYSTONE) had never run; `ABSurface`
+  wasn't even compiled. Now all gated (+23 laws). *Check `Properties.X` exists before trusting a module.*
+- **The GRID lint is a HARD build phase for ALL of `SixFour/UI`** — every `spacing:`/`.frame(`/`.padding(`
+  point literal must go through `GlobalLattice.pt()/.gif()`; grids render via `CellSprite`. It failed
+  the first picker build.
+- **Reuse-first paid off every phase** — VoxelReduce reused `RGBT4DLift`; the A/B port reused
+  `haarReconstruct`/`leafOverride`; the taste loop reused `PersonalTaste`. The new code was small.
+
+**Honest remainders (documented, not faked):** G6 `NetSynth256` is a no-op scaffold (==floor at zero
+genome) — the learned weights need the on-device TRAINER, not a port. G7 movable candidate widgets
+deferred — promoting to `ColorIdentity.candidateA/B` ripples the codegen `MoveContract` + the
+disjoint-defaults golden + `MovableLayoutTests`, unverifiable on a no-simulator box.
+
+---
+
 ## 2026-06-18 — Canonical path DECIDED + n=0 taste loop built & testable (branch `docs/nn-debt-cleanup-2026-06-18`)
 
 > **Session theme:** stop the candidate oscillation. Decide ONE canonical core, clean the docs that
