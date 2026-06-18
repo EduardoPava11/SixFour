@@ -43,6 +43,11 @@ fixtures; Swift tests assert against the same JSON. This is the verified surface
 | `s4_board_mass_q16`, `s4_board_counts_to_mass_q16` (Atlas board mass) | inline golden (`Spec.BoardQ16`, cabal-confirmed) | `kernels.zig` unit test | `BoardQ16GoldenTests` |
 
 Notes:
+- **`GLRM` (preference kill-switch) is golden-gated Swift ≡ Haskell** (no Zig kernel —
+  it is a Mac/device-CPU preflight, not a render kernel). `GLRM.swift` mirrors
+  `Spec.GLRM` with matched summation order, so the `Double` OLS is bit-identical;
+  `GLRMGoldenTests` pins the cabal-captured coefficients + R². Wired into
+  `AtlasTrainingSession` (blocks real-data training on no-signal picks).
 - **Maximin IS the collapse canon.** The historical "maximin ≠ Wu bug" is
   disproven; `s4_quantize_frame` matches `Spec.QuantFixed`/`Spec.Collapse`
   byte-for-byte. Do not re-flag.

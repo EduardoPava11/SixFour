@@ -87,6 +87,8 @@ struct AtlasTrainingField: View {
             return "DATA · DECISION LOG · \(pairs) PAIRS"
         case .synthetic(let pairs):
             return "DATA · SYNTHETIC · \(pairs) PAIRS (LOG < \(AtlasTrainingSession.minimumLogPairs))"
+        case .blockedByKillSwitch(let pairs):
+            return "DATA · KILL-SWITCH · \(pairs) LOG PAIRS REJECTED (NO SIGNAL) → SYNTH"
         }
     }
 

@@ -60,6 +60,10 @@ final class AtlasTrainingSession {
         case decisionLog(pairs: Int)
         /// Deterministic synthetic pairs — the log is still too small.
         case synthetic(pairs: Int)
+        /// The GLRM kill-switch REJECTED the real log (no stable linear signal in
+        /// the picks ⇒ noise); training fell back to synthetic. `pairs` = rejected
+        /// real pairs. See `GLRM.shouldTrain` / debt `glrm-wired-but-unused`.
+        case blockedByKillSwitch(pairs: Int)
     }
 
     // MARK: Published state (the widget's read surface)
@@ -206,6 +210,25 @@ final class AtlasTrainingSession {
                 genomeByHash[hash] = g
                 return g
             }
+
+            // GLRM KILL-SWITCH (`Spec.GLRM`): regress the win/loss outcome on each
+            // candidate's deterministic [coverage, beauty, ‖chroma‖²] features. If the
+            // picks carry no stable linear signal (R² < r2Floor or a singular design),
+            // the preference data is noise — REFUSE to train on it and fall back to
+            // the labelled synthetic teacher (debt `glrm-wired-but-unused`).
+            var glrmSamples: [(GLRM.Features, Double)] = []
+            glrmSamples.reserveCapacity(compares.count * 2)
+            for record in compares {
+                glrmSamples.append((Self.atlasFeatures(genome: genome(for: record.winHash)), 1))
+                glrmSamples.append((Self.atlasFeatures(genome: genome(for: record.loseHash)), 0))
+            }
+            guard GLRM.shouldTrain(glrmSamples) else {
+                let synth = Self.syntheticBatch(pairs: Self.syntheticPairs,
+                                                seed: 0x5158_4F52_3634_4C41)
+                dataSource = .blockedByKillSwitch(pairs: compares.count)
+                return synth
+            }
+
             var boards = [Float]()
             boards.reserveCapacity(compares.count * AtlasTrainer.boardElementCount)
             var winners = [Float]()
@@ -264,6 +287,35 @@ final class AtlasTrainingSession {
             g[3 * i + 2] = Float(leaf.z) / 65536
         }
         return g
+    }
+
+    /// The GLRM kill-switch's deterministic feature row for a 384-float genome
+    /// (128 σ-pair generators × (L,a,b)): `coverage` = fraction of distinct 16³ bins
+    /// the generators occupy; `beauty` = the Ou-Luo pair-beauty loss over the
+    /// generators (`PaletteValue.beautyLossLeaves`, the spec-mirrored harmony term);
+    /// `chromaSq` = mean `a²+b²`. All three are deterministic + golden-computable,
+    /// the regressors `Spec.GLRM` expects.
+    static func atlasFeatures(genome g: [Float]) -> GLRM.Features {
+        var gens = [SIMD3<Double>]()
+        gens.reserveCapacity(g.count / 3)
+        var i = 0
+        while i + 2 < g.count {
+            gens.append(SIMD3<Double>(Double(g[i]), Double(g[i + 1]), Double(g[i + 2])))
+            i += 3
+        }
+        guard !gens.isEmpty else { return (0, 0, 0) }
+        var bins = Set<Int>()
+        var chromaSq = 0.0
+        for c in gens {
+            let q = SIMD3<Int32>(Int32((c.x * 65536).rounded()),
+                                 Int32((c.y * 65536).rounded()),
+                                 Int32((c.z * 65536).rounded()))
+            bins.insert(AtlasBinIdx.bin(ofQ16: q).flat)
+            chromaSq += c.y * c.y + c.z * c.z
+        }
+        let coverage = Double(bins.count) / Double(gens.count)
+        let beauty = PaletteValue.beautyLossLeaves(gens)
+        return (coverage, beauty, chromaSq / Double(gens.count))
     }
 
     /// A stable 384-float identity embedding for a candidate hash whose leaves
