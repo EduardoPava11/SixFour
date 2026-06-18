@@ -154,18 +154,25 @@ step is the `GenomeCarrier` Swift codec (embed on export), which §3 needs anywa
 
 ## 6. The build sequence (each gated; per-frame, no global dependency)
 
-- **G1 — Game loop (this session).** Wire `CandidatePickView.onPick` → `PersonalTaste` (θ update +
-  save) + re-propose from θ-tinted base; export affordance as a hook. Gate: iOS BUILD + GRID lint.
-- **G2 — Δ → spread.** Feed `DivergenceSchedule.divergence(pickCount)` into the override magnitude so
-  A/B narrow as the user converges. Gate: spec law + build.
-- **G3 — Per-frame ExportFamily.** `ABExportFamily` assembling {16³ via VoxelReduce, 64³, 256³
-  replicate4x} carrying the genome. Gate: golden + build.
-- **G4 — GenomeCarrier Swift codec.** Embed/extract the S4GN block. Gate: golden vs Spec.GenomeCarrier.
-- **G5 — Gene archive.** On-device Q16 gene store (CVT-MAP-Elites, `genomeInner` similarity); warm-start
-  next session. Gate: spec + build.
-- **G6 — Learned 256³.** `NetSynth256` above the floor (migration Phase 6). Gate: bit-exact-at-zero.
-- **G7 — ABSurface FSM + movable A/B widgets.** Implement the 8-phase δ; add the candidate
-  `ColorIdentity` cases. Gate: ABSurface laws + GRID lint.
+- **G1 — Game loop. ✅ DONE.** `CandidatePickView.onPick` → `PersonalTaste` (θ update + save) +
+  re-propose from θ-tinted base; export affordance hook. iOS BUILD + GRID lint green.
+- **G2 — Δ surfaced. ✅ DONE (display).** `DivergenceSchedule` ported to Swift; the picker shows
+  "ROUND n · Δ X.XX" narrowing. *G2b (feed Δ into the override magnitude) needs a spec step-scale —
+  remaining.*
+- **G3 — Per-frame ExportFamily. ✅ DONE.** `ABExportFamily` assembles {16³ subsample, 64³ committed,
+  256³ replicate4x} carrying the genome (S4GN spliced). Rung-dim + genome-round-trip tests. *(16³ via
+  the lossless VoxelReduce needs the retained OKLab cube; the subsample is the honest interim.)*
+- **G4 — GenomeCarrier Swift codec. ✅ DONE.** Embed/extract the S4GN block; golden vs the spec
+  (6 carrier laws now gated in CI).
+- **G5 — Gene archive. ✅ DONE (flat first version).** On-device Q16 gene store + nearest warm-start.
+  *Full CVT-MAP-Elites + `genomeInner`-on-SIMT index = future (migration §9).*
+- **G6 — Learned 256³. ⚠️ SCAFFOLD.** `NetSynth256` is the gated no-op (== floor at zero genome). The
+  learned weights need the on-device trainer — NOT a port; this is the drop-in seam.
+- **G7 — ABSurface FSM ✅ DONE / movable A/B widgets ⏳ REMAINING.** The 8-phase δ is implemented +
+  7 laws gated (was an orphan stub). The candidates render through the cell grid (`CellSprite` 16×16,
+  GRID-conformant) + are tappable. Promoting them to movable `ColorIdentity.candidateA/B` widgets
+  touches the codegen `MoveContract` + the disjoint-defaults golden — deferred (needs the move-golden
+  regenerated + verified on a runnable target, not blind).
 
 ---
 
