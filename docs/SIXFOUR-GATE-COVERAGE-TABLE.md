@@ -44,6 +44,10 @@ fixtures; Swift tests assert against the same JSON. This is the verified surface
 | `s4_leaf_override` (σ-pair taste tint, n=0) | inline golden (`Spec.LeafOverride` laws) | `kernels.zig` unit test | `LeafOverrideGoldenTests` |
 
 Notes:
+- **`ThetaToDelta` (θ→δ n=0 taste map) is golden-gated Swift ≡ Haskell** (no Zig kernel — θ
+  is per-device float, so float-tier, not cross-device-exact; the integer δ it emits then feeds
+  the exact Zig `s4_leaf_override`). `ThetaToDeltaGoldenTests` pins the cabal-captured goldens
+  incl. a `.5` tie that catches round-half-to-even vs away-from-zero.
 - **`GLRM` (preference kill-switch) is golden-gated Swift ≡ Haskell** (no Zig kernel —
   it is a Mac/device-CPU preflight, not a render kernel). `GLRM.swift` mirrors
   `Spec.GLRM` with matched summation order, so the `Double` OLS is bit-identical;

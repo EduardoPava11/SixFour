@@ -50,6 +50,7 @@ library
         SixFour.Spec.CanonicalPhase
         SixFour.Spec.SigmaPairFixed
         SixFour.Spec.LeafOverride
+        SixFour.Spec.ThetaToDelta
         SixFour.Spec.GenomePair
         SixFour.Spec.GenomeBlend
         SixFour.Spec.GenomeCarrier

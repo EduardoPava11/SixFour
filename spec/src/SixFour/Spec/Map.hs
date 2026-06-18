@@ -89,7 +89,9 @@ period-2⁶ Q16 cosine LUT whose wrap is an integer identity — plus the low-fr
 residual over the owned integer Haar; the shipped Q16 twin of the float "SixFour.Spec.Cyclic"),
 "SixFour.Spec.SigmaPairFixed", "SixFour.Spec.SigmaPairHead", "SixFour.Spec.SigmaDecomp",
 "SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Bottleneck16",
-"SixFour.Spec.LeafOverride", "SixFour.Spec.GenomePair" (★ pivot KEYSTONE — two orthogonal-by-
+"SixFour.Spec.LeafOverride", "SixFour.Spec.ThetaToDelta" (★ canonical-path n=0: the closed-form
+σ-aware taste-gradient map θ(770) → generator δ(384-DOF) that feeds LeafOverride / s4_leaf_override),
+"SixFour.Spec.GenomePair" (★ pivot KEYSTONE — two orthogonal-by-
 disjoint-support σ-valid A/B candidate displacements from the base genome, with a θ-independent
 cold-start ranking), "SixFour.Spec.GenomeBlend" (★ pivot: federated transport — an extracted
 foreign genome enters as ONE gated Bradley–Terry Compare, never a θ splice),
