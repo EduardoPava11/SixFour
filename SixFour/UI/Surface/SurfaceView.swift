@@ -21,11 +21,6 @@ struct SurfaceView: View {
     @State private var surface = Surface()
     @State private var clock = SurfaceClock()
     @State private var engine = CaptureViewModel()
-    /// Act III handoff: the engine renders autonomously, so a finished GIFA can arrive
-    /// while σ is still in `.browsing` (the user is picking anchors). Hold it here and
-    /// replay `commit` once the user fires `.picked4` and σ enters the render family —
-    /// otherwise `.committed` is a δ no-op in `.browsing` and the surface would stall.
-    @State private var pendingOutput: CaptureOutput?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
@@ -45,13 +40,14 @@ struct SurfaceView: View {
             // CLEAR background ON TOP of this. (docs/SIXFOUR-DIMENSIONAL-FIELD-ARCHITECTURE.md S5.)
             StageGround(surface: surface, placement: engine.settings.widgetPlacement, tick: clock.tick)
                 .ignoresSafeArea()
-            PhaseField.field(for: surface.phase, surface, clock, engine.settings)
+            PhaseField.field(for: surface.phase, surface, clock, engine.settings,
+                             onShutter: { Task { await engine.capture() } })
         }
             // The rounded play boundary is an INVISIBLE constraint (widgets kept inside it by
             // `Boundary.footprintFits`); any saved position outside it is re-homed on launch.
             .ignoresSafeArea()
-            // The shutter (a σ event) kicks the engine. σ moves to `.locking` on
-            // `.shutterTap`; here we observe that edge and start the real burst.
+            // The shutter kicks the engine directly (`onShutter` → `engine.capture()`); σ
+            // stays `.live` until the engine's `.done` folds the GIFA and fires `.burstComplete`.
             .environment(surface)
             .task {
                 #if DEBUG
@@ -78,19 +74,10 @@ struct SurfaceView: View {
                         surface.palette = DemoScene.palette
                     }
                     #endif
-                    // Act II: while building the GIFA the preview does NOT freeze — it
-                    // sweeps backwards. Forward (normal loop) everywhere else.
-                    switch surface.phase {
-                    case .capturing, .rendering:
-                        surface.advanceCursorReverse()
-                    case .browsing:
-                        // Act III: the cursor is FINGER-driven via the scrub rail, not
-                        // auto-advanced by κ. No-op the per-tick advance here (mirrors the
-                        // .capturing/.rendering reverse-sweep gating).
-                        break
-                    default:
-                        surface.advanceCursor()
-                    }
+                    // κ advances the Z₆₄ playback cursor: the A/B heroes (`.captured` /
+                    // `.picked`) and the done preview (`.done`) play the 64-frame loop;
+                    // `.live` (and the rest) also advances the cursor harmlessly.
+                    surface.advanceCursor()
                 }
                 if scenePhase == .active { clock.start() }
             }
@@ -99,26 +86,16 @@ struct SurfaceView: View {
             .onChange(of: scenePhase) { _, newValue in
                 if newValue == .active { clock.start() } else { clock.stop() }
             }
-            // σ.phase → engine command. The only place the surface reaches the engine:
-            // a `.shutterTap` (σ now `.locking`) fires the burst; a `.retake` (σ now
-            // `.live`) resets the engine for the next shot.
+            // σ.phase → engine command. The capture itself is now kicked directly by the
+            // LivePhaseField shutter (`engine.capture()`); the only thing left to do on a
+            // phase edge is reset the engine on a `.retake` back to `.live` for the next shot.
             .onChange(of: surface.phase) { old, new in
                 // Stamp the tick the new phase was entered → the renderers ease the act-to-act
                 // transition over a few 20 fps ticks (F2) instead of cutting.
                 surface.phaseEnteredTick = clock.tick
-                switch (old, new) {
-                case (.live, .locking):
-                    Task { await engine.capture() }
-                case (.review, .live):
+                // Retake: any A/B/done phase → live resets the engine for the next burst.
+                if new == .live && old != .bootstrap {
                     engine.reset()
-                case (.browsing, .rendering):
-                    // Act III: the user fired `.picked4` (Continue). If the engine already
-                    // finished rendering while browsing, replay the held commit now so the
-                    // surface advances through the render stages into review. `surface.picks`
-                    // (the 4 ordered anchors) is the render INPUT, already in σ.
-                    if let out = pendingOutput { pendingOutput = nil; commit(out) }
-                default:
-                    break
                 }
             }
             // Lift state changed → stamp the tick so the influence field RAMPS the lift-dim (F3)
@@ -127,14 +104,14 @@ struct SurfaceView: View {
                 surface.liftChangedTick = clock.tick
             }
             // engine.phase → σ event. The engine drives the lifecycle forward; σ.step
-            // maps each engine edge onto the verified FSM.
+            // maps each engine edge onto the verified A/B FSM. Lock + burst + render are all
+            // internal to `.live`; the engine's `.done` folds the GIFA into σ then fires
+            // `.burstComplete` (→ `.captured`, the A/B game).
             .onChange(of: engine.phase) { _, new in mapEnginePhase(new) }
-            // engine.deterministicStage → σ stage-done events. The verified Zig pipeline
-            // surfaces its current stage as a string token; advance σ's rendering sub-phase.
-            .onChange(of: engine.deterministicStage) { _, stage in mapStage(stage) }
-            // Live palette → σ.palette (the live/capturing field paints from σ).
+            // Live palette → σ.palette (the live field paints from σ). Only while `.live`
+            // (capture + render are now internal to `.live`).
             .onChange(of: engine.livePalette) { _, pal in
-                if surface.phase == .live || surface.phase == .locking || surface.phase == .capturing {
+                if surface.phase == .live {
                     // The capture-screen LOOK re-grades the palette (swipe to cycle); the
                     // index tile is untouched, so the 16×16 shutter recolours in place.
                     surface.palette = engine.settings.captureLook.apply(to: pal)
@@ -143,35 +120,21 @@ struct SurfaceView: View {
             // Live camera tile → σ (indexed cells + paired palette). The live hero paints
             // the REAL camera through the cell grid, replacing the synthetic palette scroll.
             .onChange(of: engine.previewIndexTile) { _, tile in
-                if surface.phase == .live || surface.phase == .locking || surface.phase == .capturing {
+                if surface.phase == .live {
                     surface.previewTile = tile
                     // Re-grade the hero's palette through the active LOOK (same transform
                     // as the shutter + the exported LUT); the index tile is unchanged.
                     surface.previewPalette = engine.settings.captureLook.apply(to: engine.previewPalette)
                 }
             }
-            // Streamed render partials → σ. The deterministic core surfaces the REAL
-            // per-stage buffers (quantize→dither→significance→palette) in true colour; fold
-            // them into σ so `RenderingPhaseField`'s serpentine sweep reveals the actual
-            // GIFA-in-progress, not an empty placeholder. Only while `.rendering`.
-            .onChange(of: engine.renderPartialCube) { _, cube in
-                if case .rendering = surface.phase {
-                    surface.palette = engine.renderPartialPalette
-                    surface.indexCube = cube
-                }
-            }
-            // REAL render progress → σ (drives the GIFA construction reveal, not a clock timer).
+            // REAL render progress → σ (kept harmless; the field still carries it).
             .onChange(of: engine.loadingProgress) { _, p in surface.renderProgress = p }
-            // The finished GIFA → σ (palette + index cube), then the explicit commit
-            // (`lawReviewExplicit`: review is reached ONLY via `.committed`).
+            // The finished GIFA → σ. If the engine's `.done` edge raced ahead of this
+            // observer the commit already ran in `mapEnginePhase`; folding again is
+            // idempotent (it overwrites σ with the same bytes) and `.burstComplete` is a
+            // no-op once σ has left `.live`, so this is a safe belt-and-braces catch.
             .onChange(of: engine.primaryOutput) { _, out in
-                if let out {
-                    // If σ is still browsing (the user hasn't fired `.picked4` yet), hold the
-                    // finished GIFA — `commit` would no-op `.committed` from `.browsing`.
-                    // It is replayed when `.picked4` lands in `.rendering` (see the phase
-                    // onChange below). Otherwise commit immediately (normal render path).
-                    if case .browsing = surface.phase { pendingOutput = out } else { commit(out) }
-                }
+                if let out, surface.phase == .live { commit(out); surface.step(.burstComplete) }
             }
             // Debug-only ownership overlay (full-lattice identity-badge bitmap). The
             // outermost slot, above every phase; off by default ⇒ the branch is
@@ -206,74 +169,40 @@ struct SurfaceView: View {
 
     // MARK: - engine.phase → σ event
 
-    /// Translate one engine `Phase` edge into the σ FSM event that advances it. The
-    /// engine sets its phase synchronously through bootstrap → idle and through the
-    /// burst; σ.step is total (an unmodelled pair is a no-op), so an out-of-order edge
-    /// never derails the surface.
+    /// Translate one engine `Phase` edge into the σ FSM event that advances it. Under
+    /// ABSurface lock + burst + the whole render pipeline are INTERNAL to `.live` (there is
+    /// no `.locking` / `.capturing` / `.rendering` phase to observe) — only the engine's
+    /// `.done` matters: it folds the finished GIFA into σ and fires `.burstComplete`
+    /// (→ `.captured`, the A/B game). σ.step is total, so an out-of-order edge is a no-op.
     private func mapEnginePhase(_ p: CaptureViewModel.Phase) {
         switch p {
         case .unauthorized:
             surface.step(.authDenied)
         case .idle:
-            // Session ready: bootstrap → live. (Re-entry from a finished render is a
-            // no-op by δ, so this is safe to fire on every idle edge.)
+            // Session ready: bootstrap → live. (Re-entry from a finished shot is a δ no-op,
+            // so this is safe to fire on every idle edge.)
             surface.step(.sessionReady)
-        case .configuring:
-            break   // still on bootstrap; no event yet
-        case .locking:
-            break   // σ already entered `.locking` on the shutter tap that started this
-        case .capturing:
-            // The AE/AWB lock completed and the burst is in flight.
-            surface.step(.lockComplete)
-        case .renderingStageA, .renderingEncode:
-            // The burst finished; the render pipeline is running. `.burstComplete` moves
-            // σ into `.rendering(.quantize)`; the granular stages ride `deterministicStage`.
-            surface.step(.burstComplete)
+        case .configuring, .locking, .capturing, .renderingStageA, .renderingEncode:
+            break   // lock + burst + render are internal to `.live`; σ stays `.live`
         case .done:
-            // Handled by the `primaryOutput` commit path (`lawReviewExplicit`).
-            break
+            // The GIFA is finished: fold it into σ, THEN advance to the A/B game.
+            if let out = engine.primaryOutput { commit(out) }
+            surface.step(.burstComplete)
         case .failed:
             surface.step(.fault)
         }
     }
 
-    // MARK: - engine.deterministicStage → σ stage-done
+    // MARK: - commit (engine output → σ)
 
-    /// Advance σ's rendering sub-phase to track the verified Zig kernel currently running.
-    /// The engine reports the stage it has STARTED; σ models stage COMPLETION, so seeing
-    /// stage N+1 start means stage N is done. We drive σ forward to the reported stage's
-    /// sub-phase by stepping the chain of `.stageDone` events up to it.
-    private func mapStage(_ stage: String?) {
-        guard let stage, let target = SurfacePhase.RenderStage(rawValue: stage) else { return }
-        // Step `.stageDone` events until σ's rendering sub-phase reaches `target`. Each
-        // step is a δ no-op unless it is the modelled next transition, so this converges
-        // monotonically to the reported stage and never overshoots.
-        let order = SurfacePhase.RenderStage.allCases
-        guard let targetIdx = order.firstIndex(of: target) else { return }
-        var guardCount = 0
-        while case let .rendering(cur) = surface.phase,
-              let curIdx = order.firstIndex(of: cur),
-              curIdx < targetIdx,
-              guardCount < order.count {
-            surface.step(.stageDone(cur))
-            guardCount += 1
-        }
-    }
-
-    // MARK: - commit (engine output → σ, then explicit review)
-
-    /// Fold the finished GIFA into σ (the global palette + the flat 64³ index cube) and
-    /// fire the ONE event that may enter review (`lawReviewExplicit`). The engine's
-    /// `CaptureOutput` carries the per-frame palettes + per-pixel indices; σ holds a
-    /// single global palette for review, so we take frame-0's palette as the display
-    /// palette (the deterministic-global path replicates one palette across all frames;
-    /// the per-frame path uses frame 0 as the representative) and pack the indices into
-    /// the flat `t,y,x` cube `ReviewPhaseField` reads.
+    /// Fold the finished GIFA into σ — the per-frame palette series, the GIF URL, frame-0's
+    /// palette (the `cellGlobal` accessor), and the flat 64³ index cube the A/B heroes read.
+    /// The engine's `CaptureOutput` carries the per-frame palettes + per-pixel indices; the
+    /// caller fires `.burstComplete` AFTER this (so σ already has the data when `.captured`
+    /// mounts the A/B field).
     private func commit(_ out: CaptureOutput) {
-        // Carry the FULL per-frame palette series so review shows the real per-frame GIFA;
-        // keep frame-0 on `surface.palette` for the `cellGlobal` accessor / loading reads.
         surface.palettesPerFrame = out.palettesForDisplay
-        surface.gifURL = out.gifURL          // the Review Share source
+        surface.gifURL = out.gifURL
         if let pal = out.palettesForDisplay.first {
             surface.palette = pal
         }
@@ -284,26 +213,5 @@ struct SurfaceView: View {
             surface.indexCube = cube
         }
         surface.settings.useDeterministicCore = out.deterministic
-        // First drive σ to the encode sub-phase if the render edges were missed (the
-        // engine can finish faster than the phase observer fires), then commit.
-        finishRendering()
-        surface.step(.committed)
-    }
-
-    /// Ensure σ has walked the full rendering chain to `.rendering(.encode)` before the
-    /// commit, so `.committed` is a modelled transition even if intermediate stage edges
-    /// arrived out of order or were coalesced.
-    private func finishRendering() {
-        guard case .rendering = surface.phase else {
-            // Not in the rendering family (e.g. the engine raced ahead). Re-walk from
-            // capturing only if σ is somewhere on the capture path; otherwise leave it.
-            return
-        }
-        let order = SurfacePhase.RenderStage.allCases
-        var guardCount = 0
-        while case let .rendering(cur) = surface.phase, cur != .encode, guardCount < order.count {
-            surface.step(.stageDone(cur))
-            guardCount += 1
-        }
     }
 }

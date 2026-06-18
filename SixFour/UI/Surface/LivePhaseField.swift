@@ -31,6 +31,10 @@ struct LivePhaseField: View {
     let clock: SurfaceClock
     /// The ONE shared widget layout (the three global ColorWidget positions) + persistence.
     @Bindable var settings: AppSettings
+    /// The direct engine `capture()` kick — lock + burst are internal to `.live` under
+    /// ABSurface (no `.locking` phase), so the shutter starts the burst itself; σ STAYS
+    /// `.live` until the engine finishes (then `.done` → `burstComplete` → `.captured`).
+    var onShutter: () -> Void = {}
 
     /// The current shared placement (identity → position). Re-read every body so a move in
     /// any phase is visible here (one global position across phases).
@@ -154,7 +158,7 @@ struct LivePhaseField: View {
         }
         .movable(.palette16, settings: settings, surface: surface, clock: clock,
                  enabled: surface.phase == .live,
-                 onTap: { surface.step(.shutterTap) })
+                 onTap: { onShutter() })   // kick the burst directly; σ stays .live until done
         .accessibilityLabel("Capture 64-frame burst")
         .accessibilityHint("Tap to capture sixty-four frames; long-press to move the palette")
     }

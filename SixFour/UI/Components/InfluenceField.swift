@@ -104,9 +104,11 @@ struct InfluenceField: View {
     private static func arrangement(of surface: Surface) -> (tile: [UInt8], palette: [SIMD3<UInt8>]) {
         let side = surface.cubeSide
         switch surface.phase {
-        case .live, .locking, .capturing:
+        case .live:
             return (surface.previewTile, surface.previewPalette)
-        case .rendering, .review:
+        case .captured, .picked:
+            // The A/B game frames: the committed GIFA frame at the κ cursor (so the edge-bleed
+            // uses the resolved data, as the old review path did).
             let t = surface.cursor, base = t * side * side
             guard t >= 0, surface.indexCube.count >= base + side * side else {
                 return ([], surface.palette)

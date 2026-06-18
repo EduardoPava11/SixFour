@@ -87,7 +87,8 @@ struct SettingsPhaseField: View {
         HStack {
             CellText("SETTINGS", rows: 13, ink: .white)
             Spacer()
-            Button { surface.step(.closeSettings) } label: {
+            // DEPRECATED (settings phase cut under ABSurface): inert; field unrouted.
+            Button { } label: {
                 CellText("CLOSE", rows: 11, ink: Color(srgb8: accent))
                     .padding(.horizontal, GlobalLattice.pt(3))
                     .frame(minHeight: GlobalLattice.gif(GlobalLattice.touchFloorCells))

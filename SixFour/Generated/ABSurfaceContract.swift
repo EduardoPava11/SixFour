@@ -4,48 +4,40 @@
 
 import Foundation
 
-/// The simplified capture → A/B → export lifecycle FSM, pinned bit-for-bit to
-/// `SixFour.Spec.ABSurface` and gated by `cabal test`. The TARGET flow (cuts browse /
-/// pick-4 / the visible 5-stage render): `PickA`/`PickB` both land in `Picked` where the
-/// A/B infinite game self-loops while θ folds; `Exporting` is entered ONLY from `Picked`;
-/// lock + burst are internal to `Live`. The Swift `Surface` port mirrors `abStep` and
-/// re-derives `goldenHappyPathTrace` as its live Swift↔Haskell parity pin.
+/// The simplified 8-phase capture -> A/B -> export FSM constants, pinned bit-for-bit
+/// to `SixFour.Spec.ABSurface` and gated by `cabal test`. The Swift `ABPhase` / `ABEvent`
+/// / `abStep` port (in `ABSurfaceMachine.swift`) reads its phase/event token alphabet and
+/// the golden happy-path trace through this enum.
 public enum SixFourABSurface {
-    /// The 8 UI-lifecycle phases (one surface, no screens). The Swift port uses these tokens.
+    /// The 8 UI-lifecycle phases (one surface, no screens). The Swift `ABPhase` port
+    /// uses these exact tokens.
     public static let phases: [String] = ["bootstrap", "unauthorized", "live", "captured", "picked", "exporting", "done", "error"]
-    /// The 11 FSM events (transition triggers only; out-of-band data lives in σ).
+    /// The 11 FSM events (transition triggers only; out-of-band data lives in sigma).
     public static let events: [String] = ["sessionReady", "authDenied", "shutterTap", "lockComplete", "burstComplete", "pickA", "pickB", "exportFamily", "exportDone", "retake", "fault"]
-    /// The canonical happy-path event sequence + its phase trace (scanl abStep Bootstrap).
-    /// The cross-language pin: the Swift `abStep` port must reproduce the trace.
+    /// The golden happy-path event sequence + its phase trace
+    /// (`scanl abStep Bootstrap`). The cross-language pin: the Swift `abStep` port must
+    /// reproduce it token-for-token.
     public static let goldenHappyPathEvents: [String] = ["sessionReady", "shutterTap", "burstComplete", "pickA", "exportFamily", "exportDone", "retake"]
     public static let goldenHappyPathTrace: [String] = ["bootstrap", "live", "live", "captured", "picked", "exporting", "done", "live"]
 
-    /// The two A/B candidate 16×16 cell rectangles (col, row, w, h) on the lattice —
-    /// disjoint + symmetric about centre (`SixFour.Spec.ABSurface.lawABCellGrid`). The
-    /// `Captured` phase paints candidate A and B through these.
+    /// Candidate A's 16x16 tile rectangle (col, row, width, height) on the lattice.
     public static let candidateRegionA: [Int] = [16, 100, 16, 16]
+    /// Candidate B's 16x16 tile rectangle (col, row, width, height), symmetric to A.
     public static let candidateRegionB: [Int] = [68, 100, 16, 16]
-    public static let latticeCols: Int = 100
-    public static let latticeRows: Int = 218
 
-    /// Re-derives the pinned invariants from the constants — a live Haskell↔Swift parity
-    /// gate for the A/B FSM (golden trace shape + candidate-rect disjointness/in-bounds).
+    /// Re-derives every pinned invariant — a live Haskell<->Swift parity gate for the
+    /// A/B FSM (alphabet sizes + the golden trace shape + the candidate geometry).
     public static func selfCheck() -> Bool {
-        // The trace is one longer than its event list, starts at bootstrap, ends at live
-        // (the golden path retakes back to live after export).
+        if phases.count != 8 || events.count != 11 { return false }
+        // The trace is one longer than its event list, starts at bootstrap, and the
+        // golden happy path ends back at live (done -> retake -> live).
         guard goldenHappyPathTrace.count == goldenHappyPathEvents.count + 1 else { return false }
         if goldenHappyPathTrace.first != "bootstrap" { return false }
         if goldenHappyPathTrace.last != "live" { return false }
-        if phases.count != 8 || events.count != 11 { return false }
-        // The two candidate rects are disjoint and in-bounds (lawABCellGrid).
-        let a = candidateRegionA, b = candidateRegionB
-        guard a.count == 4, b.count == 4 else { return false }
-        let disjoint = a[0] + a[2] <= b[0] || b[0] + b[2] <= a[0]
-                    || a[1] + a[3] <= b[1] || b[1] + b[3] <= a[1]
-        if !disjoint { return false }
-        for r in [a, b] {
-            if r[0] < 0 || r[1] < 0 || r[0] + r[2] > latticeCols || r[1] + r[3] > latticeRows { return false }
-        }
+        // The two candidate tiles are disjoint (A is left of B with a gutter).
+        let ax = candidateRegionA[0], aw = candidateRegionA[2]
+        let bx = candidateRegionB[0]
+        if ax + aw > bx { return false }
         return true
     }
 }

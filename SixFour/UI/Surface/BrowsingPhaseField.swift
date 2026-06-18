@@ -189,12 +189,12 @@ struct BrowsingPhaseField: View {
 
     // MARK: - (6) Continue gate
 
-    /// Fires `.picked4` ONLY when exactly 4 anchors are chosen — the count is load-bearing
-    /// downstream (the 4⁴ quad). `surfaceStep`'s `.picked4` edge is unconditional (a pure
-    /// mirror of the spec δ); the exactly-4 gate lives HERE in the button.
+    /// The old "Continue" gate (browse flow cut under ABSurface). This field is unrouted;
+    /// the action is now inert (`.picked4` is no longer in the FSM alphabet) but the view
+    /// is kept so the unrouted file still compiles.
     private var continueGate: some View {
         Button {
-            if surface.picks.count == 4 { surface.step(.picked4) }
+            // DEPRECATED (browse flow cut): no FSM edge fires here anymore.
         } label: {
             CellActionButton(title: "Continue · \(surface.picks.count)/4",
                              prominent: surface.picks.count == 4)

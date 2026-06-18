@@ -24,5 +24,5 @@ enum Feature {
     /// `GenomePair.sampleOrthogonalPair` candidate looks in Review; tapping one records a Compare.
     /// OFF in MVP1 (the surfacing is new and runs only on device); flip on to test the A/B flow.
     /// See `docs/SIXFOUR-PER-FRAME-GENOME-AB-MIGRATION-WORKFLOW.md` Pillar B / Phase 3.
-    static let abCandidatePicker = false
+    static let abCandidatePicker = true
 }

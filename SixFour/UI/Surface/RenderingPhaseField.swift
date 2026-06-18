@@ -15,8 +15,14 @@ import simd
 /// banner). Cells only — no `Text`/glass/SF-Symbol/UIKit. Reads σ from the Surface and
 /// the per-tick heartbeat from κ; emits cells.
 struct RenderingPhaseField: View {
+    /// The five deterministic-core stages, in order. DEPRECATED (5-stage render cut under
+    /// ABSurface — render is now internal to `.live`); kept local so this unrouted field
+    /// still compiles. (Was `SurfacePhase.RenderStage`.)
+    enum RenderStage: String, CaseIterable, Equatable {
+        case quantize, dither, significance, palette, encode
+    }
     /// The current deterministic-core sub-stage (drives the sweep front + the banner).
-    let stage: SurfacePhase.RenderStage
+    let stage: RenderStage
     /// σ — the surface state (palette + index cube of the GIFA being resolved).
     let surface: Surface
     /// κ — the ONE 20 fps clock (heartbeat for the live checker ground).
@@ -123,7 +129,7 @@ struct RenderingPhaseField: View {
     private var progress: Double { surface.renderProgress }
 
     /// Human-readable label for the deterministic stage (the verified Zig kernel running).
-    private static func label(_ stage: SurfacePhase.RenderStage) -> String {
+    private static func label(_ stage: RenderStage) -> String {
         switch stage {
         case .quantize:     return "Quantizing per-frame palettes"
         case .dither:       return "Shaping the residual sampler"

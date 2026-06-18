@@ -112,7 +112,8 @@ struct CapturingPhaseField: View {
         let ordered = GridScript.capture(side: 16).surfaceColors(palette: padded)
         // Captured fraction read straight from σ: how many of the 256 slots are backed
         // by a real palette colour. `.locking` carries no palette yet → 0 filled.
-        let captured = surface.phase == .locking ? 0 : min(surface.palette.count, 256)
+        // (lock collapsed into .live under ABSurface; this field is unrouted)
+        let captured = surface.phase == .live ? 0 : min(surface.palette.count, 256)
 
         // F2: unfilled cells EASE from their live colour → ghost over the transition, so the tap
         // doesn't flash the whole palette to ghost; captured cells stay solid.
@@ -123,7 +124,7 @@ struct CapturingPhaseField: View {
             return rank < captured ? ordered[rank] : Self.mix(ordered[rank], ghost, t)
         }
         .allowsHitTesting(false)   // inert during the burst — a state is a cell transform, never a button
-        .accessibilityLabel(surface.phase == .locking
+        .accessibilityLabel(surface.phase == .live   // (lock collapsed into .live under ABSurface; field unrouted)
                             ? "Locking exposure, focus, white balance"
                             : "Capturing sixty-four frames")
     }
@@ -134,7 +135,7 @@ struct CapturingPhaseField: View {
     /// names which phase of the burst the surface is in. Read straight from σ's phase.
     @ViewBuilder
     private var banner: some View {
-        let label = surface.phase == .locking
+        let label = surface.phase == .live   // (lock collapsed into .live under ABSurface; field unrouted)
             ? "Locking exposure, focus, white balance…"
             : "Capturing 64 frames…"
         CellText(label, rows: 11, ink: .white)

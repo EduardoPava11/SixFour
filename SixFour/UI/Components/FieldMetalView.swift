@@ -69,9 +69,11 @@ struct FieldMetalView: UIViewRepresentable {
     private static func arrangement(of surface: Surface) -> (tile: [UInt8], palette: [SIMD3<UInt8>]) {
         let side = surface.cubeSide
         switch surface.phase {
-        case .live, .locking, .capturing:
+        case .live:
             return (surface.previewTile, surface.previewPalette)
-        case .rendering, .review:
+        case .captured, .picked:
+            // The A/B game frames: the committed GIFA frame at the κ cursor (the edge-bleed
+            // uses the real resolved data, same as the old review path).
             let t = surface.cursor, base = t * side * side
             guard t >= 0, surface.indexCube.count >= base + side * side else { return ([], surface.palette) }
             let slice = Array(surface.indexCube[base ..< base + side * side])

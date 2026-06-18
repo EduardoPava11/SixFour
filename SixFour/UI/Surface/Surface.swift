@@ -3,144 +3,17 @@ import Observation
 import simd
 
 /// σ — the ONE surface state. Every UI lifecycle "screen" is a phase of this single
-/// field (`SixFour.Spec.Display.lawPhaseIsCellGrid`): capture → render → review are
-/// cell updates on the one surface, never view swaps. The phase FSM is ported
-/// bit-for-bit from `Generated/DisplayContract.swift` (`SixFourDisplay.phases` /
-/// `.events`) and MUST reproduce `SixFourDisplay.goldenHappyPathTrace`. Review is
-/// reachable ONLY via `.committed` (`lawReviewExplicit`).
+/// field: capture → A/B → export are cell updates on the one surface, never view swaps.
+/// The phase FSM is now the simplified `ABPhase` machine (`ABSurfaceMachine.swift`),
+/// ported bit-for-bit from `Generated/ABSurfaceContract.swift` (`SixFourABSurface`) and
+/// asserted by `ABPhase.assertSpecParity()`. `step(_:)` is the only writer of `phase`.
+///
+/// The old multi-phase Display FSM (`SurfacePhase` / `SurfaceEvent` / `surfaceStep`) is
+/// RETIRED — the whole browse / refine / 5-stage-render lifecycle collapses to
+/// capture → A/B → export. The CLOCK half (the 20 fps κ, the Z₆₄ cursor, the projections)
+/// is unchanged.
 ///
 /// Tier-2 pure: Foundation + Observation + simd only.
-
-// MARK: - Phases (Σ)
-
-/// The UI-lifecycle phases — the exact `SixFourDisplay.phases` tokens, one case each.
-/// The rendering pipeline is its five sub-stages so the surface can show *which*
-/// verified Zig kernel is running as a cell transform.
-enum SurfacePhase: Equatable {
-    case bootstrap
-    case unauthorized
-    case live
-    case settings
-    case locking
-    case capturing
-    case browsing
-    case review
-    case error
-    case rendering(RenderStage)
-
-    /// The five deterministic-core stages, in order — the `rendering:*` token suffixes.
-    enum RenderStage: String, CaseIterable, Equatable {
-        case quantize, dither, significance, palette, encode
-    }
-
-    /// The contract token for this phase — MUST be one of `SixFourDisplay.phases`.
-    var token: String {
-        switch self {
-        case .bootstrap:        return "bootstrap"
-        case .unauthorized:     return "unauthorized"
-        case .live:             return "live"
-        case .settings:         return "settings"
-        case .locking:          return "locking"
-        case .capturing:        return "capturing"
-        case .browsing:         return "browsing"
-        case .review:           return "review"
-        case .error:            return "error"
-        case .rendering(let s): return "rendering:\(s.rawValue)"
-        }
-    }
-}
-
-// MARK: - Events (the FSM transition triggers)
-
-/// The FSM events — the exact `SixFourDisplay.events` tokens. Out-of-band data
-/// (palette bytes, the rendered GIF, progress) lives in Σ's fields, never here.
-enum SurfaceEvent: Equatable {
-    case sessionReady
-    case authDenied
-    case shutterTap
-    case openSettings
-    case closeSettings
-    case lockComplete
-    case burstComplete
-    case selectFrame
-    case picked4
-    case lookSwipe
-    case scrubTick
-    case cutLever
-    case exportLut
-    case committed
-    case retake
-    case fault
-    case stageDone(SurfacePhase.RenderStage)
-
-    /// The contract token — MUST be one of `SixFourDisplay.events`.
-    var token: String {
-        switch self {
-        case .sessionReady:    return "sessionReady"
-        case .authDenied:      return "authDenied"
-        case .shutterTap:      return "shutterTap"
-        case .openSettings:    return "openSettings"
-        case .closeSettings:   return "closeSettings"
-        case .lockComplete:    return "lockComplete"
-        case .burstComplete:   return "burstComplete"
-        case .selectFrame:     return "selectFrame"
-        case .picked4:         return "picked4"
-        case .lookSwipe:       return "lookSwipe"
-        case .scrubTick:       return "scrubTick"
-        case .cutLever:        return "cutLever"
-        case .exportLut:       return "exportLut"
-        case .committed:       return "committed"
-        case .retake:          return "retake"
-        case .fault:           return "fault"
-        case .stageDone(let s): return "stageDone:\(s.rawValue)"
-        }
-    }
-}
-
-// MARK: - δ — the transition function
-
-/// The pure FSM step `δ: (phase, event) → phase`, ported from the Display spec.
-/// Total: any unmodelled (phase, event) pair is a no-op (stays in `phase`), so an
-/// out-of-band event never derails the surface. `.fault` from any phase → `.error`.
-/// Review is entered ONLY by `.committed` (`lawReviewExplicit`).
-func surfaceStep(_ phase: SurfacePhase, _ event: SurfaceEvent) -> SurfacePhase {
-    // A fault from anywhere drops to the error field.
-    if case .fault = event { return .error }
-
-    switch (phase, event) {
-    case (.bootstrap, .sessionReady):   return .live
-    case (.bootstrap, .authDenied):     return .unauthorized
-
-    case (.live, .shutterTap):          return .locking
-    case (.live, .openSettings):        return .settings
-    case (.settings, .closeSettings):   return .live
-
-    case (.locking, .lockComplete):     return .capturing
-    // Act III: the burst no longer wires straight to render — it lands in `.browsing`,
-    // where the user scrubs the 64-frame burst and picks 4 anchor frames. The exactly-4
-    // gate lives in the Continue button (`picks.count == 4`), NOT here: surfaceStep is a
-    // pure (phase, event) -> phase mirror of the spec `step`, with no Surface access, so
-    // `.picked4` is UNCONDITIONAL exactly as the Haskell δ models it (δ stays total).
-    case (.capturing, .burstComplete):  return .browsing
-    case (.browsing, .selectFrame):     return .browsing               // self-loop; picks mutate in Σ
-    case (.browsing, .picked4):         return .rendering(.quantize)   // the old burst target
-
-    // The verified Zig pipeline advances stage by stage.
-    case (.rendering(.quantize), .stageDone(.quantize)):           return .rendering(.dither)
-    case (.rendering(.dither), .stageDone(.dither)):               return .rendering(.significance)
-    case (.rendering(.significance), .stageDone(.significance)):   return .rendering(.palette)
-    case (.rendering(.palette), .stageDone(.palette)):             return .rendering(.encode)
-    // The last stage completing does NOT enter review — only an explicit commit does
-    // (`lawReviewExplicit`). encode stays on the encode field until `.committed`.
-    case (.rendering(.encode), .stageDone(.encode)):               return .rendering(.encode)
-
-    case (.rendering(.encode), .committed): return .review
-    case (.review, .retake):                return .live
-
-    default:
-        return phase   // unmodelled pair → no-op
-    }
-}
 
 // MARK: - σ — the observable surface
 
@@ -151,8 +24,8 @@ final class Surface {
     // MARK: phase (Σ)
 
     /// The current lifecycle phase — ι = `.bootstrap`. A phase change is a cell
-    /// update, never a view swap.
-    private(set) var phase: SurfacePhase = .bootstrap
+    /// update, never a view swap. The A/B machine (`ABSurfaceMachine.swift`).
+    private(set) var phase: ABPhase = .bootstrap
 
     // MARK: the field's data (out-of-band Σ)
 
@@ -185,16 +58,10 @@ final class Surface {
     /// The Z₆₄ playback cursor — the current frame `0..<64`. Advanced by κ each tick.
     var cursor: Int = 0
 
-    /// OUT-OF-BAND Σ (NOT in the FSM alphabet) — the 4 ORDERED anchor frames the user
-    /// picks in `.browsing` (Act III). Cap 4, ordered; these are the 4⁴ quad anchors
-    /// (USER DECISION 2026-06-08). CONSUMER (today): the Review **4⁴ quartet** —
-    /// `ReviewPhaseField.motionSlots` reads `surface.picks` to choose the 4 frames the
-    /// QuartetDelta motion outline analyses (the Browse → 4⁴ loop). NOTE: the picks do NOT
-    /// (yet) shape the rendered GIF bytes — the deterministic render runs autonomously from
-    /// `.shutterTap`; wiring picks into the quantize/collapse pivot is a separate follow-on.
-    /// Same out-of-band category as `palettesPerFrame`/`indexCube`/`cursor`/`liftedWidget`:
-    /// the FSM math never touches it (`SelectFrame` carries no payload in the alphabet; the
-    /// frame index lives here in σ). Reset to `[]` on `.live`.
+    // DEPRECATED (browse flow cut; kept so unrouted fields compile) — the 4 ORDERED anchor
+    // frames the old `.browsing` flow let the user pick. The browse phase is gone under
+    // ABSurface; this field stays only so the unrouted Browsing/Review fields still build.
+    // Reset to `[]` on `.live`.
     var picks: [Int] = []
 
     /// OUT-OF-BAND UI state (NOT in the FSM alphabet): which ColorWidget is currently LIFTED for
@@ -222,20 +89,19 @@ final class Surface {
     // MARK: δ
 
     /// Apply one event — the single mutation point for the phase. Mirrors
-    /// `surfaceStep` and is the only writer of `phase`.
-    func step(_ event: SurfaceEvent) {
-        phase = surfaceStep(phase, event)
-        // Out-of-band Σ housekeeping: a fresh burst starts unselected (retake → `.live`
-        // clears the anchors so Continue is disabled until the user authors 4 again).
+    /// `abStep` (`ABSurfaceMachine.swift`) and is the only writer of `phase`.
+    func step(_ event: ABEvent) {
+        phase = abStep(phase, event)
+        // Out-of-band Σ housekeeping: returning to `.live` clears any vestigial picks.
         if phase == .live { picks = [] }
     }
 
-    // MARK: - Browsing picks (out-of-band Σ — Act III)
+    // MARK: - Browsing picks (out-of-band Σ — vestigial)
 
+    // DEPRECATED (browse flow cut; kept so unrouted fields compile).
     /// Toggle frame `f` in the ordered pick list: a re-tap REMOVES it; otherwise it is
     /// APPENDED (preserving pick order) while fewer than 4 are chosen — the 5th tap is
-    /// rejected (the cap is 4, the quad). The `.selectFrame` event is fired by the caller
-    /// (the FSM self-loop); this mutates only the out-of-band σ field, never `phase`.
+    /// rejected (the cap is 4, the quad). Mutates only the out-of-band σ field, never `phase`.
     func togglePick(_ f: Int) {
         guard f >= 0, f < SixFourPlaybackClock.frameCount else { return }
         if let i = picks.firstIndex(of: f) {
@@ -245,9 +111,9 @@ final class Surface {
         }
     }
 
-    /// Move the playback cursor to frame `f` directly (the finger-driven scrub in
-    /// `.browsing`). Clamps to `0..<64`; writes `cursor` with NO FSM event (κ does not
-    /// auto-advance the cursor while browsing — the rail drives it).
+    // DEPRECATED (browse flow cut; kept so unrouted fields compile).
+    /// Move the playback cursor to frame `f` directly (the old finger-driven browse scrub).
+    /// Clamps to `0..<64`; writes `cursor` with NO FSM event.
     func scrubCursor(to f: Int) {
         cursor = max(0, min(SixFourPlaybackClock.frameCount - 1, f))
     }
@@ -327,28 +193,15 @@ struct SurfaceSettings: Equatable {
 // MARK: - Spec parity gate (debug)
 
 extension Surface {
-    /// Re-derives the golden happy-path trace by folding `surfaceStep` over the
-    /// generated `SixFourDisplay.goldenHappyPathEvents`, and asserts it matches
-    /// `SixFourDisplay.goldenHappyPathTrace` token-for-token — the live Swift↔Haskell
-    /// parity pin for the phase FSM. Also runs the contract's own `selfCheck()`.
-    /// Debug-only; release builds compile this to nothing.
+    /// Re-asserts the live Swift↔Haskell parity pins. The phase-FSM pin is now the A/B
+    /// machine's own gate (`ABPhase.assertSpecParity()`, folding `abStep` over
+    /// `SixFourABSurface.goldenHappyPathEvents`); the other contract self-checks (move /
+    /// cell-mechanics / boundary / field-tuning / influence-field) + the MoveContract
+    /// golden fold are kept. Debug-only; release builds compile this to nothing.
     static func assertSpecParity() {
         #if DEBUG
-        assert(SixFourDisplay.selfCheck(), "SixFourDisplay.selfCheck() failed")
-
-        // Fold our step over the golden event tokens, starting at bootstrap.
-        var phase = SurfacePhase.bootstrap
-        var trace = [phase.token]
-        for token in SixFourDisplay.goldenHappyPathEvents {
-            guard let event = SurfaceEvent.fromToken(token) else {
-                assertionFailure("unknown golden event token: \(token)")
-                return
-            }
-            phase = surfaceStep(phase, event)
-            trace.append(phase.token)
-        }
-        assert(trace == SixFourDisplay.goldenHappyPathTrace,
-               "Surface.step trace \(trace) != golden \(SixFourDisplay.goldenHappyPathTrace)")
+        // Phase-FSM parity: the simplified capture → A/B → export machine.
+        ABPhase.assertSpecParity()
 
         // Movable ColorWidget parity: re-fold the generated `move` over `goldenScript`
         // from `defaultPlacement` and assert it reproduces `goldenAfter` — the live
@@ -377,35 +230,5 @@ extension Surface {
         }
         assert(goldenParity, "MoveContract.move fold != goldenAfter")
         #endif
-    }
-}
-
-extension SurfaceEvent {
-    /// Parse a contract event token back to an event (for the parity gate). The
-    /// `stageDone:*` family carries its stage suffix.
-    static func fromToken(_ token: String) -> SurfaceEvent? {
-        switch token {
-        case "sessionReady":  return .sessionReady
-        case "authDenied":    return .authDenied
-        case "shutterTap":    return .shutterTap
-        case "openSettings":  return .openSettings
-        case "closeSettings": return .closeSettings
-        case "lockComplete":  return .lockComplete
-        case "burstComplete": return .burstComplete
-        case "selectFrame":   return .selectFrame
-        case "picked4":       return .picked4
-        case "lookSwipe":     return .lookSwipe
-        case "scrubTick":     return .scrubTick
-        case "cutLever":      return .cutLever
-        case "exportLut":     return .exportLut
-        case "committed":     return .committed
-        case "retake":        return .retake
-        case "fault":         return .fault
-        default:
-            guard token.hasPrefix("stageDone:"),
-                  let stage = SurfacePhase.RenderStage(rawValue: String(token.dropFirst("stageDone:".count)))
-            else { return nil }
-            return .stageDone(stage)
-        }
     }
 }
