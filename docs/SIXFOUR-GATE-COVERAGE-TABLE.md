@@ -44,6 +44,11 @@ fixtures; Swift tests assert against the same JSON. This is the verified surface
 | `s4_leaf_override` (σ-pair taste tint, n=0) | inline golden (`Spec.LeafOverride` laws) | `kernels.zig` unit test | `LeafOverrideGoldenTests` |
 
 Notes:
+- **`PersonalTaste` (on-device θ taste vector, n=0 loop) is golden-gated Swift ≡ Haskell** —
+  `btUpdate` mirrors `Spec.PreferenceUpdate` (cabal-captured goldens in `PersonalTasteTests`:
+  θ=0,w=[1,0…]→0.025→0.0496862…). The embedding + leaf-tint are float, single-impl (per-device).
+  Wired live into `AtlasState.choose` (freeze embeddings → btUpdate → persist → tint → log
+  `category=atlas.taste`), surfaced in `AtlasGalleryView`.
 - **`Spec.DecisionLog` CMPE chunk (DECN v2 = embeddings) is property-gated** (`Properties.DecisionLog`,
   10 tests incl. round-trip + CMPE round-trip + v1 backward-compat). Device twin = optional embedding
   fields on the Codable `AtlasDecisionRecord` (`DecisionLogV2Tests`); the full Swift SF64 binary codec

@@ -15,12 +15,27 @@ struct AtlasGalleryView: View {
     @Bindable var atlas: AtlasState
 
     var body: some View {
-        HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
-            candidate(.a, label: "A·MAXIMIN", swatch: atlas.candidateASRGB,
-                      leaves: atlas.candidateA)
-            candidate(.b, label: "B·PERTURB", swatch: atlas.candidateBSRGB,
-                      leaves: atlas.candidateB)
+        VStack(spacing: GlobalLattice.pt(2)) {
+            HStack(spacing: GlobalLattice.gif(GlobalLattice.gutterCells)) {
+                candidate(.a, label: "A·MAXIMIN", swatch: atlas.candidateASRGB,
+                          leaves: atlas.candidateA)
+                candidate(.b, label: "B·PERTURB", swatch: atlas.candidateBSRGB,
+                          leaves: atlas.candidateB)
+            }
+            // The n=0 taste readout — picks fold θ; the winner palette recolours
+            // toward the learned taste. Made legible so the loop is testable.
+            CellText(tasteLine, rows: 6,
+                     ink: Color(srgb8: atlas.compareCount > 0
+                        ? SIMD3<UInt8>(120, 190, 230)
+                        : SIMD3<UInt8>(110, 110, 116)))
         }
+    }
+
+    /// e.g. "TASTE · 3 PICKS · ‖θ‖ 0.12 · ACTIVE" (or "LEARNING" before any pick).
+    private var tasteLine: String {
+        let n = atlas.compareCount
+        let norm = String(format: "%.2f", atlas.tasteNorm)
+        return "TASTE · \(n) PICK\(n == 1 ? "" : "S") · ‖θ‖ \(norm) · \(n > 0 ? "ACTIVE" : "LEARNING")"
     }
 
     private func candidate(
