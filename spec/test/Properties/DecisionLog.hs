@@ -57,7 +57,10 @@ genLog = do
                                     (listOf ((,) <$> arbitrary <*> genF32))))
   bs <- frequency [ (3, pure [])
                   , (1, (: []) . boardSnapshot <$> genBoard) ]
-  pure (SF64Log ds gs vs bs)
+  es <- resize 2 (listOf ((,,,) <$> genHash <*> genHash
+                                <*> vectorOf embeddingFloats genF32
+                                <*> vectorOf embeddingFloats genF32))
+  pure (SF64Log ds gs vs bs es)
 
 tests :: TestTree
 tests = testGroup "DecisionLog (SF64 TLV replay container)"
@@ -91,4 +94,12 @@ tests = testGroup "DecisionLog (SF64 TLV replay container)"
              && decodeLog (0x58 : drop 1 bs) == Nothing
   , testProperty "board snapshot has the [16,16,16,6] float count" $
       forAll genBoard $ \b -> V.length (boardSnapshot b) == boardFloats
+  , testProperty "CMPE Compare embeddings round-trip (770-f winner/loser survive)" $
+      withMaxSuccess 30 $
+        forAll (resize 2 (listOf ((,,,) <$> genHash <*> genHash
+                                        <*> vectorOf embeddingFloats genF32
+                                        <*> vectorOf embeddingFloats genF32)))
+          lawCompareEmbeddingRoundTrip
+  , testProperty "backward compat: a v1 container (no CMPE) decodes with empty embeddings" $
+      withMaxSuccess 40 $ forAll genLog lawBackwardCompatNoCMPE
   ]

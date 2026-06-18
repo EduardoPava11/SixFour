@@ -45,6 +45,7 @@ module SixFour.Spec.DecisionLog
   , genomeFloats
   , boardFloats
   , visitCap
+  , embeddingFloats
     -- * The log
   , SF64Log(..)
   , emptyLog
@@ -64,6 +65,8 @@ module SixFour.Spec.DecisionLog
   , lawEntrySize32
   , lawUnknownTagSkip
   , lawReplayMonotone
+  , lawCompareEmbeddingRoundTrip
+  , lawBackwardCompatNoCMPE
   ) where
 
 import           Data.Bits   (shiftL, shiftR, (.&.), (.|.))
@@ -113,6 +116,12 @@ boardFloats = boardBins * boardChannels
 visitCap :: Int
 visitCap = 8
 
+-- | A CMPE Compare embedding is exactly 770 floats: the 'PreferenceUpdate'
+-- @atlasEmbedding@ (256 leaves × 3 ++ [coverage, beauty]) — the BT-update input
+-- frozen at pick time so replay is self-contained (no GNOM dependency).
+embeddingFloats :: Int
+embeddingFloats = 770
+
 -- ---------------------------------------------------------------------------
 -- The log
 -- ---------------------------------------------------------------------------
@@ -124,22 +133,28 @@ data SF64Log = SF64Log
   , logGenomes   :: [(GenomeHash, [Float])]             -- ^ GNOM, 384 floats each
   , logVisits    :: [(GenomeHash, [(Word32, Float)])]   -- ^ VDST, ≤ 8 per root
   , logBoards    :: [V.Vector Float]                    -- ^ BORD, 24576 floats each
+  , logCompareEmbeddings
+      :: [(GenomeHash, GenomeHash, [Float], [Float])]   -- ^ CMPE: per Compare,
+        -- (winHash, loseHash, winner 770-f embedding, loser 770-f embedding) —
+        -- the BT-update input frozen at pick time (additive chunk, version-stable).
   } deriving (Eq, Show)
 
 -- | The empty session.
 emptyLog :: SF64Log
-emptyLog = SF64Log [] [] [] []
+emptyLog = SF64Log [] [] [] [] []
 
 -- | The wire can only carry: in-range u8 bins, exactly-384-float genomes,
 -- ≤ 8 visit rows, exactly-24576-float boards, ≤ 65535 decisions.
 wellFormedLog :: SF64Log -> Bool
-wellFormedLog (SF64Log ds gs vs bs) =
+wellFormedLog (SF64Log ds gs vs bs es) =
   length ds <= 65535
     && all binOk ds
     && all ((== genomeFloats) . length . snd) gs
     && all ((<= visitCap) . length . snd) vs
     && all ((== boardFloats) . V.length) bs
+    && all embOk es
   where
+    embOk (_, _, w, l) = length w == embeddingFloats && length l == embeddingFloats
     binOk (ToggleBin bi)      = u8Bin bi
     binOk (WeightRegion bi _) = u8Bin bi
     binOk (PinAnchor bi c)    = u8Bin bi && i32Triple c
@@ -154,11 +169,12 @@ wellFormedLog (SF64Log ds gs vs bs) =
 -- to 384, visits truncated to 8, boards padded/truncated to 24576, decisions
 -- truncated to 65535. Identity on 'wellFormedLog' inputs.
 normalizeLog :: SF64Log -> SF64Log
-normalizeLog (SF64Log ds gs vs bs) = SF64Log
+normalizeLog (SF64Log ds gs vs bs es) = SF64Log
   (map normMove (take 65535 ds))
   [ (h, pad 0 genomeFloats g) | (h, g) <- gs ]
   [ (h, take visitCap v) | (h, v) <- vs ]
   [ V.fromList (pad 0 boardFloats (V.toList b)) | b <- bs ]
+  [ (wh, lh, pad 0 embeddingFloats w, pad 0 embeddingFloats l) | (wh, lh, w, l) <- es ]
   where
     pad z n xs = take n (xs ++ repeat z)
     normMove (ToggleBin bi)       = ToggleBin (normBin bi)
@@ -286,11 +302,12 @@ decodeEntry bs0 = do
 -- Chunks
 -- ---------------------------------------------------------------------------
 
-tagDECN, tagGNOM, tagVDST, tagBORD :: [Word8]
+tagDECN, tagGNOM, tagVDST, tagBORD, tagCMPE :: [Word8]
 tagDECN = map (fromIntegral . fromEnum) "DECN"
 tagGNOM = map (fromIntegral . fromEnum) "GNOM"
 tagVDST = map (fromIntegral . fromEnum) "VDST"
 tagBORD = map (fromIntegral . fromEnum) "BORD"
+tagCMPE = map (fromIntegral . fromEnum) "CMPE"  -- Compare embeddings (additive, v1-skip-compatible)
 
 -- | The four chunk payloads of a (canonical) log, in canonical order. Exposed
 -- so 'lawTLVOrderInsensitive' can permute REAL chunks through
@@ -304,6 +321,9 @@ encodeChunks lg0 =
                          ++ concat [ u32le mi ++ f32le fr | (mi, fr) <- v ]
                      | (GenomeHash h, v) <- logVisits lg ])
   , (tagBORD, concat [ concatMap f32le (V.toList b) | b <- logBoards lg ])
+  , (tagCMPE, concat [ u32le wh ++ u32le lh
+                         ++ concatMap f32le w ++ concatMap f32le l
+                     | (GenomeHash wh, GenomeHash lh, w, l) <- logCompareEmbeddings lg ])
   ]
   where lg = normalizeLog lg0
 
@@ -362,6 +382,9 @@ decodeLog bs0 = do
       | tag == tagBORD = do
           bds <- parseMany parseBoard pay
           pure acc { logBoards = logBoards acc ++ bds }
+      | tag == tagCMPE = do
+          es <- parseMany parseCompareEmb pay
+          pure acc { logCompareEmbeddings = logCompareEmbeddings acc ++ es }
       | otherwise = Just acc   -- unknown tag: skip (forward compatibility)
 
 -- | Run a sub-parser to payload exhaustion ('Nothing' on trailing garbage).
@@ -392,6 +415,15 @@ parseBoard :: [Word8] -> Maybe (V.Vector Float, [Word8])
 parseBoard bs = do
   (fs, r) <- times boardFloats takeF32 bs
   pure (V.fromList fs, r)
+
+parseCompareEmb :: [Word8]
+                -> Maybe ((GenomeHash, GenomeHash, [Float], [Float]), [Word8])
+parseCompareEmb bs = do
+  (wh, r1) <- takeU32 bs
+  (lh, r2) <- takeU32 r1
+  (w,  r3) <- times embeddingFloats takeF32 r2
+  (l,  r4) <- times embeddingFloats takeF32 r3
+  pure ((GenomeHash wh, GenomeHash lh, w, l), r4)
 
 -- ---------------------------------------------------------------------------
 -- Laws
@@ -439,3 +471,23 @@ lawUnknownTagSkip lg at junk =
 lawReplayMonotone :: Board16 -> [CurationMove] -> [CurationMove] -> Bool
 lawReplayMonotone b xs ys =
   boardFromLog b (xs ++ ys) == boardFromLog (boardFromLog b xs) ys
+
+-- | The CMPE chunk round-trips: a log carrying Compare embeddings encodes and
+-- decodes to the canonical log, embeddings intact (the BT-update input survives).
+lawCompareEmbeddingRoundTrip
+  :: [(GenomeHash, GenomeHash, [Float], [Float])] -> Bool
+lawCompareEmbeddingRoundTrip es =
+  let lg = emptyLog { logCompareEmbeddings = es }
+  in fmap logCompareEmbeddings (decodeLog (encodeLog lg))
+       == Just (logCompareEmbeddings (normalizeLog lg))
+
+-- | Backward compatibility: a container assembled WITHOUT a CMPE chunk (a v1 log)
+-- decodes to a log with NO Compare embeddings — old logs read cleanly, the new
+-- field defaults empty. (The additive chunk is version-stable; no v1 reader breaks.)
+lawBackwardCompatNoCMPE :: SF64Log -> Bool
+lawBackwardCompatNoCMPE lg0 =
+  let lg      = (normalizeLog lg0) { logCompareEmbeddings = [] }
+      noCmpe  = filter (\(t, _) -> t /= tagCMPE) (encodeChunks lg)
+      n       = fromIntegral (length (logDecisions lg))
+  in decodeLog (assembleContainer n noCmpe)
+       == Just (lg { logCompareEmbeddings = [] })

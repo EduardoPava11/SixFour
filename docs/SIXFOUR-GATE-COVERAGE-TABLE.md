@@ -44,6 +44,10 @@ fixtures; Swift tests assert against the same JSON. This is the verified surface
 | `s4_leaf_override` (σ-pair taste tint, n=0) | inline golden (`Spec.LeafOverride` laws) | `kernels.zig` unit test | `LeafOverrideGoldenTests` |
 
 Notes:
+- **`Spec.DecisionLog` CMPE chunk (DECN v2 = embeddings) is property-gated** (`Properties.DecisionLog`,
+  10 tests incl. round-trip + CMPE round-trip + v1 backward-compat). Device twin = optional embedding
+  fields on the Codable `AtlasDecisionRecord` (`DecisionLogV2Tests`); the full Swift SF64 binary codec
+  is still spec-only (JSON on device today).
 - **`ThetaToDelta` (θ→δ n=0 taste map) is golden-gated Swift ≡ Haskell** (no Zig kernel — θ
   is per-device float, so float-tier, not cross-device-exact; the integer δ it emits then feeds
   the exact Zig `s4_leaf_override`). `ThetaToDeltaGoldenTests` pins the cabal-captured goldens
