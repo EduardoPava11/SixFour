@@ -87,6 +87,10 @@ as reversible 2D-Haar views on that substrate — lossless within capture via "S
 predictive only beyond), "SixFour.Spec.TemporalLoop" (EXACT 64-frame GIF-loop closure — a
 period-2⁶ Q16 cosine LUT whose wrap is an integer identity — plus the low-frequency temporal
 residual over the owned integer Haar; the shipped Q16 twin of the float "SixFour.Spec.Cyclic"),
+"SixFour.Spec.VoxelReduce" (the JOINT spatio-temporal @(2×2)×(2×2)→1@ reduction @64³ ↔ 16³@ — one
+named operator composing the spatial "SixFour.Spec.CubeLadder" per channel with the temporal
+"SixFour.Spec.TemporalLoop" Haar per position; reversibility inherited from both owned laws, see
+@docs/SIXFOUR-PER-FRAME-GENOME-AB-MIGRATION-WORKFLOW.md@),
 "SixFour.Spec.SigmaPairFixed", "SixFour.Spec.SigmaPairHead", "SixFour.Spec.SigmaDecomp",
 "SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Bottleneck16",
 "SixFour.Spec.LeafOverride", "SixFour.Spec.ThetaToDelta" (★ canonical-path n=0: the closed-form

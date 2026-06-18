@@ -25,8 +25,10 @@ source of truth, and the 2D GIF, the palette grid, and the shutter are all Haar 
 that one state. Haskell (`spec/`) is the source of truth — every cross-language claim (Zig ≡
 Swift ≡ Haskell) is pinned by a generated golden vector. A look-NN is **designed (forward
 oracle + Zig loader code) but its supervised MLX training was ABANDONED 2026-06-17 (trained
-weights deleted) and nothing runs it on device**; the global palette the app emits today is the
-deterministic Zig collapse, not a learned genome. Full NN inventory + design ledger:
+weights deleted) and nothing runs it on device**; **MVP1 emits PER-FRAME palettes only.** The
+global (GIFB) deterministic Zig collapse is implemented + golden-gated but **DEFERRED TO V2** behind
+`Feature.globalPaletteV2 = false` (every entry point guarded ⇒ unreachable in MVP1; see
+`docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md`). Full NN inventory + design ledger:
 `docs/SIXFOUR-NN-DESIGN-CANON.md` (roster) and `docs/SIXFOUR-NETWORKS-CANONICAL-ROSTER.md`
 (per-net detail).
 
@@ -37,6 +39,13 @@ deterministic Zig collapse, not a learned genome. Full NN inventory + design led
 > value-only search over a frozen policy; the calibrated taste organ + perceptual warp are
 > separately-specced research bets, not settled. STATUS (this file) stays the canonical *status*
 > ledger; CANONICAL-PATH is *direction*. Cited research: `docs/SIXFOUR-RESEARCH-*.md`.
+>
+> **DIRECTION AMENDMENT 2026-06-18 (Daniel): `docs/SIXFOUR-PER-FRAME-GENOME-AB-MIGRATION-WORKFLOW.md`.**
+> The single-global-genome collapse is the misdirection to retire (TAG-not-delete, see that doc §4
+> + `scripts/lint-no-global-palette.sh`). New direction: per-frame palettes throughout; `64³→16³`
+> via the reversible `(2×2)×(2×2)→1` `Spec.VoxelReduce` (DONE, Phase 1); two independent
+> policy/value searches (`r_A≠r_B`) → orthogonal A/B genes; learned `256³` super-res; CVT-MAP-Elites
+> archive = SIMT vector-RAG gene store. Full migration is phased there; STATUS reconciles at Phase 5.
 
 ## On-device personalization feasibility (A19 Pro / iOS 26) — north-star
 
@@ -144,12 +153,15 @@ do not re-research or re-derive it.
   encode are spec-generated embedded 1-D LUTs (`{log3g10_decode,filmic_tonemap,srgb_encode}_lut.bin`).
   Swift bridge `SixFourNative.{lookZoneProfile,lookTransfer,extractLUT}`. iOS build SUCCEEDED
   (compile-checked; on-device swipe/look + Resolve LUT verification is the user's step).
-- **GIFA→GIFB global collapse is WIRED in production.** `CaptureViewModel.renderDeterministic`
-  (`:478`) → `renderDeterministicGlobal` (`:480/:555`) → `DeterministicRenderer.renderGlobalPalette`
-  (`:268`) → `SixFourNative.globalCollapse` (`:314`) → Zig `s4_global_collapse`, gated by
-  `settings.paletteScope == .global`. The shipped global palette is the **deterministic
-  pooled-maximin collapse**, NOT a learned NN genome. (This retires the long-standing "zero
-  callers / app cannot emit a global-palette GIF" claim, which was false.)
+- **GIFA→GIFB global collapse is IMPLEMENTED + golden-gated, but V2-DEFERRED (MVP1 = per-frame).**
+  The code path `CaptureViewModel.renderDeterministic` → `renderDeterministicGlobal` →
+  `DeterministicRenderer.renderGlobalPalette` → `SixFourNative.globalCollapse` → Zig
+  `s4_global_collapse` exists and is byte-exact (Haskell ≡ Swift ≡ Zig), but is now gated by
+  `Feature.globalPaletteV2 ? settings.paletteScope : .perFrame` — with the flag **false** in MVP1
+  every entry point (capture router GS1 + Review Ship/group-pick/cut-lever/Atlas GS2–GS5 + the SAN
+  sanitizer) is guarded, so MVP1 cannot reach it. The global palette is the **deterministic
+  pooled-maximin collapse**, NOT a learned NN genome. Kept compiled for V2; see
+  `docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md`.
 - **Single-call core entrypoint.** `s4_gif_encode_burst` is a real implementation (folds the
   per-stage kernels, returns `s4_gif_assemble`); `s4_widen_half_to_q16` and
   `s4_linear_to_oklab_q16` are implemented with golden anchors. (NOT stubs.)

@@ -412,7 +412,8 @@ struct ReviewPhaseField: View {
                     }
 
                     // Advanced — Color Atlas (flag-gated), behind Refine, never on the main row.
-                    if settings.colorAtlasEnabled {
+                    // GS5a: the Atlas curation drives the GLOBAL render seam → V2-deferred in MVP1.
+                    if settings.colorAtlasEnabled && Feature.globalPaletteV2 {
                         Button {
                             atlas.loadIfNeeded(palettesPerFrame: surface.palettesPerFrame,
                                                indexCube: surface.indexCube)
@@ -486,6 +487,9 @@ struct ReviewPhaseField: View {
     /// data is captured into value-type locals before the hop; `LadderShareItem` is
     /// `Sendable`, so it returns cleanly to the main actor.
     private func exportRung(_ rung: LadderExport.Rung, selectedGroups groups: [Bool] = []) {
+        // ⚠️ V2-DEFERRED-GLOBAL-PALETTE (GS2): the ladder rungs collapse the per-frame palettes
+        // to ONE global palette. MVP1 is per-frame only — inert unless Feature.globalPaletteV2.
+        guard Feature.globalPaletteV2 else { return }
         let palettes = surface.palettesPerFrame
         let cube = surface.indexCube
         let branching = settings.paletteBranching
@@ -516,6 +520,7 @@ struct ReviewPhaseField: View {
     /// thread (the maximin is the ~seconds step). The grid IS the feedback: the preview
     /// repopulates with colours from the picked groups.
     private func recomputeGroupGlobal() {
+        guard Feature.globalPaletteV2 else { return }   // ⚠️ V2-DEFERRED-GLOBAL-PALETTE (GS3)
         let palettes = surface.palettesPerFrame
         let sel = selectedGroups
         computingGroups = true
@@ -534,6 +539,7 @@ struct ReviewPhaseField: View {
     /// seed the slider at full depth (the full colour set), then paint the first preview.
     /// Every later drag re-projects only `SplitTree.build` + `collapse`.
     private func openCutLever() {
+        guard Feature.globalPaletteV2 else { return }   // ⚠️ V2-DEFERRED-GLOBAL-PALETTE (GS4)
         cutLeverOn = true
         cutDepth = cutBranching.depth
         let palettes = surface.palettesPerFrame

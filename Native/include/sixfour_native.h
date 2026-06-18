@@ -177,6 +177,15 @@ int32_t s4_cube_lift_level(int32_t side, const int32_t *grid,
 // Exact inverse of s4_cube_lift_level: coarse h² + details h²·3 → 2h×2h grid.
 int32_t s4_cube_unlift_level(int32_t half, const int32_t *coarse,
                              const int32_t *details, int32_t *out_grid);
+// One level of the temporal integer Haar split over n OKLab triples (the temporal half of
+// Spec.VoxelReduce; mirrors Spec.TemporalLoop.haarSplitTime): adjacent frames → low (lifted
+// parent) + high (detail) via the owned S-transform; odd tail carried into low.
+// in: n·3. out_low: (n/2 + n%2)·3. out_high: (n/2)·3.
+int32_t s4_haar_split_level(int32_t n, const int32_t *in_q16,
+                            int32_t *out_low, int32_t *out_high);
+// Exact inverse of s4_haar_split_level (Spec.TemporalLoop.haarJoinTime). out: (low_n+high_n)·3.
+int32_t s4_haar_join_level(int32_t low_n, int32_t high_n, const int32_t *low,
+                           const int32_t *high, int32_t *out_q16);
 
 // Color Atlas board — deterministic Q16 mass (port of SixFour.Spec.BoardQ16).
 // Integer floor-div binning + integer counts + ONE round-half-up of

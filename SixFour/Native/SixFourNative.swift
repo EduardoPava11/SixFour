@@ -265,6 +265,10 @@ enum SixFourNative {
     /// `FarthestPointCollapse` and the Haskell `globalCollapseQ16`, all gated to the same
     /// spec golden. Requires uniform per-frame palette length. `indices` is the flattened
     /// `t·kIn` index map (frame `f`, slot `s` → `indices[f·kIn + s]`).
+    ///
+    /// ⚠️ V2-DEFERRED-GLOBAL-PALETTE — global (GIFB) collapse, deferred to V2 behind
+    /// Feature.globalPaletteV2 (false in MVP1). Kept, compiled, and golden-gated for V2; not a live
+    /// MVP1 path. See docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md. Do not add new callers.
     static func globalCollapse(perFramePalettes: [[SIMD3<Int32>]], kOut: Int) -> GlobalCollapseResult? {
         let t = perFramePalettes.count
         guard t > 0, let kIn = perFramePalettes.first?.count, kIn > 0,

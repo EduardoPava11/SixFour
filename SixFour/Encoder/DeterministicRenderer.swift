@@ -314,6 +314,10 @@ struct DeterministicRenderer {
     /// sRGB, gifAssemble, and the SHA-256 all run downstream unchanged (WYSIWYG:
     /// curated-view bytes == export bytes). Default nil ⇒ byte-identical to the
     /// pre-Atlas path. Gated by `AppSettings.colorAtlasEnabled` at the caller.
+    ///
+    /// ⚠️ V2-DEFERRED-GLOBAL-PALETTE — global (GIFB) render, deferred to V2 behind
+    /// Feature.globalPaletteV2 (false in MVP1). Kept, compiled, and golden-gated for V2; not a live
+    /// MVP1 path. See docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md. Do not add new callers.
     func renderGlobalPalette(
         tiles: [OKLabTile],
         comment: String?,
