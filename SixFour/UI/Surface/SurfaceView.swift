@@ -212,6 +212,12 @@ struct SurfaceView: View {
             for f in frames { cube.append(contentsOf: f) }
             surface.indexCube = cube
         }
+        // Retain the ORIGINAL per-frame OKLab pixels (Q16) so the A/B game can re-quantize each
+        // frame against a candidate genome's palette (P3 — genome shapes the bytes). The raw
+        // tiles live on the engine's CaptureBundle; absent ⇒ A/B fall back to recolouring.
+        if let tiles = engine.currentBundle?.tiles {
+            surface.framePixelsQ16 = tiles.map { SixFourNative.oklabToQ16($0.pixels) }
+        }
         surface.settings.useDeterministicCore = out.deterministic
     }
 }

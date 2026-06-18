@@ -35,6 +35,11 @@ struct ABCandidatePhaseField: View {
     /// the live ground (no crash). `candA[t]` is frame `t`'s palette for look A, likewise B.
     @State private var candA: [[SIMD3<UInt8>]] = []
     @State private var candB: [[SIMD3<UInt8>]] = []
+    /// The per-frame candidate INDEX cubes (64 × 4096), re-quantized from the original pixels
+    /// against each candidate's displaced palette (P3 — genome shapes the bytes, so A and B are
+    /// genuinely different cubes). Empty ⇒ the hero falls back to recolouring `surface.indexCube`.
+    @State private var candAIdx: [[UInt8]] = []
+    @State private var candBIdx: [[UInt8]] = []
     /// Frame-0's candidate objects — their Q16 `.leaves` are the `btUpdate` embedding when a
     /// look wins/loses (matching `ReviewPhaseField`, which embeds from `palettesPerFrame.first`).
     @State private var frame0: (a: ABCandidates.Candidate, b: ABCandidates.Candidate)?
@@ -58,8 +63,8 @@ struct ABCandidatePhaseField: View {
                     CellText(headerText, rows: 8, ink: Color(srgb8: SIMD3(200, 200, 200)))
 
                     HStack(spacing: GlobalLattice.pt(9)) {    // symmetric A | B gutter
-                        hero(palettes: candA, label: "A") { pick(a: true) }
-                        hero(palettes: candB, label: "B") { pick(a: false) }
+                        hero(palettes: candA, indices: candAIdx, label: "A") { pick(a: true) }
+                        hero(palettes: candB, indices: candBIdx, label: "B") { pick(a: false) }
                     }
 
                     Button { surface.step(.exportFamily) } label: {
@@ -87,16 +92,25 @@ struct ABCandidatePhaseField: View {
     /// One candidate hero: the GIF playing as a flat 64×64 cell loop at the κ cursor, read
     /// through THIS candidate's per-frame palette via `surface.indexCube`. Tapping it IS the
     /// pick. `nil` cells (out-of-range cursor / palette) fall through to the live ground.
-    private func hero(palettes: [[SIMD3<UInt8>]], label: String, _ onPick: @escaping () -> Void) -> some View {
+    private func hero(palettes: [[SIMD3<UInt8>]], indices: [[UInt8]], label: String, _ onPick: @escaping () -> Void) -> some View {
         let t = surface.cursor
         let base = t * side * side
         let pal = (t >= 0 && t < palettes.count) ? palettes[t] : []
+        let idxFrame = (t >= 0 && t < indices.count) ? indices[t] : []
         return Button(action: onPick) {
             VStack(spacing: GlobalLattice.pt(1)) {
                 CellSprite(cols: side, rows: side, cellPt: heroCellPt) { c, r in
-                    let offset = base + r * side + c
-                    guard offset >= 0, offset < surface.indexCube.count else { return nil }
-                    let i = Int(surface.indexCube[offset])
+                    let off = r * side + c
+                    // Genome-specific re-quantized index (P3 — A and B are different cubes);
+                    // fall back to the shared base cube when the candidate cube isn't available.
+                    let i: Int
+                    if off < idxFrame.count {
+                        i = Int(idxFrame[off])
+                    } else {
+                        let g = base + off
+                        guard g >= 0, g < surface.indexCube.count else { return nil }
+                        i = Int(surface.indexCube[g])
+                    }
                     guard i >= 0, i < pal.count else { return nil }
                     return pal[i]
                 }
@@ -133,25 +147,41 @@ struct ABCandidatePhaseField: View {
     /// by the current θ — A and B are the orthogonal `GenomePair` pair for each frame. Cheap
     /// enough to run all 64 frames on every pick. Stores frame-0's candidates for the embedding.
     private func recompute() {
-        guard Feature.abCandidatePicker else { candA = []; candB = []; frame0 = nil; return }
+        guard Feature.abCandidatePicker else { candA = []; candB = []; candAIdx = []; candBIdx = []; frame0 = nil; return }
         let frames = surface.palettesPerFrame
-        guard !frames.isEmpty else { candA = []; candB = []; frame0 = nil; return }
+        guard !frames.isEmpty else { candA = []; candB = []; candAIdx = []; candBIdx = []; frame0 = nil; return }
+        let pixels = surface.framePixelsQ16   // original per-frame Q16 OKLab, for re-quantization
 
         var a = [[SIMD3<UInt8>]](); a.reserveCapacity(frames.count)
         var b = [[SIMD3<UInt8>]](); b.reserveCapacity(frames.count)
+        var ai = [[UInt8]](); ai.reserveCapacity(frames.count)
+        var bi = [[UInt8]](); bi.reserveCapacity(frames.count)
         var first: (a: ABCandidates.Candidate, b: ABCandidates.Candidate)?
         for (t, pal) in frames.enumerated() {
             guard let pair = ABCandidates.fromPalette(pal, theta: abTheta) else {
                 // FFI failure on this frame: empty palettes ⇒ this frame falls through to ground.
-                a.append([]); b.append([])
+                a.append([]); b.append([]); ai.append([]); bi.append([])
                 continue
             }
             a.append(pair.a.rgb)
             b.append(pair.b.rgb)
+            // P3 — genome shapes the bytes: re-assign THIS frame's original pixels to each
+            // candidate's displaced palette (`s4_dither_frame`), so A and B are genuinely
+            // different index cubes. No retained pixels ⇒ empty (the hero recolours the base).
+            if t < pixels.count, !pixels[t].isEmpty {
+                let cA = pair.a.leaves.flatMap { [$0.x, $0.y, $0.z] }
+                let cB = pair.b.leaves.flatMap { [$0.x, $0.y, $0.z] }
+                ai.append(SixFourNative.ditherFrame(oklabQ16: pixels[t], centroids: cA, k: 256,
+                                                    mode: 0, serpentine: false, stbnSlice: nil) ?? [])
+                bi.append(SixFourNative.ditherFrame(oklabQ16: pixels[t], centroids: cB, k: 256,
+                                                    mode: 0, serpentine: false, stbnSlice: nil) ?? [])
+            } else {
+                ai.append([]); bi.append([])
+            }
             if t == 0 { first = pair }
         }
-        candA = a
-        candB = b
+        candA = a; candB = b
+        candAIdx = ai; candBIdx = bi
         frame0 = first
     }
 }
