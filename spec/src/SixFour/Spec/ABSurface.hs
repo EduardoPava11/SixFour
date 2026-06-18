@@ -43,6 +43,8 @@ module SixFour.Spec.ABSurface
     -- * The A/B candidate cell rectangles
   , candidateRegionA
   , candidateRegionB
+  , latticeCols
+  , latticeRows
     -- * Golden gate
   , goldenABHappyPath
   , goldenABPhaseTrace
