@@ -25,6 +25,7 @@ import qualified Properties.CubeLadder   as CubeLadder
 import qualified Properties.VoxelReduce  as VoxelReduce
 import qualified Properties.DivergenceSchedule as DivergenceSchedule
 import qualified Properties.ABSurface    as ABSurface
+import qualified Properties.GenomeCarrier as GenomeCarrier
 import qualified Properties.PairTree     as PairTree
 import qualified Properties.PairTreeFixed as PairTreeFixed
 import qualified Properties.RGBTLift     as RGBTLift
@@ -135,6 +136,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , VoxelReduce.tests
   , DivergenceSchedule.tests
   , ABSurface.tests
+  , GenomeCarrier.tests
   , PairTree.tests
   , PairTreeFixed.tests
   , RGBTLift.tests
