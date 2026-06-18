@@ -11,7 +11,7 @@
 ## 0. The three tiers and the one unifying mechanism
 
 SixFour has three tiers (per `CLAUDE.md`): **Tier 0** = Haskell spec (`spec/`,
-source of truth, **834 tests green**); **Tier 1** = Mac trainer (`trainer/`,
+source of truth, **877 tests green**); **Tier 1** = Mac trainer (`trainer/`,
 Python/MLX, NOT shipped); **Tier 2** = iOS app (`SixFour/` + `Native/`,
 hand-written Swift/Metal/Zig, zero third-party deps).
 
@@ -95,20 +95,12 @@ Each hole is also a STATUS.md "Open debt" row and/or a
    reductions (hazards in `BACKEND-TENSOR-STACK-MAP §5`), gated against
    `rgbt4d_golden.json`. This becomes the precedent every later GPU kernel follows.
 
-2. **[blocker] Float-determinism hole in the policy-net input.**
-   `Spec.AtlasBoard.histogram :: [OKLab] -> V.Vector Double`
-   (`spec/src/SixFour/Spec/AtlasBoard.hs:170`) accumulates board mass in
-   **Double**, in input order — permutation-dependent, so a 1-ULP nudge can flip
-   a bin boundary. The integer replacement **`Spec.BoardQ16`**
-   (`countsQ16`/`massQ16`/`boardMassQ16`, law `lawCountsOrderIndependent`,
-   `spec/src/SixFour/Spec/BoardQ16.hs`) is **spec-only**: grep finds **no
-   `s4_board_q16` / `countsQ16` port in `Native/` or `SixFour/`**.
-   *Nuance:* the Swift bin-index arithmetic is already Q16-integer
-   (`SixFour/Atlas/AtlasBoard.swift` `AtlasBinIdx.bin(ofQ16:)`); the un-ported
-   piece is the **mass accumulation** (counts → Q16 normalised mass) that the
-   policy/value board channels read. *Fix (§7 step 2):* port `BoardQ16` to
-   Zig + Swift, replace the float mass path, gate with `lawCountsOrderIndependent`.
-   Determinism prerequisite for any on-device policy/value selection.
+2. **[RESOLVED 2026-06-18] Float-determinism hole in the policy-net input.** Was: the
+   board mass accumulated in **Double** in input order (permutation-dependent). FIXED:
+   `Spec.BoardQ16` ported to owned Zig (`s4_board_mass_q16` / `s4_board_counts_to_mass_q16`,
+   golden-gated, see §1) and wired into `AtlasBoard16.base`, which now stores `massQ16/65536`
+   (exact dyadic). The policy/value board input is cross-device deterministic. (Kept here as a
+   struck hole so a future session doesn't re-open it.)
 
 3. **[blocker] No trained Look-NN weights; supervised path ABANDONED (2026-06-17).**
    The grayscale-L supervised MLX run **did not converge to a usable look**; the

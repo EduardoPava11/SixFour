@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {- |
 Module      : SixFour.Spec.ThetaToDelta
 Description : The taste vector θ → generator-space nudge δ — closed-form, σ-aware, the n=0 personalization map.
@@ -148,7 +149,7 @@ lawRawIsTasteGradient theta gens0 =
       gens  = take g (gens0 ++ repeat (0, 0, 0))
       raw   = thetaToDeltaRaw theta
       h     = 1e-5
-      bump i c d = [ if j == i then bumpC c d t else t | (j, t) <- zip [0 ..] gens ]
+      bump i (c :: Int) d = [ if j == i then bumpC c d t else t | (j, t) <- zip [0 :: Int ..] gens ]
       bumpC 0 d (l,a,b) = (l+d,a,b)
       bumpC 1 d (l,a,b) = (l,a+d,b)
       bumpC _ d (l,a,b) = (l,a,b+d)
@@ -156,16 +157,21 @@ lawRawIsTasteGradient theta gens0 =
                 - leafLinearUtility theta (bump i c (negate h))) / (2*h)
       close x y = abs (x - y) < 1e-6
   in and [ close rl (fd i 0) && close ra (fd i 1) && close rb (fd i 2)
-         | (i, (rl, ra, rb)) <- zip [0 ..] raw ]
+         | (i, (rl, ra, rb)) <- zip [0 :: Int ..] raw ]
 
 -- | The raw map is linear in θ: @raw(θ₁ ⊕ θ₂) = raw(θ₁) ⊕ raw(θ₂)@ (componentwise,
--- when the two θ have the same generator count).
+-- when the two θ have the same generator count). ε-equality, NOT exact: the map is
+-- FLOAT-linear, and @(a+c)+(b+d)@ vs @(a+b)+(c+d)@ differ in the last bit (IEEE
+-- addition is not associative) — this is the float tier, not the Q16-exact tier.
 lawRawLinearInTheta :: [Double] -> [Double] -> Bool
 lawRawLinearInTheta t1 t2 =
   generatorsOfTheta t1 /= generatorsOfTheta t2 ||
-  thetaToDeltaRaw (zipWith (+) t1 t2)
-    == zipWith addT (thetaToDeltaRaw t1) (thetaToDeltaRaw t2)
-  where addT (a,b,c) (d,e,f) = (a+d, b+e, c+f)
+  and (zipWith closeT (thetaToDeltaRaw (zipWith (+) t1 t2))
+                      (zipWith addT (thetaToDeltaRaw t1) (thetaToDeltaRaw t2)))
+  where
+    addT (a,b,c) (d,e,f) = (a+d, b+e, c+f)
+    closeT (a,b,c) (d,e,f) = close a d && close b e && close c f
+    close x y = abs (x - y) < 1e-9
 
 -- | The @[coverage, beauty]@ tail (the last two θ entries) does not affect δ: replacing
 -- them with anything leaves the override byte-identical.

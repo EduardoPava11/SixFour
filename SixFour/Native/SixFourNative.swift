@@ -403,7 +403,10 @@ enum SixFourNative {
     // MARK: - σ-pair leaf override (the n=0 taste tint)
 
     /// Apply the user's generator-space taste tint (`s4_leaf_override`, the owned
-    /// port of `SixFour.Spec.LeafOverride.applySigmaOverride`): for each generator
+    /// port of `SixFour.Spec.LeafOverride.applySigmaOverride`).
+    /// ⚠️ OWNED-BUT-UNWIRED: zero production callers — the σ-pair tint for step 3+
+    /// (learned genomes), NOT the live n=0 loop (that uses `PersonalTaste.leafTint`).
+    /// For each generator
     /// `gᵢ`, add `δᵢ` and emit the σ-pair `[g, σ(g)]` with `σ(l,a,b) = (l,−a,−b)`.
     /// Returns `2·generators.count` σ-pair leaves. `deltas` is zero-padded /
     /// truncated to the generator count; `nil` (or empty) ⇒ the no-op override.

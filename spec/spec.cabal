@@ -319,6 +319,7 @@ test-suite spec-tests
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride
+        Properties.ThetaToDelta
         Properties.PaletteGesture
         Properties.GroupRGBT
         Properties.Quad4Fixed

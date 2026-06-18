@@ -289,6 +289,12 @@ final class AtlasTrainingSession {
         return g
     }
 
+    /// NOTE: this is the **GLRM kill-switch's 3-D feature row** (coverage, beauty,
+    /// ‖chroma‖²) over a GENOME — NOT the 770-D `PersonalTaste.embedding` that
+    /// `btUpdate` consumes (256 leaves ++ [coverage, beauty] over the user PALETTE).
+    /// Two distinct extractors by design; they share the coverage/beauty *idea* but
+    /// compute over different inputs — do not conflate or assume they agree.
+    ///
     /// The GLRM kill-switch's deterministic feature row for a 384-float genome
     /// (128 σ-pair generators × (L,a,b)): `coverage` = fraction of distinct 16³ bins
     /// the generators occupy; `beauty` = the Ou-Luo pair-beauty loss over the

@@ -28,6 +28,30 @@ reconciliation.
 
 ---
 
+## A. WIRED vs OWNED-BUT-UNWIRED — the anti-confusion ledger
+
+> The repo's recurring failure mode: a beautifully-specced, golden-gated thing with **zero
+> production callers** that a later session reads as shipped (the abandoned look-net). This
+> table is the antidote for the 2026-06-18 session's work. **WIRED** = has a production caller in
+> `SixFour/`. **OWNED-UNWIRED** = golden-gated + correct, but nothing calls it yet. **SPEC-ONLY** =
+> Haskell only. Verified by grep 2026-06-18.
+
+| Component | Status | The one-line truth |
+|---|---|---|
+| `PersonalTaste.btUpdate` / `.embedding` / `.leafTint` | **WIRED** (`AtlasState.choose`) | The **live n=0 taste loop**: folds θ on every A/B pick, recolours the palette by a **leaf-space** tint on the **maximin floor** (256 free leaves, NOT σ-pair). This is what actually personalizes today. |
+| `s4_board_mass_q16` / `s4_board_counts_to_mass_q16` | **WIRED** (`AtlasBoard16.base`) | Deterministic board mass, every session. Golden Haskell≡Zig≡Swift. |
+| `GLRM.shouldTrain` | **WIRED, asymmetric** (`AtlasTrainingSession.makeBatch`) | Gates the **Mac-side value-net training batch only**; does NOT gate `btUpdate` (intentional — see §2.4). |
+| `AtlasDecisionRecord.win/loseEmbedding` (DECN v2) | **WIRED, JSON-only** (`AtlasState.choose`) | 770-D embeddings frozen at pick time, persisted as **Codable JSON**. The SF64 **binary** `CMPE` codec does NOT exist (deferred). "DONE" = JSON storage, not binary wire. |
+| **`ThetaToDelta` (Swift+spec) + `s4_leaf_override` / `SixFourNative.leafOverride`** | **⚠️ OWNED-UNWIRED** (zero callers) | The **σ-pair generator-space** tint reserved for **step 3+ (n>0, learned genomes)**. Golden-gated + property-tested, but **nothing calls it**. Do NOT mistake for live; the n=0 path uses `PersonalTaste.leafTint`. Do NOT wire into `btUpdate` until learned-genome candidates exist. |
+| `Spec.ThetaToDelta` laws | **SPEC + GATED** (`Properties.ThetaToDelta`) | The 5 laws are now QuickCheck'd in the cabal gate (the earlier "QuickCheck'd in Properties.ThetaToDelta" claim was a false-green until 2026-06-18; fixed). |
+| `PaletteSearch` MCTS, `GenomePair`, `GenomeBlend/Carrier`, RGBT-4D, Atlas policy net | **SPEC-ONLY / dormant** | Per §5 tags. No on-device consumers. |
+
+**Cross-doc rule:** this §A + §4's table and the STATUS "Open debt" rows must carry the same state
+markers; `verify-doc-claims.sh` does NOT check this — manual discipline. On conflict, **STATUS wins
+for *state*, this doc for *direction*.**
+
+---
+
 ## 1. The canonical core
 
 ### 1.1 The machine
@@ -201,9 +225,9 @@ brand-new perceptual warp is deferred (it inverted the de-risking order, §7).
 | **D** | `BoardQ16` float-input gap | — | no | **DONE** (`s4_board_mass_q16` present, golden) |
 | **D** | GLRM kill-switch built **+ wired** | `glrm` | no | **DONE** (`GLRM.swift` golden-gated; gates `AtlasTrainingSession.makeBatch` — blocks real-data training on no-signal picks; commit `4528881`). Extending the gate to a future per-pick `btUpdate` path is a small follow-up when that path lands. |
 | **D** | **`s4_leaf_override`** Zig kernel (mirrors `LeafOverride.hs`, no tolerance) + `SixFourNative.leafOverride` caller, golden-gated Zig≡Swift≡Haskell (`LeafOverrideGoldenTests` + `kernels.zig` unit test) — the σ-locked taste tint at `n=0`. | (new) | no | **DONE** (kernel + binding + golden; not yet routed into a live A/B capture — that is step 2) |
-| 2a | **θ→δ map** — closed-form σ-aware taste-ascent gradient `θ(770)→δ(384-DOF)`, spec-first (`Spec.ThetaToDelta`, 5 laws incl. finite-diff gradient) → Swift `ThetaToDelta` (round-half-to-even, clamped ±8192), golden-gated vs Haskell. Composes with `s4_leaf_override`. | (new) | head only | **DONE** (commit pending; spec+Swift+golden) |
-| 2b-i | **DECN v2 = embeddings (storage)** — additive `CMPE` chunk in `Spec.DecisionLog` (per Compare: winHash + loseHash + winner/loser 770-f embeddings), version-stable (v1 readers skip it; backward-compat law). Device twin: optional `winEmbedding`/`loseEmbedding` on `AtlasDecisionRecord` (Codable, old logs → nil). Golden: 10 DecisionLog property tests + `DecisionLogV2Tests`. | (new) | no | **DONE** |
-| 2b-ii | **A/B capture → θ-learning loop (n=0), surfaced + logged** — on a pick, `AtlasState.choose` freezes the winner/loser 770-D embeddings into the `CMPE` record, folds θ via `PersonalTaste.btUpdate` (Swift port of `Spec.PreferenceUpdate`, golden), persists θ, and recolours the curated palette by a **leaf-space** tint (the maximin floor is not σ-pair, so the σ-pair `ThetaToDelta`/`leafOverride` path doesn't apply here — it activates with learned-genome candidates, step 3+). Surfaced (`AtlasGalleryView` "TASTE · N PICKS · ‖θ‖") + logged (`category=atlas.taste`) so it's device-testable. | (new) | head only | **DONE** (commit pending; `PersonalTasteTests`) |
+| 2a | **θ→δ map** — closed-form σ-aware taste-ascent gradient `θ(770)→δ(384-DOF)`, spec-first (`Spec.ThetaToDelta`, 5 laws incl. finite-diff gradient) → Swift `ThetaToDelta` (round-half-to-even, clamped ±8192), golden-gated vs Haskell. Composes with `s4_leaf_override`. | (new) | head only | **DONE** (commit f019336; spec+Swift+golden, Properties.ThetaToDelta in cabal gate) |
+| 2b-i | **DECN v2 = embeddings (storage)** — additive `CMPE` chunk in `Spec.DecisionLog` (per Compare: winHash + loseHash + winner/loser 770-f embeddings), version-stable (v1 readers skip it; backward-compat law). Device twin: optional `winEmbedding`/`loseEmbedding` on `AtlasDecisionRecord` (Codable, old logs → nil). Golden: 10 DecisionLog property tests + `DecisionLogV2Tests`. **NOTE: device persistence is JSON-only; the SF64 *binary* codec does not exist** (deferred `decision-log-binary-codec`). | (new) | no | **DONE (JSON storage; binary codec deferred)** |
+| 2b-ii | **A/B capture → θ-learning loop (n=0), surfaced + logged** — on a pick, `AtlasState.choose` freezes the winner/loser 770-D embeddings into the `CMPE` record, folds θ via `PersonalTaste.btUpdate` (Swift port of `Spec.PreferenceUpdate`, golden), persists θ, and recolours the curated palette by a **leaf-space** tint (the maximin floor is not σ-pair, so the σ-pair `ThetaToDelta`/`leafOverride` path doesn't apply here — it activates with learned-genome candidates, step 3+). Surfaced (`AtlasGalleryView` "TASTE · N PICKS · ‖θ‖") + logged (`category=atlas.taste`) so it's device-testable. | (new) | head only | **DONE** (commit 637e6eb; `PersonalTasteTests`) |
 | 2b-iii | **Replace the candidate-B `perturb()` generator** (`AtlasState.swift`) with `Spec.GenomePair.sampleOrthogonalPair` (two disjoint-band σ-valid displacements). This is the actual `ab-perturb-stub`; distinct from the θ loop above. | `ab-perturb-stub` | no | NEXT |
 | 3 | **Pin the implemented value net.** Give the proven 29,249-param board‖genome→V MLP its `NetIOSpec`; reconcile (or formally retire) the "linear-770 = btUpdate verbatim" claim against the architecture actually on device. | `atlas-nets-unpinned`, `atlas-value-spec-drift` | head | — |
 | 4 | **Human/synthetic Compare split** — add `awHumanCompares` (or equivalent) to `AtlasOracle` + wire format; re-gate `betaBlend` on human Compares only. **Blocking for any β ramp.** | (new, §2.4) | no | — |

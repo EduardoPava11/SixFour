@@ -1,9 +1,15 @@
 import Foundation
 import simd
 
-/// The taste vector θ → generator-space nudge δ — the canonical path's n=0
-/// personalization map (`SixFour.Spec.ThetaToDelta`; `docs/SIXFOUR-CANONICAL-PATH.md`
-/// §2, step 2).
+/// The taste vector θ → **σ-pair generator-space** nudge δ (`SixFour.Spec.ThetaToDelta`).
+///
+/// ⚠️ OWNED-BUT-UNWIRED (zero production callers). This is the **generator-space** tint
+/// reserved for **step 3+ (n>0, learned σ-pair genomes)** — NOT the live n=0 loop. The
+/// shipped n=0 path recolours the **maximin floor** (256 free leaves, not σ-pair) via
+/// `PersonalTaste.leafTint` (leaf-space). Do NOT wire this into `PersonalTaste.btUpdate`
+/// until learned-genome candidates exist. Golden-gated + property-tested so it is correct
+/// and ready; it is simply not called yet. (Anti-confusion: see the wiring ledger in
+/// `docs/SIXFOUR-CANONICAL-PATH.md` §A.)
 ///
 /// Turns the on-device 770-D Bradley–Terry taste vector θ
 /// (`PreferenceUpdate.btUpdate`, laid out as `256 leaves × 3 ++ [coverage, beauty]`)

@@ -7,7 +7,11 @@ import os
 /// `SixFour.Spec.DecisionLog`. The wire contract of record is the SF64 TLV
 /// container (binary, golden-pinned, Mac↔iPhone only); the app persists the SAME
 /// `AtlasDecisionRecord` fields as Codable JSON today — replayable on day 1 and
-/// losslessly transcodable to SF64 when the spec encoder lands. Data never
+/// losslessly transcodable to SF64 when the spec encoder lands (DEFERRED debt
+/// `decision-log-binary-codec`: `Spec.DecisionLog` defines the binary CMPE chunk,
+/// but no Zig/Swift SF64 codec exists — persistence is JSON-only today, which is
+/// sufficient for n=0; binary is only needed for Mac↔iPhone transcode at step 3+).
+/// Data never
 /// leaves the device (no network; a plain file in Application Support).
 struct AtlasDecisionLog: Codable, Equatable, Sendable {
     /// Format version (the JSON twin of the SF64 header's `version u32 = 1`).

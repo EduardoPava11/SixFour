@@ -76,6 +76,23 @@ NOT contract-protected** (dims are uncodegenned trainer literals `ATLAS_TOKEN_DI
 - **"bit-identical Mac↔iPhone" is overstated** → treat as: on-device training real,
   cross-language bit-identity UNPROVEN.
 
-> Note: `verify-doc-claims.sh` already asserts the header declares **28** distinct `s4_*`
-> symbols (25 shipped + 3 tooling), so any new doc prose that says "24"/"21+3" is stale —
+> Note: `verify-doc-claims.sh` already asserts the header declares **31** distinct `s4_*`
+> symbols (28 shipped + 3 tooling), so any new doc prose with a different count is stale —
+> the gate is the single source of truth for that number (do not pin it a second time in prose).
+
+---
+
+## F. Session anti-confusion notes (2026-06-18) — owned-but-unwired + intentional asymmetries
+
+The 2026-06-18 build session added correct, golden-gated code that is **not yet called**, plus a
+few intentional asymmetries. Recorded here so a future session does NOT re-flag them as bugs or
+mistake them for live. The authoritative wiring table is `SIXFOUR-CANONICAL-PATH.md` §A.
+
+| id | note |
+|----|------|
+| `theta-to-delta-unwired` | `ThetaToDelta.swift` (+ `s4_leaf_override` / `SixFourNative.leafOverride`) is the **σ-pair generator-space** tint, golden-gated + property-tested but with **zero production callers** — reserved for step 3+ (learned genomes). The live n=0 loop uses `PersonalTaste.leafTint` (leaf-space, maximin floor). Do NOT wire into `btUpdate` until learned-genome candidates exist. The look-net trap precedent. |
+| `properties-thetatodelta-fixed` | `Spec.ThetaToDelta`'s header claimed "QuickCheck'd in Properties.ThetaToDelta" before that file existed (false-green, not in the cabal gate). FIXED 2026-06-18: `Properties.ThetaToDelta` written + wired into `spec/test/Spec.hs` (5 laws green); `lawRawLinearInTheta` weakened from exact `==` to ε (float-linearity, IEEE non-associative). |
+| `decision-log-binary-codec` | `Spec.DecisionLog` defines the binary `CMPE` chunk (DECN v2), but **no Zig/Swift SF64 codec exists** — device persistence is JSON-only (`AtlasDecisionLog`, Codable). Sufficient for n=0; binary only needed for Mac↔iPhone transcode at step 3+. Expected-absent, not missing. |
+| `glrm-wired-asymmetric` | `GLRM.shouldTrain` gates the **Mac-side value-net training batch only** (`AtlasTrainingSession.makeBatch`). `PersonalTaste.btUpdate` (the n=0 θ loop) runs **unconditionally** on device — by design (θ is bounded + robust; the value net is not). Step 3+ unifies both under one preference gate. |
+| `dual-feature-extractors` | coverage/beauty are computed in TWO places: `PersonalTaste.embedding` (770-D, user palette, btUpdate input) and `AtlasTrainingSession.atlasFeatures` (3-D + chromaSq, genome, GLRM input). Different inputs, intentionally separate; documented in both. Consolidate only if the coverage/beauty formula itself changes. |
 > the three drafts' export-count asides were corrected to match the gate in the new docs.
