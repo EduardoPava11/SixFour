@@ -4,7 +4,7 @@
 > The load-bearing facts in this file are gated by `scripts/verify-doc-claims.sh` — run it
 > before trusting a status claim. If a claim here disagrees with another doc, this file wins;
 > the other doc is stale. Last reconciled 2026-06-17 (state-inspection pass: verified test
-> counts to **834 Haskell / 30 Zig** — both gates green; closed the Zig-export-surface debt
+> counts to **834 Haskell / 31 Zig** — both gates green; closed the Zig-export-surface debt
 > by declaring the 4 `s4_cube/rgbt_lift` symbols in the header + lighting the previously-skipped
 > `rgbt4d_fixture_test`; see `docs/SIXFOUR-STATE-INSPECTION-2026-06-17.md`). Prior reconcile
 > 2026-06-09 (debt-cleanup pass: archived 10 docs
@@ -125,7 +125,7 @@ do not re-research or re-derive it.
 - **Deterministic Zig render core.** Per-stage kernels (widen → linear→OKLab → quantize
   (maximin+Lloyd) → dither → significance fill → palette → LZW/GIF89a assemble) drive
   `DeterministicRenderer`; default path, GPU-float `GIFRenderer` is the throw-fallback.
-  Native header now **declares all 30** `s4_*` exports (27 shipped + 3 tooling-only:
+  Native header now **declares all 31** `s4_*` exports (28 shipped + 3 tooling-only:
   `s4_gif_decode`, `s4_gif_decode_scratch_bytes`, `s4_srgb8_to_oklab_q16`); the gate asserts the
   header symbol set ≡ the Zig export set (drift-proof). **RESOLVED:** `s4_quantize_frame`'s
   maximin (Gonzalez 1985 farthest-first) **IS** the `Spec.QuantFixed`/`Spec.Collapse` canon and
@@ -140,7 +140,7 @@ do not re-research or re-derive it.
   Resolve. Spec source of truth: `Spec.{ZoneProfile,LookTransfer,RedFrontEnd,CubeLut}` (★ laws:
   luminance-preservation, preview≡cube, .cube grid ordering; 834 Haskell tests). Zig kernels
   `s4_zone_profile_q16`/`s4_look_transfer_q16`/`s4_build_cube_q16` are byte-exact to the spec
-  (`lut_fixture_test.zig`, 30 Zig tests); transcendentals (Log3G10 decode, filmic exp) +sRGB
+  (`lut_fixture_test.zig`, 31 Zig tests); transcendentals (Log3G10 decode, filmic exp) +sRGB
   encode are spec-generated embedded 1-D LUTs (`{log3g10_decode,filmic_tonemap,srgb_encode}_lut.bin`).
   Swift bridge `SixFourNative.{lookZoneProfile,lookTransfer,extractLUT}`. iOS build SUCCEEDED
   (compile-checked; on-device swipe/look + Resolve LUT verification is the user's step).
@@ -155,7 +155,7 @@ do not re-research or re-derive it.
   `s4_linear_to_oklab_q16` are implemented with golden anchors. (NOT stubs.)
 - **Cross-language parity gates.** Collapse, value head, color, quantize, dither, GridAxis,
   CloudProjection, VoxelFit, RGBT-4D cube-ladder goldens green; spec suite **834 tests pass**
-  (Haskell), **30 Zig tests pass** (incl. the now-live `rgbt4d_fixture_test` cross-language gate).
+  (Haskell), **31 Zig tests pass** (incl. the now-live `rgbt4d_fixture_test` cross-language gate).
 - **Capture→GIFA morph on the one surface (2026-06-07).** The live hero paints the REAL
   camera (`σ.previewTile` index cells, not a synthetic scroll); the loading sweep streams the
   REAL deterministic partials (`raw→quantize→dither→palette`) in true colour via

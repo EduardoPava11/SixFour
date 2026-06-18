@@ -852,6 +852,65 @@ test "s4_board_mass_q16: golden + laws (Spec.BoardQ16)" {
     try std.testing.expectEqual(@as(i32, 21845), massC[136]); // (1·65536+1)/3
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// σ-pair leaf override — the user's generator-space taste tint (port of
+// SixFour.Spec.LeafOverride.applySigmaOverride; the n=0 taste channel of the
+// canonical path). A pure EXACT-integer post-step on the already-reconstructed
+// generators (it never touches the reversible Haar): for each generator gᵢ, add
+// the override δᵢ, then emit the σ-pair [g, σ(g)] with σ(l,a,b) = (l, −a, −b).
+// The σ-symmetry is preserved BY CONSTRUCTION — the odd leaf is σ of the NUDGED
+// generator, so the user can never break the genome. No tolerance (integer add
+// + negate). δ shorter than n is the caller's responsibility to zero-pad.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// `n` generators (interleaved L,a,b Q16) + `n` deltas → `2n` σ-pair leaves
+/// `[g₀, σ(g₀), g₁, σ(g₁), …]` where `gᵢ = generatorᵢ + δᵢ`. `out_leaves_q16`
+/// holds `2n` triples (`6n` ints). Pass `deltas_q16 == null` for the no-op
+/// (zero) override. Byte-exact vs `Spec.LeafOverride`.
+pub export fn s4_leaf_override(generators_q16: [*c]const i32, deltas_q16: [*c]const i32, n: i32, out_leaves_q16: [*c]i32) i32 {
+    if (out_leaves_q16 == null) return RC_NULL_PTR;
+    if (n < 0) return RC_BAD_SHAPE;
+    if (n > 0 and generators_q16 == null) return RC_NULL_PTR;
+    var i: usize = 0;
+    const cnt: usize = @intCast(n);
+    while (i < cnt) : (i += 1) {
+        const gi = i * 3;
+        const dl: i32 = if (deltas_q16 == null) 0 else deltas_q16[gi + 0];
+        const da: i32 = if (deltas_q16 == null) 0 else deltas_q16[gi + 1];
+        const db: i32 = if (deltas_q16 == null) 0 else deltas_q16[gi + 2];
+        const gl = generators_q16[gi + 0] + dl;
+        const ga = generators_q16[gi + 1] + da;
+        const gb = generators_q16[gi + 2] + db;
+        const o = i * 6;
+        out_leaves_q16[o + 0] = gl; // even leaf = g
+        out_leaves_q16[o + 1] = ga;
+        out_leaves_q16[o + 2] = gb;
+        out_leaves_q16[o + 3] = gl; // odd leaf = σ(g) = (l, −a, −b)
+        out_leaves_q16[o + 4] = -ga;
+        out_leaves_q16[o + 5] = -gb;
+    }
+    return RC_OK;
+}
+
+test "s4_leaf_override: σ-pair tint matches Spec.LeafOverride laws" {
+    // 2 generators; δ0 = 0 (no-op), δ1 nudges all three channels.
+    const gens = [_]i32{ 10000, 20000, -5000, 40000, -10000, 30000 };
+    const deltas = [_]i32{ 0, 0, 0, 1000, -2000, 3000 };
+    var out = [_]i32{0} ** 12;
+    try std.testing.expectEqual(RC_OK, s4_leaf_override(&gens, &deltas, 2, &out));
+    // lawSigmaOverrideIdentityNoOp + AddsToGenerators (even leaves = gen + δ)
+    try std.testing.expectEqualSlices(i32, &[_]i32{ 10000, 20000, -5000 }, out[0..3]);
+    try std.testing.expectEqualSlices(i32, &[_]i32{ 41000, -12000, 33000 }, out[6..9]);
+    // lawSigmaOverrideOddLeafCarriesSigmaOfNudged (odd leaf = σ of the nudged g)
+    try std.testing.expectEqualSlices(i32, &[_]i32{ 10000, -20000, 5000 }, out[3..6]);
+    try std.testing.expectEqualSlices(i32, &[_]i32{ 41000, 12000, -33000 }, out[9..12]);
+    // null deltas ⇒ pure no-op σ-pair of the generators
+    var out2 = [_]i32{0} ** 12;
+    try std.testing.expectEqual(RC_OK, s4_leaf_override(&gens, null, 2, &out2));
+    try std.testing.expectEqualSlices(i32, &[_]i32{ 40000, -10000, 30000 }, out2[6..9]);
+    try std.testing.expectEqualSlices(i32, &[_]i32{ 40000, 10000, -30000 }, out2[9..12]);
+}
+
 // Error-diffusion taps: (dx, dy, num, den). FS = 7/3/5/1 ÷ 16; Atkinson = 6 × 1/8.
 const FS_TAPS = [4][4]i32{ .{ 1, 0, 7, 16 }, .{ -1, 1, 3, 16 }, .{ 0, 1, 5, 16 }, .{ 1, 1, 1, 16 } };
 const ATKINSON_TAPS = [6][4]i32{ .{ 1, 0, 1, 8 }, .{ 2, 0, 1, 8 }, .{ -1, 1, 1, 8 }, .{ 0, 1, 1, 8 }, .{ 1, 1, 1, 8 }, .{ 0, 2, 1, 8 } };

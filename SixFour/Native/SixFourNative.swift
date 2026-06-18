@@ -400,6 +400,44 @@ enum SixFourNative {
         return mass
     }
 
+    // MARK: - σ-pair leaf override (the n=0 taste tint)
+
+    /// Apply the user's generator-space taste tint (`s4_leaf_override`, the owned
+    /// port of `SixFour.Spec.LeafOverride.applySigmaOverride`): for each generator
+    /// `gᵢ`, add `δᵢ` and emit the σ-pair `[g, σ(g)]` with `σ(l,a,b) = (l,−a,−b)`.
+    /// Returns `2·generators.count` σ-pair leaves. `deltas` is zero-padded /
+    /// truncated to the generator count; `nil` (or empty) ⇒ the no-op override.
+    /// Byte-exact across Haskell/Zig/Swift — the σ-symmetry is preserved by
+    /// construction (the odd leaf is σ of the *nudged* generator).
+    static func leafOverride(generators: [SIMD3<Int32>], deltas: [SIMD3<Int32>]? = nil) -> [SIMD3<Int32>]? {
+        let n = generators.count
+        guard n > 0 else { return [] }
+        var gflat = [Int32](); gflat.reserveCapacity(n * 3)
+        for g in generators { gflat.append(g.x); gflat.append(g.y); gflat.append(g.z) }
+        var dflat: [Int32]? = nil
+        if let deltas {
+            var d = [Int32](repeating: 0, count: n * 3)
+            for i in 0 ..< min(n, deltas.count) {
+                d[i * 3 + 0] = deltas[i].x; d[i * 3 + 1] = deltas[i].y; d[i * 3 + 2] = deltas[i].z
+            }
+            dflat = d
+        }
+        var out = [Int32](repeating: 0, count: n * 6)
+        let rc = gflat.withUnsafeBufferPointer { gp -> Int32 in
+            out.withUnsafeMutableBufferPointer { op in
+                if let dflat {
+                    return dflat.withUnsafeBufferPointer { dp in
+                        s4_leaf_override(gp.baseAddress, dp.baseAddress, Int32(n), op.baseAddress)
+                    }
+                } else {
+                    return s4_leaf_override(gp.baseAddress, nil, Int32(n), op.baseAddress)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_leaf_override rc=\(rc)"); return nil }
+        return (0 ..< n * 2).map { SIMD3<Int32>(out[$0 * 3], out[$0 * 3 + 1], out[$0 * 3 + 2]) }
+    }
+
     /// Convenience for the UI: an sRGB8 palette (`k` a power of two) → the Haar
     /// `level` node colours as sRGB8 (the abstraction cascade). Used by the capture
     /// shutter (`level 4` → 16 colours) and review. sRGB8 → OKLab Q16 → haarAnalyze →

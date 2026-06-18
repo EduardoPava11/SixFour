@@ -41,6 +41,7 @@ fixtures; Swift tests assert against the same JSON. This is the verified surface
 | `s4_gif_assemble`, `s4_gif_encode_burst` (+bound/scratch) | `golden.gif` from composed fold | `gif_fixture_test.zig` | — |
 | LUT grading: `s4_zone_profile_q16`, `s4_look_transfer_q16`, `s4_build_cube_q16` | `lut_golden.json` (`Spec.{ZoneProfile,LookTransfer,CubeLut}`) | `lut_fixture_test.zig` | yes |
 | `s4_board_mass_q16`, `s4_board_counts_to_mass_q16` (Atlas board mass) | inline golden (`Spec.BoardQ16`, cabal-confirmed) | `kernels.zig` unit test | `BoardQ16GoldenTests` |
+| `s4_leaf_override` (σ-pair taste tint, n=0) | inline golden (`Spec.LeafOverride` laws) | `kernels.zig` unit test | `LeafOverrideGoldenTests` |
 
 Notes:
 - **`GLRM` (preference kill-switch) is golden-gated Swift ≡ Haskell** (no Zig kernel —

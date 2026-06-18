@@ -190,6 +190,13 @@ int32_t s4_board_counts_to_mass_q16(const int32_t *counts, int32_t bins,
 // Full mass channel for n interleaved (L,a,b) Q16 colours → 4096-bin Q16 channel.
 int32_t s4_board_mass_q16(const int32_t *colors_q16, int32_t n, int32_t *out_mass_q16);
 
+// σ-pair leaf override — the user's generator-space taste tint (port of
+// SixFour.Spec.LeafOverride). n generators (interleaved L,a,b Q16) + n deltas →
+// 2n σ-pair leaves [g, σ(g)] where g = generator + δ and σ(l,a,b) = (l,−a,−b).
+// out_leaves_q16 holds 2n triples (6n ints). deltas_q16 = NULL ⇒ zero override.
+int32_t s4_leaf_override(const int32_t *generators_q16, const int32_t *deltas_q16,
+                         int32_t n, int32_t *out_leaves_q16);
+
 int32_t s4_dither_frame(const int32_t *oklab_q16, const int32_t *centroids_q16,
                         int32_t p, int32_t k, int32_t dither_mode, int32_t serpentine,
                         const uint8_t *stbn_slice, uint8_t *out_indices,
@@ -279,7 +286,7 @@ int32_t s4_build_cube_q16(int32_t cube_size,
 // These three are exported by the Zig core (Native/src/kernels.zig) for host-side
 // round-trip verification and the cross-language golden tests; they are NOT called
 // by the iOS app. Declared here so header-based callers get correct prototypes and
-// the contract surface is unambiguous (Zig exports 30 symbols total: 27 shipped +
+// the contract surface is unambiguous (Zig exports 31 symbols total: 28 shipped +
 // these 3 tooling). Memory rule unchanged: caller owns all memory.
 // ─────────────────────────────────────────────────────────────────────────
 
