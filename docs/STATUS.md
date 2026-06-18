@@ -30,6 +30,14 @@ deterministic Zig collapse, not a learned genome. Full NN inventory + design led
 `docs/SIXFOUR-NN-DESIGN-CANON.md` (roster) and `docs/SIXFOUR-NETWORKS-CANONICAL-ROSTER.md`
 (per-net detail).
 
+> **Single source of DIRECTION: `docs/SIXFOUR-CANONICAL-PATH.md`** (2026-06-18). The canonical
+> core = one Gumbel-AlphaZero policy+value predictor as a *bounded addition above a frozen
+> Q16-idempotent maximin floor*, read at search budgets n=0/1/8–16 (which subsume the
+> deterministic / residual / AlphaZero candidates; supervised MSE Look-NN rejected). v1 ships
+> value-only search over a frozen policy; the calibrated taste organ + perceptual warp are
+> separately-specced research bets, not settled. STATUS (this file) stays the canonical *status*
+> ledger; CANONICAL-PATH is *direction*. Cited research: `docs/SIXFOUR-RESEARCH-*.md`.
+
 ## On-device personalization feasibility (A19 Pro / iOS 26) — north-star
 
 The product north-star is **on-device personalized look-learning**: the user trains / "push-pulls"
