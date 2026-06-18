@@ -48,6 +48,7 @@ library
         SixFour.Spec.RGBTLift
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
+        SixFour.Spec.DivergenceSchedule
         SixFour.Spec.CanonicalPhase
         SixFour.Spec.SigmaPairFixed
         SixFour.Spec.LeafOverride
@@ -316,6 +317,7 @@ test-suite spec-tests
         Properties.RGBTFeature
         Properties.CubeLadder
         Properties.VoxelReduce
+        Properties.DivergenceSchedule
         Properties.PairTree
         Properties.PairTreeFixed
         Properties.RGBTLift
