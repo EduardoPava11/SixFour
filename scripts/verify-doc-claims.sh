@@ -50,17 +50,22 @@ for f in "${GREP_TARGETS[@]}"; do
   fi
 done
 
-# --- ANCHOR 1: GIFA->GIFB global collapse keystone is WIRED (>=1 production caller) ---
-check "renderDeterministicGlobal exists (CaptureViewModel routes to global path)" \
+# --- ANCHOR 1: global collapse (GIFB) is KEPT + COMPILED, but V2-DEFERRED (MVP1 is per-frame) ---
+# The code is present (not deleted) so these presence checks stay green; MVP1 reaches it only when
+# Feature.globalPaletteV2 is on — see docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md.
+check "renderDeterministicGlobal exists (V2-gated global path kept)" \
   grep -q 'renderDeterministicGlobal' SixFour/UI/Screens/Capture/CaptureViewModel.swift
-check "DeterministicRenderer.renderGlobalPalette exists" \
+check "DeterministicRenderer.renderGlobalPalette exists (V2-gated)" \
   grep -q 'func renderGlobalPalette' SixFour/Encoder/DeterministicRenderer.swift
 check "renderGlobalPalette calls SixFourNative.globalCollapse (Zig s4_global_collapse)" \
   grep -q 'SixFourNative.globalCollapse' SixFour/Encoder/DeterministicRenderer.swift
-check "global path is gated on settings.paletteScope == .global" \
-  grep -q 'paletteScope == .global' SixFour/UI/Screens/Capture/CaptureViewModel.swift
 check "globalCollapse wraps the Zig s4_global_collapse symbol" \
   grep -q 's4_global_collapse' SixFour/Native/SixFourNative.swift
+# --- ANCHOR 1b: the V2-deferral invariant — MVP1 ships global OFF and the live router is gated ---
+check "MVP1 ships global OFF (Feature.globalPaletteV2 = false)" \
+  grep -q 'static let globalPaletteV2 = false' SixFour/Settings/Feature.swift
+check "the live capture router is gated by Feature.globalPaletteV2 (per-frame only in MVP1)" \
+  grep -q 'Feature.globalPaletteV2 ? settings.paletteScope : .perFrame' SixFour/UI/Screens/Capture/CaptureViewModel.swift
 
 # --- ANCHOR 2: loadLookNet has ZERO production callers (NN spine unwired) ---
 check "loadLookNet has zero production callers (only its own definition references it)" \
@@ -89,8 +94,8 @@ check "Zig blob loader verified by fixture test" \
 # --- BUILT: deterministic core implementations are real, not stubs ---
 check "s4_gif_encode_burst is a real impl (folds and returns s4_gif_assemble)" \
   grep -q 'return s4_gif_assemble' Native/src/kernels.zig
-check "Native header declares all 31 distinct s4_* symbols (28 shipped + 3 tooling)" \
-  test "$(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u | wc -l | tr -d ' ')" -eq 31
+check "Native header declares all 33 distinct s4_* symbols (30 shipped + 3 tooling)" \
+  test "$(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u | wc -l | tr -d ' ')" -eq 33
 check "header s4_* symbol set == Zig export set (no undeclared exports)" \
   bash -c "diff <(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u) <(grep -hoE 'export fn (s4_[a-z_0-9]+)' Native/src/*.zig | sed 's/export fn //' | sort -u) >/dev/null"
 

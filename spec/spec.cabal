@@ -47,6 +47,8 @@ library
         SixFour.Spec.PairTreeFixed
         SixFour.Spec.RGBTLift
         SixFour.Spec.TemporalLoop
+        SixFour.Spec.VoxelReduce
+        SixFour.Spec.DivergenceSchedule
         SixFour.Spec.CanonicalPhase
         SixFour.Spec.SigmaPairFixed
         SixFour.Spec.LeafOverride
@@ -137,6 +139,8 @@ library
         SixFour.Codegen.Golden
         SixFour.Codegen.Collapse
         SixFour.Codegen.RGBT4D
+        SixFour.Codegen.VoxelReduce
+        SixFour.Codegen.GenomePair
         SixFour.Codegen.PairTree
         SixFour.Codegen.QuartetDelta
         SixFour.Codegen.PaletteValue
@@ -313,12 +317,15 @@ test-suite spec-tests
         Properties.Entropy
         Properties.RGBTFeature
         Properties.CubeLadder
+        Properties.VoxelReduce
+        Properties.DivergenceSchedule
         Properties.PairTree
         Properties.PairTreeFixed
         Properties.RGBTLift
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride
+        Properties.GenomePair
         Properties.ThetaToDelta
         Properties.PaletteGesture
         Properties.GroupRGBT

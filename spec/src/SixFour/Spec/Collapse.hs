@@ -98,6 +98,12 @@ pooledCandidatesQ16 = concat
 -- pixels — here applied to the union of all frames — so it is already mirrored
 -- byte-for-byte by the Zig @s4_quantize_frame@ seed phase. Every chosen colour is
 -- an actual input colour (gamut-closed); ties resolve to the lowest index.
+--
+-- ⚠️ V2-DEFERRED-GLOBAL-PALETTE — this single-global-collapse (and its siblings
+-- 'globalCollapseIndicesQ16' / 'reindexFrameQ16') is the global (GIFB) path, deferred to V2 behind
+-- the Swift gate Feature.globalPaletteV2 (false in MVP1). Kept + golden-gated for V2, not a live
+-- MVP1 path. The GENERIC 'farthestPointCollapse' / 'pooledCandidates' above stay live (the maximin
+-- floor). See docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md. Do not add new callers.
 globalCollapseQ16 :: Int -> [[PxQ16]] -> [PxQ16]
 globalCollapseQ16 k = farthestPointSeedsQ16 k . pooledCandidatesQ16
 

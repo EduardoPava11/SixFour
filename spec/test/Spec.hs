@@ -22,12 +22,15 @@ import qualified Properties.Barycenter   as Barycenter
 import qualified Properties.Entropy      as Entropy
 import qualified Properties.RGBTFeature  as RGBTFeature
 import qualified Properties.CubeLadder   as CubeLadder
+import qualified Properties.VoxelReduce  as VoxelReduce
+import qualified Properties.DivergenceSchedule as DivergenceSchedule
 import qualified Properties.PairTree     as PairTree
 import qualified Properties.PairTreeFixed as PairTreeFixed
 import qualified Properties.RGBTLift     as RGBTLift
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
+import qualified Properties.GenomePair    as GenomePair
 import qualified Properties.ThetaToDelta  as ThetaToDelta
 import qualified Properties.PaletteGesture as PaletteGesture
 import qualified Properties.GroupRGBT     as GroupRGBT
@@ -128,12 +131,15 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Entropy.tests
   , RGBTFeature.tests
   , CubeLadder.tests
+  , VoxelReduce.tests
+  , DivergenceSchedule.tests
   , PairTree.tests
   , PairTreeFixed.tests
   , RGBTLift.tests
   , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests
+  , GenomePair.tests
   , ThetaToDelta.tests
   , PaletteGesture.tests
   , GroupRGBT.tests

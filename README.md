@@ -41,8 +41,9 @@ hand-written**:
 
 A learned "look-network" that would emit a single *learned* global palette is
 designed and golden-verified in Haskell, and partially trained on the Mac — but
-it is **not shipped on device**. The global palette the app emits today is the
-deterministic Zig **pooled-maximin collapse**, not a learned genome.
+it is **not shipped on device**. **MVP1 emits PER-FRAME palettes only.** The global
+(GIFB) deterministic Zig **pooled-maximin collapse** is implemented and golden-gated
+but **deferred to V2** behind `Feature.globalPaletteV2 = false` (unreachable in MVP1).
 
 ## Layout
 

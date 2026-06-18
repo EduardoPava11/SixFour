@@ -43,7 +43,7 @@ verb_codegen() { cabal_env "run -v0 spec-codegen"; }
 verb_verify()  { cabal_env "test"; }
 verb_native()  { ( cd "$ROOT/Native" && zig build test ); "$ROOT/Native/build-ios.sh"; }
 verb_gen()     { "$ROOT/scripts/regenerate.sh"; }
-verb_lint()    { "$ROOT/scripts/lint-grid.sh"; }
+verb_lint()    { "$ROOT/scripts/lint-grid.sh" && "$ROOT/scripts/lint-no-global-palette.sh"; }
 verb_build()   { xcodebuild -scheme SixFour -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build; }
 verb_device()  { "$ROOT/scripts/run-on-device.sh" "$@"; }
 verb_doc()     { "$ROOT/scripts/verify-doc-claims.sh"; }

@@ -456,6 +456,10 @@ pub export fn s4_quantize_frame(
 /// argmin/tie-break). Mirrors `SixFour.Spec.Collapse.globalCollapseQ16` +
 /// `reindexFrameQ16`. `k_out` ≤ 256 (u8 indices) and ≤ `t·k_in`.
 /// `scratch` ≥ (t·k_in)·8 + 3·k_out·8 + k_out·4 bytes.
+///
+/// ⚠️ V2-DEFERRED-GLOBAL-PALETTE — global (GIFB) collapse, deferred to V2 behind the Swift gate
+/// Feature.globalPaletteV2 (false in MVP1). Kept, compiled, and golden-gated for V2; not a live
+/// MVP1 path. See docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md. Do not add new callers.
 pub export fn s4_global_collapse(
     palettes_q16: [*c]const i32,
     t: i32,
@@ -625,31 +629,45 @@ pub export fn s4_haar_level_nodes(
 // for Zig, RGBT4DGolden.swift for Swift) — never against each other directly.
 
 // 2×2 block (a,b,c,d) → sub-bands (R,G,B,T)=(LL,LH,HL,HH).
-fn rgbtLiftQuad(q: *const [4]i32, out: *[4]i32) void {
-    const la = q[1] + @divFloor(q[0] - q[1], 2);
-    const ha = q[0] - q[1];
-    const lc = q[3] + @divFloor(q[2] - q[3], 2);
-    const hc = q[2] - q[3];
-    out[0] = lc + @divFloor(la - lc, 2); // ll = R
-    out[1] = la - lc; // lh = G
-    out[2] = hc + @divFloor(ha - hc, 2); // hl = B
-    out[3] = ha - hc; // hh = T
+// The owned integer S-transform (lifting scheme, JPEG2000-lossless lineage), factored into ONE
+// shared pair-lift so the spatial 2×2 RGBT lift and the temporal one-level Haar split call the
+// SAME math (no inline copies — see docs/SIXFOUR-REUSE-FIRST-NO-NEW-DEBT-WORKFLOW.md §5.1).
+// Forward: (x,y) → (low, high) = (y + floor((x-y)/2), x - y). Mirrors SixFour.Spec.TemporalLoop
+// liftPairT (per channel) and SixFour.Spec.RGBTLift's S-transform.
+fn sLift(x: i32, y: i32) [2]i32 {
+    const d = x - y;
+    return .{ y + @divFloor(d, 2), d };
 }
 
-// Exact inverse of rgbtLiftQuad: (R,G,B,T) → (a,b,c,d).
+// Exact inverse of sLift: (low, high) → (x, y) = (y + high, y), y = low - floor(high/2).
+fn sUnlift(low: i32, high: i32) [2]i32 {
+    const y = low - @divFloor(high, 2);
+    return .{ y + high, y };
+}
+
+// 2×2 separable Haar = four sLift applications (rows then columns). Byte-identical to the prior
+// inline form; gated by haar_fixture_test + rgbt4d_fixture_test.
+fn rgbtLiftQuad(q: *const [4]i32, out: *[4]i32) void {
+    const a = sLift(q[0], q[1]); // (la, ha)
+    const c = sLift(q[2], q[3]); // (lc, hc)
+    const l = sLift(a[0], c[0]); // (R, G)
+    const h = sLift(a[1], c[1]); // (B, T)
+    out[0] = l[0]; // ll = R
+    out[1] = l[1]; // lh = G
+    out[2] = h[0]; // hl = B
+    out[3] = h[1]; // hh = T
+}
+
+// Exact inverse of rgbtLiftQuad: (R,G,B,T) → (a,b,c,d) via four sUnlift applications.
 fn rgbtUnliftQuad(r: *const [4]i32, out: *[4]i32) void {
-    const yla = r[0] - @divFloor(r[1], 2);
-    const la = yla + r[1];
-    const lc = yla;
-    const yha = r[2] - @divFloor(r[3], 2);
-    const ha = yha + r[3];
-    const hc = yha;
-    const ya = la - @divFloor(ha, 2);
-    out[0] = ya + ha; // a
-    out[1] = ya; // b
-    const yc = lc - @divFloor(hc, 2);
-    out[2] = yc + hc; // c
-    out[3] = yc; // d
+    const lo = sUnlift(r[0], r[1]); // (la, lc)
+    const hi = sUnlift(r[2], r[3]); // (ha, hc)
+    const a = sUnlift(lo[0], hi[0]); // (a, b)
+    const c = sUnlift(lo[1], hi[1]); // (c, d)
+    out[0] = a[0];
+    out[1] = a[1];
+    out[2] = c[0];
+    out[3] = c[1];
 }
 
 /// 2×2 → RGBT lift on one block (4 ints in, 4 ints out). Bijective with s4_rgbt_unlift_quad.
@@ -727,6 +745,56 @@ pub export fn s4_cube_unlift_level(half: i32, coarse: [*c]const i32, details: [*
             out_grid[(2 * by + 1) * s + 2 * bx] = q[2];
             out_grid[(2 * by + 1) * s + 2 * bx + 1] = q[3];
         }
+    }
+    return RC_OK;
+}
+
+/// One level of the temporal integer Haar split over a sequence of `n` OKLab triples (Q16) —
+/// the TEMPORAL half of SixFour.Spec.VoxelReduce, mirroring SixFour.Spec.TemporalLoop.haarSplitTime.
+/// Adjacent frames pair into a lifted parent (low) and a detail (high) via the OWNED `sLift` per
+/// channel (no new lift math; see docs/SIXFOUR-REUSE-FIRST-NO-NEW-DEBT-WORKFLOW.md §5.1). An odd
+/// trailing frame is carried into the low band with no detail. Exactly inverted by
+/// s4_haar_join_level. in: n·3 i32 (frame-major). out_low: (n/2 + n%2)·3. out_high: (n/2)·3.
+pub export fn s4_haar_split_level(n: i32, in_q16: [*c]const i32, out_low: [*c]i32, out_high: [*c]i32) i32 {
+    if (in_q16 == null or out_low == null or out_high == null) return RC_NULL_PTR;
+    if (n < 0) return RC_BAD_SHAPE;
+    const nn: usize = @intCast(n);
+    const pairs = nn / 2;
+    var i: usize = 0;
+    while (i < pairs) : (i += 1) {
+        var c: usize = 0;
+        while (c < 3) : (c += 1) {
+            const r = sLift(in_q16[(2 * i) * 3 + c], in_q16[(2 * i + 1) * 3 + c]);
+            out_low[i * 3 + c] = r[0];
+            out_high[i * 3 + c] = r[1];
+        }
+    }
+    if (nn % 2 == 1) { // carry the odd tail into the low band, no detail
+        var c: usize = 0;
+        while (c < 3) : (c += 1) out_low[pairs * 3 + c] = in_q16[(nn - 1) * 3 + c];
+    }
+    return RC_OK;
+}
+
+/// Exact inverse of s4_haar_split_level (mirrors SixFour.Spec.TemporalLoop.haarJoinTime): rebuild
+/// the n-frame sequence from (low, high) via the OWNED `sUnlift`. `low_n = n/2 + n%2`,
+/// `high_n = n/2`, so n = low_n + high_n and `low_n - high_n ∈ {0,1}`. out: n·3 i32.
+pub export fn s4_haar_join_level(low_n: i32, high_n: i32, low: [*c]const i32, high: [*c]const i32, out_q16: [*c]i32) i32 {
+    if (low == null or high == null or out_q16 == null) return RC_NULL_PTR;
+    if (low_n < 0 or high_n < 0 or low_n < high_n or low_n - high_n > 1) return RC_BAD_SHAPE;
+    const hn: usize = @intCast(high_n);
+    var i: usize = 0;
+    while (i < hn) : (i += 1) {
+        var c: usize = 0;
+        while (c < 3) : (c += 1) {
+            const q = sUnlift(low[i * 3 + c], high[i * 3 + c]);
+            out_q16[(2 * i) * 3 + c] = q[0];
+            out_q16[(2 * i + 1) * 3 + c] = q[1];
+        }
+    }
+    if (@as(usize, @intCast(low_n)) > hn) { // the carried odd tail
+        var c: usize = 0;
+        while (c < 3) : (c += 1) out_q16[(2 * hn) * 3 + c] = low[hn * 3 + c];
     }
     return RC_OK;
 }

@@ -58,9 +58,14 @@ take on a dependency.
 - **Fallback:** PyTorch→CoreML→ANE is kept dormant, never shipped.
 
 ## Palette: global vs per-frame
+**MVP1 ships PER-FRAME palettes only.** The global (GIFB) path below is implemented and
+golden-gated but **DEFERRED TO V2** behind `Feature.globalPaletteV2 = false` (every entry point is
+guarded ⇒ unreachable in MVP1). See `docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md` and the
+per-frame direction in `docs/SIXFOUR-PER-FRAME-GENOME-AB-MIGRATION-WORKFLOW.md`.
+
 `Spec/StageA.hs` extracts a **per-frame** 256-colour palette per frame — that is
 the NN *input*. The look-NN sum-pools all frames' tokens (permutation-invariant)
-and emits ONE **global** **384-DOF σ-pair genome** (`SIGMA_PAIR_DOF` = 3·128
+and *would* emit ONE **global** **384-DOF σ-pair genome** (`SIGMA_PAIR_DOF` = 3·128
 generators; `Spec/SigmaPairHead.hs`, `Spec/LookNetD.hs`) for the whole 64³ GIF —
 reconstructed into the 256-leaf palette. The *output* is the genome; the palette
 it reconstructs lives in the **768-real flat leaf space** (256·3). Do not conflate

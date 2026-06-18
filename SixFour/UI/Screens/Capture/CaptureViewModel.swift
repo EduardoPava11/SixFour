@@ -247,7 +247,7 @@ final class CaptureViewModel {
         guard previewQuantized else { return nil }
         var parts: [String] = []
         if settings.ditherConfig.method == .blueNoise { parts.append("FS shown · blue-noise on export") }
-        if settings.paletteScope == .global { parts.append("per-frame shown · global on export") }
+        if Feature.globalPaletteV2 && settings.paletteScope == .global { parts.append("per-frame shown · global on export") }
         return parts.isEmpty ? nil : "preview: " + parts.joined(separator: " · ")
     }
 
@@ -598,7 +598,14 @@ final class CaptureViewModel {
     ) async throws -> RenderResult {
         // GIFB: one global palette (collapse + whole-GIF rescue), gated by the
         // whole-GIF brands. Routed by the user's paletteScope toggle.
-        if settings.paletteScope == .global {
+        //
+        // ⚠️ V2-DEFERRED-GLOBAL-PALETTE — global (GIFB) collapse path, deferred to V2 behind
+        // Feature.globalPaletteV2 (false in MVP1 ⇒ this branch is statically unreachable). Kept,
+        // compiled, and golden-gated for V2; MVP1 is per-frame only.
+        // See docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md §2 (GS1 + SAN). Do not add new callers.
+        // GS1 + SAN: gate on the flag AND coerce a stale persisted `.global` to per-frame.
+        let paletteScope: PaletteScope = Feature.globalPaletteV2 ? settings.paletteScope : .perFrame
+        if paletteScope == .global {
             return try await renderDeterministicGlobal(
                 tiles: tiles, dither: dither, baseURL: baseURL, sheetURL: sheetURL, summary: summary
             )
@@ -694,8 +701,9 @@ final class CaptureViewModel {
         // user's Compare pick with anchors substituted — rides the render-path
         // seam so the "global palette cube" is rendered through THE USER'S
         // palette. Flag off or no curated palette ⇒ nil ⇒ byte-identical.
+        // GS5b: the curated global palette is injected only when global is enabled for V2.
         let curatedLeaves: [SIMD3<Int32>]? =
-            settings.colorAtlasEnabled ? AtlasPaletteStore.shared.curatedLeavesQ16 : nil
+            (settings.colorAtlasEnabled && Feature.globalPaletteV2) ? AtlasPaletteStore.shared.curatedLeavesQ16 : nil
         let g = try await Task.detached(priority: .userInitiated) {
             try renderer.renderGlobalPalette(tiles: tiles, comment: comment, branching: branching,
                                              curatedLeavesQ16: curatedLeaves) { stage in
