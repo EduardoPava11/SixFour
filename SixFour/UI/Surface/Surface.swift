@@ -55,6 +55,12 @@ final class Surface {
     /// the engine's `CaptureOutput.gifURL`; `nil` until a GIFA is rendered.
     var gifURL: URL?
 
+    /// The CHOSEN A/B look's per-frame palettes (64 × 256 sRGB8), set when the user picks A or
+    /// B. The EXPORT re-encodes the (complete, brand-passing) base `indexCube` through THESE, so
+    /// the shipped GIF reflects the chosen genome's colours — not the base auto-render. Empty
+    /// until a pick; reset on retake (`.live`).
+    var chosenLookPalettes: [[SIMD3<UInt8>]] = []
+
     /// The LIVE camera tile as 64×64 indexed cells (row-major `y·64 + x`) + its paired
     /// sRGB palette — the live hero paints the REAL camera through these (the cube law:
     /// 1 GIF pixel per cell). Distinct from `palette` (the throttled shutter/ground palette)
@@ -85,6 +91,7 @@ final class Surface {
     /// `abStep` (`ABSurfaceMachine.swift`) and is the only writer of `phase`.
     func step(_ event: ABEvent) {
         phase = abStep(phase, event)
+        if phase == .live { chosenLookPalettes = [] }   // retake drops the last chosen look
     }
 
     // MARK: κ-fed cursor advance (Z₆₄)

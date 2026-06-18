@@ -134,6 +134,9 @@ struct ABCandidatePhaseField: View {
                 loser:  PersonalTaste.embedding(leaves: loser.leaves))
             PersonalTasteStore.save(abTheta)
         }
+        // Carry the chosen look's per-frame palettes so the export re-encodes the base cube
+        // through THEM (ships the chosen genome's colours, not the base auto-render).
+        surface.chosenLookPalettes = pickedA ? candA : candB
         abPickCount += 1   // bumps `recomputeKey` → `.task` re-fires the next round off-main
         surface.step(pickedA ? .pickA : .pickB)
     }

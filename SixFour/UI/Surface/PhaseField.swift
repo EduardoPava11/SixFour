@@ -58,16 +58,22 @@ struct ExportingPhaseField: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Exporting")
-        // Drive the terminal edge so `.exporting` is never a dead-end. The genome-faithful
-        // cube-ladder encode (ABExportFamily {16³,64³,256³} carrying the chosen genome) is P3;
-        // for now the auto-rendered GIF (`surface.gifURL`) is the shippable artifact, surfaced
-        // for Share on the Done field. A brief beat, then `.exportDone` → `.done`.
-        .onAppear {
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 400_000_000)
-                surface.step(.exportDone)
-            }
-        }
+        .task { await export() }
+    }
+
+    /// Re-encode the CHOSEN A/B look (the base cube through the chosen per-frame palettes) OFF
+    /// the κ clock, point `gifURL` at it so Done ships the chosen look (not the base auto-render),
+    /// then fire `.exportDone` → `.done`. Falls back to the existing `gifURL` if the chosen
+    /// encode declines (empty pick / incomplete volume). The genome-carrying {16³,256³} ladder
+    /// (ABExportFamily) is the follow-on.
+    private func export() async {
+        let cube = surface.indexCube
+        let pals = surface.chosenLookPalettes
+        let url = await Task.detached(priority: .userInitiated) {
+            ABExport.encodeChosenLook(indexCube: cube, palettes: pals)
+        }.value
+        if let url { surface.gifURL = url }
+        surface.step(.exportDone)
     }
 }
 
