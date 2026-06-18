@@ -118,23 +118,30 @@ struct AtlasBoard16: Sendable, Equatable {
     ) -> AtlasBoard16 {
         var board = AtlasBoard16.empty
 
-        // ch0 — palette-slot mass (the 64×256 slots; normalised by the true total).
-        var paletteSlots = 0
-        for frame in perFramePalettesQ16 {
-            paletteSlots += frame.count
-            for c in frame { board.binMassPalettes[AtlasBinIdx.bin(ofQ16: c).flat] += 1 }
-        }
-        if paletteSlots > 0 {
-            let inv = 1 / Float(paletteSlots)
-            for i in 0 ..< Self.binCount { board.binMassPalettes[i] *= inv }
+        // All three base channels are the DETERMINISTIC Q16 mass (owned Zig
+        // `s4_board_mass_q16` / `s4_board_counts_to_mass_q16`, port of
+        // `SixFour.Spec.BoardQ16`): integer floor-div binning + integer counts +
+        // ONE round-half-up of count·2¹⁶/total. We store `massQ16 / 65536` — an
+        // EXACT dyadic conversion (1/65536 = 2⁻¹⁶), so the policy/value board input
+        // is now cross-device bit-identical (debt `board-q16-unported`). This
+        // replaces the old non-dyadic `1/total` float normalise that leaked into
+        // the first matmul's argmax.
+        let q16ToUnit: Float = 1.0 / 65536.0
+
+        // ch0 — palette-slot mass (the 64×256 slots).
+        var paletteColors = [SIMD3<Int32>]()
+        for frame in perFramePalettesQ16 { paletteColors.append(contentsOf: frame) }
+        if let mass = SixFourNative.boardMassQ16(colorsQ16: paletteColors) {
+            for i in 0 ..< Self.binCount { board.binMassPalettes[i] = Float(mass[i]) * q16ToUnit }
         }
 
-        // ch1 — pixel mass: every voxel's colour through its frame's palette.
+        // ch1 — pixel mass: every voxel's colour through its frame's palette. Counts
+        // are built by an integer slot→bin table (already order-independent); the Q16
+        // normalise is the owned kernel.
         if !perFramePalettesQ16.isEmpty, !indexCube.isEmpty {
             let perFrame = indexCube.count / perFramePalettesQ16.count
             if perFrame > 0 {
-                // Per-frame slot → flat bin lookup table (256 entries per frame),
-                // so the 262144-voxel pass does integer table reads, not re-binning.
+                var counts = [Int32](repeating: 0, count: Self.binCount)
                 for (t, palette) in perFramePalettesQ16.enumerated() {
                     let binOfSlot = palette.map { AtlasBinIdx.bin(ofQ16: $0).flat }
                     let lo = t * perFrame
@@ -142,21 +149,19 @@ struct AtlasBoard16: Sendable, Equatable {
                     guard lo < hi else { break }
                     for i in lo ..< hi {
                         let slot = Int(indexCube[i])
-                        if slot < binOfSlot.count { board.binMassPixels[binOfSlot[slot]] += 1 }
+                        if slot < binOfSlot.count { counts[binOfSlot[slot]] += 1 }
                     }
                 }
-                let inv = 1 / Float(indexCube.count)
-                for i in 0 ..< Self.binCount { board.binMassPixels[i] *= inv }
+                if let mass = SixFourNative.boardMassQ16(counts: counts, total: indexCube.count) {
+                    for i in 0 ..< Self.binCount { board.binMassPixels[i] = Float(mass[i]) * q16ToUnit }
+                }
             }
         }
 
-        // ch2 — candidate-leaf coverage (count/256).
-        if !candidateLeavesQ16.isEmpty {
-            for c in candidateLeavesQ16 {
-                board.globalCoverage[AtlasBinIdx.bin(ofQ16: c).flat] += 1
-            }
-            let inv = 1 / Float(candidateLeavesQ16.count)
-            for i in 0 ..< Self.binCount { board.globalCoverage[i] *= inv }
+        // ch2 — candidate-leaf coverage.
+        if !candidateLeavesQ16.isEmpty,
+           let mass = SixFourNative.boardMassQ16(colorsQ16: candidateLeavesQ16) {
+            for i in 0 ..< Self.binCount { board.globalCoverage[i] = Float(mass[i]) * q16ToUnit }
         }
 
         return board

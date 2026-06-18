@@ -731,6 +731,127 @@ pub export fn s4_cube_unlift_level(half: i32, coarse: [*c]const i32, details: [*
     return RC_OK;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Color Atlas board — deterministic Q16 mass (port of SixFour.Spec.BoardQ16).
+//
+// The AlphaZero policy/value reads the 16³ board; its base mass channels were
+// built by a float histogram that normalised by a non-dyadic 1/total — a float
+// leak at the FIRST matmul that desyncs the argmax cross-device. These kernels
+// are the byte-exact integer replacement: integer floor-div binning, integer
+// counts (associative ⇒ permutation-invariant EXACTLY), and ONE round-half-up
+// of count·2¹⁶/total per bin. The Haskell module is the source of truth; a
+// future Metal port MUST reuse `boardFloorDiv` (int `/` truncates toward zero
+// on negatives — the @divFloor trap from the SIMT bit-agreement contract).
+// ─────────────────────────────────────────────────────────────────────────
+
+const BOARD_BINS_PER_AXIS: i32 = 16;
+const BOARD_BINS: usize = 16 * 16 * 16; // 4096
+const BOARD_BIN_WIDTH_Q16: i32 = 65536 / BOARD_BINS_PER_AXIS; // 4096
+const BOARD_HALF_Q16: i32 = 32768; // 0.5 in Q16 (a/b axis offset)
+
+// Floor division by a positive divisor (matches Haskell `div` / Zig @divFloor;
+// the explicit helper a Metal port must call instead of int `/`).
+inline fn boardFloorDiv(n: i32, d: i32) i32 {
+    return @divFloor(n, d);
+}
+
+inline fn boardClampBin(i: i32) i32 {
+    return @max(@as(i32, 0), @min(BOARD_BINS_PER_AXIS - 1, i));
+}
+
+// Flat bin index of a Q16 OKLab triple — exactly Spec.BoardQ16.binOfQ16 then binIndex.
+inline fn boardBinIndexQ16(l: i32, a: i32, b: i32) usize {
+    const bl = boardClampBin(boardFloorDiv(l, BOARD_BIN_WIDTH_Q16));
+    const ba = boardClampBin(boardFloorDiv(a + BOARD_HALF_Q16, BOARD_BIN_WIDTH_Q16));
+    const bb = boardClampBin(boardFloorDiv(b + BOARD_HALF_Q16, BOARD_BIN_WIDTH_Q16));
+    return @intCast((bl * BOARD_BINS_PER_AXIS + ba) * BOARD_BINS_PER_AXIS + bb);
+}
+
+// ONE round-half-up of count·2¹⁶/total (Spec.BoardQ16.massQ16). i64 intermediate:
+// count can reach 262144 (the 64³ pixel pass), so count·2¹⁶ overflows i32.
+inline fn boardMassFromCount(count: i32, total: i32) i32 {
+    if (total <= 0) return 0;
+    const t: i64 = total;
+    const num: i64 = @as(i64, count) * 65536 + @divFloor(t, 2);
+    return @intCast(@divFloor(num, t));
+}
+
+/// Q16 mass channel from precomputed integer per-bin counts (Spec.BoardQ16.massQ16).
+/// For the pixel channel whose counts come from a per-frame slot→bin table. `bins`
+/// is the channel length (16³ = 4096); `total` the exact element count.
+pub export fn s4_board_counts_to_mass_q16(counts: [*c]const i32, bins: i32, total: i32, out_mass_q16: [*c]i32) i32 {
+    if (counts == null or out_mass_q16 == null) return RC_NULL_PTR;
+    if (bins <= 0) return RC_BAD_SHAPE;
+    var i: usize = 0;
+    const n: usize = @intCast(bins);
+    while (i < n) : (i += 1) out_mass_q16[i] = boardMassFromCount(counts[i], total);
+    return RC_OK;
+}
+
+/// Full deterministic mass channel for a Q16 OKLab colour list (Spec.BoardQ16.boardMassQ16):
+/// bin (integer floor-div) → integer count → Q16 round-half-up mass. `colors_q16` is
+/// `n` interleaved (L,a,b) triples; `out_mass_q16` is the 16³ = 4096 channel.
+pub export fn s4_board_mass_q16(colors_q16: [*c]const i32, n: i32, out_mass_q16: [*c]i32) i32 {
+    if (out_mass_q16 == null) return RC_NULL_PTR;
+    if (n < 0) return RC_BAD_SHAPE;
+    if (n > 0 and colors_q16 == null) return RC_NULL_PTR;
+    var counts = [_]i32{0} ** BOARD_BINS;
+    var i: usize = 0;
+    const cnt: usize = @intCast(n);
+    while (i < cnt) : (i += 1) {
+        const idx = boardBinIndexQ16(colors_q16[i * 3 + 0], colors_q16[i * 3 + 1], colors_q16[i * 3 + 2]);
+        counts[idx] += 1;
+    }
+    var bi: usize = 0;
+    while (bi < BOARD_BINS) : (bi += 1) out_mass_q16[bi] = boardMassFromCount(counts[bi], n);
+    return RC_OK;
+}
+
+test "s4_board_mass_q16: golden + laws (Spec.BoardQ16)" {
+    // Golden input: fixed Q16 OKLab list spanning several bins incl. a repeat
+    // (bin 2288 has count 2). Expected mass mirrors Spec.BoardQ16.boardMassQ16.
+    const cs = [_]i32{
+        0,     0,      0, // → bin 136
+        65535, 0,      0, // → bin 3976
+        32768, 32768,  -32768, // → bin 2288
+        32768, 32768,  -32768, // → bin 2288 (repeat)
+        10000, -20000, 5000, // → bin 569
+        60000, 30000,  30000, // → bin 3839
+    };
+    var mass = [_]i32{0} ** BOARD_BINS;
+    try std.testing.expectEqual(RC_OK, s4_board_mass_q16(&cs, 6, &mass));
+    // count-1 bins: round((1·65536+3)/6) = 10923; count-2 bin: (2·65536+3)/6 = 21845
+    try std.testing.expectEqual(@as(i32, 10923), mass[136]);
+    try std.testing.expectEqual(@as(i32, 10923), mass[569]);
+    try std.testing.expectEqual(@as(i32, 21845), mass[2288]);
+    try std.testing.expectEqual(@as(i32, 10923), mass[3839]);
+    try std.testing.expectEqual(@as(i32, 10923), mass[3976]);
+    // lawMassQ16Bounded: |Σ − 2¹⁶| ≤ boardBins
+    var sum: i64 = 0;
+    for (mass) |m| sum += m;
+    try std.testing.expect(@abs(sum - 65536) <= @as(i64, @intCast(BOARD_BINS)));
+    // lawCountsOrderIndependent: reversing the triples cannot change a single bin
+    var rcs: [18]i32 = undefined;
+    var t: usize = 0;
+    while (t < 6) : (t += 1) {
+        const src = (5 - t) * 3;
+        rcs[t * 3 + 0] = cs[src + 0];
+        rcs[t * 3 + 1] = cs[src + 1];
+        rcs[t * 3 + 2] = cs[src + 2];
+    }
+    var mass2 = [_]i32{0} ** BOARD_BINS;
+    try std.testing.expectEqual(RC_OK, s4_board_mass_q16(&rcs, 6, &mass2));
+    try std.testing.expect(std.mem.eql(i32, &mass, &mass2));
+    // s4_board_counts_to_mass_q16 agrees on a hand-built count vector
+    var counts = [_]i32{0} ** BOARD_BINS;
+    counts[2288] = 2;
+    counts[136] = 1;
+    var massC = [_]i32{0} ** BOARD_BINS;
+    try std.testing.expectEqual(RC_OK, s4_board_counts_to_mass_q16(&counts, @intCast(BOARD_BINS), 3, &massC));
+    try std.testing.expectEqual(@as(i32, 43691), massC[2288]); // (2·65536+1)/3
+    try std.testing.expectEqual(@as(i32, 21845), massC[136]); // (1·65536+1)/3
+}
+
 // Error-diffusion taps: (dx, dy, num, den). FS = 7/3/5/1 ÷ 16; Atkinson = 6 × 1/8.
 const FS_TAPS = [4][4]i32{ .{ 1, 0, 7, 16 }, .{ -1, 1, 3, 16 }, .{ 0, 1, 5, 16 }, .{ 1, 1, 1, 16 } };
 const ATKINSON_TAPS = [6][4]i32{ .{ 1, 0, 1, 8 }, .{ 2, 0, 1, 8 }, .{ -1, 1, 1, 8 }, .{ 0, 1, 1, 8 }, .{ 1, 1, 1, 8 }, .{ 0, 2, 1, 8 } };

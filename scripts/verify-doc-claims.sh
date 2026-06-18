@@ -89,8 +89,8 @@ check "Zig blob loader verified by fixture test" \
 # --- BUILT: deterministic core implementations are real, not stubs ---
 check "s4_gif_encode_burst is a real impl (folds and returns s4_gif_assemble)" \
   grep -q 'return s4_gif_assemble' Native/src/kernels.zig
-check "Native header declares all 28 distinct s4_* symbols (25 shipped + 3 tooling)" \
-  test "$(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u | wc -l | tr -d ' ')" -eq 28
+check "Native header declares all 30 distinct s4_* symbols (27 shipped + 3 tooling)" \
+  test "$(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u | wc -l | tr -d ' ')" -eq 30
 check "header s4_* symbol set == Zig export set (no undeclared exports)" \
   bash -c "diff <(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u) <(grep -hoE 'export fn (s4_[a-z_0-9]+)' Native/src/*.zig | sed 's/export fn //' | sort -u) >/dev/null"
 
