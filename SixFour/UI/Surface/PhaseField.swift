@@ -53,11 +53,21 @@ struct ExportingPhaseField: View {
     var body: some View {
         ZStack {
             Color.clear
-            CellText("EXPORTING THE FAMILY", rows: 9, ink: Color(srgb8: SIMD3(190, 190, 190)))
+            CellText("EXPORTING…", rows: 9, ink: Color(srgb8: SIMD3(190, 190, 190)))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Exporting the cube-ladder family")
+        .accessibilityLabel("Exporting")
+        // Drive the terminal edge so `.exporting` is never a dead-end. The genome-faithful
+        // cube-ladder encode (ABExportFamily {16³,64³,256³} carrying the chosen genome) is P3;
+        // for now the auto-rendered GIF (`surface.gifURL`) is the shippable artifact, surfaced
+        // for Share on the Done field. A brief beat, then `.exportDone` → `.done`.
+        .onAppear {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                surface.step(.exportDone)
+            }
+        }
     }
 }
 
@@ -73,6 +83,16 @@ struct DonePhaseField: View {
             Color.clear
             VStack(spacing: GlobalLattice.pt(9)) {
                 CellText("EXPORTED", rows: 13, ink: .white)
+                // The rendered GIF is the shippable artifact (the genome-faithful cube-ladder
+                // is P3). Surface it for Share when present; otherwise just offer a new shot.
+                if let url = surface.gifURL {
+                    ShareLink(item: url) {
+                        CellActionButton(icon: .none, title: "SHARE GIF",
+                                         prominent: false, fillWidth: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Share the exported GIF")
+                }
                 Button { surface.step(.retake) } label: {
                     CellActionButton(icon: .none, title: "NEW SHOT",
                                      prominent: true, fillWidth: false)
