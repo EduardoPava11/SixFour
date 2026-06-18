@@ -2,6 +2,12 @@
 
 # The L→A→B Look-NN — Authoritative Master Design
 
+> **HISTORICAL (2026-06-18):** this is the design rationale for the SUPERVISED L→A→B look-NN
+> training path, which was ABANDONED 2026-06-17 (trained weights deleted; did not converge). It is
+> kept for rationale, NOT as a live plan. The current NN authority is
+> `docs/SIXFOUR-NN-DESIGN-CANON.md` (AlphaZero-shaped collapse game + the preserved look-NN forward
+> oracle); per-net status is `docs/SIXFOUR-NETWORKS-CANONICAL-ROSTER.md`.
+
 **Status of record: 2026-05-30. This document supersedes and reconciles**
 `docs/archive/L-NN-RESEARCH-AND-WORKFLOW.md`, `docs/archive/L-NN-ATOM-DESIGN.md`,
 `docs/archive/L-NN-PRODUCT-ABSTRACTION.md`, and `docs/archive/PALETTE-LOOM-INTERACTION.md`

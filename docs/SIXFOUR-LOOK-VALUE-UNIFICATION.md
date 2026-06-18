@@ -1,5 +1,12 @@
 # SixFour, Look-NN + Value-Net Unification (careful-engineering design)
 
+> **SUPERSEDED (2026-06-18):** this doc's framing assumes the supervised look-net + a 384-genome MLP
+> value head as the live path. That path is superseded — the look-net training was ABANDONED
+> 2026-06-17, and the value head is now spec'd as a LINEAR-770 utility (`btUpdate`), with the only
+> proven net being the on-device value spike. Read this for its trunk/heads rationale only; current
+> authority is `docs/SIXFOUR-NN-DESIGN-CANON.md` + `docs/SIXFOUR-NETWORKS-CANONICAL-ROSTER.md`. Its
+> open Section 7 decisions are resolved in `docs/SIXFOUR-MERGE-DECISION-ADR.md`.
+
 Status: design, 2026-06-17. Companion to STATUS.md and the state inspection
 (`docs/SIXFOUR-STATE-INSPECTION-2026-06-17.md`). Spec-first: nothing here ships
 before the Haskell law lands and the golden gate is green.

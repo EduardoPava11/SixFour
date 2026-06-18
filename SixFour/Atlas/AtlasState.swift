@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 import simd
 
 /// COLOR ATLAS — the curation session state (docs/COLOR-ATLAS.md §1–§4).
@@ -55,6 +56,19 @@ final class AtlasState {
     private(set) var candidateBSRGB: [SIMD3<UInt8>] = []
     /// The hash of the candidate the user last picked (nil before any Compare).
     private(set) var pickedHash: UInt32? = nil
+    /// The per-device 770-D Bradley-Terry taste vector θ, folded on every pick and
+    /// persisted across review sessions (the n=0 personalization state).
+    private(set) var theta: [Double] = PersonalTaste.zeroTheta()
+
+    /// Observability for the UI + tests (the flywheel made legible).
+    /// Number of A/B Compares folded into θ (the Bradley-Terry `n`).
+    var compareCount: Int { log.compareCount }
+    /// ‖θ‖₂ — grows from 0 as taste is learned (the "taste strength" readout).
+    var tasteNorm: Double { (theta.reduce(0) { $0 + $1 * $1 }).squareRoot() }
+
+    /// Pick + taste telemetry — `log stream --predicate 'category == "atlas.taste"'`
+    /// (or Console) to watch θ evolve on device. "To test we need logs."
+    private static let tasteLog = Logger(subsystem: "com.sixfour", category: "atlas.taste")
 
     /// The L-slice the board view shows (0..15) — the scrubbed projection.
     var slice = 8
@@ -104,6 +118,8 @@ final class AtlasState {
         )
         log = AtlasDecisionLogStore.load()
         board = boardFromLog(base: baseBoard, records: log.entries)
+        theta = PersonalTasteStore.load()   // cross-session learned taste (kept across reset)
+        Self.tasteLog.info("atlas loaded: compares=\(self.log.compareCount, privacy: .public) tasteNorm=\(self.tasteNorm, format: .fixed(precision: 4), privacy: .public)")
     }
 
     /// Drop the session so the next review entry re-folds fresh σ data.
@@ -124,7 +140,13 @@ final class AtlasState {
     /// re-fold the board from base (replay determinism is the implementation,
     /// not just a law). Compare additionally publishes the curated palette.
     func apply(_ move: CurationMove) {
-        log.entries.append(AtlasDecisionRecord(move))
+        appendAndRefold(AtlasDecisionRecord(move))
+    }
+
+    /// Append ONE record (carrying any CMPE embeddings), persist, and re-fold the
+    /// board from base. The single log-mutation seam (replay determinism).
+    private func appendAndRefold(_ record: AtlasDecisionRecord) {
+        log.entries.append(record)
         AtlasDecisionLogStore.save(log)
         board = boardFromLog(base: baseBoard, records: log.entries)
     }
@@ -149,9 +171,33 @@ final class AtlasState {
         let winner = which == .a ? candidateA : candidateB
         let loser = which == .a ? candidateB : candidateA
         let winHash = Self.fnv1a32(winner)
-        apply(.compare(winner: winHash, loser: Self.fnv1a32(loser)))
+        let loseHash = Self.fnv1a32(loser)
+
+        // The n=0 taste loop (canonical path §2): freeze the winner/loser 770-D
+        // embeddings into the CMPE record → fold θ via btUpdate → persist → tint
+        // the curated palette by θ → log. Both halves of the A/B nudge: the
+        // TRAINING signal (θ moves) and the INFERENCE effect (palette recolours).
+        let winEmb = PersonalTaste.embedding(leaves: winner)
+        let loseEmb = PersonalTaste.embedding(leaves: loser)
+        var record = AtlasDecisionRecord(.compare(winner: winHash, loser: loseHash))
+        record.winEmbedding = winEmb.map(Float.init)
+        record.loseEmbedding = loseEmb.map(Float.init)
+        appendAndRefold(record)
+
+        let normBefore = tasteNorm
+        theta = PersonalTaste.btUpdate(theta: theta, winner: winEmb, loser: loseEmb)
+        PersonalTasteStore.save(theta)
         pickedHash = winHash
-        AtlasPaletteStore.shared.curatedLeavesQ16 = curatedPalette(from: winner)
+
+        let curated = curatedPalette(from: winner)
+        let tinted = PersonalTaste.leafTint(curated, theta: theta)
+        AtlasPaletteStore.shared.curatedLeavesQ16 = tinted
+
+        let tintMaxQ16 = zip(tinted, curated).map { t, c in
+            max(abs(Int(t.x - c.x)), abs(Int(t.y - c.y)), abs(Int(t.z - c.z)))
+        }.max() ?? 0
+        Self.tasteLog.info(
+            "pick=\(which == .a ? "A" : "B", privacy: .public) compareN=\(self.compareCount, privacy: .public) tasteNorm \(normBefore, format: .fixed(precision: 4), privacy: .public)→\(self.tasteNorm, format: .fixed(precision: 4), privacy: .public) tintMaxQ16=\(tintMaxQ16, privacy: .public)")
     }
 
     /// The chosen leaves with every pinned anchor substituted EXACTLY (each

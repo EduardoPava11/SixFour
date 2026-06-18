@@ -362,6 +362,85 @@ enum SixFourNative {
         return (0 ..< count).map { SIMD3<Int32>(nodes[$0 * 3], nodes[$0 * 3 + 1], nodes[$0 * 3 + 2]) }
     }
 
+    // MARK: - Color Atlas board (deterministic Q16 mass)
+
+    /// Deterministic Q16 board-mass channel for a list of Q16 OKLab colours
+    /// (`s4_board_mass_q16`, the owned port of `SixFour.Spec.BoardQ16.boardMassQ16`):
+    /// integer floor-div binning → integer counts → ONE round-half-up of
+    /// `count·2¹⁶/total` per bin. Returns the 16³ = 4096 Q16 channel (each ∈ [0, 65536]).
+    /// Byte-exact across Haskell/Zig/Swift — closes the float-histogram determinism hole
+    /// at the policy/value board input (replaces the non-dyadic `1/total` normalise).
+    static func boardMassQ16(colorsQ16 colors: [SIMD3<Int32>]) -> [Int32]? {
+        let n = colors.count
+        var flat = [Int32](); flat.reserveCapacity(n * 3)
+        for c in colors { flat.append(c.x); flat.append(c.y); flat.append(c.z) }
+        var mass = [Int32](repeating: 0, count: AtlasBoard16.binCount)
+        let rc = flat.withUnsafeBufferPointer { fp in
+            mass.withUnsafeMutableBufferPointer { mp in
+                s4_board_mass_q16(fp.baseAddress, Int32(n), mp.baseAddress)
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_board_mass_q16 rc=\(rc)"); return nil }
+        return mass
+    }
+
+    /// Q16 mass from precomputed integer per-bin counts (`s4_board_counts_to_mass_q16`,
+    /// `SixFour.Spec.BoardQ16.massQ16`): for the pixel channel whose counts come from a
+    /// per-frame slot→bin table (integer, so already order-independent). `counts.count`
+    /// is the channel length (16³ = 4096); `total` is the exact element count.
+    static func boardMassQ16(counts: [Int32], total: Int) -> [Int32]? {
+        let bins = counts.count
+        var mass = [Int32](repeating: 0, count: bins)
+        let rc = counts.withUnsafeBufferPointer { cp in
+            mass.withUnsafeMutableBufferPointer { mp in
+                s4_board_counts_to_mass_q16(cp.baseAddress, Int32(bins), Int32(total), mp.baseAddress)
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_board_counts_to_mass_q16 rc=\(rc)"); return nil }
+        return mass
+    }
+
+    // MARK: - σ-pair leaf override (the n=0 taste tint)
+
+    /// Apply the user's generator-space taste tint (`s4_leaf_override`, the owned
+    /// port of `SixFour.Spec.LeafOverride.applySigmaOverride`).
+    /// ⚠️ OWNED-BUT-UNWIRED: zero production callers — the σ-pair tint for step 3+
+    /// (learned genomes), NOT the live n=0 loop (that uses `PersonalTaste.leafTint`).
+    /// For each generator
+    /// `gᵢ`, add `δᵢ` and emit the σ-pair `[g, σ(g)]` with `σ(l,a,b) = (l,−a,−b)`.
+    /// Returns `2·generators.count` σ-pair leaves. `deltas` is zero-padded /
+    /// truncated to the generator count; `nil` (or empty) ⇒ the no-op override.
+    /// Byte-exact across Haskell/Zig/Swift — the σ-symmetry is preserved by
+    /// construction (the odd leaf is σ of the *nudged* generator).
+    static func leafOverride(generators: [SIMD3<Int32>], deltas: [SIMD3<Int32>]? = nil) -> [SIMD3<Int32>]? {
+        let n = generators.count
+        guard n > 0 else { return [] }
+        var gflat = [Int32](); gflat.reserveCapacity(n * 3)
+        for g in generators { gflat.append(g.x); gflat.append(g.y); gflat.append(g.z) }
+        var dflat: [Int32]? = nil
+        if let deltas {
+            var d = [Int32](repeating: 0, count: n * 3)
+            for i in 0 ..< min(n, deltas.count) {
+                d[i * 3 + 0] = deltas[i].x; d[i * 3 + 1] = deltas[i].y; d[i * 3 + 2] = deltas[i].z
+            }
+            dflat = d
+        }
+        var out = [Int32](repeating: 0, count: n * 6)
+        let rc = gflat.withUnsafeBufferPointer { gp -> Int32 in
+            out.withUnsafeMutableBufferPointer { op in
+                if let dflat {
+                    return dflat.withUnsafeBufferPointer { dp in
+                        s4_leaf_override(gp.baseAddress, dp.baseAddress, Int32(n), op.baseAddress)
+                    }
+                } else {
+                    return s4_leaf_override(gp.baseAddress, nil, Int32(n), op.baseAddress)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_leaf_override rc=\(rc)"); return nil }
+        return (0 ..< n * 2).map { SIMD3<Int32>(out[$0 * 3], out[$0 * 3 + 1], out[$0 * 3 + 2]) }
+    }
+
     /// Convenience for the UI: an sRGB8 palette (`k` a power of two) → the Haar
     /// `level` node colours as sRGB8 (the abstraction cascade). Used by the capture
     /// shutter (`level 4` → 16 colours) and review. sRGB8 → OKLab Q16 → haarAnalyze →

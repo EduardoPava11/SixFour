@@ -7,6 +7,41 @@ newest first.
 
 ---
 
+## 2026-06-18 — Canonical path DECIDED + n=0 taste loop built & testable (branch `docs/nn-debt-cleanup-2026-06-18`)
+
+> **Session theme:** stop the candidate oscillation. Decide ONE canonical core, clean the docs that
+> would mislead about it, and build the n=0 personalization loop end-to-end so it can be tested on
+> device. 10 commits; spec suite 834 → 877; Zig 29 → 31; doc gate green at every commit.
+
+**The decision (`docs/SIXFOUR-CANONICAL-PATH.md`, via a 15-agent research+reconcile workflow):** ONE
+Gumbel-AlphaZero policy+value predictor as a *bounded addition above a frozen Q16-idempotent maximin
+floor*, read at search budgets **n=0 / n=1 / n=8–16** — which subsume the deterministic / residual /
+AlphaZero candidates (supervised MSE Look-NN rejected). `lawTerminalQuantizationIdempotent` is the
+spec-backed unifier: learning re-ranks/tints, never rewrites the floor. v1 ships value-only over a
+frozen policy; the enriched taste organ (Laplace posterior, Double-Thompson, IPO/KTO, Oklch+ warp)
+has zero repo footprint and is demoted to PROPOSE-SPEC. The critic caught a real latent bug: the
+anti-collapse β-ramp gates on `awHumanCompares`, which **does not exist** (`awCompares` counts
+synthetic too) → blocking prerequisite.
+
+**Built this session (each: existing/new spec → owned impl → golden → honest doc):**
+- **board-q16** (`s4_board_mass_q16`): deterministic Q16 board mass, closes the float-input hole. WIRED.
+- **glrm** (`GLRM.swift`): preference kill-switch, refuses to train on no-signal picks. WIRED into `AtlasTrainingSession`.
+- **s4_leaf_override** + **ThetaToDelta** (spec-first): the σ-pair generator-space tint. ⚠️ OWNED-BUT-UNWIRED (step 3+).
+- **DECN v2** (additive `CMPE` chunk): 770-D embeddings per Compare, version-stable. Spec binary + Swift JSON twin.
+- **n=0 taste loop** (`PersonalTaste` + `AtlasState.choose`): on each A/B pick, freeze embeddings → `btUpdate` θ → persist → recolour palette by a **leaf-space** tint (maximin floor isn't σ-pair) → log `category=atlas.taste`, surfaced in `AtlasGalleryView`. The first end-to-end personalization loop. Test on device: `log stream --predicate 'category=="atlas.taste"'`.
+
+**Debt cleanup (self-audit workflow):** closed a false-green (`Spec.ThetaToDelta` claimed a Properties
+test that didn't exist → wrote it, found+fixed a float-`==` law bug); added the **§A WIRED vs
+OWNED-BUT-UNWIRED ledger** (the anti-look-net-trap artifact); reconciled counts/dates/DONE markers;
+documented the arm64-only headless build incantation in CLAUDE.md.
+
+**NEXT (canonical path build plan):** 2b-iii `GenomePair` (real orthogonal A/B candidates) → step 3
+pin the value-net `NetIOSpec` (`atlas-value-spec-drift`) → step 4 `awHumanCompares` split → **step 5
+the keystone `no-metal-golden-gate`** (first byte-exact Zig↔Metal golden, the GPU SIMT precedent).
+See memory `sixfour-canonical-path.md`.
+
+---
+
 ## 2026-06-17 — MLX look-net ABANDONED; AlphaZero reframe; Haskell backbone built (S2/S3/M2/M4/M5)
 
 > **Session theme:** the supervised MLX look-net did not train well and was abandoned (trained

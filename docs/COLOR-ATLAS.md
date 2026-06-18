@@ -1,5 +1,13 @@
 # SixFour Color Atlas — Canonical Design (AlphaGo-framed curation → 256³)
 
+> **ABANDONED-PATH NOTE (2026-06-18):** the supervised MLX look-net training this doc assumes was
+> ABANDONED 2026-06-17 and its trained artifacts (`look_net_trained.s4ln`, `atlas_net_trained.npz`,
+> `synth_looknet_grayscale.gif`) were DELETED. Wherever this doc references those blobs, read them
+> as design/regenerable references, NOT reachable files. `Spec.GLRM` is described as needing to be
+> built — it now EXISTS (`spec/src/SixFour/Spec/GLRM.hs`); only wiring is outstanding. Current NN
+> direction + honest as-built status: `docs/SIXFOUR-NN-DESIGN-CANON.md`, the per-net roster
+> `docs/SIXFOUR-NETWORKS-CANONICAL-ROSTER.md`, and canon `docs/STATUS.md`.
+
 **Status of record: 2026-06-10. This is the canonical design for the Color Atlas system** — the
 16³ curation board, the unified Move ADT, the policy/value/search loop over σ-pair genomes, and
 the two-cube → 256³ cascade upscale. It synthesizes three adversarially-judged proposals

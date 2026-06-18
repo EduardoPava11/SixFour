@@ -3,8 +3,8 @@
 > **NOTES.md = history; STATUS.md = current truth.**
 > The load-bearing facts in this file are gated by `scripts/verify-doc-claims.sh` — run it
 > before trusting a status claim. If a claim here disagrees with another doc, this file wins;
-> the other doc is stale. Last reconciled 2026-06-17 (state-inspection pass: verified test
-> counts to **834 Haskell / 29 Zig** — both gates green; closed the Zig-export-surface debt
+> the other doc is stale. Last reconciled 2026-06-18 (session: 6 canonical-path build steps + Properties.ThetaToDelta gate; counts now 877 Haskell / 31 Zig / 31 s4_* exports). Prior 2026-06-17 (state-inspection pass: verified test
+> counts to **877 Haskell / 31 Zig** — both gates green; closed the Zig-export-surface debt
 > by declaring the 4 `s4_cube/rgbt_lift` symbols in the header + lighting the previously-skipped
 > `rgbt4d_fixture_test`; see `docs/SIXFOUR-STATE-INSPECTION-2026-06-17.md`). Prior reconcile
 > 2026-06-09 (debt-cleanup pass: archived 10 docs
@@ -23,9 +23,20 @@ fixed-point fold runs identically across devices and is the default (`useDetermi
 true`). The architecture is "one cube projected honestly": a 64³ index cube is the single
 source of truth, and the 2D GIF, the palette grid, and the shutter are all Haar projections of
 that one state. Haskell (`spec/`) is the source of truth — every cross-language claim (Zig ≡
-Swift ≡ Haskell) is pinned by a generated golden vector. A look-NN is **designed and partially
-trained on the Mac but not shipped on device**; the global palette the app emits today is the
-deterministic Zig collapse, not a learned genome.
+Swift ≡ Haskell) is pinned by a generated golden vector. A look-NN is **designed (forward
+oracle + Zig loader code) but its supervised MLX training was ABANDONED 2026-06-17 (trained
+weights deleted) and nothing runs it on device**; the global palette the app emits today is the
+deterministic Zig collapse, not a learned genome. Full NN inventory + design ledger:
+`docs/SIXFOUR-NN-DESIGN-CANON.md` (roster) and `docs/SIXFOUR-NETWORKS-CANONICAL-ROSTER.md`
+(per-net detail).
+
+> **Single source of DIRECTION: `docs/SIXFOUR-CANONICAL-PATH.md`** (2026-06-18). The canonical
+> core = one Gumbel-AlphaZero policy+value predictor as a *bounded addition above a frozen
+> Q16-idempotent maximin floor*, read at search budgets n=0/1/8–16 (which subsume the
+> deterministic / residual / AlphaZero candidates; supervised MSE Look-NN rejected). v1 ships
+> value-only search over a frozen policy; the calibrated taste organ + perceptual warp are
+> separately-specced research bets, not settled. STATUS (this file) stays the canonical *status*
+> ledger; CANONICAL-PATH is *direction*. Cited research: `docs/SIXFOUR-RESEARCH-*.md`.
 
 ## On-device personalization feasibility (A19 Pro / iOS 26) — north-star
 
@@ -59,11 +70,23 @@ do not re-research or re-derive it.
 - **On-device training proven** (commit `ef0344e`, `SixFour/Atlas/AtlasTrainer.swift` +
   `SixFourTests/AtlasTrainerTests.swift`): MPSGraph `gradients(of:with:)` + SGD trained a
   29,249-param value net on the physical iPhone 17 Pro — Bradley–Terry loss 0.7154 → 0.00075
-  over 300 steps, **12.4 ms/step steady, 6.3 s total**, loss trajectory **bit-identical
-  Mac ↔ iPhone**. Gotchas (encoded in code): MPSGraph cannot EXECUTE in the simulator
+  over 300 steps, **12.4 ms/step steady, 6.3 s total**. The on-device run is real, but
+  cross-language bit-identity Mac ↔ iPhone is UNPROVEN (no parity harness; folded from the
+  state-inspection §2 C11 into `docs/SIXFOUR-GATE-COVERAGE-TABLE.md §5`). Gotchas (encoded in
+  code): MPSGraph cannot EXECUTE in the simulator
   (uncatchable ObjC exception) and `MPSSupportsMTLDevice()` falsely returns true there —
   gate with `#if targetEnvironment(simulator)`. Device tests need signing overrides
   (`DEVELOPMENT_TEAM` + Apple Development identity; project.yml pins ad-hoc).
+- **VALUE NET SPEC & IMPLEMENTATION STATE (single source of truth):** Spec (v1) = a LINEAR
+  utility over the 770-D atlasEmbedding → scalar (`docs/SIXFOUR-ALPHAZERO-COLLAPSE-DESIGN.md
+  §4.1`), which is literally `btUpdate` (`Spec.PreferenceUpdate`, dims=770) so the three spec
+  laws hold for free. Device spike (PROVEN, current) = a NONLINEAR MLP over the 384-D genome
+  + 128-D board context → scalar (`AtlasTrainer.swift`; 29,249 params pinned at
+  `AtlasTrainingSession.swift:76`; 12.4 ms/step, train-only, never selects a palette). These
+  are DIFFERENT heads over DIFFERENT inputs; cross-language bit-identity is UNPROVEN. Alignment
+  work (debt `atlas-value-spec-drift`): rewrite AtlasTrainer to the v1 linear-770 head over
+  atlasEmbedding, add the `-η·λ·θ` L2 decay, delete the 384-genome MLP, re-measure. Detail:
+  `docs/SIXFOUR-NETWORKS-CANONICAL-ROSTER.md §4`.
 - **Curated research**: `docs/ON-DEVICE-TRAINING.md` (adversarially verified, cited) — MPSGraph
   is the recommended first-party training API; `MLUpdateTask` legacy-only; `mlx-swift` stays
   Tier 1. Federated bootstrap design: single-message Prio split-trust aggregation, central DP
@@ -102,7 +125,7 @@ do not re-research or re-derive it.
 - **Deterministic Zig render core.** Per-stage kernels (widen → linear→OKLab → quantize
   (maximin+Lloyd) → dither → significance fill → palette → LZW/GIF89a assemble) drive
   `DeterministicRenderer`; default path, GPU-float `GIFRenderer` is the throw-fallback.
-  Native header now **declares all 24** `s4_*` exports (21 shipped + 3 tooling-only:
+  Native header now **declares all 31** `s4_*` exports (28 shipped + 3 tooling-only:
   `s4_gif_decode`, `s4_gif_decode_scratch_bytes`, `s4_srgb8_to_oklab_q16`); the gate asserts the
   header symbol set ≡ the Zig export set (drift-proof). **RESOLVED:** `s4_quantize_frame`'s
   maximin (Gonzalez 1985 farthest-first) **IS** the `Spec.QuantFixed`/`Spec.Collapse` canon and
@@ -115,9 +138,9 @@ do not re-research or re-derive it.
   untouched ⇒ cell-grid law intact; transient `CellText` look name), and Review **Export LUT**
   bakes a 65³ `.cube` (`LUTFile`, Q16 6-decimal, Log3G10/RWGRGB→Rec.709) for grading R3D in
   Resolve. Spec source of truth: `Spec.{ZoneProfile,LookTransfer,RedFrontEnd,CubeLut}` (★ laws:
-  luminance-preservation, preview≡cube, .cube grid ordering; 834 Haskell tests). Zig kernels
+  luminance-preservation, preview≡cube, .cube grid ordering; 877 Haskell tests). Zig kernels
   `s4_zone_profile_q16`/`s4_look_transfer_q16`/`s4_build_cube_q16` are byte-exact to the spec
-  (`lut_fixture_test.zig`, 29 Zig tests); transcendentals (Log3G10 decode, filmic exp) +sRGB
+  (`lut_fixture_test.zig`, 31 Zig tests); transcendentals (Log3G10 decode, filmic exp) +sRGB
   encode are spec-generated embedded 1-D LUTs (`{log3g10_decode,filmic_tonemap,srgb_encode}_lut.bin`).
   Swift bridge `SixFourNative.{lookZoneProfile,lookTransfer,extractLUT}`. iOS build SUCCEEDED
   (compile-checked; on-device swipe/look + Resolve LUT verification is the user's step).
@@ -131,8 +154,8 @@ do not re-research or re-derive it.
   per-stage kernels, returns `s4_gif_assemble`); `s4_widen_half_to_q16` and
   `s4_linear_to_oklab_q16` are implemented with golden anchors. (NOT stubs.)
 - **Cross-language parity gates.** Collapse, value head, color, quantize, dither, GridAxis,
-  CloudProjection, VoxelFit, RGBT-4D cube-ladder goldens green; spec suite **834 tests pass**
-  (Haskell), **29 Zig tests pass** (incl. the now-live `rgbt4d_fixture_test` cross-language gate).
+  CloudProjection, VoxelFit, RGBT-4D cube-ladder goldens green; spec suite **877 tests pass**
+  (Haskell), **31 Zig tests pass** (incl. the now-live `rgbt4d_fixture_test` cross-language gate).
 - **Capture→GIFA morph on the one surface (2026-06-07).** The live hero paints the REAL
   camera (`σ.previewTile` index cells, not a synthetic scroll); the loading sweep streams the
   REAL deterministic partials (`raw→quantize→dither→palette`) in true colour via
@@ -162,7 +185,7 @@ do not re-research or re-derive it.
   Button). Source of truth `Spec.MovableLayout` (8 laws: disjoint-preservation, bounds-clamp,
   snap-idempotence, reject-is-identity, …) golden-pinned in `MoveContract.goldenAfter` and
   re-folded in `Surface.assertSpecParity` (DEBUG). **DiversityRing re-introduced** (the
-  `CellRing` gauge had no caller) fed by `Surface.diversityGauge`. 595 Haskell tests + 11
+  `CellRing` gauge had no caller) fed by `Surface.diversityGauge`. 877 Haskell tests + 11
   Swift `MovableLayoutTests` (move laws + persistence round-trip + corrupt-store fallback).
 - **Palette explorer surfaces.** `.grid2D` (`GridLayout` + `PaletteGridView`, default review
   view), treemap (`PaletteTreeView`), AddressPicker, Quad4 drill, `PaletteCloudView`. Versioned
@@ -188,12 +211,21 @@ do not re-research or re-derive it.
   still fixture-verified against the regenerable golden `look_net.s4ln` (not a trained artifact).
   The core is reframing AlphaZero-shaped: a policy+value net over the reversible 2x2->1 LAB-collapse
   turn-based state machine (Atlas board/move/state), Bradley-Terry A/B preference as the reward,
-  built bare-metal SIMT+Metal. Design: `docs/SIXFOUR-ALPHAZERO-COLLAPSE-DESIGN.md`. The
+  built bare-metal SIMT+Metal. Design: `docs/SIXFOUR-ALPHAZERO-COLLAPSE-DESIGN.md`; consolidated
+  NN ledger + roster: `docs/SIXFOUR-NN-DESIGN-CANON.md` + `docs/SIXFOUR-NETWORKS-CANONICAL-ROSTER.md`;
+  what-is-gated: `docs/SIXFOUR-GATE-COVERAGE-TABLE.md`. The
   sigma-pair / sigma-equivariant trunk ideas are ported, the MLX weights are not.
 
 ### DESIGN-ONLY (spec'd / written, not on the live render or UI path)
 - **Learned global palette (the NN genome).** No on-device Swift forward pass; `loadLookNet`
-  has **zero production callers**. The genome path is unreached.
+  has **zero production callers**. The genome path is unreached. Full per-net inventory (all 7
+  slots, spec status, param counts pinned-vs-est., trainers, consumers) lives in
+  `docs/SIXFOUR-NETWORKS-CANONICAL-ROSTER.md`.
+- **Atlas policy / value nets — NO spec-pinned NetIOSpec.** Only METRIC and LOOK have a
+  `NetIOSpec` (Net.hs → net_shape.py → NetContract.swift). The Atlas policy (13-D tokens →
+  1,524 logits) and the Mac/spec-v1 linear-770 value head carry NO cross-tier contract; the
+  only proven value net is the device spike. See roster doc + debt rows `atlas-nets-unpinned`,
+  `board-q16-unported`.
 - **`PaletteSearch` MCTS keystone** — spec-complete (336 LOC), zero iOS consumer.
 - **REVEAL axis** (`ColorBleed`/`ChromaAllocation`/`Reference`/`Bleed`/`BleedLoop`/`Incitement`)
   — spec'd in BLEED_LOOP, **not on disk**; depth-8 grey head has δ≡0 so the bleed dial is inert.
@@ -243,6 +275,15 @@ do not re-research or re-derive it.
 | no-look-category-taxonomy | North-star "looks mapped in categories" has no spec — the Berlin-Kay/`Spec.Competition` grid was deleted when `Spec.Preference` went category-free | `spec/src/SixFour/Spec/Preference.hs` | high | open |
 | no-ondevice-trainer-spec | No Spec/Codegen for an on-device gradient/weight-update step over the 384-DOF σ-pair delta head; `Spec.Preference` (Bradley-Terry) is orphaned (no Swift port/codegen/consumer) | `spec/src/SixFour/Spec/Preference.hs` | high | open |
 | palette-value-unused | `PaletteValue.swift` search value head has zero iOS consumers (part of the unwired learned/search spine) | `SixFour/Palette/PaletteValue.swift` | med | open |
+| glrm-wired-but-unused | `Spec.GLRM` OLS kill-switch ported to `GLRM.swift` (byte-exact, golden vs Haskell) and WIRED: `AtlasTrainingSession.makeBatch` regresses win/loss on `[coverage, beauty, ‖chroma‖²]` and BLOCKS real-data training (falls back to synthetic, `.blockedByKillSwitch`) when `R² < r2Floor`. | `SixFour/Atlas/GLRM.swift`, `SixFour/Atlas/AtlasTrainingSession.swift` | med | DONE 2026-06-18 |
+| board-q16-unported | `Spec.BoardQ16` ported to owned Zig (`s4_board_mass_q16`/`s4_board_counts_to_mass_q16`); `AtlasBoard16.base` now uses it (mass = round-half-up `count·2¹⁶/total`, stored `/65536` = exact dyadic) so the policy/value board input is cross-device bit-identical. Golden-gated Haskell≡Zig≡Swift (`board_q16` Zig test + `BoardQ16GoldenTests.swift`). | `Native/src/kernels.zig`, `SixFour/Atlas/AtlasBoard.swift` | high | DONE 2026-06-18 |
+| no-metal-golden-gate | No Metal kernel gated byte-exact vs a Zig golden; `field.metal` is float-tolerance vs a CPU reference; `s4_cube_lift_level` (`kernels.zig:684`) has no Metal port | `SixFour/Metal/field.metal` / `Native/src/kernels.zig:684` | high | open (blocker) |
+| atlas-nets-unpinned | Atlas policy+value have no spec-pinned `NetIOSpec`; dims live only in trainer Python (`ATLAS_TOKEN_DIM=13`, `N_VOCAB=1524`); no `Codegen.Atlas*` | `trainer/atlas_net_mlx.py` / `spec/src/SixFour/Codegen/` | high | open (blocker) |
+| atlas-value-spec-drift | Device value spike (nonlinear MLP, 384 genome + 128 board ctx, 29,249 params) ≠ spec v1 (linear-770 over atlasEmbedding); rewrite AtlasTrainer to spec | `SixFour/Atlas/AtlasTrainer.swift` | high | open |
+| ab-perturb-stub | A/B device path uses `perturb()` fixed-delta stub (±0.04 a-axis, Q16 2621), not spec'd `sampleOrthogonalPair`/`GenomePair` | `SixFour/Atlas/AtlasState.swift` / `spec/src/SixFour/Spec/GenomePair.hs:270` | high | open |
+| gan-framing-contradiction | `regimen.py` calls Stage 2 "ε-annealed GAN"; `look_net_loss_mlx.py` implements 3 non-GAN terms (Bures/coverage/beauty); `Spec.Loss`/`Map.hs:25` says "GAN dropped" — strike vestigial GAN framing + dead lam_adv/dlr/eps_* from regimen.py (Tier-1, no gate) | `trainer/regimen.py:14,54` | med | open |
+| looknet-param-count-est | Look-NN ~115K param count is an unsourced design estimate; no literal in look_net_mlx.py, no law in Spec.LookNet | `docs/COLOR-ATLAS.md` | low | open |
+| genome-blend-carrier-export-design-only | `Spec.{GenomeBlend,GenomeCarrier,ExportFamily}` spec'd, no on-device consumer (federated import, v2+) | `spec/src/SixFour/Spec/Map.hs` (§4) | low | open |
 | app-widget-gap-plan | App-only widget plan (radix 16²/4⁴/2⁸ as one `SplitTree` at 3 branching factors, the compression/cut-level lever P5, and the P6 train-the-iPhone seam). 5 decisions resolved 2026-06-12: (1) three radix screens = perspectives of one widget; (2) picking on Capture+Review; (3) log picks as Bradley–Terry NOW behind the Atlas flag; (4) **TWO 256³ products** — A=per-frame (HD GIFA) + B=global (residual-seeded by the 64³ per-frame↔global comparison, HD GIFB); (5) both 256³ products are **trainable AND shareable**. §7 sequences the build (steps 1–2 = zero-NN plumbing). | `docs/SIXFOUR-APP-WIDGET-GAP-REPORT.md` | — | plan (2026-06-12) |
 
 ## Ethos pillars

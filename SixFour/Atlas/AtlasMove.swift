@@ -80,6 +80,15 @@ struct AtlasDecisionRecord: Codable, Equatable, Sendable {
     /// Explicit pad — always zero (pinned in the SF64 sum check).
     var pad: UInt32 = 0
 
+    /// The winner / loser 770-D `atlasEmbedding` frozen at pick time (Compare only) —
+    /// the `PreferenceUpdate.btUpdate` input, stored so replay is self-contained (no
+    /// genome-resolution dependency). The SF64 binary twin is the additive `CMPE`
+    /// chunk (`Spec.DecisionLog`, version-stable). `nil` on non-Compare or pre-embedding
+    /// records; Codable decodes old logs (missing keys) straight to `nil` — backward
+    /// compatible, no version bump (debt step 2b: DECN v2 = embeddings).
+    var winEmbedding: [Float]?
+    var loseEmbedding: [Float]?
+
     /// Encode a move as a record (lossless for the four-move alphabet).
     init(_ move: CurationMove) {
         switch move {

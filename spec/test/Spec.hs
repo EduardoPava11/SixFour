@@ -28,6 +28,7 @@ import qualified Properties.RGBTLift     as RGBTLift
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
+import qualified Properties.ThetaToDelta  as ThetaToDelta
 import qualified Properties.PaletteGesture as PaletteGesture
 import qualified Properties.GroupRGBT     as GroupRGBT
 import qualified Properties.Quad4Fixed   as Quad4Fixed
@@ -133,6 +134,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests
+  , ThetaToDelta.tests
   , PaletteGesture.tests
   , GroupRGBT.tests
   , Quad4Fixed.tests

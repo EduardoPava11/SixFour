@@ -71,9 +71,20 @@ Both NN-input and NN-output are true, at different layers.
 ## Build / test
 ```bash
 cd spec && cabal build && cabal test && cabal run spec-codegen   # verify + regen contracts
-cd .. && xcodegen generate                                       # regen .xcodeproj
+cd Native && zig build test                                      # owned Zig core (31 tests)
+cd .. && xcodegen generate                                       # regen .xcodeproj (after ANY new .swift)
 xcodebuild -scheme SixFour -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 ```
+**Headless / no-simulator-installed machines** (compile-check only — there is no camera, so the
+bar is BUILD SUCCEEDED, the user runs on device): the prebuilt Native lib is **arm64-only**, so a
+generic destination that also wants x86_64 fails at LINK (not a Zig/codegen bug). Restrict to arm64:
+```bash
+xcodegen generate
+xcodebuild -scheme SixFour -destination 'generic/platform=iOS Simulator' \
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=YES EXCLUDED_ARCHS=x86_64 build-for-testing
+```
+The build auto-stamps `SixFour/Generated/BuildStamp.swift` (gitSHA + time) — `git checkout` it
+before committing so the stamp is not committed as noise.
 Never hand-edit generated files (`SixFour/Generated/`, `trainer/generated/`,
 `studio/look-nn-baseline/src/generated/`) — change `spec/src/SixFour/Codegen/`
 and regenerate.
