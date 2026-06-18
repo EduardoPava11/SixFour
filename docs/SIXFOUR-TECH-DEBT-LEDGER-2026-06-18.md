@@ -43,7 +43,7 @@ Ordered by the honest dependency sequence (matches `SIXFOUR-ALPHAZERO-COLLAPSE-D
 | id | STATUS debt row | code-fix unblocked | sev | blocker? |
 |----|-----------------|--------------------|-----|----------|
 | glrm-wired-but-unused | new | Wire `Spec.GLRM` OLS kill-switch into `AtlasTrainer` before any value-net preference training | med | no (do first) |
-| board-q16-unported | new | Port `Spec.BoardQ16` → Zig `s4_board_q16` + Swift `AtlasBoard.histogram` mass path; gate `lawCountsOrderIndependent` (closes float leak at policy argmax) | high | **yes** |
+| board-q16-unported | **DONE 2026-06-18** (commit 14478c1) | Ported `Spec.BoardQ16` → Zig `s4_board_mass_q16`/`s4_board_counts_to_mass_q16`; `AtlasBoard16.base` uses it; golden-gated Haskell≡Zig≡Swift (`BoardQ16GoldenTests`, `kernels.zig` unit test). Float leak at the policy/value board input CLOSED. | high | done |
 | (genome-source) | empty-training-data + looknet-load-unused | Decide genome source: retrain converging full-colour Look-NN (re-export real `.s4ln`) OR commit to AlphaZero collapse path | high | **yes** |
 | ab-perturb-stub | new | Replace `AtlasState.perturb()` fixed-±0.04 stub with `Spec.GenomePair.sampleOrthogonalPair`; extend DecisionLog to 770-D embeddings; wire `btUpdate` | high | no |
 | no-metal-golden-gate | new | Stand up first byte-exact Zig→Metal golden: Metal port of `s4_cube_lift_level` via `floorDiv` + fixed-order reductions, gated vs `rgbt4d_golden.json` | high | **yes** (GPU precedent) |
