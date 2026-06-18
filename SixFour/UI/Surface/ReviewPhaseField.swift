@@ -104,13 +104,28 @@ struct ReviewPhaseField: View {
     /// The palette edge — 16 cells × 4 pt = 64 pt (the GIF's first abstraction = the shutter).
     private let paletteEdge = GlobalLattice.gif(GlobalLattice.shutterCells)
 
-    // Pillar B — the orthogonal A/B candidate picker (gated OFF in MVP1 by Feature.abCandidatePicker).
-    @State private var abPickedA: Bool? = nil
+    // Pillar B — the orthogonal A/B game (gated OFF in MVP1 by Feature.abCandidatePicker).
+    @State private var abTheta: [Double] = PersonalTasteStore.load()
+    @State private var abPickCount = 0
 
-    /// The two orthogonal candidate looks derived from the committed per-frame palette (cold start).
-    /// Only evaluated when the picker flag is on (short-circuited otherwise), so MVP1 pays nothing.
-    private var abCandidates: (a: [SIMD3<UInt8>], b: [SIMD3<UInt8>])? {
-        ABCandidates.fromPalette(surface.palettesPerFrame.first ?? [])
+    /// The two orthogonal candidate looks derived from the committed per-frame palette, tinted by
+    /// the learned taste θ. Only evaluated when the picker flag is on (short-circuited), so MVP1
+    /// pays nothing.
+    private var abCandidates: (a: ABCandidates.Candidate, b: ABCandidates.Candidate)? {
+        ABCandidates.fromPalette(surface.palettesPerFrame.first ?? [], theta: abTheta)
+    }
+
+    /// Fold the A/B pick into θ (Bradley–Terry, the built `PersonalTaste` loop), persist, and
+    /// advance — the next pair re-derives from the new θ (the "play the game" loop).
+    private func recordABPick(_ pickedA: Bool, _ cands: (a: ABCandidates.Candidate, b: ABCandidates.Candidate)) {
+        let winner = pickedA ? cands.a : cands.b
+        let loser  = pickedA ? cands.b : cands.a
+        abTheta = PersonalTaste.btUpdate(
+            theta: abTheta,
+            winner: PersonalTaste.embedding(leaves: winner.leaves),
+            loser:  PersonalTaste.embedding(leaves: loser.leaves))
+        PersonalTasteStore.save(abTheta)
+        abPickCount += 1
     }
 
     var body: some View {
@@ -129,15 +144,12 @@ struct ReviewPhaseField: View {
                 // The GROUP-PICK gesture tool (browse 16 RGBT groups, tap to include/exclude).
                 groupPickField
             } else if Feature.abCandidatePicker, let cands = abCandidates {
-                // Pillar B: the orthogonal A/B candidate picker (per-frame). OFF in MVP1.
-                Group {
-                    if let picked = abPickedA {
-                        Text("PICKED \(picked ? "A" : "B")").font(.caption.monospaced())
-                    } else {
-                        CandidatePickView(candidateA: cands.a, candidateB: cands.b) { abPickedA = $0 }
-                        // TODO(Phase 3+): record the Compare → btUpdate θ (PersonalTaste), as AtlasState.choose does.
-                    }
-                }
+                // Pillar B: the orthogonal A/B game (per-frame). OFF in MVP1. Each pick folds θ and
+                // re-proposes a taste-shifted pair (the loop); Export ends the game.
+                CandidatePickView(
+                    candidateA: cands.a.rgb, candidateB: cands.b.rgb,
+                    onPick: { recordABPick($0, cands) },
+                    onExport: { /* G3: ABExportFamily {16³,64³,256³} carrying the genome — workflow §3 */ })
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             } else {
                 // All three ColorWidgets are PLACED at the ONE shared global position (no

@@ -9,7 +9,10 @@ struct CandidatePickView: View {
     let candidateA: [SIMD3<UInt8>]
     let candidateB: [SIMD3<UInt8>]
     /// Called with `true` for A, `false` for B — the Compare outcome (winner = the tapped tile).
+    /// The game continues: each pick re-proposes a taste-shifted pair.
     let onPick: (_ pickedA: Bool) -> Void
+    /// Called when the user is satisfied and wants the full cube-ladder export {16³, 64³, 256³}.
+    let onExport: () -> Void
 
     var body: some View {
         VStack(spacing: GlobalLattice.pt(2)) {
@@ -18,6 +21,12 @@ struct CandidatePickView: View {
                 tile(candidateA, label: "A") { onPick(true) }
                 tile(candidateB, label: "B") { onPick(false) }
             }
+            Button(action: onExport) {
+                Text("EXPORT ▸").font(.caption.monospaced().weight(.bold))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, GlobalLattice.pt(2))
+            .accessibilityLabel("Export the full cube ladder")
         }
     }
 
