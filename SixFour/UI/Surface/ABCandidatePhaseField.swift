@@ -156,12 +156,13 @@ struct ABCandidatePhaseField: View {
         guard Feature.abCandidatePicker, !surface.palettesPerFrame.isEmpty else {
             candA = []; candB = []; candAIdx = []; candBIdx = []; frame0 = nil; return
         }
-        // RE-CENTER on the user's last pick: each round proposes the next orthogonal pair
-        // around the CHOSEN look (not the original capture), so picking visibly evolves A/B
-        // toward your taste (the reload you expect). Round 1 (no pick yet) uses the capture.
-        // NOTE: re-centering compounds the displacement; the convergence/delta-preservation
-        // that bounds the drift (the degradation) is the genome-game redesign workflow.
-        let frames = surface.chosenLookPalettes.isEmpty ? surface.palettesPerFrame : surface.chosenLookPalettes
+        // Always propose from the FIXED original capture (clean OKLab), never the previous
+        // round's CHOSEN look. Re-centering on `chosenLookPalettes` (sRGB8 round-tripped +
+        // re-quantized) fed a LOSSY palette back as each round's base → compounding round-trips
+        // → the round-16 noise (degradation). The design workflow confirmed this re-center is
+        // the dominant degrader; the visible-reload-done-right is a SCHEDULED move magnitude
+        // (Spec.MoveRadiusSchedule) over a delta-preserving isometry, not lossy re-centering.
+        let frames = surface.palettesPerFrame
         let pixels = surface.framePixelsQ16
         let theta = abTheta
         let set = await Task.detached(priority: .userInitiated) {
