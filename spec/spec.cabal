@@ -54,6 +54,7 @@ library
         SixFour.Spec.SigmaPairFixed
         SixFour.Spec.LeafOverride
         SixFour.Spec.IsometryMove
+        SixFour.Spec.MoveRadiusSchedule
         SixFour.Spec.ThetaToDelta
         SixFour.Spec.GenomePair
         SixFour.Spec.GenomeBlend
@@ -330,6 +331,7 @@ test-suite spec-tests
         Properties.SigmaPairFixed
         Properties.LeafOverride
         Properties.IsometryMove
+        Properties.MoveRadiusSchedule
         Properties.GenomePair
         Properties.ThetaToDelta
         Properties.PaletteGesture
