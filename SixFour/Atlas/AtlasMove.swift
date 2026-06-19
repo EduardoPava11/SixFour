@@ -89,6 +89,21 @@ struct AtlasDecisionRecord: Codable, Equatable, Sendable {
     var winEmbedding: [Float]?
     var loseEmbedding: [Float]?
 
+    /// The A/B-game pick gene (Compare only; the live delta-preserving game). The chosen look IS
+    /// an `IsoMove.translate` (signs ≡ (1,1,1)), so the honest gene is the 3-int Q16 translation:
+    /// `abCenterShift` = the post-pick cumulative center (the CHOSEN gene, capped to ±0.25 OKLab);
+    /// `abWinner/LoserShift` = the two candidates' full shifts (center ± the annealed sep).
+    /// `abChosenGeneHash` = the gene's join key to its self-describing exported GIF (kept in a
+    /// DEDICATED field so the live game's hash domain never collides with the Atlas board's
+    /// `winHash`/`loseHash` fnv1a32-of-leaves). All Optional ⇒ old logs decode to `nil` (backward
+    /// compatible, no version bump; the SF64 `CMPE` binary twin is deferred debt).
+    var abRound: Int?
+    var abPickedA: Bool?
+    var abWinnerShift: [Int32]?
+    var abLoserShift: [Int32]?
+    var abCenterShift: [Int32]?
+    var abChosenGeneHash: UInt32?
+
     /// Encode a move as a record (lossless for the four-move alphabet).
     init(_ move: CurationMove) {
         switch move {

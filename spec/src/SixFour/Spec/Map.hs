@@ -94,11 +94,17 @@ named operator composing the spatial "SixFour.Spec.CubeLadder" per channel with 
 "SixFour.Spec.DivergenceSchedule" (the A/B divergence schedule @Δ = |r_A − r_B|@ — the policy:value
 mix-ratio gap that starts wide and narrows as Compares accrue, floored @> 0@ so A and B never
 collapse; the start-diverse-then-converge knob + the MAP-Elites descriptor axis),
+"SixFour.Spec.MoveRadiusSchedule" (★ the GEOMETRIC sibling of DivergenceSchedule: the annealed Q16
+'SixFour.Spec.IsometryMove' magnitude (wide early → JND floor) + a hard cumulative-displacement cap —
+the visible-reload-without-drift schedule; EXACT integer, no ε),
 "SixFour.Spec.ABSurface" (the simplified 8-phase capture→A/B→export FSM = the user story; total δ,
 Pick* self-loop in Picked, Export gated on a prior pick, the two 16×16 candidate cell rectangles),
 "SixFour.Spec.SigmaPairFixed", "SixFour.Spec.SigmaPairHead", "SixFour.Spec.SigmaDecomp",
 "SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Bottleneck16",
-"SixFour.Spec.LeafOverride", "SixFour.Spec.ThetaToDelta" (★ canonical-path n=0: the closed-form
+"SixFour.Spec.LeafOverride", "SixFour.Spec.IsometryMove" (★ the EXACT delta-preserving A/B move:
+sign-flips + integer translation on Q16 OKLab, the only no-tolerance lattice isometries, SIMT-native —
+preserves intra/inter-frame colour deltas, stops the genome-game degradation), "SixFour.Spec.ThetaToDelta"
+(★ canonical-path n=0: the closed-form
 σ-aware taste-gradient map θ(770) → generator δ(384-DOF) that feeds LeafOverride / s4_leaf_override),
 "SixFour.Spec.GenomePair" (★ pivot KEYSTONE — two orthogonal-by-
 disjoint-support σ-valid A/B candidate displacements from the base genome, with a θ-independent

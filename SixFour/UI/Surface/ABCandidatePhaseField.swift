@@ -35,14 +35,20 @@ struct ABCandidatePhaseField: View {
     /// the live ground (no crash). `candA[t]` is frame `t`'s palette for look A, likewise B.
     @State private var candA: [[SIMD3<UInt8>]] = []
     @State private var candB: [[SIMD3<UInt8>]] = []
-    /// The per-frame candidate INDEX cubes (64 × 4096), re-quantized from the original pixels
-    /// against each candidate's displaced palette (P3 — genome shapes the bytes, so A and B are
-    /// genuinely different cubes). Empty ⇒ the hero falls back to recolouring `surface.indexCube`.
+    /// Always EMPTY under the delta-preserving move: A and B differ by a COHERENT isometry over
+    /// the SAME index structure (recolour `surface.indexCube`), not a re-quantised cube — that is
+    /// what keeps the relative deltas intact. (The hero recolours the base cube when these are empty.)
     @State private var candAIdx: [[UInt8]] = []
     @State private var candBIdx: [[UInt8]] = []
     /// Frame-0's candidate objects — their Q16 `.leaves` are the `btUpdate` embedding when a
     /// look wins/loses (matching `ReviewPhaseField`, which embeds from `palettesPerFrame.first`).
     @State private var frame0: (a: ABCandidates.Candidate, b: ABCandidates.Candidate)?
+
+    /// The cumulative pick drift (Q16 OKLab), capped to the `MoveRadiusSchedule` L∞ ball: each pick
+    /// nudges it toward the chosen direction, so the pair RE-CENTERS on your taste — but BOUNDED, so
+    /// it can never drift into noise (the degradation the unbounded lossy re-center caused). θ is
+    /// still folded for the future taste model; the drift is the visible steering for now.
+    @State private var centerShift: SIMD3<Int32> = .zero
 
     private let side = GlobalLattice.previewCells   // 64
     /// Each hero is half the preview hero's pitch so the two GIFs sit side-by-side (2 pt/cell).
@@ -125,85 +131,107 @@ struct ABCandidatePhaseField: View {
     /// the new θ IS the next round (the infinite game). `pickA` / `pickB` both self-loop in
     /// `.picked` per the spec; from `.captured` they enter `.picked`.
     private func pick(a pickedA: Bool) {
+        // The two candidates' isometry shifts THIS round — MUST match `computeCandidates` exactly.
+        let sepV = SIMD3<Int32>(0, MoveRadiusSchedule.radius(abPickCount) / 2, 0)
+        let shiftA = MoveRadiusSchedule.clampToCap(centerShift &+ sepV)
+        let shiftB = MoveRadiusSchedule.clampToCap(centerShift &- sepV)
+
         if let cands = frame0 {
             let winner = pickedA ? cands.a : cands.b
             let loser  = pickedA ? cands.b : cands.a
-            abTheta = PersonalTaste.btUpdate(
-                theta: abTheta,
-                winner: PersonalTaste.embedding(leaves: winner.leaves),
-                loser:  PersonalTaste.embedding(leaves: loser.leaves))
+            let winEmb = PersonalTaste.embedding(leaves: winner.leaves)
+            let loseEmb = PersonalTaste.embedding(leaves: loser.leaves)
+            abTheta = PersonalTaste.btUpdate(theta: abTheta, winner: winEmb, loser: loseEmb)
             PersonalTasteStore.save(abTheta)
+            logPick(pickedA: pickedA, winner: winner, loser: loser,
+                    winEmb: winEmb, loseEmb: loseEmb, shiftA: shiftA, shiftB: shiftB)
         }
+        // Drift the (bounded) center to the WINNING candidate's shift — re-center on taste, capped.
+        centerShift = pickedA ? shiftA : shiftB
         // Carry the chosen look's per-frame palettes so the export re-encodes the base cube
-        // through THEM (ships the chosen genome's colours, not the base auto-render).
+        // through THEM (ships the chosen look's colours, not the base auto-render).
         surface.chosenLookPalettes = pickedA ? candA : candB
         abPickCount += 1   // bumps `recomputeKey` → `.task` re-fires the next round off-main
         surface.step(pickedA ? .pickA : .pickB)
     }
 
-    /// The off-actor compute result — A and B per-frame palettes + re-quantized index cubes,
-    /// plus frame-0's candidates for the θ embedding. `Sendable` so it crosses the actor hop.
+    /// Append this A/B round to the replay-deterministic decision log (REUSING the existing
+    /// `AtlasDecisionLog` spine; Compare is state-identity so no board re-fold is needed). Records
+    /// the winner/loser leaf hashes + 770-D embeddings (the taste model) PLUS the honest A/B gene:
+    /// the round, which side won, both candidates' Q16 shifts, and the chosen gene
+    /// (`abCenterShift` = the winner's shift) + its join hash for the self-describing GIF.
+    private func logPick(pickedA: Bool, winner: ABCandidates.Candidate, loser: ABCandidates.Candidate,
+                         winEmb: [Double], loseEmb: [Double],
+                         shiftA: SIMD3<Int32>, shiftB: SIMD3<Int32>) {
+        let winShift = pickedA ? shiftA : shiftB
+        let loseShift = pickedA ? shiftB : shiftA
+        let winHash = AtlasState.fnv1a32(winner.leaves)
+        var rec = AtlasDecisionRecord(.compare(winner: winHash, loser: AtlasState.fnv1a32(loser.leaves)))
+        rec.winEmbedding = winEmb.map { Float($0) }   // the record stores the frozen embedding as Float
+        rec.loseEmbedding = loseEmb.map { Float($0) }
+        rec.abRound = abPickCount
+        rec.abPickedA = pickedA
+        rec.abWinnerShift = [winShift.x, winShift.y, winShift.z]
+        rec.abLoserShift = [loseShift.x, loseShift.y, loseShift.z]
+        rec.abCenterShift = [winShift.x, winShift.y, winShift.z]   // the chosen gene
+        rec.abChosenGeneHash = winHash
+        var log = AtlasDecisionLogStore.load()
+        log.entries.append(rec)
+        AtlasDecisionLogStore.save(log)
+    }
+
+    /// The off-actor compute result — A and B per-frame palettes + frame-0's candidates for the θ
+    /// embedding. `Sendable` so it crosses the actor hop. No index cubes: the delta-preserving move
+    /// recolours the SAME base cube (coherent shift), so A/B share the structure by design.
     private struct CandidateSet: Sendable {
         let a: [[SIMD3<UInt8>]]; let b: [[SIMD3<UInt8>]]
-        let ai: [[UInt8]]; let bi: [[UInt8]]
         let frame0A: ABCandidates.Candidate?; let frame0B: ABCandidates.Candidate?
     }
 
-    /// Snapshot σ on the main actor, run the heavy per-frame FFI OFF it, then apply the result.
+    /// Snapshot σ on the main actor, run the per-frame isometry-move OFF it, then apply the result.
     /// Cancellation (a rapid pick) is checked before the @State write so a superseded round is
-    /// dropped. Empty inputs / the gate off ⇒ clears the caches (the hero shows the ground).
+    /// dropped. Always proposes from the FIXED original capture; the round number + the capped
+    /// `centerShift` parameterise the bounded, delta-preserving move (no lossy re-centering).
     private func recomputeAsync() async {
         guard Feature.abCandidatePicker, !surface.palettesPerFrame.isEmpty else {
             candA = []; candB = []; candAIdx = []; candBIdx = []; frame0 = nil; return
         }
-        // RE-CENTER on the user's last pick: each round proposes the next orthogonal pair
-        // around the CHOSEN look (not the original capture), so picking visibly evolves A/B
-        // toward your taste (the reload you expect). Round 1 (no pick yet) uses the capture.
-        // NOTE: re-centering compounds the displacement; the convergence/delta-preservation
-        // that bounds the drift (the degradation) is the genome-game redesign workflow.
-        let frames = surface.chosenLookPalettes.isEmpty ? surface.palettesPerFrame : surface.chosenLookPalettes
-        let pixels = surface.framePixelsQ16
-        let theta = abTheta
+        let frames = surface.palettesPerFrame
+        let n = abPickCount
+        let center = centerShift
         let set = await Task.detached(priority: .userInitiated) {
-            Self.computeCandidates(frames: frames, pixels: pixels, theta: theta)
+            Self.computeCandidates(frames: frames, pickCount: n, center: center)
         }.value
         guard !Task.isCancelled else { return }
         candA = set.a; candB = set.b
-        candAIdx = set.ai; candBIdx = set.bi
+        candAIdx = []; candBIdx = []      // delta-preserving: recolour the base cube, no re-quant
         if let fa = set.frame0A, let fb = set.frame0B { frame0 = (a: fa, b: fb) } else { frame0 = nil }
     }
 
-    /// Per-frame candidate compute (nonisolated — safe off the main actor; pure FFI on value
-    /// types). For each frame: the orthogonal `GenomePair` pair tinted by θ → A/B palettes, then
-    /// RE-QUANTIZE the original pixels against each candidate's leaves (`s4_dither_frame`) so A
-    /// and B are genuinely different index cubes (P3). No retained pixels ⇒ empty index frame
-    /// (the hero recolours the shared base cube).
-    nonisolated private static func computeCandidates(frames: [[SIMD3<UInt8>]], pixels: [[Int32]],
-                                                      theta: [Double]) -> CandidateSet {
+    /// Per-frame candidate compute (nonisolated — safe off the main actor; pure FFI on value types).
+    /// A and B are two SCHEDULED isometry moves off the capture: A nudges +a chroma, B −a chroma, by
+    /// the annealed radius (`MoveRadiusSchedule`, wide early → JND floor), both offset by the capped
+    /// cumulative `center`. Each move is an exact isometry, so every relative colour delta is
+    /// preserved — the same move to all 64 frames keeps the inter-frame deltas too. No degradation.
+    nonisolated private static func computeCandidates(frames: [[SIMD3<UInt8>]], pickCount: Int,
+                                                      center: SIMD3<Int32>) -> CandidateSet {
+        let sep = MoveRadiusSchedule.radius(pickCount) / 2
+        let sepV = SIMD3<Int32>(0, sep, 0)
+        let moveA = IsoMove.translate(MoveRadiusSchedule.clampToCap(center &+ sepV))
+        let moveB = IsoMove.translate(MoveRadiusSchedule.clampToCap(center &- sepV))
+
         var a = [[SIMD3<UInt8>]](); a.reserveCapacity(frames.count)
         var b = [[SIMD3<UInt8>]](); b.reserveCapacity(frames.count)
-        var ai = [[UInt8]](); ai.reserveCapacity(frames.count)
-        var bi = [[UInt8]](); bi.reserveCapacity(frames.count)
         var f0a: ABCandidates.Candidate?; var f0b: ABCandidates.Candidate?
         for (t, pal) in frames.enumerated() {
-            guard let pair = ABCandidates.fromPalette(pal, theta: theta) else {
-                a.append([]); b.append([]); ai.append([]); bi.append([])
+            guard let pair = ABCandidates.deltaPreservingPair(pal, moveA: moveA, moveB: moveB) else {
+                a.append([]); b.append([])
                 continue
             }
             a.append(pair.a.rgb)
             b.append(pair.b.rgb)
-            if t < pixels.count, !pixels[t].isEmpty {
-                let cA = pair.a.leaves.flatMap { [$0.x, $0.y, $0.z] }
-                let cB = pair.b.leaves.flatMap { [$0.x, $0.y, $0.z] }
-                ai.append(SixFourNative.ditherFrame(oklabQ16: pixels[t], centroids: cA, k: 256,
-                                                    mode: 0, serpentine: false, stbnSlice: nil) ?? [])
-                bi.append(SixFourNative.ditherFrame(oklabQ16: pixels[t], centroids: cB, k: 256,
-                                                    mode: 0, serpentine: false, stbnSlice: nil) ?? [])
-            } else {
-                ai.append([]); bi.append([])
-            }
             if t == 0 { f0a = pair.a; f0b = pair.b }
         }
-        return CandidateSet(a: a, b: b, ai: ai, bi: bi, frame0A: f0a, frame0B: f0b)
+        return CandidateSet(a: a, b: b, frame0A: f0a, frame0B: f0b)
     }
 }
