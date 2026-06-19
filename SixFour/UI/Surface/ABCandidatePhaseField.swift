@@ -131,25 +131,53 @@ struct ABCandidatePhaseField: View {
     /// the new θ IS the next round (the infinite game). `pickA` / `pickB` both self-loop in
     /// `.picked` per the spec; from `.captured` they enter `.picked`.
     private func pick(a pickedA: Bool) {
+        // The two candidates' isometry shifts THIS round — MUST match `computeCandidates` exactly.
+        let sepV = SIMD3<Int32>(0, MoveRadiusSchedule.radius(abPickCount) / 2, 0)
+        let shiftA = MoveRadiusSchedule.clampToCap(centerShift &+ sepV)
+        let shiftB = MoveRadiusSchedule.clampToCap(centerShift &- sepV)
+
         if let cands = frame0 {
             let winner = pickedA ? cands.a : cands.b
             let loser  = pickedA ? cands.b : cands.a
-            abTheta = PersonalTaste.btUpdate(
-                theta: abTheta,
-                winner: PersonalTaste.embedding(leaves: winner.leaves),
-                loser:  PersonalTaste.embedding(leaves: loser.leaves))
+            let winEmb = PersonalTaste.embedding(leaves: winner.leaves)
+            let loseEmb = PersonalTaste.embedding(leaves: loser.leaves)
+            abTheta = PersonalTaste.btUpdate(theta: abTheta, winner: winEmb, loser: loseEmb)
             PersonalTasteStore.save(abTheta)
+            logPick(pickedA: pickedA, winner: winner, loser: loser,
+                    winEmb: winEmb, loseEmb: loseEmb, shiftA: shiftA, shiftB: shiftB)
         }
-        // Nudge the cumulative center toward the chosen direction (BOUNDED by the L∞ cap), so the
-        // pair re-centers on your taste without ever drifting into noise — the structural fix for
-        // the degradation.
-        let sepV = SIMD3<Int32>(0, MoveRadiusSchedule.radius(abPickCount) / 2, 0)
-        centerShift = MoveRadiusSchedule.clampToCap(pickedA ? centerShift &+ sepV : centerShift &- sepV)
+        // Drift the (bounded) center to the WINNING candidate's shift — re-center on taste, capped.
+        centerShift = pickedA ? shiftA : shiftB
         // Carry the chosen look's per-frame palettes so the export re-encodes the base cube
         // through THEM (ships the chosen look's colours, not the base auto-render).
         surface.chosenLookPalettes = pickedA ? candA : candB
         abPickCount += 1   // bumps `recomputeKey` → `.task` re-fires the next round off-main
         surface.step(pickedA ? .pickA : .pickB)
+    }
+
+    /// Append this A/B round to the replay-deterministic decision log (REUSING the existing
+    /// `AtlasDecisionLog` spine; Compare is state-identity so no board re-fold is needed). Records
+    /// the winner/loser leaf hashes + 770-D embeddings (the taste model) PLUS the honest A/B gene:
+    /// the round, which side won, both candidates' Q16 shifts, and the chosen gene
+    /// (`abCenterShift` = the winner's shift) + its join hash for the self-describing GIF.
+    private func logPick(pickedA: Bool, winner: ABCandidates.Candidate, loser: ABCandidates.Candidate,
+                         winEmb: [Double], loseEmb: [Double],
+                         shiftA: SIMD3<Int32>, shiftB: SIMD3<Int32>) {
+        let winShift = pickedA ? shiftA : shiftB
+        let loseShift = pickedA ? shiftB : shiftA
+        let winHash = AtlasState.fnv1a32(winner.leaves)
+        var rec = AtlasDecisionRecord(.compare(winner: winHash, loser: AtlasState.fnv1a32(loser.leaves)))
+        rec.winEmbedding = winEmb.map { Float($0) }   // the record stores the frozen embedding as Float
+        rec.loseEmbedding = loseEmb.map { Float($0) }
+        rec.abRound = abPickCount
+        rec.abPickedA = pickedA
+        rec.abWinnerShift = [winShift.x, winShift.y, winShift.z]
+        rec.abLoserShift = [loseShift.x, loseShift.y, loseShift.z]
+        rec.abCenterShift = [winShift.x, winShift.y, winShift.z]   // the chosen gene
+        rec.abChosenGeneHash = winHash
+        var log = AtlasDecisionLogStore.load()
+        log.entries.append(rec)
+        AtlasDecisionLogStore.save(log)
     }
 
     /// The off-actor compute result — A and B per-frame palettes + frame-0's candidates for the θ
