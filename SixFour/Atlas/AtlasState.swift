@@ -119,7 +119,7 @@ final class AtlasState {
         log = AtlasDecisionLogStore.load()
         board = boardFromLog(base: baseBoard, records: log.entries)
         theta = PersonalTasteStore.load()   // cross-session learned taste (kept across reset)
-        Self.tasteLog.info("atlas loaded: compares=\(self.log.compareCount, privacy: .public) tasteNorm=\(self.tasteNorm, format: .fixed(precision: 4), privacy: .public)")
+        Self.tasteLog.debug("atlas loaded: compares=\(self.log.compareCount, privacy: .public) tasteNorm=\(self.tasteNorm, format: .fixed(precision: 4), privacy: .public)")
     }
 
     /// Drop the session so the next review entry re-folds fresh σ data.
@@ -196,7 +196,7 @@ final class AtlasState {
         let tintMaxQ16 = zip(tinted, curated).map { t, c in
             max(abs(Int(t.x - c.x)), abs(Int(t.y - c.y)), abs(Int(t.z - c.z)))
         }.max() ?? 0
-        Self.tasteLog.info(
+        Self.tasteLog.debug(
             "pick=\(which == .a ? "A" : "B", privacy: .public) compareN=\(self.compareCount, privacy: .public) tasteNorm \(normBefore, format: .fixed(precision: 4), privacy: .public)→\(self.tasteNorm, format: .fixed(precision: 4), privacy: .public) tintMaxQ16=\(tintMaxQ16, privacy: .public)")
     }
 

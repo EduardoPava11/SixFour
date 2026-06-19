@@ -71,7 +71,7 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
         self.kmeansAssignAccumulatePSO = try gpu.pso("kmeansAssignAccumulateKernel")
         self.kmeansFinalizePSO = try gpu.pso("kmeansFinalizeKernel")
         self.kmeansFinalizeStatsPSO = try gpu.pso("kmeansFinalizeStatsKernel")
-        Self.logger.info("KMeansPalettePipeline init: tileSide=\(tileSide) K=\(kMeansK) device=\(self.gpu.device.name)")
+        Self.logger.debug("KMeansPalettePipeline init: tileSide=\(tileSide) K=\(kMeansK) device=\(self.gpu.device.name)")
     }
 
     /// Byte stride of one `KMeansBin`: 10 × 4-byte atomics (4 linear sums +
@@ -88,7 +88,7 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
                      "KMeansPalettePipeline: K=\(K) doesn't match kMeansK=\(kMeansK). " +
                      "Reconstruct the pipeline with the new K to change palette size.")
         let frameCount = tiles.count
-        Self.logger.info(
+        Self.logger.debug(
             "extractBatch starting: frames=\(frameCount) K=\(self.kMeansK) iters=\(self.kMeansIterations)"
         )
         let started = ContinuousClock().now
@@ -165,7 +165,7 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
             if seed == .wuInit { lastWuSeedMillis = ms }
             let name = (seed == .wuInit) ? "Wu+KM" : "farthest-point"
             // .notice so it persists + shows in Console for on-device benchmarking.
-            Self.logger.notice("[bench] \(name) seed (CPU, ×\(frameCount) frames): \(ms)ms total (\(ms / max(1, frameCount))ms/frame)")
+            Self.logger.debug("[bench] \(name) seed (CPU, ×\(frameCount) frames): \(ms)ms total (\(ms / max(1, frameCount))ms/frame)")
         }
 
         guard let cmd = gpu.queue.makeCommandBuffer() else {
@@ -269,7 +269,7 @@ final class KMeansPalettePipeline: PalettePipeline, @unchecked Sendable {
         let ms = Self.millis(elapsed)
         let meanShift = shiftAccum / Float(frameCount)
         let meanMSE = mseAccum / Float(frameCount)
-        Self.logger.info(
+        Self.logger.debug(
             "extractBatch done in \(ms)ms (mean final shift=\(meanShift), mean MSE=\(meanMSE), \(ms / max(1, frameCount))ms/frame)"
         )
         return out

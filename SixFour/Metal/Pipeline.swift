@@ -70,7 +70,7 @@ final class MetalPipeline: @unchecked Sendable {
         self.cropDownsampleLinearizePSO = try pso("cropDownsampleLinearizeKernel")
         self.linearToOklabPSO = try pso("linearToOklabKernel")
         self.unsharpPSO = try pso("unsharpMaskLKernel")
-        Self.logger.info("MetalPipeline (capture) init: tileSide=\(tileSide) device=\(dev.name)")
+        Self.logger.debug("MetalPipeline (capture) init: tileSide=\(tileSide) device=\(dev.name)")
     }
 
     enum MetalPipelineError: Error {

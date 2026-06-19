@@ -260,7 +260,7 @@ struct DeterministicRenderer {
         // fingerprint. Pairs with the Zig per-kernel logs (category native.zig).
         // .notice (not .info) so this headline proof PERSISTS to the unified log
         // store — findable after the fact via `log show`, not live-stream-only.
-        Self.logger.notice(
+        Self.logger.debug(
             "[deterministic] \(tiles.count)f → \(gif.count)B in \(totalMs)ms [quant \(qMs) · dither \(dMs) · signif \(sMs) · palette \(pMs) · encode \(eMs)] sha256 \(sha.prefix(12), privacy: .public)…"
         )
 
@@ -468,7 +468,7 @@ struct DeterministicRenderer {
         let sha = SHA256.hash(data: gif).map { String(format: "%02x", $0) }.joined()
         let eMs = lap()
 
-        Self.logger.notice("[deterministic·global] \(tiles.count)f → \(gif.count)B · one 256-colour palette · sha256 \(sha.prefix(12), privacy: .public)…")
+        Self.logger.debug("[deterministic·global] \(tiles.count)f → \(gif.count)B · one 256-colour palette · sha256 \(sha.prefix(12), privacy: .public)…")
         return GlobalResult(
             gifData: gif, frameIndices: indicesPerFrame,
             globalPalette: globalPalette, globalLeavesQ16: globalLeaves,

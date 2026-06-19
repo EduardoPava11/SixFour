@@ -128,7 +128,7 @@ struct PaletteGenerator: Sendable {
             let edMs = Self.milliseconds(ContinuousClock().now - ditherStart)
             let scan = useSerpentine ? "serpentine" : "raster"
             ditherSummary = "errorDiffusion/\(scan)/CPU \(edMs)ms"
-            Self.logger.notice("[bench] dither errorDiffusion (CPU SIMD8, ×\(frameCount)): \(edMs)ms")
+            Self.logger.debug("[bench] dither errorDiffusion (CPU SIMD8, ×\(frameCount)): \(edMs)ms")
         }
 
         // Phase 3: significance split-fill — guarantees every frame uses all K
@@ -149,7 +149,7 @@ struct PaletteGenerator: Sendable {
         }
 
         let stageAMs = Self.milliseconds(ContinuousClock().now - t0)
-        Self.logger.info("[palette] refine+dither+split-fill (×\(frameCount) frames): \(stageAMs)ms")
+        Self.logger.debug("[palette] refine+dither+split-fill (×\(frameCount) frames): \(stageAMs)ms")
         return Output(perFramePalettes: palettes, frameIndices: indices,
                       perFrameCells: frameCells,
                       stageAMillis: stageAMs, ditherSummary: ditherSummary)
@@ -175,7 +175,7 @@ struct PaletteGenerator: Sendable {
 
         guard let gpu = blueNoiseGPU else {
             let cpu = runCPU()
-            Self.logger.notice("[bench] dither blueNoise CPU=\(cpu.ms)ms (no GPU pipeline)")
+            Self.logger.debug("[bench] dither blueNoise CPU=\(cpu.ms)ms (no GPU pipeline)")
             return (cpu.result, "blueNoise/CPU \(cpu.ms)ms")
         }
 
@@ -188,10 +188,10 @@ struct PaletteGenerator: Sendable {
             if benchmarkDither {
                 let cpu = runCPU()
                 let ratio = gpuMs > 0 ? Double(cpu.ms) / Double(gpuMs) : 0
-                Self.logger.notice("[bench] dither blueNoise CPU=\(cpu.ms)ms GPU=\(gpuMs)ms (\(String(format: "%.2f", ratio))× CPU/GPU, batched ×\(frameCount))")
+                Self.logger.debug("[bench] dither blueNoise CPU=\(cpu.ms)ms GPU=\(gpuMs)ms (\(String(format: "%.2f", ratio))× CPU/GPU, batched ×\(frameCount))")
                 return (gpuResult, "blueNoise/GPU \(gpuMs)ms (cpu \(cpu.ms)ms)")
             } else {
-                Self.logger.notice("[bench] dither blueNoise GPU=\(gpuMs)ms (batched ×\(frameCount))")
+                Self.logger.debug("[bench] dither blueNoise GPU=\(gpuMs)ms (batched ×\(frameCount))")
                 return (gpuResult, "blueNoise/GPU \(gpuMs)ms")
             }
         } catch {

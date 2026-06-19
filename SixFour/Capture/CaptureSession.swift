@@ -209,7 +209,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             throw CaptureError.noCamera
         }
         self.device = device
-        Self.log.info("[capture] Device: \(device.localizedName, privacy: .public) modelID=\(device.modelID, privacy: .public)")
+        Self.log.debug("[capture] Device: \(device.localizedName, privacy: .public) modelID=\(device.modelID, privacy: .public)")
 
         let input = try AVCaptureDeviceInput(device: device)
         guard session.canAddInput(input) else { throw CaptureError.cantAddInput }
@@ -249,7 +249,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         // reliable query point — log for diagnostics only (no preflight).
         // The actual format verification lives in the delegate on the
         // first sample buffer.
-        Self.log.info(
+        Self.log.debug(
             "[capture] availableVideoPixelFormatTypes (pre-commit, diagnostic only): \(Self.formatList(self.dataOutput.availableVideoPixelFormatTypes), privacy: .public)"
         )
     }
@@ -292,7 +292,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     private func selectHDRFormat(on device: AVCaptureDevice) throws {
         let allFormats = device.formats
         let want10Bit: OSType = kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
-        Self.log.info("[capture] Scanning \(allFormats.count, privacy: .public) device formats for x420 (10-bit YCbCr 4:2:0) at \(self.targetFps, privacy: .public) fps…")
+        Self.log.debug("[capture] Scanning \(allFormats.count, privacy: .public) device formats for x420 (10-bit YCbCr 4:2:0) at \(self.targetFps, privacy: .public) fps…")
 
         // 1. Restrict to x420 formats at the target fps.
         let x420Candidates: [AVCaptureDevice.Format] = allFormats.filter { fmt in
@@ -333,7 +333,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                                             label: "P3_D65", priority: 1, area: a))
             }
         }
-        Self.log.info("[capture] Found \(x420Candidates.count, privacy: .public) x420 formats at \(self.targetFps, privacy: .public) fps; \(hlgCount, privacy: .public) support HLG, \(p3Count, privacy: .public) support P3")
+        Self.log.debug("[capture] Found \(x420Candidates.count, privacy: .public) x420 formats at \(self.targetFps, privacy: .public) fps; \(hlgCount, privacy: .public) support HLG, \(p3Count, privacy: .public) support P3")
 
         // Sort by (priority ASC, area ASC) — HLG beats P3; within
         // bucket, smallest format wins. Small formats are the
@@ -364,14 +364,14 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             let available = dataOutput.availableVideoPixelFormatTypes
             let dims = CMVideoFormatDescriptionGetDimensions(cand.format.formatDescription)
             if available.contains(want10Bit) {
-                Self.log.info(
+                Self.log.debug(
                     "[capture] Probing \(dims.width, privacy: .public)×\(dims.height, privacy: .public) \(cand.label, privacy: .public) → available=\(Self.formatList(available), privacy: .public): x420 OK; selecting."
                 )
                 accepted = cand
                 break
             } else {
                 excludedCount += 1
-                Self.log.info(
+                Self.log.debug(
                     "[capture] Probing \(dims.width, privacy: .public)×\(dims.height, privacy: .public) \(cand.label, privacy: .public) → available=\(Self.formatList(available), privacy: .public): no x420; excluding."
                 )
             }
@@ -411,10 +411,10 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             )
         }
         device.unlockForConfiguration()
-        Self.log.info(
+        Self.log.debug(
             "[capture] Active color space: \(actualLabel, privacy: .public) (requested \(chosen.label, privacy: .public))"
         )
-        Self.log.info("[capture] colorSpaceTag=\(self.activeColorSpaceTag.label, privacy: .public)")
+        Self.log.debug("[capture] colorSpaceTag=\(self.activeColorSpaceTag.label, privacy: .public)")
     }
 
     /// Tag passed to the Metal kernel so the YCbCr10 → linear-sRGB
@@ -494,7 +494,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 && !device.isAdjustingWhiteBalance
                 && !device.isAdjustingFocus {
                 let elapsed = Self.elapsedMilliseconds(from: start)
-                Self.log.info("Lock settled in \(elapsed) ms")
+                Self.log.debug("Lock settled in \(elapsed) ms")
                 return .settled(ms: elapsed)
             }
             try? await Task.sleep(for: .milliseconds(15))
@@ -577,7 +577,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 self.continuation = cont
                 self.firstFrameVerified = false
                 self.collecting = true
-                Self.log.info("Burst started: target \(self.targetFrameCount) frames @ \(self.targetFps) fps")
+                Self.log.debug("Burst started: target \(self.targetFrameCount) frames @ \(self.targetFps) fps")
             }
         }
     }
@@ -675,7 +675,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             targetFps: targetFps,
             droppedFrameCount: droppedFrameCount
         )
-        Self.log.info("Burst complete: \(timing.summary)")
+        Self.log.debug("Burst complete: \(timing.summary)")
         let snapshot = collected
         let cont = continuation
         collected.removeAll(keepingCapacity: true)
@@ -774,7 +774,7 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
                 return
             }
             firstFrameVerified = true
-            Self.log.info("[capture] frame 0 mediaSubType=x420 (verified)")
+            Self.log.debug("[capture] frame 0 mediaSubType=x420 (verified)")
         }
 
         let ts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)

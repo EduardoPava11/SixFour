@@ -114,7 +114,7 @@ struct GIFRenderer {
         // Primary metric: LAB gamut COVERAGE — how much colour the 64 frames
         // sampled (the diversity objective), not reconstruction fidelity.
         let coverage = ClusterStatisticsOps.gamutCoverage(perFrame: perFrameStats)
-        Self.logger.notice("[bench] coverage occupiedBins=\(coverage.occupiedBins) (\(String(format: "%.1f%%", coverage.fraction * 100)) of 16³)  meanMSE=\(meanExtractMSE)")
+        Self.logger.debug("[bench] coverage occupiedBins=\(coverage.occupiedBins) (\(String(format: "%.1f%%", coverage.fraction * 100)) of 16³)  meanMSE=\(meanExtractMSE)")
 
         // Seed A/B on COVERAGE (the right yardstick): does raw farthest-point
         // (maximin, diversity-maximizing) capture MORE of the gamut than the
@@ -140,7 +140,7 @@ struct GIFRenderer {
                     coverage.occupiedBins, fpsCov.occupiedBins, deltaPct,
                     meanExtractMSE, Self.meanMSE(fps)
                 )
-                Self.logger.notice("[bench] seed \(seedComparison!, privacy: .public)")
+                Self.logger.debug("[bench] seed \(seedComparison!, privacy: .public)")
             }
             engines.kMeans.seed = origSeed
             engines.kMeans.kMeansIterations = origIters
@@ -213,7 +213,7 @@ struct GIFRenderer {
 
         let encodeMs = PaletteGenerator.milliseconds(ContinuousClock().now - encodeStart)
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
-        Self.logger.info("[renderer] encode done in \(encodeMs)ms (\(fileSize) bytes)")
+        Self.logger.debug("[renderer] encode done in \(encodeMs)ms (\(fileSize) bytes)")
 
         // Per-frame numbers, surfaced so the Review screen can show (and the
         // user can verify) every figure the pipeline computed per frame.

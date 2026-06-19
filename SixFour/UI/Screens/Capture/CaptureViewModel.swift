@@ -301,7 +301,7 @@ final class CaptureViewModel {
             // pipeline so the Metal kernel decodes YCbCr10 against the
             // right OETF + RGB primaries instead of always assuming Rec.709.
             pipeline.colorSpaceTag = session.activeColorSpaceTag.rawValue
-            Self.logger.info(
+            Self.logger.debug(
                 "[viewmodel] propagated colorSpaceTag=\(session.activeColorSpaceTag.label, privacy: .public) to MetalPipeline"
             )
 
@@ -365,7 +365,7 @@ final class CaptureViewModel {
             do {
                 if let loaded = try CaptureBundle.load() {
                     self.currentBundle = loaded
-                    Self.logger.info("[viewmodel] restored CaptureBundle id=\(loaded.id, privacy: .public)")
+                    Self.logger.debug("[viewmodel] restored CaptureBundle id=\(loaded.id, privacy: .public)")
                 }
             } catch {
                 Self.logger.warning("[viewmodel] CaptureBundle restore failed (ignored): \(String(describing: error), privacy: .public)")
@@ -386,7 +386,7 @@ final class CaptureViewModel {
         Task.detached(priority: .background) {
             do {
                 try bundle.save()
-                Self.logger.info("[viewmodel] CaptureBundle saved to disk")
+                Self.logger.debug("[viewmodel] CaptureBundle saved to disk")
             } catch {
                 Self.logger.warning("[viewmodel] CaptureBundle save failed: \(String(describing: error), privacy: .public)")
             }
@@ -404,7 +404,7 @@ final class CaptureViewModel {
         loadingProgress = 0      // fresh resolve sweep for this capture
         phase = .locking
         let lockResult = await session.lockExposureAndWhiteBalance(timeoutMs: 400)
-        Self.logger.info("[viewmodel] AE/AWB lock: \(String(describing: lockResult), privacy: .public)")
+        Self.logger.debug("[viewmodel] AE/AWB lock: \(String(describing: lockResult), privacy: .public)")
 
         phase = .capturing(progress: 0)
         // Stream each captured frame into the SAME preview the live feed uses, so
@@ -455,7 +455,7 @@ final class CaptureViewModel {
             }
             let result = try await session.captureBurst(into: pipeline)
             lastTimingSummary = result.timing.summary
-            Self.logger.info("[viewmodel] burst complete: \(result.timing.summary, privacy: .public)")
+            Self.logger.debug("[viewmodel] burst complete: \(result.timing.summary, privacy: .public)")
 
             let tiles = result.tiles
             // The sampler is configured in Settings, read fresh per capture.
