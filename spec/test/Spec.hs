@@ -32,6 +32,7 @@ import qualified Properties.RGBTLift     as RGBTLift
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
+import qualified Properties.IsometryMove  as IsometryMove
 import qualified Properties.GenomePair    as GenomePair
 import qualified Properties.ThetaToDelta  as ThetaToDelta
 import qualified Properties.PaletteGesture as PaletteGesture
@@ -142,6 +143,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests
+  , IsometryMove.tests
   , GenomePair.tests
   , ThetaToDelta.tests
   , PaletteGesture.tests

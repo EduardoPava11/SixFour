@@ -98,7 +98,10 @@ collapse; the start-diverse-then-converge knob + the MAP-Elites descriptor axis)
 Pick* self-loop in Picked, Export gated on a prior pick, the two 16×16 candidate cell rectangles),
 "SixFour.Spec.SigmaPairFixed", "SixFour.Spec.SigmaPairHead", "SixFour.Spec.SigmaDecomp",
 "SixFour.Spec.Quad4", "SixFour.Spec.Quad4Fixed", "SixFour.Spec.Bottleneck16",
-"SixFour.Spec.LeafOverride", "SixFour.Spec.ThetaToDelta" (★ canonical-path n=0: the closed-form
+"SixFour.Spec.LeafOverride", "SixFour.Spec.IsometryMove" (★ the EXACT delta-preserving A/B move:
+sign-flips + integer translation on Q16 OKLab, the only no-tolerance lattice isometries, SIMT-native —
+preserves intra/inter-frame colour deltas, stops the genome-game degradation), "SixFour.Spec.ThetaToDelta"
+(★ canonical-path n=0: the closed-form
 σ-aware taste-gradient map θ(770) → generator δ(384-DOF) that feeds LeafOverride / s4_leaf_override),
 "SixFour.Spec.GenomePair" (★ pivot KEYSTONE — two orthogonal-by-
 disjoint-support σ-valid A/B candidate displacements from the base genome, with a θ-independent
