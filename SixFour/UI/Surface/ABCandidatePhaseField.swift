@@ -156,7 +156,12 @@ struct ABCandidatePhaseField: View {
         guard Feature.abCandidatePicker, !surface.palettesPerFrame.isEmpty else {
             candA = []; candB = []; candAIdx = []; candBIdx = []; frame0 = nil; return
         }
-        let frames = surface.palettesPerFrame
+        // RE-CENTER on the user's last pick: each round proposes the next orthogonal pair
+        // around the CHOSEN look (not the original capture), so picking visibly evolves A/B
+        // toward your taste (the reload you expect). Round 1 (no pick yet) uses the capture.
+        // NOTE: re-centering compounds the displacement; the convergence/delta-preservation
+        // that bounds the drift (the degradation) is the genome-game redesign workflow.
+        let frames = surface.chosenLookPalettes.isEmpty ? surface.palettesPerFrame : surface.chosenLookPalettes
         let pixels = surface.framePixelsQ16
         let theta = abTheta
         let set = await Task.detached(priority: .userInitiated) {
