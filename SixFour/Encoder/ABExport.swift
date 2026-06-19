@@ -34,8 +34,11 @@ enum ABExport {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("sixfour-look-\(UUID().uuidString).gif")
         do {
-            try GIFEncoder().encode(volume: volume, perFramePalettes: palettes, to: url,
-                                    comment: "SixFour A/B look")
+            // Export at 256×256 (the 256³ rung): GIFEncoder replicates each 64² index 4×4 at LZW
+            // EMIT time, so the volume stays 64² (the brand holds, no memory blow-up) but every
+            // colour pixel becomes a 4×4 "thick" block on a 256² canvas.
+            try GIFEncoder(upscale: 4).encode(volume: volume, perFramePalettes: palettes, to: url,
+                                              comment: "SixFour A/B look · 256² (4× thick pixels)")
             return url
         } catch {
             return nil
