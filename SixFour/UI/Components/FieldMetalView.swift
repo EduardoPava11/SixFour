@@ -67,16 +67,12 @@ struct FieldMetalView: UIViewRepresentable {
     }
 
     private static func arrangement(of surface: Surface) -> (tile: [UInt8], palette: [SIMD3<UInt8>]) {
-        let side = surface.cubeSide
         switch surface.phase {
-        case .live, .locking, .capturing:
+        case .live:
             return (surface.previewTile, surface.previewPalette)
-        case .rendering, .review:
-            let t = surface.cursor, base = t * side * side
-            guard t >= 0, surface.indexCube.count >= base + side * side else { return ([], surface.palette) }
-            let slice = Array(surface.indexCube[base ..< base + side * side])
-            let pal = (t < surface.palettesPerFrame.count) ? surface.palettesPerFrame[t] : surface.palette
-            return (slice, pal)
+        // The A/B phases (`.captured`/`.picked`) SUPPRESS the full-screen ground: the two
+        // candidate GIFs in `ABCandidatePhaseField` are the sole content, so the ground must
+        // NOT paint the captured scene behind them (it would overlap the 64×64 candidate tiles).
         default:
             return ([], [])
         }

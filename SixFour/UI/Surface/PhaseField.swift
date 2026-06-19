@@ -1,46 +1,143 @@
 import SwiftUI
 
 /// Π — the projection. Maps the current phase of σ to the cells on screen. A phase is a
-/// cell-field CONFIGURATION, not a screen: `field(for:_:)` routes each `SurfacePhase` to
-/// its per-phase renderer, all drawing onto the ONE surface.
+/// cell-field CONFIGURATION, not a screen: `field(for:_:)` routes each `ABPhase` to its
+/// per-phase renderer, all drawing onto the ONE surface.
 ///
-/// Each `case` routes to the real per-phase renderer authored alongside this file
-/// (`LivePhaseField` / `CapturingPhaseField` / `RenderingPhaseField` / `ReviewPhaseField`
-/// / `BootstrapPhaseField` / `UnauthorizedPhaseField` / `ErrorPhaseField` /
-/// `SettingsPhaseField`). The dispatch shape is fixed; a phase change re-draws cells on
-/// the ONE surface — no view swap.
+/// Under the A/B genome shift the lifecycle collapses to **capture → A/B → export**, so
+/// only five renderers are routed: `BootstrapPhaseField` / `UnauthorizedPhaseField` /
+/// `LivePhaseField` / the new `ABCandidatePhaseField` (the `.captured` + `.picked` A/B
+/// game) / `ErrorPhaseField`, plus minimal exporting/done fields. The cut renderers
+/// (Settings / Capturing / Browsing / Rendering / Review) are no longer routed but left in
+/// place. A phase change re-draws cells on the ONE surface — no view swap.
 enum PhaseField {
 
     /// Route a phase to its field renderer. `clock` carries the 20 fps heartbeat so the
     /// canvas is live; `surface` carries σ. Returns a type-erased view because the
     /// branches produce heterogeneous renderers.
+    /// `onShutter` is the direct engine `capture()` kick (lock + burst are internal to
+    /// `.live` under ABSurface — there is no `.locking` phase to observe), wired by
+    /// `SurfaceView` and called by the LivePhaseField shutter.
     @MainActor
     @ViewBuilder
-    static func field(for phase: SurfacePhase, _ surface: Surface, _ clock: SurfaceClock,
-                      _ settings: AppSettings) -> some View {
+    static func field(for phase: ABPhase, _ surface: Surface, _ clock: SurfaceClock,
+                      _ settings: AppSettings, onShutter: @escaping () -> Void) -> some View {
         switch phase {
         case .bootstrap:
             BootstrapPhaseField(surface: surface, clock: clock)
         case .unauthorized:
             UnauthorizedPhaseField(surface: surface, clock: clock)
         case .live:
-            LivePhaseField(surface: surface, clock: clock, settings: settings)
-        case .settings:
-            SettingsPhaseField(surface: surface, clock: clock, settings: settings)
-        case .locking:
-            // The lock is a cell transform of the live field — the shutter goes inert and
-            // the capture-progress field names the lock (it carries no palette yet).
-            CapturingPhaseField(surface: surface, clock: clock, settings: settings)
-        case .capturing:
-            CapturingPhaseField(surface: surface, clock: clock, settings: settings)
-        case .browsing:
-            BrowsingPhaseField(surface: surface, clock: clock, settings: settings)
-        case .rendering(let stage):
-            RenderingPhaseField(stage: stage, surface: surface, clock: clock, settings: settings)
-        case .review:
-            ReviewPhaseField(surface: surface, clock: clock, settings: settings)
+            LivePhaseField(surface: surface, clock: clock, settings: settings, onShutter: onShutter)
+        case .captured, .picked:
+            // The A/B game: two orthogonal candidate GIFs; tapping one IS the pick, which
+            // re-proposes a taste-shifted pair (the infinite game). Export ends it.
+            ABCandidatePhaseField(surface: surface, clock: clock, settings: settings)
+        case .exporting:
+            ExportingPhaseField(surface: surface, clock: clock)
+        case .done:
+            DonePhaseField(surface: surface, clock: clock, settings: settings)
         case .error:
             ErrorPhaseField(surface: surface, clock: clock)
+        }
+    }
+}
+
+/// Π·exporting — the minimal cell field shown while the cube-ladder export family
+/// {16³, 64³, 256³} is being produced (entered only from `.picked`). A flat status word on
+/// the persistent ground; the real `ABExportFamily` wiring is a follow-on.
+struct ExportingPhaseField: View {
+    let surface: Surface
+    let clock: SurfaceClock
+
+    var body: some View {
+        ZStack {
+            Color.clear
+            CellText("EXPORTING…", rows: 9, ink: Color(srgb8: SIMD3(190, 190, 190)))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Exporting")
+        .task { await export() }
+    }
+
+    /// Re-encode the CHOSEN A/B look (the base cube through the chosen per-frame palettes) OFF
+    /// the κ clock, point `gifURL` at it so Done ships the chosen look (not the base auto-render),
+    /// then fire `.exportDone` → `.done`. Falls back to the existing `gifURL` if the chosen
+    /// encode declines (empty pick / incomplete volume). The genome-carrying {16³,256³} ladder
+    /// (ABExportFamily) is the follow-on.
+    private func export() async {
+        let cube = surface.indexCube
+        let pals = surface.chosenLookPalettes
+        let url = await Task.detached(priority: .userInitiated) {
+            ABExport.encodeChosenLook(indexCube: cube, palettes: pals)
+        }.value
+        if let url { surface.gifURL = url }
+        surface.step(.exportDone)
+    }
+}
+
+/// Π·done — the minimal terminal cell field after an export completes. The GIF is shipped;
+/// the only action is Retake (back to `.live` to play again). A flat done word + a Retake
+/// cell button on the persistent ground.
+struct DonePhaseField: View {
+    let surface: Surface
+    let clock: SurfaceClock
+    /// The shared AppSettings — read only for the active Look (the `.cube` LUT is the export
+    /// form of the Look axis, surfaced only when a grade is on).
+    @Bindable var settings: AppSettings
+
+    /// The built `.cube` awaiting the share sheet (set by the Export LUT button). Ported out
+    /// of the retired `ReviewPhaseField`: the .cube LUT export now lives on the Done screen,
+    /// beside the GIF Share, so the only worked LUT path survives the Review deletion.
+    @State private var lutShare: LUTShareItem?
+
+    /// The colours the LUT grades toward: ALL frames' palettes pooled into one cloud (a
+    /// clip-wide profile), falling back to the single review palette. (Ported from Review.)
+    private var lutPalette: [SIMD3<UInt8>] {
+        let pooled = surface.palettesPerFrame.flatMap { $0 }
+        return pooled.isEmpty ? surface.palette : pooled
+    }
+
+    var body: some View {
+        ZStack {
+            Color.clear
+            VStack(spacing: GlobalLattice.pt(9)) {
+                CellText("EXPORTED", rows: 13, ink: .white)
+                // The rendered GIF is the shippable artifact (the genome-faithful cube-ladder
+                // is P3). Surface it for Share when present; otherwise just offer a new shot.
+                if let url = surface.gifURL {
+                    ShareLink(item: url) {
+                        CellActionButton(icon: .none, title: "SHARE GIF",
+                                         prominent: false, fillWidth: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Share the exported GIF")
+                }
+                // The active Look's `.cube` LUT (only when a grade is on; it is the export form
+                // of the Look axis). Ported verbatim from Review — `LUTFile.makeShareItem` + the
+                // pooled `lutPalette` + the `ActivityView` sheet, all unchanged.
+                if settings.captureLook != .off {
+                    Button {
+                        lutShare = LUTFile.makeShareItem(palette: lutPalette, look: settings.captureLook)
+                    } label: {
+                        CellActionButton(icon: .none, title: "EXPORT LUT",
+                                         prominent: false, fillWidth: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Export 3D LUT for R3D")
+                }
+                Button { surface.step(.retake) } label: {
+                    CellActionButton(icon: .none, title: "NEW SHOT",
+                                     prominent: true, fillWidth: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Capture a new shot")
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(item: $lutShare) { item in
+            ActivityView(items: [item.url])
         }
     }
 }
