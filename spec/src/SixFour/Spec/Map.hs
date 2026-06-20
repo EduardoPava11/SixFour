@@ -88,6 +88,10 @@ fixpoint @Fix (OctF l)@: collapse = catamorphism, lift = anamorphism, octant edg
 @liftOct@ lifts "SixFour.Spec.RGBTLift" to @8→8@; PROVES "1 at the bottom" is a
 structured @(coarse + 7 detail)@ band not a scalar — reversibility forces operadic
 self-similarity, and per-scale weights are expressible),
+"SixFour.Spec.PerScaleWeights" (★ per-scale octree weights — the depth-indexed
+gains that REPLACE @LookNetR@'s one weight-tied block; neutral weighting is the
+reversible floor, and a per-scale weighting is strictly more expressive than any
+tied one, so it subsumes and supersedes the retired Mixture-of-Recursions design),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),
