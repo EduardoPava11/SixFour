@@ -28,6 +28,10 @@ module SixFour.Spec.Collapse
   , globalCollapseQ16
   , globalCollapseIndicesQ16
   , reindexFrameQ16
+    -- * Palette-scope gate (HARD MUST #1: per-frame palettes only)
+  , PaletteScope(..)
+  , shippedScope
+  , poolsAcrossFrames
   ) where
 
 import qualified Data.Vector as V
@@ -117,3 +121,29 @@ globalCollapseIndicesQ16 k = farthestPointSeedIndicesQ16 k . pooledCandidatesQ16
 -- ties — the GIF GCT index map). Mirrors 'nearestCentroidQ16'.
 reindexFrameQ16 :: [PxQ16] -> [PxQ16] -> [Int]
 reindexFrameQ16 leaves = map (nearestCentroidQ16 (V.fromList leaves))
+
+-- ---------------------------------------------------------------------------
+-- Palette-scope gate (HARD MUST #1: per-frame palettes only)
+-- ---------------------------------------------------------------------------
+
+-- | Which palette scope a render path uses. 'PerFrame' gives every frame its own
+-- 256-colour palette (GIFA — the shipped MVP1 product); 'Global' pools all frames
+-- into one shared palette via 'globalCollapseQ16' (GIFB — V2-deferred). This is the
+-- spec-level mirror of the Swift @Feature.globalPaletteV2@ flag.
+data PaletteScope = PerFrame | Global
+  deriving (Eq, Show, Enum, Bounded)
+
+-- | The scope the shipped product renders in. Pinned to 'PerFrame': the spec-level
+-- statement of HARD MUST #1 (per-frame palettes only, no global-palette collapse),
+-- mirroring @Feature.globalPaletteV2 = false@. 'Properties.Collapse' gates that this
+-- never silently becomes 'Global'.
+shippedScope :: PaletteScope
+shippedScope = PerFrame
+
+-- | Whether a scope pools colours across frames (the global-collapse path). Only
+-- 'Global' does; 'PerFrame' keeps each frame independent. So
+-- @not (poolsAcrossFrames shippedScope)@ is exactly "the shipped path never invokes
+-- 'globalCollapseQ16'".
+poolsAcrossFrames :: PaletteScope -> Bool
+poolsAcrossFrames PerFrame = False
+poolsAcrossFrames Global   = True

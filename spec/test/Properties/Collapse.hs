@@ -79,4 +79,15 @@ tests = testGroup "Collapse (per-frame palettes → one)"
       forAll genFramesQ16 $ \fs -> forAll (choose (1, 12)) $ \k ->
         let leaves = globalCollapseQ16 k fs
         in all (all (\i -> i >= 0 && i < length leaves)) (map (reindexFrameQ16 leaves) fs)
+
+  -- HARD MUST #1: per-frame palettes only (the spec-level scope gate) ----------
+
+  , testProperty "shipped scope is per-frame (HARD MUST #1: no global palette)" $
+      shippedScope == PerFrame
+
+  , testProperty "the shipped scope never pools across frames (no globalCollapseQ16)" $
+      not (poolsAcrossFrames shippedScope)
+
+  , testProperty "only Global scope pools; PerFrame keeps every frame independent" $
+      poolsAcrossFrames Global && not (poolsAcrossFrames PerFrame)
   ]

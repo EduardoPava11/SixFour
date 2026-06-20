@@ -111,6 +111,10 @@ tests = testGroup "PaletteSearch (MCTS over global-palette candidates)"
              , counterexample "every node state stays well-formed"
                  (property (all (all wellFormed . nodeStates) snaps))
              ]
+  , testProperty "depth-bounded: expansion never exceeds hpMaxDepth (the shallow depth-2-3 proposer)" $
+      forAll genHaar $ \s -> forAll (choose (0, 40)) $ \n -> forAll (choose (1, 1000000)) $ \seed ->
+        forAll (choose (1, 3)) $ \d ->
+          lawDepthBounded stubOracle (defaultHyperparams { hpMaxDepth = d }) n seed s
   ]
 
 -- | ε-approximate equality of two colour lists (FP add/sub is not exact).

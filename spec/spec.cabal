@@ -406,6 +406,8 @@ test-suite spec-tests
         Properties.DeltaCodebook
         Properties.AtlasOracle
         Properties.PreferenceUpdate
+        Properties.PersonalGenome
+        Properties.GenomeBlend
         Properties.DecisionLog
         Properties.AtlasCascade
         Properties.Upscale256

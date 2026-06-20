@@ -40,6 +40,7 @@ module SixFour.Spec.PaletteSearch
   , leafNode
   , meanValue
   , subtreeVisits
+  , searchTreeDepth
     -- * Selection / iteration / halting
   , Hyperparams(..)
   , defaultHyperparams
@@ -64,6 +65,7 @@ module SixFour.Spec.PaletteSearch
   , lawBackupCountsVisits
   , lawDeterministic
   , lawGalleryBounded
+  , lawDepthBounded
   ) where
 
 import Data.List (foldl', maximumBy)
@@ -176,12 +178,13 @@ subtreeVisits t = stVisits t + sum [ subtreeVisits c | (_, c) <- stChildren t ]
 
 -- | The search's tunable knobs (PUCT exploration constant, budgets, …).
 data Hyperparams = Hyperparams
-  { hpC :: Double   -- ^ PUCT exploration constant. 0 ⇒ pure exploitation.
+  { hpC        :: Double   -- ^ PUCT exploration constant. 0 ⇒ pure exploitation.
+  , hpMaxDepth :: Int      -- ^ ply budget: expansion stops at this tree depth (the shallow proposer).
   } deriving (Eq, Show)
 
 -- | The default MCTS hyperparameters (exploration constant, rollout budget, …).
 defaultHyperparams :: Hyperparams
-defaultHyperparams = Hyperparams 1.4
+defaultHyperparams = Hyperparams { hpC = 1.4, hpMaxDepth = 3 }
 
 -- | PUCT score of a child given the parent's visit count.
 -- @Q(child) + c · P(child) · √N(parent) / (1 + n(child))@.
@@ -198,10 +201,20 @@ childrenFromPolicy o s = [ (m, leafNode p (applyMove m s)) | (m, p) <- oPolicy o
 -- expand + evaluate it, and back the value up — returning the updated tree, the
 -- leaf value, and the advanced seed. Pure and deterministic.
 mctsStep :: Oracle -> Hyperparams -> Seed -> SearchTree -> (SearchTree, Double, Seed)
-mctsStep o hp seed t
+mctsStep o hp = mctsStepD o hp 0
+
+-- | 'mctsStep' carrying the current ply depth from the root, so expansion stops
+-- once 'hpMaxDepth' is reached: a node at the budget commits NO children and is
+-- thereafter treated as terminal. This bounds the tree to the shallow depth-2-3
+-- proposer ('lawDepthBounded'); the unbounded recursion was the only thing that
+-- let it grow without limit.
+mctsStepD :: Oracle -> Hyperparams -> Int -> Seed -> SearchTree -> (SearchTree, Double, Seed)
+mctsStepD o hp depth seed t
   | not (stExpanded t) =
-      -- Leaf: expand (commit children) + evaluate, count this visit.
-      let kids = childrenFromPolicy o (stState t)
+      -- Leaf: expand (commit children) UNLESS the ply budget is reached; either way
+      -- evaluate + count this visit. A budget-capped leaf keeps [] children ⇒ terminal.
+      let kids | depth >= hpMaxDepth hp = []
+               | otherwise              = childrenFromPolicy o (stState t)
           v    = oValue o (stState t)
       in ( t { stChildren = kids
              , stExpanded = True
@@ -209,16 +222,17 @@ mctsStep o hp seed t
              , stValueSum = stValueSum t + v }
          , v, seed )
   | null (stChildren t) =
-      -- Terminal (policy proposed nothing): re-evaluate, count the visit.
+      -- Terminal (policy proposed nothing, or the ply budget capped it): re-evaluate.
       let v = oValue o (stState t)
       in (t { stVisits = stVisits t + 1, stValueSum = stValueSum t + v }, v, seed)
   | otherwise =
-      -- Internal: select the best child by PUCT (seed breaks ties), recurse, back up.
+      -- Internal: select the best child by PUCT (seed breaks ties), recurse ONE ply
+      -- deeper, back up.
       let parentN     = stVisits t
           scored      = [ (puct hp parentN c, i) | (i, (_, c)) <- zip [0 ..] (stChildren t) ]
           (bestI, sd) = argmaxWithSeed scored seed
           (mv, child) = stChildren t !! bestI
-          (child', v, sd') = mctsStep o hp sd child
+          (child', v, sd') = mctsStepD o hp (depth + 1) sd child
           kids'       = setAt bestI (mv, child') (stChildren t)
       in ( t { stChildren = kids'
              , stVisits   = stVisits t + 1
@@ -330,7 +344,7 @@ lawMovePreservesWellFormed m s = wellFormed s == wellFormed (applyMove m s)
 -- | At @c = 0@ PUCT reduces to pure exploitation (= the child's mean value).
 lawPuctExploitLimit :: Int -> SearchTree -> Bool
 lawPuctExploitLimit parentN child =
-  puct (Hyperparams 0) parentN child == meanValue child
+  puct (defaultHyperparams { hpC = 0 }) parentN child == meanValue child
 
 -- | After @n@ root iterations the root has been visited exactly @n@ times.
 lawBackupCountsVisits :: Oracle -> Int -> Seed -> SearchTree -> Bool
@@ -346,3 +360,17 @@ lawDeterministic o n seed tree =
 -- | The gallery never returns more than @k@ options.
 lawGalleryBounded :: Int -> SearchTree -> Bool
 lawGalleryBounded k t = length (galStates (extractGallery k 1.0 0.5 t)) <= max 0 k
+
+-- | The search tree's depth (root = 0; a childless node = 0; else 1 + deepest child).
+searchTreeDepth :: SearchTree -> Int
+searchTreeDepth t = case stChildren t of
+  [] -> 0
+  cs -> 1 + maximum [ searchTreeDepth c | (_, c) <- cs ]
+
+-- | The shallow-tree guarantee (the locked design's depth-2-3 proposer): searching
+-- from a fresh root leaf, expansion never grows the tree past 'hpMaxDepth' — every
+-- committed node sits at depth ≤ the ply budget, for any iteration count and seed.
+lawDepthBounded :: Oracle -> Hyperparams -> Int -> Seed -> SearchState -> Bool
+lawDepthBounded o hp n seed s =
+  searchTreeDepth (runSearch o hp (HaltOnVisits (max 0 n)) seed (leafNode 1.0 s))
+    <= hpMaxDepth hp

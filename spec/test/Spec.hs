@@ -108,6 +108,8 @@ import qualified Properties.AtlasState   as AtlasState
 import qualified Properties.DeltaCodebook as DeltaCodebook
 import qualified Properties.AtlasOracle  as AtlasOracle
 import qualified Properties.PreferenceUpdate as PreferenceUpdate
+import qualified Properties.PersonalGenome as PersonalGenome
+import qualified Properties.GenomeBlend  as GenomeBlend
 import qualified Properties.DecisionLog  as DecisionLog
 import qualified Properties.AtlasCascade as AtlasCascade
 import qualified Properties.Upscale256   as Upscale256
@@ -220,6 +222,8 @@ main = defaultMain $ testGroup "sixfour-spec"
   , DeltaCodebook.tests
   , AtlasOracle.tests
   , PreferenceUpdate.tests
+  , PersonalGenome.tests
+  , GenomeBlend.tests
   , DecisionLog.tests
   , AtlasCascade.tests
   , Upscale256.tests
