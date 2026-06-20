@@ -51,16 +51,27 @@ module SixFour.Spec.ValueHead
   , valuePairGradient
   , valueUpdate
   , zeroResidual
+    -- * Fixed-order training trajectory + cross-device golden signature (nn-10)
+  , valueMargin
+  , valueMarginKey
+  , valueTrainTrajectory
+  , trajectoryKeys
     -- * Laws (QuickCheck'd in Properties.ValueHead)
   , lawValueGradientFiniteDiff
   , lawValueStepDecreasesLoss
   , lawReducesToLinear
   , lawReducesToLinearGradient
   , lawSmoothingHasFiniteOptimum
+  , lawTrainTrajectoryDeterministic
+  , lawTrainTrajectoryFixedOrder
+  , lawTrajectoryKeyRequantStable
   ) where
+
+import Data.List (foldl')
 
 import SixFour.Spec.Preference      (Embedding, btProbability, linearUtility)
 import SixFour.Spec.PreferenceUpdate (btPairGradient)
+import SixFour.Spec.GumbelSearch    (q16Key)
 
 -- ---------------------------------------------------------------------------
 -- Shape and hyperparameters
@@ -224,3 +235,74 @@ lawSmoothingHasFiniteOptimum eps delta =
   eps <= 0 || eps >= 0.5 ||
   marginLoss eps (logit (1 - eps)) <= marginLoss eps delta + 1e-9
   where logit p = log (p / (1 - p))
+
+-- ---------------------------------------------------------------------------
+-- Fixed-order training trajectory + cross-device golden signature (nn-10)
+-- ---------------------------------------------------------------------------
+
+-- | The value margin @Δ = u(w) − u(l)@ the head assigns an ordered pair.
+valueMargin :: ValueShape -> [Double] -> (Embedding, Embedding) -> Double
+valueMargin sh ps (w, l) = valueScore sh ps w - valueScore sh ps l
+
+-- | The CROSS-DEVICE decision key for a probe pair: the value margin quantized to
+-- the integer Q16 lattice ('SixFour.Spec.GumbelSearch.q16Key'). Two devices whose
+-- floats differ below half a Q16 ULP produce the SAME key, so a decision built on
+-- this key is reproducible even though the float training is not.
+valueMarginKey :: ValueShape -> [Double] -> (Embedding, Embedding) -> Int
+valueMarginKey sh ps probe = q16Key (valueMargin sh ps probe)
+
+-- | The fixed-order on-device training trajectory: the parameter vector after each
+-- Compare, folded oldest-first by 'valueUpdate' (head = the initial params).
+-- ORDER-DEPENDENT by design (SGD never commutes), exactly as 'btFit' — replay
+-- therefore stores Compares in decision order.
+valueTrainTrajectory
+  :: Double -> Double -> Double -> ValueShape -> [Double]
+  -> [(Embedding, Embedding)] -> [[Double]]
+valueTrainTrajectory eta lambda eps sh =
+  scanl (\ps c -> valueUpdate eta lambda eps sh ps c)
+
+-- | The cross-device DECISION SIGNATURE of a training run: 'valueMarginKey' on a
+-- fixed probe pair at every step of the trajectory. This integer sequence is the
+-- GOLDEN a hand-written / MPSGraph trainer is gated against — reproducible across
+-- devices even though the raw float parameters are not (the contract is "produce
+-- these keys", not "produce these floats").
+trajectoryKeys
+  :: Double -> Double -> Double -> ValueShape -> [Double]
+  -> [(Embedding, Embedding)] -> (Embedding, Embedding) -> [Int]
+trajectoryKeys eta lambda eps sh ps0 cmps probe =
+  [ valueMarginKey sh ps probe | ps <- valueTrainTrajectory eta lambda eps sh ps0 cmps ]
+
+-- | The trajectory and its decision signature are pure deterministic functions of
+-- (init params, Compare log, hyperparameters) — same inputs ⇒ identical trajectory
+-- and identical key sequence.
+lawTrainTrajectoryDeterministic
+  :: Double -> Double -> Double -> ValueShape -> [Double]
+  -> [(Embedding, Embedding)] -> (Embedding, Embedding) -> Bool
+lawTrainTrajectoryDeterministic eta lambda eps sh ps0 cmps probe =
+  valueTrainTrajectory eta lambda eps sh ps0 cmps == valueTrainTrajectory eta lambda eps sh ps0 cmps
+  && trajectoryKeys eta lambda eps sh ps0 cmps probe == trajectoryKeys eta lambda eps sh ps0 cmps probe
+
+-- | Fixed-order pin: the trajectory has exactly @length log + 1@ entries and its
+-- LAST params equal the ordered left-fold of 'valueUpdate' over the Compare log
+-- (oldest-first). Pins that training is the ordered fold (order matters; SGD does
+-- not commute).
+lawTrainTrajectoryFixedOrder
+  :: Double -> Double -> Double -> ValueShape -> [Double]
+  -> [(Embedding, Embedding)] -> Bool
+lawTrainTrajectoryFixedOrder eta lambda eps sh ps0 cmps =
+  let traj = valueTrainTrajectory eta lambda eps sh ps0 cmps
+  in length traj == length cmps + 1
+     && last traj == foldl' (\ps c -> valueUpdate eta lambda eps sh ps c) ps0 cmps
+
+-- | The Q16 key is a FIXED POINT of its own quantization: reconstructing the
+-- Q16-rounded margin from a key and re-keying yields the same key, at every
+-- trajectory step. So the integer decision signature survives the float→Q16→float
+-- round-trip across the CPU/GPU boundary EXACTLY — which is what makes
+-- 'trajectoryKeys' a valid cross-device golden. (@65536@ mirrors 'q16Key''s scale.)
+lawTrajectoryKeyRequantStable
+  :: Double -> Double -> Double -> ValueShape -> [Double]
+  -> [(Embedding, Embedding)] -> (Embedding, Embedding) -> Bool
+lawTrajectoryKeyRequantStable eta lambda eps sh ps0 cmps probe =
+  and [ q16Key (fromIntegral (q16Key m) / 65536) == q16Key m
+      | ps <- valueTrainTrajectory eta lambda eps sh ps0 cmps
+      , let m = valueMargin sh ps probe ]
