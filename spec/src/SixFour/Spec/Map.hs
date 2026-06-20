@@ -47,6 +47,8 @@ comparisons, and a small per-user delta head is updated on device (proven on har
     [coverage,beauty,‖chroma‖²]; STOP on no signal; drop degenerate gallery pairs)
   * "SixFour.Spec.GumbelSearch"    — ★ AlphaZero reframe: Sequential-Halving root selection + the Q16
     cross-tier comparison key (CPU tree ≡ GPU float value decision; sub-key wobble cannot flip a move)
+  * "SixFour.Spec.Proposer"        — ★ the propose-candidates organ: compose orthogonal genome seed →
+    value-rank → Sequential-Halving into one A/B Proposal (the three pieces, finally wired)
   * "SixFour.Spec.AtlasCascade"    — the multi-stage proposal cascade
   * "SixFour.Spec.PersonalGenome"  — ★ pivot: the per-device θ lifecycle (cold start, per-pick
     learning, deterministic replay, KataGo-gated promotion) wrapping "SixFour.Spec.PreferenceUpdate"
