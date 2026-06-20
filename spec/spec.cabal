@@ -87,6 +87,7 @@ library
         SixFour.Spec.CloudProjection
         SixFour.Spec.PaletteSearch
         SixFour.Spec.Proposer
+        SixFour.Spec.ValueHead
         SixFour.Spec.PaletteOracle
         SixFour.Spec.Dither
         SixFour.Spec.LookNet
@@ -335,6 +336,7 @@ test-suite spec-tests
         Properties.MoveRadiusSchedule
         Properties.GenomePair
         Properties.Proposer
+        Properties.ValueHead
         Properties.ThetaToDelta
         Properties.PaletteGesture
         Properties.GroupRGBT

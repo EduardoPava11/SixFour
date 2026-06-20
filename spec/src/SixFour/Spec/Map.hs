@@ -49,6 +49,8 @@ comparisons, and a small per-user delta head is updated on device (proven on har
     cross-tier comparison key (CPU tree ≡ GPU float value decision; sub-key wobble cannot flip a move)
   * "SixFour.Spec.Proposer"        — ★ the propose-candidates organ: compose orthogonal genome seed →
     value-rank → Sequential-Halving into one A/B Proposal (the three pieces, finally wired)
+  * "SixFour.Spec.ValueHead"       — ★ the LEARNED BT value head: linear floor + gated tanh residual +
+    on-device training step (nn-6; finite-diff-pinned gradient; linear is the zero-residual case)
   * "SixFour.Spec.AtlasCascade"    — the multi-stage proposal cascade
   * "SixFour.Spec.PersonalGenome"  — ★ pivot: the per-device θ lifecycle (cold start, per-pick
     learning, deterministic replay, KataGo-gated promotion) wrapping "SixFour.Spec.PreferenceUpdate"

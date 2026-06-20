@@ -36,6 +36,7 @@ import qualified Properties.IsometryMove  as IsometryMove
 import qualified Properties.MoveRadiusSchedule as MoveRadiusSchedule
 import qualified Properties.GenomePair    as GenomePair
 import qualified Properties.Proposer      as Proposer
+import qualified Properties.ValueHead     as ValueHead
 import qualified Properties.ThetaToDelta  as ThetaToDelta
 import qualified Properties.PaletteGesture as PaletteGesture
 import qualified Properties.GroupRGBT     as GroupRGBT
@@ -151,6 +152,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , MoveRadiusSchedule.tests
   , GenomePair.tests
   , Proposer.tests
+  , ValueHead.tests
   , ThetaToDelta.tests
   , PaletteGesture.tests
   , GroupRGBT.tests
