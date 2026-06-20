@@ -58,6 +58,10 @@ module SixFour.Spec.OctreeCell
     -- * Cube-ladder scales (octree levels)
   , octreeDepth
   , levelsBetween
+    -- * The octant ladder (a real Haar pyramid built on 'liftOct')
+  , Detail
+  , octantDistill
+  , octantSynthesize
     -- * Laws (QuickCheck'd in @Properties.OctreeCell@)
   , lawOctReversible
   , lawLadderSelfSimilar
@@ -67,6 +71,7 @@ module SixFour.Spec.OctreeCell
   , lawUnitWeightLossless
   , scalarCollapseLossy
   , lawScalarLeafFailsUnlessSmooth
+  , lawOctantLadderBijective
   ) where
 
 import SixFour.Spec.RGBTLift (liftQuad, unliftQuad)
@@ -242,3 +247,52 @@ levelsBetween hi lo = octreeDepth hi - octreeDepth lo
 -- (each is 2 levels). This is WHY one octant operator covers every rung.
 lawLadderSelfSimilar :: Bool
 lawLadderSelfSimilar = levelsBetween 64 16 == levelsBetween 256 64
+
+-- | The seven detail sub-bands of an octant (same shape as 'OctBand''s detail).
+type Detail = (Int,Int,Int,Int,Int,Int,Int)
+
+-- | Group a list into consecutive 8-tuples (one per octant, Morton order).
+chunk8 :: [a] -> [[a]]
+chunk8 [] = []
+chunk8 xs = take 8 xs : chunk8 (drop 8 xs)
+
+-- | Pack the first eight elements into a 'V8' (total; pads with 0 if short, which
+-- never happens for a well-formed @8^d@ cube).
+toV8 :: [Int] -> V8 Int
+toV8 (a:b:c:d:e:f:g:h:_) = V8 a b c d e f g h
+toV8 _                   = V8 0 0 0 0 0 0 0 0
+
+-- | Flatten a 'V8' to its eight elements in Morton order.
+unV8 :: V8 a -> [a]
+unV8 (V8 a b c d e f g h) = [a,b,c,d,e,f,g,h]
+
+-- | One octant ladder level: @8^k@ Morton voxels ↦ @8^(k-1)@ coarse values + the
+-- per-octant detail bands. This is where the pyramid DELEGATES to 'liftOct'.
+octantStep :: [Int] -> ([Int], [Detail])
+octantStep xs = unzip [ (ocCoarse b, ocDetail b) | oct <- chunk8 xs, let b = liftOct (toV8 oct) ]
+
+-- | Descend the octant ladder @d@ levels: a @8^d@ cube ↦ the single coarsest value
+-- plus the detail bands finest-first. The real 3-D Haar pyramid (cf. the 2-D
+-- "SixFour.Spec.CubeLadder"), built entirely on the reversible 'liftOct' edge.
+octantDistill :: Int -> [Int] -> ([Int], [[Detail]])
+octantDistill 0 xs = (xs, [])
+octantDistill d xs =
+  let (coarse, det) = octantStep xs
+      (c', dets)    = octantDistill (d - 1) coarse
+  in (c', det : dets)
+
+-- | Exact inverse of 'octantDistill': replay the detail bands (coarsest-first) to
+-- rebuild the @8^d@ cube via 'unliftOct'.
+octantSynthesize :: ([Int], [[Detail]]) -> [Int]
+octantSynthesize (coarse, [])         = coarse
+octantSynthesize (coarse, det : dets) =
+  let inner = octantSynthesize (coarse, dets)
+  in concatMap unV8 (zipWith (\co de -> unliftOct (OctBand co de)) inner det)
+
+-- | The octant ladder loses nothing: @octantSynthesize . octantDistill d ≡ id@ on
+-- a @8^d@ cube — the 3-D mirror of @CubeLadder.lawLadderBijective@, delegating to
+-- the 'liftOct' edge at every level.
+lawOctantLadderBijective :: Int -> [Int] -> Bool
+lawOctantLadderBijective d xs =
+  not (d >= 0 && length xs == 8 ^ d)
+    || octantSynthesize (octantDistill d (take (8 ^ d) xs)) == take (8 ^ d) xs

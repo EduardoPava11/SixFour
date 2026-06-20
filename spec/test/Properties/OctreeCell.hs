@@ -4,6 +4,7 @@ import Test.Tasty
 import Test.Tasty.QuickCheck
 
 import SixFour.Spec.OctreeCell
+import qualified SixFour.Spec.VoxelReduce as VR
 
 -- Q16-range integers, including negatives (the regime the device uses).
 genInt :: Gen Int
@@ -54,4 +55,12 @@ tests = testGroup "OctreeCell (2x2x2 <-> 1 octree: structured-leaf invariant)"
 
   , testProperty "self-similar ladder: 64^3->16^3 == 256^3->64^3 (2 levels each)" $
       once (levelsBetween 64 16 == 2 && levelsBetween 256 64 == 2 && lawLadderSelfSimilar)
+
+  , testProperty "octant ladder round-trips (delegates to liftOct): synth . distill = id" $
+      forAll genDepthXs (uncurry lawOctantLadderBijective)
+
+  , testProperty "cross-module: VoxelReduce 64->16 and 256->64 are each 2 octree levels" $
+      once ( VR.reducedSide 2 64 == 16 && VR.reducedFrames 2 64 == 16
+           && VR.reducedSide 2 256 == 64
+           && levelsBetween 64 16 == 2 && levelsBetween 256 64 == 2 )
   ]
