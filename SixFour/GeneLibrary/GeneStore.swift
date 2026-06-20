@@ -10,7 +10,7 @@ import os
 /// PURPOSE: the gene store, the unit the fleet would eventually share/merge.
 /// STATUS: today a FLAT JSON catalog (linear nearest-by-distance retrieval). The
 /// pivot's CVT-MAP-Elites / `genomeInner` vector RAG on a SIMT substrate is NOT
-/// built yet. MAP: docs/NN-STACK.generated.md ("Unfinished work").
+/// built yet. (Warm-start RAG staged but not wired; see CLAUDE.md.)
 actor GeneStore {
     static let log = Logger(subsystem: "com.sixfour.SixFour", category: "genes")
 

@@ -46,6 +46,7 @@ library
         SixFour.Spec.PairTree
         SixFour.Spec.PairTreeFixed
         SixFour.Spec.RGBTLift
+        SixFour.Spec.OctreeCell
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
@@ -329,6 +330,7 @@ test-suite spec-tests
         Properties.PairTree
         Properties.PairTreeFixed
         Properties.RGBTLift
+        Properties.OctreeCell
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride

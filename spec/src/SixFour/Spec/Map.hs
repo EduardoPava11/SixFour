@@ -82,7 +82,13 @@ learns this barycenter.)
 "SixFour.Spec.SplitTree", "SixFour.Spec.PairTree", "SixFour.Spec.PairTreeFixed",
 "SixFour.Spec.RGBTLift" (the @2×2 ↔ RGBT@ reversible integer lifting — the spatial sibling of the
 1-D PairTreeFixed S-transform; the @(2×2)<->1@ bijection that makes the cube ladder lossless, see
-@docs/SIXFOUR-RGBT4D-BUFFER-HARDENING-WORKFLOW.md@), "SixFour.Spec.CanonicalPhase" (the loop
+@docs/SIXFOUR-RGBT4D-BUFFER-HARDENING-WORKFLOW.md@),
+"SixFour.Spec.OctreeCell" (★ octree keystone — the @2×2×2 → 1@ structured-leaf
+fixpoint @Fix (OctF l)@: collapse = catamorphism, lift = anamorphism, octant edge
+@liftOct@ lifts "SixFour.Spec.RGBTLift" to @8→8@; PROVES "1 at the bottom" is a
+structured @(coarse + 7 detail)@ band not a scalar — reversibility forces operadic
+self-similarity, and per-scale weights are expressible),
+"SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),
 "SixFour.Spec.RGBTFeature" (the 1b feature layer — entropy-weighted temporal coherence over the

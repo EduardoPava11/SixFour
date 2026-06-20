@@ -4,7 +4,7 @@
 // morphism (16^3:64^3 :: 64^3:256^3) and the final 256-quantize — the ONLY
 // cross-device BIT-EXACT substrate. Every float result from Core AI (L) or
 // MPSGraph (A/B) must re-enter here via the `zero-genome == floor` short-circuit
-// so floating-point noise never reaches the GIF bytes. MAP: docs/NN-STACK.generated.md.
+// so floating-point noise never reaches the GIF bytes. MAP: CLAUDE.md (train/deploy spine).
 //
 // These kernels replace the GPU/Swift palette+dither+GIF path with a fixed-point
 // integer pipeline so the 64-frame GIF is produced 100% deterministically

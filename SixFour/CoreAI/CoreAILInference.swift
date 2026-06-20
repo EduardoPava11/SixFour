@@ -5,7 +5,7 @@
 //  PURPOSE: the on-device inference seam for the frozen L (grayscale) net.
 //  Loads the `L.aimodel` produced by `trainer/coreai_export/` and runs it through
 //  Apple's Core AI runtime. This is the iOS half of the 2026-06-20 pivot — see
-//  `docs/NN-STACK.generated.md`.
+//  CLAUDE.md (the amendment block).
 //
 //  CONTRACT (amended 2026-06-20, see CLAUDE.md):
 //   • Core AI is an Apple SYSTEM framework, so it satisfies the zero-third-party

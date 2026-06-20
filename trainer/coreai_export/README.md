@@ -2,8 +2,8 @@
 
 **PURPOSE.** This is the one new seam of the 2026-06-20 pivot: it converts the
 **frozen L (grayscale) net** — trained by MLX/PyTorch on the Mac — into a Core AI
-`.aimodel` asset that the iPhone loads for *inference*. See
-`docs/NN-STACK.generated.md` for the full map.
+`.aimodel` asset that the iPhone loads for *inference*. See CLAUDE.md
+(the 2026-06-20 amendment) for the pivot contract.
 
 **SCOPE — read before adding code here.**
 - ✅ L channel only. L is frozen at deploy time, so inference-only Core AI is the

@@ -1,7 +1,7 @@
 """export_l_coreai.py — convert the frozen L (grayscale) net to a Core AI .aimodel.
 
 PURPOSE: the L-channel deploy bridge of the 2026-06-20 pivot (see
-docs/NN-STACK.generated.md and ./README.md). Train L in MLX/PyTorch on the Mac;
+CLAUDE.md (2026-06-20 amendment) and ./README.md). Train L in MLX/PyTorch on the Mac;
 this script exports it for INFERENCE on the iPhone via Apple Core AI.
 
 SCOPE: L only, inference only. Core AI cannot train; the A/B chroma channels

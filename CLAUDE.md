@@ -58,7 +58,7 @@ take on a dependency.
 >   developer-beta (GA ~Sept 2026); every use sits behind `#if canImport(CoreAI)`
 >   and is verifiable only on a real device.
 >
-> The full pivot map is `docs/NN-STACK.generated.md`.
+> This contract is the canon; the pivot is the amendment above.
 
 ## Train / deploy spine
 - **Train (base net):** MLX on the M1.
@@ -69,10 +69,10 @@ take on a dependency.
   Core AI is now allowed for **L-inference only** (see the amendment above), never
   for training. MPSGraph does not execute in the simulator (gate via
   `targetEnvironment(simulator)`).
-  **Orientation: `docs/NN-STACK.generated.md`** is the single canonical map. (It
-  replaces the sunset plans `docs/ON-DEVICE-TRAINING.md`, `docs/COLOR-ATLAS.md`,
-  and `docs/STATUS.md`, which were deleted; their essentials now live in that map
-  and in the purpose-headers of `SixFour/Atlas/`.)
+  **Orientation:** this contract (the amendment above) is the canon. The sunset
+  plans `docs/ON-DEVICE-TRAINING.md` / `docs/COLOR-ATLAS.md` / `docs/STATUS.md`
+  were deleted; their essentials live in these rules and the purpose-headers in
+  `SixFour/Atlas/`.
 - **Verify:** Haskell spec (golden vectors gate every backend).
 - **Deploy (L, frozen):** MLX (Mac train) → `trainer/coreai_export/` → `L.aimodel`
   → **Core AI** inference on device (`SixFour/CoreAI/`), behind the Zig
@@ -86,8 +86,9 @@ take on a dependency.
 ## Palette: global vs per-frame
 **MVP1 ships PER-FRAME palettes only.** The global (GIFB) path below is implemented and
 golden-gated but **DEFERRED TO V2** behind `Feature.globalPaletteV2 = false` (every entry point is
-guarded ⇒ unreachable in MVP1). The per-frame + A/B-genome direction is mapped in
-`docs/NN-STACK.generated.md` (the migration-workflow plans it cited were sunset).
+guarded ⇒ unreachable in MVP1). The per-frame + A/B-genome direction lives in the
+spec (`Spec/StageA.hs`, `Spec.Proposer`, `Spec.GenomePair`); its earlier
+migration-workflow docs were sunset.
 
 `Spec/StageA.hs` extracts a **per-frame** 256-colour palette per frame — that is
 the NN *input*. The look-NN sum-pools all frames' tokens (permutation-invariant)

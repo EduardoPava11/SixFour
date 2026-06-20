@@ -7,13 +7,12 @@ import MetalPerformanceShadersGraph
 ///
 /// PURPOSE: the on-device, per-user LEARNING leg for the chromatic A/B channels.
 /// Stays on MPSGraph because Core AI cannot train (only the frozen L net deploys
-/// via Core AI — see the 2026-06-20 amendment in CLAUDE.md and
-/// `docs/NN-STACK.generated.md`).
+/// via Core AI — see the 2026-06-20 amendment in CLAUDE.md).
 /// STATUS: SPIKE, not the production head — honest deviations noted below (no
 /// σ-masks, no 24-D σ-invariant projection, policy heads unbuilt). Device-only
 /// (does not run in the simulator). Promote before treating as shipped.
-/// MAP: `docs/NN-STACK.generated.md` §A. (The cited `docs/ON-DEVICE-TRAINING.md`
-/// and `docs/COLOR-ATLAS.md` were sunset; their math is summarised inline here.)
+/// MAP: CLAUDE.md (train/deploy spine). (The cited COLOR-ATLAS.md /
+/// ON-DEVICE-TRAINING.md were sunset; their math is summarised inline here.)
 ///
 /// Proves the verdict of the research report: the Atlas value path can train
 /// on-device with MPSGraph alone (`gradients(of:with:)` reverse-mode autodiff +

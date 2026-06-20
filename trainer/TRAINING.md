@@ -15,6 +15,15 @@ PonderNet-halting recursive core → **depth-8 256-distinct-L head** (the σ-pai
 chroma; L uses full resolution), trained as a soft-OT GAN. Beats the 256-level
 Wasserstein-barycenter baseline on held-out captures.
 
+> **DIRECTION NOTE (2026-06-20 — supersedes the "global grayscale palette" framing above):**
+> L is being reframed from a grayscale-palette nucleus to a **white-balance +
+> dynamic-range BALANCE network** — a learned **spatio-temporal LUT** that applies
+> the reversible `(2×2)×(2×2)↔1` collapse/lift over the 64³ LAB cube. It is **NOT a
+> global colour palette** (the global-output line above is the debt being retired).
+> Training becomes **self-supervised on random colours** (learn the operator, no
+> labels). Game role (homeostasis): A/B picks DESTABILIZE colours; L RE-BALANCES
+> (white point + dynamic range). Canon home = `CLAUDE.md`; design search in progress.
+
 ## Prerequisites (M1)
 
 - **Zig 0.16** (`brew install zig`) — builds the native core `libsixfour_native.dylib`.
