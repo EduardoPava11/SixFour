@@ -6,6 +6,11 @@ import os
 /// per-slot index file `<appSupport>/SixFour/genes/<slot>/index.json`.
 ///
 /// AirDrop'd `.sixfour-genes` bundles are unpacked here by AirDropHandler.
+///
+/// PURPOSE: the gene store, the unit the fleet would eventually share/merge.
+/// STATUS: today a FLAT JSON catalog (linear nearest-by-distance retrieval). The
+/// pivot's CVT-MAP-Elites / `genomeInner` vector RAG on a SIMT substrate is NOT
+/// built yet. MAP: docs/NN-STACK.generated.md ("Unfinished work").
 actor GeneStore {
     static let log = Logger(subsystem: "com.sixfour.SixFour", category: "genes")
 

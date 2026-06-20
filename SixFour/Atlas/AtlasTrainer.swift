@@ -3,7 +3,17 @@ import Metal
 import MetalPerformanceShaders
 import MetalPerformanceShadersGraph
 
-/// COLOR ATLAS — on-device training SPIKE (docs/ON-DEVICE-TRAINING.md Answer 1).
+/// COLOR ATLAS — on-device training SPIKE.
+///
+/// PURPOSE: the on-device, per-user LEARNING leg for the chromatic A/B channels.
+/// Stays on MPSGraph because Core AI cannot train (only the frozen L net deploys
+/// via Core AI — see the 2026-06-20 amendment in CLAUDE.md and
+/// `docs/NN-STACK.generated.md`).
+/// STATUS: SPIKE, not the production head — honest deviations noted below (no
+/// σ-masks, no 24-D σ-invariant projection, policy heads unbuilt). Device-only
+/// (does not run in the simulator). Promote before treating as shipped.
+/// MAP: `docs/NN-STACK.generated.md` §A. (The cited `docs/ON-DEVICE-TRAINING.md`
+/// and `docs/COLOR-ATLAS.md` were sunset; their math is summarised inline here.)
 ///
 /// Proves the verdict of the research report: the Atlas value path can train
 /// on-device with MPSGraph alone (`gradients(of:with:)` reverse-mode autodiff +
@@ -11,7 +21,7 @@ import MetalPerformanceShadersGraph
 /// "Training a neural network using MPSGraph" sample pattern), zero third-party
 /// dependencies (MetalPerformanceShadersGraph is an OS framework, iOS 14+).
 ///
-/// The graph is the VALUE PATH of docs/COLOR-ATLAS.md §4.2, spike-simplified:
+/// The graph is the VALUE PATH of COLOR-ATLAS §4.2 (sunset), spike-simplified:
 ///
 ///   board [B,4096,6] ──(per-bin 6→64 linear, mean-pool over bins, tanh)──┐
 ///                                                                        ├─ ctx [B,128]
@@ -20,7 +30,7 @@ import MetalPerformanceShadersGraph
 ///   ctx ──(128→32 tanh ── 32→1)── V(board, genome)                       ▼
 ///
 /// trained with the Bradley–Terry pairwise logistic loss on Compare pairs
-/// (docs/COLOR-ATLAS.md §3.1 `Compare` — pure training signal):
+/// (COLOR-ATLAS §3.1 (sunset) `Compare` — pure training signal):
 ///
 ///   loss = mean softplus(−(V(board, gWinner) − V(board, gLoser)))
 ///        = mean −log σ(V_w − V_l)
@@ -42,7 +52,7 @@ import MetalPerformanceShadersGraph
 /// thread; MPSGraph `run` blocks until the GPU completes each step.
 final class AtlasTrainer {
 
-    // MARK: Pinned dimensions (docs/COLOR-ATLAS.md §2 tensor table)
+    // MARK: Pinned dimensions (COLOR-ATLAS §2 tensor table, sunset)
 
     /// 16³ board bins (`AtlasBoard16.binCount`).
     static var boardBins: Int { AtlasBoard16.binCount }

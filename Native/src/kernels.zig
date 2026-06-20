@@ -1,5 +1,11 @@
 // SixFour deterministic quantized core — C ABI surface (Stage 0 scaffold).
 //
+// LADDER ROLE: the Zig core owns the reversible (2x2)x(2x2)->1 collapse/lift
+// morphism (16^3:64^3 :: 64^3:256^3) and the final 256-quantize — the ONLY
+// cross-device BIT-EXACT substrate. Every float result from Core AI (L) or
+// MPSGraph (A/B) must re-enter here via the `zero-genome == floor` short-circuit
+// so floating-point noise never reaches the GIF bytes. MAP: docs/NN-STACK.generated.md.
+//
 // These kernels replace the GPU/Swift palette+dither+GIF path with a fixed-point
 // integer pipeline so the 64-frame GIF is produced 100% deterministically
 // (bit-exact, cross-device). The compute boundary: Metal hands back linear-sRGB
@@ -459,7 +465,7 @@ pub export fn s4_quantize_frame(
 ///
 /// ⚠️ V2-DEFERRED-GLOBAL-PALETTE — global (GIFB) collapse, deferred to V2 behind the Swift gate
 /// Feature.globalPaletteV2 (false in MVP1). Kept, compiled, and golden-gated for V2; not a live
-/// MVP1 path. See docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md. Do not add new callers.
+/// MVP1 path (global-palette is V2-deferred). Do not add new callers.
 pub export fn s4_global_collapse(
     palettes_q16: [*c]const i32,
     t: i32,
@@ -631,7 +637,7 @@ pub export fn s4_haar_level_nodes(
 // 2×2 block (a,b,c,d) → sub-bands (R,G,B,T)=(LL,LH,HL,HH).
 // The owned integer S-transform (lifting scheme, JPEG2000-lossless lineage), factored into ONE
 // shared pair-lift so the spatial 2×2 RGBT lift and the temporal one-level Haar split call the
-// SAME math (no inline copies — see docs/SIXFOUR-REUSE-FIRST-NO-NEW-DEBT-WORKFLOW.md §5.1).
+// SAME math (no inline copies — reuse-first, no duplicated kernels).
 // Forward: (x,y) → (low, high) = (y + floor((x-y)/2), x - y). Mirrors SixFour.Spec.TemporalLoop
 // liftPairT (per channel) and SixFour.Spec.RGBTLift's S-transform.
 fn sLift(x: i32, y: i32) [2]i32 {
@@ -752,7 +758,7 @@ pub export fn s4_cube_unlift_level(half: i32, coarse: [*c]const i32, details: [*
 /// One level of the temporal integer Haar split over a sequence of `n` OKLab triples (Q16) —
 /// the TEMPORAL half of SixFour.Spec.VoxelReduce, mirroring SixFour.Spec.TemporalLoop.haarSplitTime.
 /// Adjacent frames pair into a lifted parent (low) and a detail (high) via the OWNED `sLift` per
-/// channel (no new lift math; see docs/SIXFOUR-REUSE-FIRST-NO-NEW-DEBT-WORKFLOW.md §5.1). An odd
+/// channel (no new lift math; reuse-first, no duplicated kernels). An odd
 /// trailing frame is carried into the low band with no detail. Exactly inverted by
 /// s4_haar_join_level. in: n·3 i32 (frame-major). out_low: (n/2 + n%2)·3. out_high: (n/2)·3.
 pub export fn s4_haar_split_level(n: i32, in_q16: [*c]const i32, out_low: [*c]i32, out_high: [*c]i32) i32 {

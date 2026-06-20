@@ -1,5 +1,11 @@
 """fed_sim.py — federated-learning cohort-size simulation for the Color Atlas
-Bradley–Terry preference model (ON-DEVICE-TRAINING.md open item 4).
+Bradley–Terry preference model.
+
+STATUS: SIMULATION ONLY — research, not product code. There is NO on-device
+federation client; the "leverage many users" fleet leg of the pivot is unbuilt.
+Its world model uses isotropic-Gaussian features (see "main limitation" below),
+NOT real genome embeddings. Promote only after device measurement + a real
+genome-vector design. MAP: docs/NN-STACK.generated.md ("Unfinished work").
 
 Question: for K = 4…512 users with m local Compare decisions each, when does
 federated aggregation beat purely-local training, and when does clustered

@@ -42,26 +42,52 @@ box. Never the ANE via an opaque runtime.** The model is tiny (~115K params), so
 GPU/CPU latency and power are negligible — there is no performance reason to
 take on a dependency.
 
+> **AMENDMENT 2026-06-20 — Core AI for L-inference only.** `CoreAI.framework` is
+> an Apple *system* framework (it satisfies the zero-third-party rule), and it is
+> adopted for **exactly one job**: running the **frozen L (grayscale) net** for
+> *inference* on device (`SixFour/CoreAI/`, asset built by
+> `trainer/coreai_export/`). Scope and guards:
+> - **L inference only.** Core AI cannot train. **A/B chroma learning stays on
+>   MPSGraph** (`SixFour/Atlas/`). The "never `mlx-swift`" and zero-third-party
+>   rules are **unchanged**.
+> - **Determinism floor.** Core AI float output is *not* cross-device bit-exact,
+>   so it MUST re-enter the Zig Q16 core via the `zero-genome == floor`
+>   short-circuit before reaching the GIF bytes. The integer floor stays the only
+>   bit-exact substrate.
+> - **Guarded.** Core AI is absent from the iOS Simulator SDK (issue #49) and is
+>   developer-beta (GA ~Sept 2026); every use sits behind `#if canImport(CoreAI)`
+>   and is verifiable only on a real device.
+>
+> The full pivot map is `docs/NN-STACK.generated.md`.
+
 ## Train / deploy spine
 - **Train (base net):** MLX on the M1.
 - **Train (on-device, per-user):** **MPSGraph** — an Apple system framework, so it satisfies
   the Tier 2 contract. Proven on the physical iPhone 17 Pro 2026-06-12
   (`SixFour/Atlas/AtlasTrainer.swift`: Bradley–Terry value training, 12.4 ms/step,
-  bit-identical loss trajectory Mac↔iPhone). The never-`mlx-swift` / never-CoreML rules
-  stand; MPSGraph does not execute in the simulator (gate via `targetEnvironment(simulator)`).
-  See `docs/ON-DEVICE-TRAINING.md` (verified research) and `docs/COLOR-ATLAS.md` (the
-  curation/policy/value design this trains). **Future sessions: build on top of this state**
-  — the continuation plan is COLOR-ATLAS.md §8 + the UPDATE 2026-06-12 block in
-  `docs/STATUS.md`.
+  bit-identical loss trajectory Mac↔iPhone). The never-`mlx-swift` rule stands;
+  Core AI is now allowed for **L-inference only** (see the amendment above), never
+  for training. MPSGraph does not execute in the simulator (gate via
+  `targetEnvironment(simulator)`).
+  **Orientation: `docs/NN-STACK.generated.md`** is the single canonical map. (It
+  replaces the sunset plans `docs/ON-DEVICE-TRAINING.md`, `docs/COLOR-ATLAS.md`,
+  and `docs/STATUS.md`, which were deleted; their essentials now live in that map
+  and in the purpose-headers of `SixFour/Atlas/`.)
 - **Verify:** Haskell spec (golden vectors gate every backend).
-- **Deploy:** hand-written Swift + Metal on the iPhone 17 Pro (zero deps).
-- **Fallback:** PyTorch→CoreML→ANE is kept dormant, never shipped.
+- **Deploy (L, frozen):** MLX (Mac train) → `trainer/coreai_export/` → `L.aimodel`
+  → **Core AI** inference on device (`SixFour/CoreAI/`), behind the Zig
+  `zero-genome == floor` short-circuit. Owned Metal kernels ride inside the asset
+  via `TorchMetalKernel`. (Per the 2026-06-20 amendment above.)
+- **Deploy (A/B + integer core):** hand-written Swift + Metal + Zig on the iPhone
+  17 Pro (zero third-party deps).
+- **Fallback:** the older PyTorch→CoreML→ANE distillation is superseded by the
+  Core AI L path; the hand-written-blob forward pass remains a valid alternative.
 
 ## Palette: global vs per-frame
 **MVP1 ships PER-FRAME palettes only.** The global (GIFB) path below is implemented and
 golden-gated but **DEFERRED TO V2** behind `Feature.globalPaletteV2 = false` (every entry point is
-guarded ⇒ unreachable in MVP1). See `docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md` and the
-per-frame direction in `docs/SIXFOUR-PER-FRAME-GENOME-AB-MIGRATION-WORKFLOW.md`.
+guarded ⇒ unreachable in MVP1). The per-frame + A/B-genome direction is mapped in
+`docs/NN-STACK.generated.md` (the migration-workflow plans it cited were sunset).
 
 `Spec/StageA.hs` extracts a **per-frame** 256-colour palette per frame — that is
 the NN *input*. The look-NN sum-pools all frames' tokens (permutation-invariant)
@@ -100,8 +126,7 @@ The Haskell spec is the source of truth AND a browsable reference. Its module
 doc-comments (`{- | … -}`) and per-function `-- |` comments ARE the spec pages.
 Tooling: **Haddock** (hyperlinked HTML + quickjump search), **Hoogle** (name/type
 search), **ghcid** (live typecheck), **graphviz** (module import graph). One
-driver: `spec/scripts/spec-docs.sh` (`--serve` for Hoogle on :8080). See
-`docs/SIXFOUR-SPEC-BROWSABLE-WORKFLOW.md`.
+driver: `spec/scripts/spec-docs.sh` (`--serve` for Hoogle on :8080).
 
 **Start any spec exploration at module `SixFour.Spec.Map`** — the categorised
 index (NN design is the ★ core category). Browse before grepping.
