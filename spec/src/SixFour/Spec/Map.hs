@@ -104,6 +104,12 @@ the reversible RGBTLift Haar split — L is the balance the A/B searches destabi
 first-class: the coarse/DC value of an octant, gamut-closed (in the children's
 range) and fixed on a uniform cell (the floor fixpoint) — the @t≅L@ factor the
 white-balance + dynamic-range operator drives below the A/B chroma search),
+"SixFour.Spec.OctreeGenome" (★ the octant-ladder GENOME — bijective octree code
+(@genomeOf@/@paletteOf@ = octantDistill/Synthesize); law-pins the scale counts
+@octreeLeafCount = 8^d@ and @octreeNodeCount = (8^d−1)/7@ that will drive the Atlas
+head dims; makes @zero-genome == floor@ concrete (fills @ExportFamily@'s TODO law).
+σ-symmetry / 256-palette mapping / cut-depth are DEFERRED design decisions that
+parameterise these formulas),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),
