@@ -197,6 +197,12 @@ reconstructs identically under either XOR projection-ordering: @decodeUnder p . 
 @Z2@ is the object; @lawDifferentEncodingsSameObject@ = same object / orthogonal projection;
 @lawEquivariance@ = swap-the-ordering == swap-the-input. Why the projection-choice is a safe
 RL action. Delegates OctreeCell octant bijection + ProjectionOrdering XOR self-inverse),
+"SixFour.Spec.CarrierL" (★ L CARRIES THE SIGNAL (frontier 1b) — the coarse/DC band is
+the backbone, A/B search is the perturbation L re-balances: @lawCarrierIsDC@ (lBalance =
+ocCoarse), @lawZeroSearchIsCarrierFloor@ (A/B=0 ⇒ pure-L constant floor),
+@lawCarrierInvariantToSearch@ (L re-balances — coarse invariant to detail, delegates
+octant reversibility), @lawSearchIsZeroOnConstant@ (flat L ⇒ zero search). Law module over
+the real liftOct/unliftOct),
 "SixFour.Spec.SteeringSpine" (★ the form-follows-function CAPSTONE — the one module
 where the steering dataflow connects: @steerShown@ (nudge the shared latent then
 project the structural pool P to the live 16³ @[Q16]@) and @commitReconstruct@ (the
