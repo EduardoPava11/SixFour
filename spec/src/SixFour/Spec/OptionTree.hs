@@ -38,11 +38,17 @@ module SixFour.Spec.OptionTree
   , lawVisitPolicySumsToOne
   , lawPuctMonotoneInPrior
   , lawPuctGolden
+    -- * Rotation-aware dedup (the chroma turn gauge)
+  , dedupKey
+  , transpositionUpToRotation
+  , lawRotationDedup
+  , lawTranspositionUpToRotation
   ) where
 
 import Data.Word              (Word32)
 import SixFour.Spec.AtlasMove (GenomeHash(..))
 import SixFour.Spec.AtlasGame (Tier(..))
+import SixFour.Spec.ChromaRotation (canonicalQuarter, rotateQuarter)
 
 -- | A search node: identity is the Merkle hash of the SURFACED Q16 leaves only
 -- (the held remainder is latent, never hashed). @onTier@/@onTerminal@ are metadata,
@@ -125,3 +131,24 @@ lawPuctMonotoneInPrior cpuct' p1' p2' n sumN =
 -- | Golden pin: @puct 1.0 0.5 0.5 0 4 = 0.5 + 0.5·2 = 1.5@.
 lawPuctGolden :: Bool
 lawPuctGolden = puct 1.0 0.5 0.5 0 4 == 1.5
+
+-- | The rotation-canonical surfaced-chroma key a node should hash: the
+-- @canonicalQuarter@ ("SixFour.Spec.ChromaRotation") of the surfaced @(a,b)@ leaves,
+-- so a look and its chroma-turn rotations share ONE node identity.
+dedupKey :: [(Int, Int)] -> [(Int, Int)]
+dedupKey = canonicalQuarter
+
+-- | Two surfaced looks transpose UP TO a chroma quarter-turn iff their dedup keys
+-- match — the rotation-aware node equivalence layered on the exact-hash 'transposition'.
+transpositionUpToRotation :: [(Int, Int)] -> [(Int, Int)] -> Bool
+transpositionUpToRotation p q = dedupKey p == dedupKey q
+
+-- | The dedup key is invariant under any chroma quarter-turn, so rotation-equivalent
+-- surfaced looks collapse to one node (this is what makes 'transposition' rotation-aware
+-- once node hashes are taken over 'dedupKey').
+lawRotationDedup :: Int -> [(Int, Int)] -> Bool
+lawRotationDedup r pal = dedupKey (map (rotateQuarter r) pal) == dedupKey pal
+
+-- | A look and any chroma-rotation of it are the same node up to rotation.
+lawTranspositionUpToRotation :: Int -> [(Int, Int)] -> Bool
+lawTranspositionUpToRotation r pal = transpositionUpToRotation (map (rotateQuarter r) pal) pal
