@@ -100,6 +100,10 @@ stop-depth, so adaptive per-scale pondering strictly exceeds the scalar halt),
 functor Φ (@x↦a,y↦b,t↦L@) splitting the cube into a UNIVERSAL/balance factor @t≅L@
 and a SEARCH factor @(x,y)≅(a,b)@; the @Balance ⊣ Search@ adjunction whose unit is
 the reversible RGBTLift Haar split — L is the balance the A/B searches destabilize),
+"SixFour.Spec.LBalanceOperator" (★ L = the universal balance operator made
+first-class: the coarse/DC value of an octant, gamut-closed (in the children's
+range) and fixed on a uniform cell (the floor fixpoint) — the @t≅L@ factor the
+white-balance + dynamic-range operator drives below the A/B chroma search),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),

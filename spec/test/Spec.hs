@@ -33,6 +33,7 @@ import qualified Properties.OctreeCell   as OctreeCell
 import qualified Properties.PerScaleWeights as PerScaleWeights
 import qualified Properties.ScalePonder   as ScalePonder
 import qualified Properties.XYTLabDuality as XYTLabDuality
+import qualified Properties.LBalanceOperator as LBalanceOperator
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
@@ -153,6 +154,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , PerScaleWeights.tests
   , ScalePonder.tests
   , XYTLabDuality.tests
+  , LBalanceOperator.tests
   , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests

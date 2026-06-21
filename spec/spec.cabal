@@ -50,6 +50,7 @@ library
         SixFour.Spec.PerScaleWeights
         SixFour.Spec.ScalePonder
         SixFour.Spec.XYTLabDuality
+        SixFour.Spec.LBalanceOperator
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
@@ -337,6 +338,7 @@ test-suite spec-tests
         Properties.PerScaleWeights
         Properties.ScalePonder
         Properties.XYTLabDuality
+        Properties.LBalanceOperator
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride
