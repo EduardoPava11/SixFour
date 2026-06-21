@@ -52,6 +52,8 @@ library
         SixFour.Spec.XYTLabDuality
         SixFour.Spec.LBalanceOperator
         SixFour.Spec.OctreeGenome
+        SixFour.Spec.SuccessiveRefinement
+        SixFour.Spec.Dimensions
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
@@ -341,6 +343,8 @@ test-suite spec-tests
         Properties.XYTLabDuality
         Properties.LBalanceOperator
         Properties.OctreeGenome
+        Properties.SuccessiveRefinement
+        Properties.Dimensions
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride

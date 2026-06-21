@@ -110,6 +110,14 @@ white-balance + dynamic-range operator drives below the A/B chroma search),
 head dims; makes @zero-genome == floor@ concrete (fills @ExportFamily@'s TODO law).
 σ-symmetry / 256-palette mapping / cut-depth are DEFERRED design decisions that
 parameterise these formulas),
+"SixFour.Spec.SuccessiveRefinement" (★ the "surface one 16³, keep the remainder in
+the net" code — Equitz-Cover successive refinement over the octant ladder: @split@
+collapses the k finest levels into the surfaced cube + held detail bands, @refine@
+replays them exactly; @lawMarkovByPooling@ = the coarse is a deterministic pool of
+the fine, the no-rate-penalty guarantee; @remainderRate@ = the held info budget),
+"SixFour.Spec.Dimensions" (★ the RULE OF DIMENSIONS — the traceable axis ledger
+(L,t surfaced; a,b,x,y held) + @lawDimConserved@: surfaced + held == input dims
+exactly, no dimension silently dropped),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),

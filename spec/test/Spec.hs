@@ -35,6 +35,8 @@ import qualified Properties.ScalePonder   as ScalePonder
 import qualified Properties.XYTLabDuality as XYTLabDuality
 import qualified Properties.LBalanceOperator as LBalanceOperator
 import qualified Properties.OctreeGenome  as OctreeGenome
+import qualified Properties.SuccessiveRefinement as SuccessiveRefinement
+import qualified Properties.Dimensions    as Dimensions
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
@@ -157,6 +159,8 @@ main = defaultMain $ testGroup "sixfour-spec"
   , XYTLabDuality.tests
   , LBalanceOperator.tests
   , OctreeGenome.tests
+  , SuccessiveRefinement.tests
+  , Dimensions.tests
   , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests
