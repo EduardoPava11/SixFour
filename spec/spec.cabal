@@ -65,6 +65,7 @@ library
         SixFour.Spec.OctreeForward
         SixFour.Spec.SelfSimilarReconstruct
         SixFour.Spec.SteeringSpine
+        SixFour.Spec.RedownsampleGate
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
@@ -367,6 +368,7 @@ test-suite spec-tests
         Properties.OctreeForward
         Properties.SelfSimilarReconstruct
         Properties.SteeringSpine
+        Properties.RedownsampleGate
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride

@@ -185,6 +185,12 @@ self-similar lift to 256³); delegates every heavy proof to its organ
 ("SixFour.Spec.NudgeStep"/"SixFour.Spec.LatentProjection"/"SixFour.Spec.SelfSimilarReconstruct"),
 adds @lawSpineShownIsCoarser@ (P is dimension-reducing — a pixel is a PROJECTION of
 the one latent, not the latent); end-to-end Q16 is a TYPE guarantee),
+"SixFour.Spec.RedownsampleGate" (★ the RSI verify gate scoped to the COARSE/DC band —
+@passesGate@ pools a reconstructed cube via @octantDistill@ and checks the coarse
+equals the given rung: @lawGateRejectsCoarseDrift@ (teeth — drifted DC is rejected,
+not-vacuous) + @lawGateIgnoresInventedDetail@ (invented high-freq exempt, so genuine
+super-res is never rejected, not-impossible); closes audit H2, runs on the integer
+floor so eps=0),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),
