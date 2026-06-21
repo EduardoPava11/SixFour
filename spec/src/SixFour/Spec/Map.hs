@@ -158,6 +158,11 @@ hybrid, latent remainder never hashed),
 necklace gauge-fix (rotation-equivalent looks dedup, @lawCanonicalChromaGaugeFixed@);
 detents C12/C8/C6 = 30/45/60deg as FLOAT-guidance re-entering the Q16 floor; gray
 axis = the collapse-proximity degenerate fixed point),
+"SixFour.Spec.DetentNudge" (★ the angle-gated ±1 swipe (frontier 1c) — a unit (a,b)
+step is an 'AdmissibleStep' (smart-ctor) ONLY when its quarter-turn angle lands on the
+chosen detent grid (@lawStepOnlyAtDetent@; @C6@/60deg rejects 90deg = the octant mirror
+of @lawQuarterInDetent@); the increment is the unit ±1 rotated by @rotateQuarter@,
+unit-length-preserving, and the opposite-sign step undoes it),
 "SixFour.Spec.LatentNavigation" (★ the single-16³ STEERING model that REPLACES the
 A/B pick — finger gestures as the non-abelian rigid-motion group @C4 ⋉ ℤ²@ on the
 shared latent: @compose@ is non-commutative (@lawNonAbelian@), every single step has

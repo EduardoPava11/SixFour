@@ -45,6 +45,7 @@ import qualified Properties.Dimensions    as Dimensions
 import qualified Properties.OptionTree    as OptionTree
 import qualified Properties.ChromaRotation as ChromaRotation
 import qualified Properties.LatentNavigation as LatentNavigation
+import qualified Properties.DetentNudge   as DetentNudge
 import qualified Properties.NudgeStep      as NudgeStep
 import qualified Properties.LatentProjection as LatentProjection
 import qualified Properties.OctreeForward  as OctreeForward
@@ -185,6 +186,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , OptionTree.tests
   , ChromaRotation.tests
   , LatentNavigation.tests
+  , DetentNudge.tests
   , NudgeStep.tests
   , LatentProjection.tests
   , OctreeForward.tests
