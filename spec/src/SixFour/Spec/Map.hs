@@ -151,11 +151,33 @@ shared latent: @compose@ is non-commutative (@lawNonAbelian@), every single step
 an exact inverse, but undoing an earlier move by a later opposite swipe FAILS
 (@lawUndoNeedsHistoryNotInverse@ = the @SE ≠ NW⁻¹@ fact) so undo = HISTORY REPLAY;
 A/B is the degenerate 1-step case),
+"SixFour.Spec.NudgeStep" (★ the ONE-DIRECTION-AT-A-TIME arrow wiring the steering
+organs together — @LatentCube@ is the ONE shared cube-shaped @ByteCarrier.Latent@;
+@project@ = __P__, the LOSSY MANY-TO-ONE readout to the shown 16³ Q16 built on the
+single sanctioned @reenterQ16@ crossing (@lawProjectIsManyToOne@: distinct latents
+collide); @nudge@ moves the shared latent by ONE gesture's @(a,b)@ search-shift
+(@lawSingleNudgeIsOneStep@), then @nudgeThenProject@ re-projects a FRESH 16³
+(@lawNudgeThenProject@); undo = history-replay (@lawNudgeUndoIsHistory@ DELEGATES to
+@LatentNavigation.lawUndoNeedsHistoryNotInverse@ — P is non-invertible)),
+"SixFour.Spec.LatentProjection" (★ __P__ as the STRUCTURAL POOLING readout (the
+dimension-reducing complement to @NudgeStep@'s scalar @map reenterQ16@) — @project@
+= @map reenterQ16 . poolToRung@ where the lossy half is octant pooling
+(@SuccessiveRefinement.split@): @lawProjectionManyToOne@ (a concrete distinct-latent
+collision via discarded detail), @lawProjectionThroughReentry@ (P factors through the
+single @ByteCarrier.reenterQ16@ seam, no raw round), @lawProjectionIsPooling@
+(DELEGATES @SuccessiveRefinement.lawMarkovByPooling@ — coarse is a deterministic pool
+of fine), and @lawUndoNeedsReplayBecauseNonInjective@ (non-injective P ⇒ undo =
+history-replay, complementing the non-commutativity proof)),
 "SixFour.Spec.OctreeForward" (★ the CAPSTONE FSM — capture -> @surface@ (one 16^3
 shown + held latent remainder, cut fixed at 2 levels from 64^3) -> @refineOne@
 (show one finer band, lossless) -> @commit@ (the shipped terminal): composes
 SuccessiveRefinement + OptionTree + ScalePonder + ChromaRotation as ONE contract;
 every law delegates to an already-proven one so the composition preserves them),
+"SixFour.Spec.SelfSimilarReconstruct" (★ the SELF-SIMILAR 256³ reconstruction — the
+SAME octant operator applied twice: 16³→64³ replays HELD EXACT detail (delegates
+@SuccessiveRefinement.refine@), 64³→256³ synthesises INVENTED CONTINUOUS detail (the
+latent tail re-entered to Q16 via @ByteCarrier.reenterQ16@); same shape
+(@OctreeCell.lawLadderSelfSimilar@), different DETAIL SOURCE as a type),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),

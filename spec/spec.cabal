@@ -60,7 +60,10 @@ library
         SixFour.Spec.OptionTree
         SixFour.Spec.ChromaRotation
         SixFour.Spec.LatentNavigation
+        SixFour.Spec.NudgeStep
+        SixFour.Spec.LatentProjection
         SixFour.Spec.OctreeForward
+        SixFour.Spec.SelfSimilarReconstruct
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
@@ -358,7 +361,10 @@ test-suite spec-tests
         Properties.OptionTree
         Properties.ChromaRotation
         Properties.LatentNavigation
+        Properties.NudgeStep
+        Properties.LatentProjection
         Properties.OctreeForward
+        Properties.SelfSimilarReconstruct
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride
