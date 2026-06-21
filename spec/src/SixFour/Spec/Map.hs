@@ -118,6 +118,11 @@ the fine, the no-rate-penalty guarantee; @remainderRate@ = the held info budget)
 "SixFour.Spec.Dimensions" (★ the RULE OF DIMENSIONS — the traceable axis ledger
 (L,t surfaced; a,b,x,y held) + @lawDimConserved@: surfaced + held == input dims
 exactly, no dimension silently dropped),
+"SixFour.Spec.OptionTree" (★ the Merkle-MCTS option tree — KataGo/AlphaZero @puct@
+selection + @{N,W,P}@ edges over @GameMove@, nodes keyed by the surfaced Q16
+@GenomeHash@ so equal looks dedup (@transposition@ = a Merkle DAG); @visitPolicy@ =
+the visit-count training target; the surfaced-tier half of the AlphaZero/MuZero
+hybrid, latent remainder never hashed),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),

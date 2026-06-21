@@ -54,6 +54,7 @@ library
         SixFour.Spec.OctreeGenome
         SixFour.Spec.SuccessiveRefinement
         SixFour.Spec.Dimensions
+        SixFour.Spec.OptionTree
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
@@ -345,6 +346,7 @@ test-suite spec-tests
         Properties.OctreeGenome
         Properties.SuccessiveRefinement
         Properties.Dimensions
+        Properties.OptionTree
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride
