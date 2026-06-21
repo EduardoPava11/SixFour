@@ -72,6 +72,7 @@ library
         SixFour.Spec.CarrierL
         SixFour.Spec.SteeringSpine
         SixFour.Spec.RedownsampleGate
+        SixFour.Spec.PairedResidual
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
@@ -381,6 +382,7 @@ test-suite spec-tests
         Properties.CarrierL
         Properties.SteeringSpine
         Properties.RedownsampleGate
+        Properties.PairedResidual
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride

@@ -227,6 +227,15 @@ equals the given rung: @lawGateRejectsCoarseDrift@ (teeth — drifted DC is reje
 not-vacuous) + @lawGateIgnoresInventedDetail@ (invented high-freq exempt, so genuine
 super-res is never rejected, not-impossible); closes audit H2, runs on the integer
 floor so eps=0),
+"SixFour.Spec.PairedResidual" (★ capture-anchored super-res — the 256³ detail is a
+residual KEYED BY the 64³ coarse value (@ResidualBook = Map Int Detail@, @residualFor@
+= the codebook/token lookup), applied self-similarly (@pairedLift@ = @liftKeyed@ twice,
+same book): @lawPairedRepoolsToCoarse@ (the 256³ re-pools to EXACTLY the 64³ for ANY
+book — capture-anchored by octant reversibility, RedownsampleGate passes by
+construction) + @lawDistinctBooksSameCoarse@ (residual in the gate's null space) +
+@lawResidualPureValue@ + @lawUnseenKeyIsFloor@ (zero-genome==floor). "The residual IS
+the token, keyed by the coarse value." Additive sibling to SelfSimilarReconstruct's
+free latent-tail path),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),

@@ -55,6 +55,7 @@ import qualified Properties.SameObjectJEPA as SameObjectJEPA
 import qualified Properties.CarrierL      as CarrierL
 import qualified Properties.SteeringSpine as SteeringSpine
 import qualified Properties.RedownsampleGate as RedownsampleGate
+import qualified Properties.PairedResidual as PairedResidual
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
@@ -197,6 +198,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , CarrierL.tests
   , SteeringSpine.tests
   , RedownsampleGate.tests
+  , PairedResidual.tests
   , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests
