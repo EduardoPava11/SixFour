@@ -49,6 +49,7 @@ library
         SixFour.Spec.OctreeCell
         SixFour.Spec.PerScaleWeights
         SixFour.Spec.ScalePonder
+        SixFour.Spec.XYTLabDuality
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
@@ -335,6 +336,7 @@ test-suite spec-tests
         Properties.OctreeCell
         Properties.PerScaleWeights
         Properties.ScalePonder
+        Properties.XYTLabDuality
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride

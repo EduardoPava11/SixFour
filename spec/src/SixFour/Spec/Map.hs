@@ -96,6 +96,10 @@ tied one, so it subsumes and supersedes the retired Mixture-of-Recursions design
 octree scales that REPLACES @LookNetR@'s scalar PonderNet halt; refine-all is the
 reversible floor and a non-contiguous ponder is unreachable by any single
 stop-depth, so adaptive per-scale pondering strictly exceeds the scalar halt),
+"SixFour.Spec.XYTLabDuality" (★ the @[x,y,t] ≅ [L,a,b]@ duality — the involutive
+functor Φ (@x↦a,y↦b,t↦L@) splitting the cube into a UNIVERSAL/balance factor @t≅L@
+and a SEARCH factor @(x,y)≅(a,b)@; the @Balance ⊣ Search@ adjunction whose unit is
+the reversible RGBTLift Haar split — L is the balance the A/B searches destabilize),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),
