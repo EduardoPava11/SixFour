@@ -48,6 +48,7 @@ library
         SixFour.Spec.RGBTLift
         SixFour.Spec.OctreeCell
         SixFour.Spec.PerScaleWeights
+        SixFour.Spec.ScalePonder
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
@@ -333,6 +334,7 @@ test-suite spec-tests
         Properties.RGBTLift
         Properties.OctreeCell
         Properties.PerScaleWeights
+        Properties.ScalePonder
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride

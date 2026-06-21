@@ -92,6 +92,10 @@ self-similarity, and per-scale weights are expressible),
 gains that REPLACE @LookNetR@'s one weight-tied block; neutral weighting is the
 reversible floor, and a per-scale weighting is strictly more expressive than any
 tied one, so it subsumes and supersedes the retired Mixture-of-Recursions design),
+"SixFour.Spec.ScalePonder" (★ per-scale structured halting — the refine-mask over
+octree scales that REPLACES @LookNetR@'s scalar PonderNet halt; refine-all is the
+reversible floor and a non-contiguous ponder is unreachable by any single
+stop-depth, so adaptive per-scale pondering strictly exceeds the scalar halt),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),

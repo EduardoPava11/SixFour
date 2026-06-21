@@ -31,6 +31,7 @@ import qualified Properties.PairTreeFixed as PairTreeFixed
 import qualified Properties.RGBTLift     as RGBTLift
 import qualified Properties.OctreeCell   as OctreeCell
 import qualified Properties.PerScaleWeights as PerScaleWeights
+import qualified Properties.ScalePonder   as ScalePonder
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
@@ -149,6 +150,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , RGBTLift.tests
   , OctreeCell.tests
   , PerScaleWeights.tests
+  , ScalePonder.tests
   , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests
