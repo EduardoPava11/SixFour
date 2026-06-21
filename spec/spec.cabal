@@ -66,6 +66,7 @@ library
         SixFour.Spec.LatentProjection
         SixFour.Spec.OctreeForward
         SixFour.Spec.SelfSimilarReconstruct
+        SixFour.Spec.SameObjectInvariance
         SixFour.Spec.SteeringSpine
         SixFour.Spec.RedownsampleGate
         SixFour.Spec.TemporalLoop
@@ -371,6 +372,7 @@ test-suite spec-tests
         Properties.LatentProjection
         Properties.OctreeForward
         Properties.SelfSimilarReconstruct
+        Properties.SameObjectInvariance
         Properties.SteeringSpine
         Properties.RedownsampleGate
         Properties.CanonicalPhase

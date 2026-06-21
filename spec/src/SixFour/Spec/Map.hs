@@ -191,6 +191,12 @@ SAME octant operator applied twice: 16³→64³ replays HELD EXACT detail (deleg
 @SuccessiveRefinement.refine@), 64³→256³ synthesises INVENTED CONTINUOUS detail (the
 latent tail re-entered to Q16 via @ByteCarrier.reenterQ16@); same shape
 (@OctreeCell.lawLadderSelfSimilar@), different DETAIL SOURCE as a type),
+"SixFour.Spec.SameObjectInvariance" (★ the frontier keystone — the SAME 64³ object
+reconstructs identically under either XOR projection-ordering: @decodeUnder p . encodeUnder p
+== decodeUnder p' . encodeUnder p'@ (@lawReorderingPreservesObject@), the orbit under the
+@Z2@ is the object; @lawDifferentEncodingsSameObject@ = same object / orthogonal projection;
+@lawEquivariance@ = swap-the-ordering == swap-the-input. Why the projection-choice is a safe
+RL action. Delegates OctreeCell octant bijection + ProjectionOrdering XOR self-inverse),
 "SixFour.Spec.SteeringSpine" (★ the form-follows-function CAPSTONE — the one module
 where the steering dataflow connects: @steerShown@ (nudge the shared latent then
 project the structural pool P to the live 16³ @[Q16]@) and @commitReconstruct@ (the

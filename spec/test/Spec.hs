@@ -49,6 +49,7 @@ import qualified Properties.NudgeStep      as NudgeStep
 import qualified Properties.LatentProjection as LatentProjection
 import qualified Properties.OctreeForward  as OctreeForward
 import qualified Properties.SelfSimilarReconstruct as SelfSimilarReconstruct
+import qualified Properties.SameObjectInvariance as SameObjectInvariance
 import qualified Properties.SteeringSpine as SteeringSpine
 import qualified Properties.RedownsampleGate as RedownsampleGate
 import qualified Properties.CanonicalPhase as CanonicalPhase
@@ -187,6 +188,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LatentProjection.tests
   , OctreeForward.tests
   , SelfSimilarReconstruct.tests
+  , SameObjectInvariance.tests
   , SteeringSpine.tests
   , RedownsampleGate.tests
   , CanonicalPhase.tests
