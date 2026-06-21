@@ -128,6 +128,11 @@ hybrid, latent remainder never hashed),
 necklace gauge-fix (rotation-equivalent looks dedup, @lawCanonicalChromaGaugeFixed@);
 detents C12/C8/C6 = 30/45/60deg as FLOAT-guidance re-entering the Q16 floor; gray
 axis = the collapse-proximity degenerate fixed point),
+"SixFour.Spec.OctreeForward" (★ the CAPSTONE FSM — capture -> @surface@ (one 16^3
+shown + held latent remainder, cut fixed at 2 levels from 64^3) -> @refineOne@
+(show one finer band, lossless) -> @commit@ (the shipped terminal): composes
+SuccessiveRefinement + OptionTree + ScalePonder + ChromaRotation as ONE contract;
+every law delegates to an already-proven one so the composition preserves them),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),
