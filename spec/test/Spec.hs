@@ -39,6 +39,8 @@ import qualified Properties.OctreeGenome  as OctreeGenome
 import qualified Properties.SuccessiveRefinement as SuccessiveRefinement
 import qualified Properties.RemainderTail as RemainderTail
 import qualified Properties.ByteCarrier   as ByteCarrier
+import qualified Properties.Dim6          as Dim6
+import qualified Properties.ProjectionOrdering as ProjectionOrdering
 import qualified Properties.Dimensions    as Dimensions
 import qualified Properties.OptionTree    as OptionTree
 import qualified Properties.ChromaRotation as ChromaRotation
@@ -175,6 +177,8 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SuccessiveRefinement.tests
   , RemainderTail.tests
   , ByteCarrier.tests
+  , Dim6.tests
+  , ProjectionOrdering.tests
   , Dimensions.tests
   , OptionTree.tests
   , ChromaRotation.tests

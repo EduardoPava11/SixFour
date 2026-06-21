@@ -56,6 +56,8 @@ library
         SixFour.Spec.SuccessiveRefinement
         SixFour.Spec.RemainderTail
         SixFour.Spec.ByteCarrier
+        SixFour.Spec.Dim6
+        SixFour.Spec.ProjectionOrdering
         SixFour.Spec.Dimensions
         SixFour.Spec.OptionTree
         SixFour.Spec.ChromaRotation
@@ -359,6 +361,8 @@ test-suite spec-tests
         Properties.SuccessiveRefinement
         Properties.RemainderTail
         Properties.ByteCarrier
+        Properties.Dim6
+        Properties.ProjectionOrdering
         Properties.Dimensions
         Properties.OptionTree
         Properties.ChromaRotation

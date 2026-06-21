@@ -132,6 +132,19 @@ ships+runs, @Latent = Carried MacTag Double@ is Mac-side; the ONLY float→devic
 crossing is @reenterQ16@ (= AtlasGame.quantizeQ16, the zero-genome==floor seam), and
 no @Latent -> Int@ is exported so @toByte someLatent@ is a COMPILE ERROR — CLAUDE.md's
 "float must never carry a device byte" as a theorem, not a lint),
+"SixFour.Spec.Dim6" (★ the 6-axis ALPHABET (L,A,B,x,y,t) every projection-ordering
+permutes — one FLAT subset-enum spanning the colour/position boundary (vs
+"SixFour.Spec.XYTLabDuality"'s two split 3-sets); @phi6@ = the @x↔a,y↔b,t↔L@ twist as
+an involution; @isUniversal@ marks the @L,t@ carrier the encoding pins to the coarse
+lane. The frontier-1a foundation that @ProjectionOrdering@ builds on),
+"SixFour.Spec.ProjectionOrdering" (★ frontier-2: a VALID projection-ordering of the
+six @Dim6@ axes as a smart-ctor newtype @Ordering6@ — carrier @(L:t)@ pinned coarse,
+the search pairing @{x,y}<->{a,b}@ carried as a first-class XOR\/Z2 choice (@XorBit@:
+two cosets, x->a\/y->b vs x->b\/y->a) so projections stay ORTHOGONAL and reversibility
+is the @Z2@ inverse; @orderingHash@ = a @Word32@ projection-mode token (OptionTree\/
+GenomeHash idiom); @composeOp\/identityOp\/invertOp@ = the group action as functions+laws,
+not a typeclass until closure is proven. Vocabulary (cabal-repl enumerated): XOR-only = 2,
+full coset = 16),
 "SixFour.Spec.Dimensions" (★ the RULE OF DIMENSIONS — the traceable axis ledger
 (L,t surfaced; a,b,x,y held) + @lawDimConserved@: surfaced + held == input dims
 exactly, no dimension silently dropped),
