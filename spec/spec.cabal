@@ -47,15 +47,19 @@ library
         SixFour.Spec.PairTreeFixed
         SixFour.Spec.RGBTLift
         SixFour.Spec.OctreeCell
+        SixFour.Spec.LadderIdentity
         SixFour.Spec.PerScaleWeights
         SixFour.Spec.ScalePonder
         SixFour.Spec.XYTLabDuality
         SixFour.Spec.LBalanceOperator
         SixFour.Spec.OctreeGenome
         SixFour.Spec.SuccessiveRefinement
+        SixFour.Spec.RemainderTail
+        SixFour.Spec.ByteCarrier
         SixFour.Spec.Dimensions
         SixFour.Spec.OptionTree
         SixFour.Spec.ChromaRotation
+        SixFour.Spec.LatentNavigation
         SixFour.Spec.OctreeForward
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
@@ -341,15 +345,19 @@ test-suite spec-tests
         Properties.PairTreeFixed
         Properties.RGBTLift
         Properties.OctreeCell
+        Properties.LadderIdentity
         Properties.PerScaleWeights
         Properties.ScalePonder
         Properties.XYTLabDuality
         Properties.LBalanceOperator
         Properties.OctreeGenome
         Properties.SuccessiveRefinement
+        Properties.RemainderTail
+        Properties.ByteCarrier
         Properties.Dimensions
         Properties.OptionTree
         Properties.ChromaRotation
+        Properties.LatentNavigation
         Properties.OctreeForward
         Properties.CanonicalPhase
         Properties.SigmaPairFixed

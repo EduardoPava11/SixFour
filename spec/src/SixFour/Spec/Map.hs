@@ -88,6 +88,11 @@ fixpoint @Fix (OctF l)@: collapse = catamorphism, lift = anamorphism, octant edg
 @liftOct@ lifts "SixFour.Spec.RGBTLift" to @8→8@; PROVES "1 at the bottom" is a
 structured @(coarse + 7 detail)@ band not a scalar — reversibility forces operadic
 self-similarity, and per-scale weights are expressible),
+"SixFour.Spec.LadderIdentity" (★ disambiguates the two operators both called "cube
+ladder" and PINS @VolumeOctant@ ("SixFour.Spec.OctreeCell", ×8 volume / 7 detail) as
+the learned token substrate vs @SpatialHaar@ ("SixFour.Spec.CubeLadder", ×4 area / 3
+detail) as the Zig within-rung op — laws destructure the real operators to PROVE
+they differ (closes audit blocker B2; role-split not deletion),
 "SixFour.Spec.PerScaleWeights" (★ per-scale octree weights — the depth-indexed
 gains that REPLACE @LookNetR@'s one weight-tied block; neutral weighting is the
 reversible floor, and a per-scale weighting is strictly more expressive than any
@@ -115,6 +120,18 @@ the net" code — Equitz-Cover successive refinement over the octant ladder: @sp
 collapses the k finest levels into the surfaced cube + held detail bands, @refine@
 replays them exactly; @lawMarkovByPooling@ = the coarse is a deterministic pool of
 the fine, the no-rate-penalty guarantee; @remainderRate@ = the held info budget),
+"SixFour.Spec.RemainderTail" (★ the discrete-surfaced / continuous-remainder TYPED
+SPLIT that closes audit B6+B1 — 'Surfaced' (integers) reconstructs EXACTLY while
+'Remainder' (continuous FlowAR tail) reconstructs only WITHIN @eps@ and is provably
+NOT bit-exact, so "lossless by construction" is forbidden and losslessness is pinned
+to RETAINING the remainder (@lawLosslessNeedsRemainder@); the tail is one-shot, not
+autoregressed, and channel-bounded),
+"SixFour.Spec.ByteCarrier" (★ the TYPE-ENFORCED device-byte vs Mac-float boundary —
+phantom-tagged @Carried tag a@ (constructor hidden): @Q16 = Carried DeviceTag Int@
+ships+runs, @Latent = Carried MacTag Double@ is Mac-side; the ONLY float→device
+crossing is @reenterQ16@ (= AtlasGame.quantizeQ16, the zero-genome==floor seam), and
+no @Latent -> Int@ is exported so @toByte someLatent@ is a COMPILE ERROR — CLAUDE.md's
+"float must never carry a device byte" as a theorem, not a lint),
 "SixFour.Spec.Dimensions" (★ the RULE OF DIMENSIONS — the traceable axis ledger
 (L,t surfaced; a,b,x,y held) + @lawDimConserved@: surfaced + held == input dims
 exactly, no dimension silently dropped),
@@ -128,6 +145,12 @@ hybrid, latent remainder never hashed),
 necklace gauge-fix (rotation-equivalent looks dedup, @lawCanonicalChromaGaugeFixed@);
 detents C12/C8/C6 = 30/45/60deg as FLOAT-guidance re-entering the Q16 floor; gray
 axis = the collapse-proximity degenerate fixed point),
+"SixFour.Spec.LatentNavigation" (★ the single-16³ STEERING model that REPLACES the
+A/B pick — finger gestures as the non-abelian rigid-motion group @C4 ⋉ ℤ²@ on the
+shared latent: @compose@ is non-commutative (@lawNonAbelian@), every single step has
+an exact inverse, but undoing an earlier move by a later opposite swipe FAILS
+(@lawUndoNeedsHistoryNotInverse@ = the @SE ≠ NW⁻¹@ fact) so undo = HISTORY REPLAY;
+A/B is the degenerate 1-step case),
 "SixFour.Spec.OctreeForward" (★ the CAPSTONE FSM — capture -> @surface@ (one 16^3
 shown + held latent remainder, cut fixed at 2 levels from 64^3) -> @refineOne@
 (show one finer band, lossless) -> @commit@ (the shipped terminal): composes

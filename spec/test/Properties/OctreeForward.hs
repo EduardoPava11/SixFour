@@ -39,4 +39,8 @@ tests = testGroup "OctreeForward (capstone FSM: surface + held -> refine -> comm
     testProperty "golden: surface 2 2 [0..63] shows 1 voxel and round-trips" $
       once (length (surfacedCube (surface 2 2 [0 .. 63])) == 1
             && refineSession (surface 2 2 [0 .. 63]) == [0 .. 63])
+
+  , -- the product run: every 64^3 capture surfaces exactly one 16^3 (4096) rung
+    testProperty "surface-16: a 64^3 capture surfaces exactly one 16^3 (4096) rung" $
+      once (lawRunSurfacesExactlyOne16 [0 .. 8 ^ (6 :: Int) - 1])
   ]

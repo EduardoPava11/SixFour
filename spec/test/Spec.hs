@@ -30,15 +30,19 @@ import qualified Properties.PairTree     as PairTree
 import qualified Properties.PairTreeFixed as PairTreeFixed
 import qualified Properties.RGBTLift     as RGBTLift
 import qualified Properties.OctreeCell   as OctreeCell
+import qualified Properties.LadderIdentity as LadderIdentity
 import qualified Properties.PerScaleWeights as PerScaleWeights
 import qualified Properties.ScalePonder   as ScalePonder
 import qualified Properties.XYTLabDuality as XYTLabDuality
 import qualified Properties.LBalanceOperator as LBalanceOperator
 import qualified Properties.OctreeGenome  as OctreeGenome
 import qualified Properties.SuccessiveRefinement as SuccessiveRefinement
+import qualified Properties.RemainderTail as RemainderTail
+import qualified Properties.ByteCarrier   as ByteCarrier
 import qualified Properties.Dimensions    as Dimensions
 import qualified Properties.OptionTree    as OptionTree
 import qualified Properties.ChromaRotation as ChromaRotation
+import qualified Properties.LatentNavigation as LatentNavigation
 import qualified Properties.OctreeForward  as OctreeForward
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
@@ -157,15 +161,19 @@ main = defaultMain $ testGroup "sixfour-spec"
   , PairTreeFixed.tests
   , RGBTLift.tests
   , OctreeCell.tests
+  , LadderIdentity.tests
   , PerScaleWeights.tests
   , ScalePonder.tests
   , XYTLabDuality.tests
   , LBalanceOperator.tests
   , OctreeGenome.tests
   , SuccessiveRefinement.tests
+  , RemainderTail.tests
+  , ByteCarrier.tests
   , Dimensions.tests
   , OptionTree.tests
   , ChromaRotation.tests
+  , LatentNavigation.tests
   , OctreeForward.tests
   , CanonicalPhase.tests
   , SigmaPairFixed.tests

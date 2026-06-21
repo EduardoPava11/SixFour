@@ -44,6 +44,11 @@ module SixFour.Spec.OctreeForward
   , lawRefineOneShrinksHeld
   , lawCommitPreservesCapture
   , lawCommitIdempotent
+    -- * Surface-exactly-one-16³ (the fixed product run)
+  , productDepth
+  , rungDepth
+  , runProduct
+  , lawRunSurfacesExactlyOne16
   ) where
 
 import SixFour.Spec.OctreeCell           (Detail)
@@ -127,3 +132,28 @@ lawCommitIdempotent :: Int -> Int -> [Int] -> Bool
 lawCommitIdempotent cut d cap =
   not (validInput cut d cap) ||
     let s = surface cut d cap in commit (commit s) == commit s
+
+-- | The product capture depth: @8^6 = 64^3@.
+productDepth :: Int
+productDepth = 6
+
+-- | The surfaced rung depth: @8^4 = 16^3@.
+rungDepth :: Int
+rungDepth = 4
+
+-- | THE product run: surface at the FIXED product cut (@productDepth − rungDepth = 2@,
+-- the @levelsBetween 64 16@ already proven in "SixFour.Spec.OctreeCell"). The cut is
+-- DERIVED from the rung\/product geometry, not a free knob.
+runProduct :: [Int] -> Session
+runProduct cap = surface (productDepth - rungDepth) productDepth cap
+
+-- | Every well-formed @64^3@ capture surfaces EXACTLY one @16^3@ rung. Totality:
+-- 'runProduct' is total on a well-formed capture (never bottom ⇒ ≥ 1). Cardinality:
+-- the surfaced size is pinned to @octreeLeafCount rungDepth == 16*16*16 == 4096@
+-- (⇒ = 1). With 'lawSurfaceLossless' (surfaced + held reconstructs the capture), the
+-- single surfaced rung loses nothing — the "surface a 16³ every time" guarantee.
+lawRunSurfacesExactlyOne16 :: [Int] -> Bool
+lawRunSurfacesExactlyOne16 cap =
+  length cap /= octreeLeafCount productDepth
+    || (length (surfacedCube (runProduct cap)) == octreeLeafCount rungDepth
+        && octreeLeafCount rungDepth == 16 * 16 * 16)
