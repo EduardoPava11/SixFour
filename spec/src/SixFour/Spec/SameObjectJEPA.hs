@@ -12,16 +12,30 @@ takes a SINGLE 'Cube' plus the two orderings, so the two stored genomes are
 necessarily co-projections of one object (a plain pair of genomes could staple two
 unrelated objects — this constructor cannot).
 
-  * 'lawJepaPredictsTarget' (the objective) — @predictTarget@ from the context
-    recovers the ACTUAL target genome exactly: the sibling projection is predictable
-    (delegates "SixFour.Spec.SameObjectInvariance" @lawEncodeDecodeRoundTrip@).
+  * 'lawJepaPredictsTarget' (a ROUND-TRIP SANITY check — NOT a learning objective; see
+    the demotion note below) — @predictTarget@ from the context recovers the ACTUAL
+    target genome exactly (delegates "SixFour.Spec.SameObjectInvariance"
+    @lawEncodeDecodeRoundTrip@).
   * 'lawJepaSameObject' — context and target decode to the SAME cube (delegates
     @lawReorderingPreservesObject@): they are co-projections, not two objects.
   * 'lawJepaContextIsCube' — the context faithfully encodes the source cube.
 
-This is the JEPA self-supervision: mask one projection, predict it from another; the
-loss is zero at the truth because the projections share an object. Additive law
-module, GHC-boot.
+== Demotion note: 'lawJepaPredictsTarget' is a SANITY check, not the objective
+
+@predictTarget = encodeUnder pt . decodeUnder pc@ recovers the sibling projection by
+FULLY decoding the context to the cube and re-encoding under the target ordering — so
+its loss is zero by the Z2 self-inverse round-trip and the predictor @f@ NEVER APPEARS.
+It witnesses only that the two co-projections describe ONE object (a permutation
+identity), carrying NO genuine prediction difficulty: it is the @lawTailNotAutoregressed@
+/ @lawReconstructIsQ16@ vacuity family. It is kept here as a labelled sanity check.
+
+The REAL masked-prediction objective lives in "SixFour.Spec.DetailMaskedPrediction"
+(@lawConstantPredictorIncursLoss@): mask a detail band, predict it from the COARSE
+context alone, and a CONSTANT (f-free) predictor incurs STRICTLY POSITIVE loss — the
+existential failure this round-trip twin lacks. Do NOT cite 'lawJepaPredictsTarget' as
+evidence of an information gain or as a training signal.
+
+Additive law module, GHC-boot.
 -}
 module SixFour.Spec.SameObjectJEPA
   ( JepaPair          -- opaque: build only via 'mkJepaPair'
@@ -76,9 +90,11 @@ validCube d (Cube cl ca cb) =
 -- Laws (predicates; QuickCheck'd in Properties.SameObjectJEPA)
 -- ============================================================================
 
--- | THE OBJECTIVE: predicting the target from the context recovers the ACTUAL target
--- genome — the masked sibling projection is exactly predictable (loss zero at the
--- truth). Delegates the encode/decode round-trip.
+-- | ROUND-TRIP SANITY check (NOT the objective — see the module header's demotion
+-- note): predicting the target from the context recovers the ACTUAL target genome,
+-- loss zero by the Z2 self-inverse round-trip in which the predictor @f@ never appears.
+-- The real masked-prediction objective is "SixFour.Spec.DetailMaskedPrediction"
+-- @lawConstantPredictorIncursLoss@. Delegates the encode/decode round-trip.
 lawJepaPredictsTarget :: Int -> Ordering6 -> Ordering6 -> Cube -> Bool
 lawJepaPredictsTarget d pc pt cube =
   not (validCube d cube)

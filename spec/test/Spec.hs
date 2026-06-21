@@ -37,8 +37,12 @@ import qualified Properties.XYTLabDuality as XYTLabDuality
 import qualified Properties.LBalanceOperator as LBalanceOperator
 import qualified Properties.OctreeGenome  as OctreeGenome
 import qualified Properties.SuccessiveRefinement as SuccessiveRefinement
+import qualified Properties.SuperResPalette as SuperResPalette
 import qualified Properties.RemainderTail as RemainderTail
 import qualified Properties.ByteCarrier   as ByteCarrier
+import qualified Properties.DetailEntropy as DetailEntropy
+import qualified Properties.DetailMaskedPrediction as DetailMaskedPrediction
+import qualified Properties.DetailPredictor as DetailPredictor
 import qualified Properties.Dim6          as Dim6
 import qualified Properties.ProjectionOrdering as ProjectionOrdering
 import qualified Properties.Dimensions    as Dimensions
@@ -59,6 +63,7 @@ import qualified Properties.PairedResidual as PairedResidual
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
+import qualified Properties.LocalPonder   as LocalPonder
 import qualified Properties.IsometryMove  as IsometryMove
 import qualified Properties.MoveRadiusSchedule as MoveRadiusSchedule
 import qualified Properties.GenomePair    as GenomePair
@@ -180,8 +185,12 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LBalanceOperator.tests
   , OctreeGenome.tests
   , SuccessiveRefinement.tests
+  , SuperResPalette.tests
   , RemainderTail.tests
   , ByteCarrier.tests
+  , DetailEntropy.tests
+  , DetailMaskedPrediction.tests
+  , DetailPredictor.tests
   , Dim6.tests
   , ProjectionOrdering.tests
   , Dimensions.tests
@@ -202,6 +211,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests
+  , LocalPonder.tests
   , IsometryMove.tests
   , MoveRadiusSchedule.tests
   , GenomePair.tests

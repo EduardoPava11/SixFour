@@ -101,6 +101,14 @@ tied one, so it subsumes and supersedes the retired Mixture-of-Recursions design
 octree scales that REPLACES @LookNetR@'s scalar PonderNet halt; refine-all is the
 reversible floor and a non-contiguous ponder is unreachable by any single
 stop-depth, so adaptive per-scale pondering strictly exceeds the scalar halt),
+"SixFour.Spec.LocalPonder" (★ per-(level,octant) adaptive deltas — "rungs
+accelerate/decelerate in deltas": generalizes ScalePonder from LEVEL-uniform to a
+PER-OCTANT @LocalMask@ (@applyLocal@). @lawLevelUniformSubsumed@ (per-level Ponder is the
+all-octants-agree special case), @lawLocalExceedsLevel@ (keep one octant + drop its
+sibling is unreachable by ANY per-level mask and changes the reconstruction — strictly
+more expressive), @lawHaltingALevelZeroesItsBits@ (halting a varied level drives its
+"SixFour.Spec.DetailEntropy" coded-bit budget from positive to ZERO — a MEASURED saving,
+not a True-count)),
 "SixFour.Spec.XYTLabDuality" (★ the @[x,y,t] ≅ [L,a,b]@ duality — the involutive
 functor Φ (@x↦a,y↦b,t↦L@) splitting the cube into a UNIVERSAL/balance factor @t≅L@
 and a SEARCH factor @(x,y)≅(a,b)@; the @Balance ⊣ Search@ adjunction whose unit is
@@ -202,12 +210,20 @@ reconstructs identically under either XOR projection-ordering: @decodeUnder p . 
 @Z2@ is the object; @lawDifferentEncodingsSameObject@ = same object / orthogonal projection;
 @lawEquivariance@ = swap-the-ordering == swap-the-input. Why the projection-choice is a safe
 RL action. Delegates OctreeCell octant bijection + ProjectionOrdering XOR self-inverse),
-"SixFour.Spec.SameObjectJEPA" (★ the JEPA OBJECTIVE — a 'JepaPair' (smart-ctor from ONE
-cube + two orderings, so context & target are GUARANTEED co-projections) with
-@predictTarget@; @lawJepaPredictsTarget@ = the masked sibling projection is recovered
-EXACTLY from the context (loss zero at truth), @lawJepaSameObject@ = co-projections of
-one object, @lawJepaContextIsCube@ = context faithfully encodes the source. The
-self-supervision: mask one projection, predict it from another),
+"SixFour.Spec.SameObjectJEPA" (the same-object ROUND-TRIP — a 'JepaPair' (smart-ctor
+from ONE cube + two orderings, so context & target are GUARANTEED co-projections) with
+@predictTarget@; @lawJepaPredictsTarget@ is a SANITY check NOT a learning objective
+(@predictTarget = encodeUnder . decodeUnder@ ⇒ loss zero by Z2 round-trip, the predictor
+never appears — DEMOTED, the real objective is "SixFour.Spec.DetailMaskedPrediction"),
+@lawJepaSameObject@ = co-projections of one object, @lawJepaContextIsCube@ = context
+faithfully encodes the source),
+"SixFour.Spec.DetailMaskedPrediction" (★ the REAL masked-prediction (JEPA) objective —
+mask an octant detail band, predict it from the COARSE context alone via
+"SixFour.Spec.DetailPredictor" @f@. @lawConstantPredictorIncursLoss@ = an off-floor
+masked target makes a CONSTANT (f-free) predictor incur STRICTLY POSITIVE loss AND one
+SGD step reduces it (the existential failure the SameObjectJEPA round-trip lacks),
+@lawTrainingDrivesLossDown@ = the mask is recoverable by learning, @lawFittingOneTargetMissesAnother@
+= the masked band carries info beyond the context. Replaces the vacuous JEPA twin),
 "SixFour.Spec.CarrierL" (★ L CARRIES THE SIGNAL (frontier 1b) — the coarse/DC band is
 the backbone, A/B search is the perturbation L re-balances: @lawCarrierIsDC@ (lBalance =
 ocCoarse), @lawZeroSearchIsCarrierFloor@ (A/B=0 ⇒ pure-L constant floor),
@@ -236,6 +252,30 @@ construction) + @lawDistinctBooksSameCoarse@ (residual in the gate's null space)
 @lawResidualPureValue@ + @lawUnseenKeyIsFloor@ (zero-genome==floor). "The residual IS
 the token, keyed by the coarse value." Additive sibling to SelfSimilarReconstruct's
 free latent-tail path),
+"SixFour.Spec.DetailPredictor" (★ the LEARNED detail-predictor @f_θ : coarse → detail@
+that REPLACES "SixFour.Spec.PairedResidual"'s stored table with a trainable parametric
+function (@θ·φ per band@, @φ(v)=[1,ṽ,ṽ²]@), re-entered to Q16 via the single
+"SixFour.Spec.ByteCarrier" @reenterQ16@ crossing; trained by finite-diff-pinned SGD
+(the "SixFour.Spec.ValueHead" idiom) on the SUPERVISED @16³→64³@ rung and REUSED
+unchanged on the unsupervised @64³→256³@ rung — self-similar transfer. @zeroParams ==
+floor BY ARITHMETIC@ (no sentinel): @lawZeroParamsIsFloorArithmetic@ has four teeth
+(floor / non-constant / step-decreases / differs-from-floor), each killing a different
+wrong @f@),
+"SixFour.Spec.SuperResPalette" (★ the per-frame ≤K-colour constraint on the 256³, as a
+TYPE + a verified requantizer over "SixFour.Spec.Upscale256". @PaletteFrame@ (hidden-ctor
+brand, value-level — build via @mkPaletteFrame@: Just iff ≤K distinct) + @requantizeSlice@
+(LOSSLESS within budget, NEAREST-of-K reps over budget). @lawWithinBudgetLossless@ +
+@lawNearestMinimizesError@ + @lawMultiColourLegitimate@ kill the clamp-to-one-colour cheat;
+@lawUpscalePreservesLengthBudget@ (THE tie: Upscale256 never grows a frame's palette, so
+the per-frame budget SURVIVES super-res — delegates @lawIndicesInRange@). "Invent free
+detail" is bounded to free INDEX detail inside the ≤K table),
+"SixFour.Spec.DetailEntropy" (★ the integer-histogram Shannon entropy over octant
+@Detail@ bands — "bits = compressible surplus": @shannonBits@ = @−Σ p·log₂ p@ read
+PER-BAND (@detailColumn@/@detailEntropyBits@), the missing Tier-0 estimator that makes
+adaptive rung deltas a MEASURED bit saving. @lawSkewedStrictlyBelowUniform@ (a skewed =
+well-predicted residual costs strictly fewer bits than uniform — rejects a
+frequency-ignoring distinct-count fake) + @lawEntropyZeroIffSingleSymbol@ (flat band =
+0 bits) + @lawPerBandDiffersFromPooled@ (per-band ≠ pooling all 7)),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),
