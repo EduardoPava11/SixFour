@@ -51,6 +51,7 @@ import qualified Properties.LatentProjection as LatentProjection
 import qualified Properties.OctreeForward  as OctreeForward
 import qualified Properties.SelfSimilarReconstruct as SelfSimilarReconstruct
 import qualified Properties.SameObjectInvariance as SameObjectInvariance
+import qualified Properties.SameObjectJEPA as SameObjectJEPA
 import qualified Properties.CarrierL      as CarrierL
 import qualified Properties.SteeringSpine as SteeringSpine
 import qualified Properties.RedownsampleGate as RedownsampleGate
@@ -192,6 +193,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , OctreeForward.tests
   , SelfSimilarReconstruct.tests
   , SameObjectInvariance.tests
+  , SameObjectJEPA.tests
   , CarrierL.tests
   , SteeringSpine.tests
   , RedownsampleGate.tests

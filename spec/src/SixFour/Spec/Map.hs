@@ -202,6 +202,12 @@ reconstructs identically under either XOR projection-ordering: @decodeUnder p . 
 @Z2@ is the object; @lawDifferentEncodingsSameObject@ = same object / orthogonal projection;
 @lawEquivariance@ = swap-the-ordering == swap-the-input. Why the projection-choice is a safe
 RL action. Delegates OctreeCell octant bijection + ProjectionOrdering XOR self-inverse),
+"SixFour.Spec.SameObjectJEPA" (★ the JEPA OBJECTIVE — a 'JepaPair' (smart-ctor from ONE
+cube + two orderings, so context & target are GUARANTEED co-projections) with
+@predictTarget@; @lawJepaPredictsTarget@ = the masked sibling projection is recovered
+EXACTLY from the context (loss zero at truth), @lawJepaSameObject@ = co-projections of
+one object, @lawJepaContextIsCube@ = context faithfully encodes the source. The
+self-supervision: mask one projection, predict it from another),
 "SixFour.Spec.CarrierL" (★ L CARRIES THE SIGNAL (frontier 1b) — the coarse/DC band is
 the backbone, A/B search is the perturbation L re-balances: @lawCarrierIsDC@ (lBalance =
 ocCoarse), @lawZeroSearchIsCarrierFloor@ (A/B=0 ⇒ pure-L constant floor),

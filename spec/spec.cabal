@@ -68,6 +68,7 @@ library
         SixFour.Spec.OctreeForward
         SixFour.Spec.SelfSimilarReconstruct
         SixFour.Spec.SameObjectInvariance
+        SixFour.Spec.SameObjectJEPA
         SixFour.Spec.CarrierL
         SixFour.Spec.SteeringSpine
         SixFour.Spec.RedownsampleGate
@@ -376,6 +377,7 @@ test-suite spec-tests
         Properties.OctreeForward
         Properties.SelfSimilarReconstruct
         Properties.SameObjectInvariance
+        Properties.SameObjectJEPA
         Properties.CarrierL
         Properties.SteeringSpine
         Properties.RedownsampleGate
