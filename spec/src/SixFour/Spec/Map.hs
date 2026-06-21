@@ -123,6 +123,11 @@ selection + @{N,W,P}@ edges over @GameMove@, nodes keyed by the surfaced Q16
 @GenomeHash@ so equal looks dedup (@transposition@ = a Merkle DAG); @visitPolicy@ =
 the visit-count training target; the surfaced-tier half of the AlphaZero/MuZero
 hybrid, latent remainder never hashed),
+"SixFour.Spec.ChromaRotation" (★ the swipe-TURN gauge — SO(2)/Cn rotation of the
+@(a,b)@ chroma plane (L fixed): bit-exact quarter-turn subgroup @C4@ + @canonicalQuarter@
+necklace gauge-fix (rotation-equivalent looks dedup, @lawCanonicalChromaGaugeFixed@);
+detents C12/C8/C6 = 30/45/60deg as FLOAT-guidance re-entering the Q16 floor; gray
+axis = the collapse-proximity degenerate fixed point),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),

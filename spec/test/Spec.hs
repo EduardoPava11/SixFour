@@ -38,6 +38,7 @@ import qualified Properties.OctreeGenome  as OctreeGenome
 import qualified Properties.SuccessiveRefinement as SuccessiveRefinement
 import qualified Properties.Dimensions    as Dimensions
 import qualified Properties.OptionTree    as OptionTree
+import qualified Properties.ChromaRotation as ChromaRotation
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
@@ -163,6 +164,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SuccessiveRefinement.tests
   , Dimensions.tests
   , OptionTree.tests
+  , ChromaRotation.tests
   , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests

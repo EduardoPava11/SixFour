@@ -55,6 +55,7 @@ library
         SixFour.Spec.SuccessiveRefinement
         SixFour.Spec.Dimensions
         SixFour.Spec.OptionTree
+        SixFour.Spec.ChromaRotation
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
         SixFour.Spec.DivergenceSchedule
@@ -347,6 +348,7 @@ test-suite spec-tests
         Properties.SuccessiveRefinement
         Properties.Dimensions
         Properties.OptionTree
+        Properties.ChromaRotation
         Properties.CanonicalPhase
         Properties.SigmaPairFixed
         Properties.LeafOverride
