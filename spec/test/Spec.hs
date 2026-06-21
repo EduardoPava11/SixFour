@@ -47,6 +47,7 @@ import qualified Properties.NudgeStep      as NudgeStep
 import qualified Properties.LatentProjection as LatentProjection
 import qualified Properties.OctreeForward  as OctreeForward
 import qualified Properties.SelfSimilarReconstruct as SelfSimilarReconstruct
+import qualified Properties.SteeringSpine as SteeringSpine
 import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
@@ -181,6 +182,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LatentProjection.tests
   , OctreeForward.tests
   , SelfSimilarReconstruct.tests
+  , SteeringSpine.tests
   , CanonicalPhase.tests
   , SigmaPairFixed.tests
   , LeafOverride.tests

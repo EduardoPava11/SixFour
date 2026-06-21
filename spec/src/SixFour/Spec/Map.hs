@@ -178,6 +178,13 @@ SAME octant operator applied twice: 16³→64³ replays HELD EXACT detail (deleg
 @SuccessiveRefinement.refine@), 64³→256³ synthesises INVENTED CONTINUOUS detail (the
 latent tail re-entered to Q16 via @ByteCarrier.reenterQ16@); same shape
 (@OctreeCell.lawLadderSelfSimilar@), different DETAIL SOURCE as a type),
+"SixFour.Spec.SteeringSpine" (★ the form-follows-function CAPSTONE — the one module
+where the steering dataflow connects: @steerShown@ (nudge the shared latent then
+project the structural pool P to the live 16³ @[Q16]@) and @commitReconstruct@ (the
+self-similar lift to 256³); delegates every heavy proof to its organ
+("SixFour.Spec.NudgeStep"/"SixFour.Spec.LatentProjection"/"SixFour.Spec.SelfSimilarReconstruct"),
+adds @lawSpineShownIsCoarser@ (P is dimension-reducing — a pixel is a PROJECTION of
+the one latent, not the latent); end-to-end Q16 is a TYPE guarantee),
 "SixFour.Spec.CanonicalPhase" (the loop
 gauge-fix — the rotation-invariant necklace canonical form that gives the semantic RGBT lanes a
 reproducible phase on the C₆₄-symmetric GIF loop),
