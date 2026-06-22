@@ -7,6 +7,55 @@ newest first.
 
 ---
 
+## 2026-06-22: Device GIF make/encode verification strategy (branch `deploy/device-gif-verify`)
+
+> **Session theme (Daniel's direction):** "ensure the device can form the GIF and the encoder can run on the
+> device. do we airdrop binaries or write a test? Core AI is to be web-searched." A workflow produced the
+> strategy; I built + compile-checked the camera-free harness.
+
+**STRATEGY: TEST, not airdrop.** The proof of record is an on-device `xcodebuild test` of the `SixFourTests`
+bundle against committed Haskell goldens. Airdrop is rejected (a hand-built Mach-O cannot link the per-slice
+arm64 Zig lib, cannot host Core AI's bundle-asset loading, and yields no pass/fail gate); it is kept only as a
+human-eyeball fallback for the non-bit-exact Core AI float output. The simulator has no camera, so the input is
+the deterministic golden or `s4_synth_burst` (the synthetic-data-harness exception to compile-only-no-run).
+
+**THREE LAYERS.** L1 MAKE+ENCODE (byte-exact): `golden_input.halfs` -> `encodeBurst` (ditherMode 0 FS,
+FC=2/SD=32/K=256/Lloyd=15) == `golden.gif`. L1b FULL-SHAPE LIVENESS: `synthBurst` a real 64x64x64 burst ->
+quantize -> palette -> assemble -> valid GIF89a (no camera). L2 ENCODER (reversible lift): already shipped on
+device (`ZigHaarTests` round-trip n=1..256). L3 L-NET via Core AI: device + iOS-27-beta only, self-skips until
+`L.aimodel` + `predictL` exist.
+
+**CONFIRMED the kernel is REAL (not a stub).** `s4_gif_encode_burst` is implemented (fold
+widen->oklab->quantize->dither->palette->`s4_gif_assemble`) and byte-exact vs `golden.gif` (Zig
+`gif_fixture_test`, in the 71/71). The Swift doc claiming `RC_NOT_IMPLEMENTED` was STALE; fixed. So the iPhone
+arm64 makes the GIF byte-for-byte like the Mac (same Zig lib). L1 is transitively proven; the Swift test
+confirms the FFI surface + runs it on real hardware.
+
+**BUILT + compile-checked (TEST BUILD SUCCEEDED, arm64).** `SixFourNative.synthBurst` (only missing binding;
+s4_synth_burst was already in the bridging header), `scripts/embed-gif-golden.py` ->
+`SixFourTests/GifGoldenFixture.swift` (embedded base64 goldens, matching the Generated/*Golden.swift convention,
+no resource bundling), `SixFourTests/DeviceGifParityTests.swift` (L1 + L1b + determinism). No iPhone simulator
+installed here, so the device run is Daniel's step:
+`xcodebuild test -scheme SixFour -destination 'platform=iOS,id=<UDID>' -allowProvisioningUpdates -only-testing:SixFourTests/DeviceGifParityTests`
+(signing: `DEVELOPMENT_TEAM=QFTX3897B7` pinned; one-time add Apple ID in Xcode->Accounts).
+
+**Core AI (web-cited).** WWDC26 Core ML successor; dev-beta, GA ~Sept 2026, iOS/Xcode 27, Apple-silicon device
+only, ABSENT from the simulator (apple/coreai-models issue #49). On-device API: `AIModelAsset(url:)` ->
+`AIModel(asset:)` (AOT-specialize + cache) -> `InferenceFunction` (inspect `InferenceFunctionDescriptor` /
+`NDArrayDescriptor`) -> inputs as `NDArray`/`InferenceValue` -> `function.run(inputs:states:outputViews:)` ->
+read output `NDArray`. Current scaffold uses the older `AIModel(contentsOf:)` spelling; `predictL` is a nil
+stub. L3 verification = a `#if canImport(CoreAI)` device-only smoke test: assert `isAvailable`, load+specialize
+`L.aimodel`, run one fixed input, assert non-nil/finite/correct-length (float is NOT cross-device bit-exact),
+then route through the Zig zero-genome==floor short-circuit and assert the floor-routed GIF bytes are bit-exact
+(the only golden-able tail). Build first: `export_l_coreai.py` (wire look_net.s4ln -> L.aimodel), bundle it,
+implement `predictL`.
+
+**NEXT (ordered):** (1) Daniel runs L1/L1b/L2 on the iPhone 17 Pro. (2) export `L.aimodel`. (3) implement
+`CoreAILInference` (asset->specialize + predictL NDArray/run). (4) `CoreAILInferenceTests` (L3, isAvailable-gated).
+(5) Daniel re-runs on the iOS 27 beta for L3.
+
+---
+
 ## 2026-06-22: Canonical RGB->OKLab unification (kill train/capture input skew) (branch `color/unify-forward-oklab`)
 
 > **Session theme (Daniel's direction):** "your findings are the work. continue. engineering by strict
