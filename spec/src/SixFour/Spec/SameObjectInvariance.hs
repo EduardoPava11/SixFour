@@ -35,6 +35,8 @@ module SixFour.Spec.SameObjectInvariance
   ( -- * The object and its per-ordering encoding
     Cube(..)
   , Genome(..)
+  , Band            -- additive: the distilled-channel band type (carrier sub-genome)
+  , validCube       -- additive: well-formedness predicate (8^d voxels per channel)
   , swapAB
   , encodeUnder
   , decodeUnder

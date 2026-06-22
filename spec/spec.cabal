@@ -59,6 +59,8 @@ library
         SixFour.Spec.ByteCarrier
         SixFour.Spec.DetailEntropy
         SixFour.Spec.DetailMaskedPrediction
+        SixFour.Spec.MaskedBandPrediction
+        SixFour.Spec.MaskedBandTrainer
         SixFour.Spec.DetailPredictor
         SixFour.Spec.Dim6
         SixFour.Spec.ProjectionOrdering
@@ -71,8 +73,20 @@ library
         SixFour.Spec.LatentProjection
         SixFour.Spec.OctreeForward
         SixFour.Spec.SelfSimilarReconstruct
+        SixFour.Spec.DeferredSurfacing
+        SixFour.Spec.SelfSupervisedRung
+        SixFour.Spec.NeuronRedundancy
+        SixFour.Spec.RungPivot
+        SixFour.Spec.HJepaLevels
+        SixFour.Spec.DisplayDecoder
+        SixFour.Spec.EncoderFrozen
+        SixFour.Spec.ContinuousLoop
+        SixFour.Spec.JepaTarget
+        SixFour.Spec.PerAxisTraining
         SixFour.Spec.SameObjectInvariance
         SixFour.Spec.SameObjectJEPA
+        SixFour.Spec.CubeTensor
+        SixFour.Spec.ProjectionQuery
         SixFour.Spec.CarrierL
         SixFour.Spec.SteeringSpine
         SixFour.Spec.RedownsampleGate
@@ -374,6 +388,8 @@ test-suite spec-tests
         Properties.ByteCarrier
         Properties.DetailEntropy
         Properties.DetailMaskedPrediction
+        Properties.MaskedBandPrediction
+        Properties.MaskedBandTrainer
         Properties.DetailPredictor
         Properties.Dim6
         Properties.ProjectionOrdering
@@ -386,8 +402,20 @@ test-suite spec-tests
         Properties.LatentProjection
         Properties.OctreeForward
         Properties.SelfSimilarReconstruct
+        Properties.DeferredSurfacing
+        Properties.SelfSupervisedRung
+        Properties.NeuronRedundancy
+        Properties.RungPivot
+        Properties.HJepaLevels
+        Properties.DisplayDecoder
+        Properties.EncoderFrozen
+        Properties.ContinuousLoop
+        Properties.JepaTarget
+        Properties.PerAxisTraining
         Properties.SameObjectInvariance
         Properties.SameObjectJEPA
+        Properties.CubeTensor
+        Properties.ProjectionQuery
         Properties.CarrierL
         Properties.SteeringSpine
         Properties.RedownsampleGate
