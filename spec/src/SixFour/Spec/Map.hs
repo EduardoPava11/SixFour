@@ -134,6 +134,12 @@ TOTAL on this domain; @lawDomainFitsI32@ proves every band fits i32 in-domain an
 @lawBoundIsTight@ proves B is tight (the 4B HH band of @liftQuad@ is the binding case);
 mirrors the Zig @SUBSTRATE_BOUND@ / @RC_OUT_OF_RANGE@ total-function guard so the oracle
 and the kernel share ONE domain),
+"SixFour.Spec.RelationalResidual" (the residual as a RELATIONAL MEMORY UNIT: a voxel
+becomes a 6D point @P6 (L,a,b,x,y,t)@ with a distance @d6@ (Q16 L1, a real metric) so
+pixels in different regions are comparable; the @phi6@ pairing @a<->x,b<->y,L<->t@ grounds
+it, the carriers @{L,t}@ are held out, and the LEARNED position residual is
+@7 bands x {x,y} = 14@ ints/octant (@relationalResidualLen@ = the user's @16-2=14@). The
+@+/-1@ nudge is one unit step on any axis),
 "SixFour.Spec.RemainderTail" (★ the discrete-surfaced / continuous-remainder TYPED
 SPLIT that closes audit B6+B1 — 'Surfaced' (integers) reconstructs EXACTLY while
 'Remainder' (continuous FlowAR tail) reconstructs only WITHIN @eps@ and is provably
