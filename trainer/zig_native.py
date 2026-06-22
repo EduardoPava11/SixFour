@@ -90,6 +90,9 @@ def _load() -> ctypes.CDLL:
 
     lib.s4_srgb8_to_oklab_q16.restype = c_i32
     lib.s4_srgb8_to_oklab_q16.argtypes = [c_u8p, c_i32, c_i32p]
+
+    lib.s4_linear_to_oklab_q16.restype = c_i32
+    lib.s4_linear_to_oklab_q16.argtypes = [c_i32p, c_i32, c_i32p]
     return lib
 
 
@@ -191,13 +194,33 @@ def gif_decode(gif: bytes):
 
 
 def srgb8_to_oklab_q16(rgb: np.ndarray) -> np.ndarray:
-    """(k,3) uint8 sRGB8 → (k,3) int32 OKLab Q16 (inverse of palette_to_srgb8; lossy)."""
+    """(k,3) uint8 sRGB8 → (k,3) int32 OKLab Q16 (inverse of palette_to_srgb8; lossy).
+    THE canonical 8-bit RGB→OKLab: the same kernel the device uses to decode 8-bit
+    colour. Training preprocessing of 8-bit sources (GIF frames) MUST route through
+    this, never a numpy reimplementation, so the frozen encoder sees the identical
+    integer voxel at train and capture time."""
     rgb = np.ascontiguousarray(rgb, dtype=np.uint8)
     k = rgb.shape[0]
     out = np.empty((k, 3), dtype=np.int32)
     rc = _LIB.s4_srgb8_to_oklab_q16(_u8p(rgb), k, _i32p(out))
     if rc != RC_OK:
         raise RuntimeError(f"s4_srgb8_to_oklab_q16 rc={rc}")
+    return out
+
+
+def linear_to_oklab_q16(lin_q16: np.ndarray) -> np.ndarray:
+    """(p,3) int32 linear-sRGB Q16 → (p,3) int32 OKLab Q16 via THE canonical forward
+    transform (integer matmul + icbrtQ16 floor cube root). This is the ONE RGB→OKLab
+    the device substrate / Haskell oracle use (pinned byte-exact by
+    color_fixture_test.zig 'linear_to_oklab'); the camera linear path routes through
+    it. Replaces every numpy np.cbrt reimplementation so train == capture by
+    construction. Inputs outside the +-2^29-1 domain return RC_OUT_OF_RANGE."""
+    lin_q16 = np.ascontiguousarray(lin_q16, dtype=np.int32)
+    p = lin_q16.shape[0]
+    out = np.empty((p, 3), dtype=np.int32)
+    rc = _LIB.s4_linear_to_oklab_q16(_i32p(lin_q16), p, _i32p(out))
+    if rc != RC_OK:
+        raise RuntimeError(f"s4_linear_to_oklab_q16 rc={rc}")
     return out
 
 
