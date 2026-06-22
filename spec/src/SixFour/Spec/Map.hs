@@ -148,6 +148,13 @@ unit distance can GROW/SHRINK in the higher-dim relations (@lawBiasLearnsToScale
 single-token limit, so @lawPositionConditioningStrictlyHelps@ is inherited and the float
 scale never bypasses Q16; no-EMA + VICReg-load-bearing delegated. Trains MLX -> coreai-torch
 -> Core AI = the flip condition),
+"SixFour.Spec.TwoMoveOctave" (the GLOBAL-coarse-octave-then-LOCAL-fine-octave @(a,b)@
+two-move chroma navigation: AXIS-AWARE @+/-1@ moves (via @RelationalResidual.nudge@, so
+@(+2,0)/=(+1,+1)@ and a diagonal's two orderings differ at the intermediate 16³ = the "mid
+funnel"), the 12 ordered magnitude-2 paths over 8 endpoints, one composed @d6@ as the
+per-two-move SIGNAL. OCTAVE answer: VALUE distance LINEAR (@d6@), SCALE distance OCTAVE
+(@levelsBetween@=log2); @s_h@ the learned octave scale stays in @LargeJepaHead@. KEYSTONE
+@lawDiagonalOrderingsDifferAtIntermediate@. Reuses NudgeStep/DetentNudge/DisplayDecoder),
 "SixFour.Spec.RemainderTail" (★ the discrete-surfaced / continuous-remainder TYPED
 SPLIT that closes audit B6+B1 — 'Surfaced' (integers) reconstructs EXACTLY while
 'Remainder' (continuous FlowAR tail) reconstructs only WITHIN @eps@ and is provably

@@ -57,6 +57,7 @@ library
         SixFour.Spec.SubstrateDomain
         SixFour.Spec.SuccessiveRefinement
         SixFour.Spec.SuperResPalette
+        SixFour.Spec.TwoMoveOctave
         SixFour.Spec.RelationalResidual
         SixFour.Spec.RemainderTail
         SixFour.Spec.ByteCarrier
@@ -390,6 +391,7 @@ test-suite spec-tests
         Properties.SubstrateDomain
         Properties.SuccessiveRefinement
         Properties.SuperResPalette
+        Properties.TwoMoveOctave
         Properties.RelationalResidual
         Properties.RemainderTail
         Properties.ByteCarrier
