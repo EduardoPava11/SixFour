@@ -85,6 +85,7 @@ module SixFour.Spec.MaskedBandPrediction
   , lawMaskedGradientFiniteDiff
   , lawMaskedContextExcludesTarget
   , lawSiblingContextStrictlyHelps
+  , lawMaskedConsumesSiblingContext
   , lawMaskedReusesOnBothRungs
   , lawTransferRecoversGapUnderSelfSimilarity
   , lawTransferDegradesUnderLawShift
@@ -385,21 +386,38 @@ lawSiblingContextStrictlyHelps w =
 -- existing @Detail@; re-pins NOTHING. "SixFour.Spec.DetailPredictor" and the four existing
 -- MaskedBandPrediction laws are untouched, and 'lawMaskedContextExcludesTarget' (the
 -- masking no-leak guarantee) is rung-independent and carries over unchanged.
-lawMaskedReusesOnBothRungs :: [Double] -> Int -> Bool
-lawMaskedReusesOnBothRungs ps v =
-  let psQC = take paramCountB (ps ++ repeat 0)
-      psW  = take paramCountB
-                  (cycle (take featureCountB ([1, 1] ++ repeat 0)))
-      mIdx = 0
-      v1   = v
-      v2   = v + 1
-      det1 = fromBands (0 : 100 : replicate (numBands - 2) 0)
-      det2 = fromBands (0 : 700 : replicate (numBands - 2) 0)
-      ex1  = (v1, det1, mIdx)
-      ex2  = (v2, det2, mIdx)
-  in predictMaskedBand psQC ex1 == predictMaskedBand psQC ex1
-     && predictMaskedBand psW ex1 /= predictMaskedBand psW ex2
-     && levelsBetween 64 16 == levelsBetween 256 64
+-- The earlier witness drove its distinctness off the COARSE value (siblings zeroed) and
+-- carried a reflexive @x == x@ conjunct, so a coarse-only option-A model passed it
+-- identically. It now rides the SIBLINGS (the thing that distinguishes option B), and the
+-- coarse-only converse is pinned in 'lawMaskedConsumesSiblingContext'. Closed @Bool@.
+lawMaskedReusesOnBothRungs :: Bool
+lawMaskedReusesOnBothRungs =
+  let psW  = take paramCountB (cycle (replicate featureCountB 1))   -- sibling weights ON
+      detA = fromBands (0 : 0     : replicate (numBands - 2) 0)
+      detB = fromBands (0 : 60000 : replicate (numBands - 2) 0)     -- differs in a VISIBLE sibling (band 1)
+      exA  = (4000, detA, 0)        -- coarse 4000, masked band 0 ⇒ bands 1..6 are visible siblings
+      exB  = (4000, detB, 0)        -- SAME coarse, SAME masked band
+  in predictMaskedBand psW exA /= predictMaskedBand psW exB    -- the sibling difference changes the prediction
+     && levelsBetween 64 16 == levelsBetween 256 64            -- self-similar octant distance on both rungs
+
+-- | STANDALONE sibling-consumption teeth — the converse that pins the cause to the
+-- SIBLINGS, not the coarse value. With sibling weights ON, two examples that share the SAME
+-- coarse value and SAME masked band but differ in a VISIBLE sibling predict DIFFERENTLY;
+-- with a COARSE-ONLY parameterisation (the six sibling weights zeroed, @[1, ṽ, ṽ²]@ kept)
+-- the SAME two examples predict IDENTICALLY. Together: the prediction's dependence on the
+-- differing input is carried by the sibling context. An option-A (coarse-only) model
+-- provably CANNOT satisfy the first conjunct — this is exactly the consumption the module
+-- name advertises, finally law-checked rather than asserted.
+lawMaskedConsumesSiblingContext :: Bool
+lawMaskedConsumesSiblingContext =
+  let psW  = take paramCountB (cycle (replicate featureCountB 1))                                  -- siblings ON
+      psC  = take paramCountB (cycle (take featureCountB (1 : 1 : 1 : replicate siblingCount 0)))  -- coarse only
+      detA = fromBands (0 : 0     : replicate (numBands - 2) 0)
+      detB = fromBands (0 : 60000 : replicate (numBands - 2) 0)
+      exA  = (4000, detA, 0)
+      exB  = (4000, detB, 0)
+  in predictMaskedBand psW exA /= predictMaskedBand psW exB    -- siblings DO change the prediction
+     && predictMaskedBand psC exA == predictMaskedBand psC exB -- coarse-only CANNOT see the difference
 
 -- ============================================================================
 -- Cross-rung TRANSFER — numeric teeth for the self-similar-reuse claim
@@ -416,11 +434,11 @@ lawMaskedReusesOnBothRungs ps v =
 -- | A SELF-SIMILAR detail law: band 0 is a fixed affine function of the coarse value, the
 -- SAME law on both rungs (exactly representable by the @[1, ṽ, ṽ²]@ feature map).
 sharedLawTarget :: Int -> Detail
-sharedLawTarget v = (round (1000 + 0.1 * fromIntegral v), 0, 0, 0, 0, 0, 0)
+sharedLawTarget v = (round (1000 + 0.1 * fromIntegral v :: Double), 0, 0, 0, 0, 0, 0)
 
 -- | A SHIFTED detail law (a different affine) — breaks self-similarity.
 shiftedLawTarget :: Int -> Detail
-shiftedLawTarget v = (round (5000 - 0.05 * fromIntegral v), 0, 0, 0, 0, 0, 0)
+shiftedLawTarget v = (round (5000 - 0.05 * fromIntegral v :: Double), 0, 0, 0, 0, 0, 0)
 
 -- | DOWN-rung training examples (one coarse range), masked band 0, the shared law.
 transferDownExamples :: [MaskedBandExample]

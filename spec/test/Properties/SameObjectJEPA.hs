@@ -19,7 +19,7 @@ genCube = do
 
 tests :: TestTree
 tests = testGroup "SameObjectJEPA (the JEPA objective: predict the sibling projection)"
-  [ testProperty "OBJECTIVE: predicting the target from the context recovers it exactly" $
+  [ testProperty "SANITY (f-free Z2 round-trip, NOT the objective; see DetailMaskedPrediction.lawConstantPredictorIncursLoss): predicting the target from the context recovers it exactly" $
       forAll genCube $ \(d, c) ->
         forAll (elements allOrderings) $ \pc ->
           forAll (elements allOrderings) $ \pt -> lawJepaPredictsTarget d pc pt c

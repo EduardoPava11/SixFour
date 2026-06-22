@@ -23,9 +23,5 @@ tests = testGroup "DeferredSurfacing (rung-1 latent search; surface 16³+residua
         forAll (choose (0, d)) $ \k ->
           forAll (genCapture d) $ \cap -> lawSurfacedOutputIsExact k d cap
   , testProperty "one θ_B drives the latent search across BOTH rungs before the single commit" $
-      forAll (vectorOf paramCountBForTest (choose (-2.0, 2.0))) $ \ps ->
-        forAll (choose (0, 65536)) $ \v -> lawSearchReusesBothRungs ps v
+      once lawSearchReusesBothRungs
   ]
-  where
-    -- the 63-param width of MaskedBandPrediction's θ_B (kept local to avoid an extra import)
-    paramCountBForTest = 63

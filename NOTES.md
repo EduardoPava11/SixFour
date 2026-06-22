@@ -7,6 +7,56 @@ newest first.
 
 ---
 
+## 2026-06-22: Reversible-seam hardening + rubric-soundness review (branch `spec/harden-reversible-seams`)
+
+> **Session theme (Daniel's direction):** review the prior JEPA-session work with a workflow, anchored on
+> reversibility being the core feature; harden the weak spots; then, before committing, review the work
+> AGAIN with a workflow asking "is the strategy sound? this spec is a RUBRIC, the actual tests determine
+> validity." Two review workflows (9 + 10 agents) with spec-internal fixes between them. Suite
+> **1180 → 1187**; all additive, golden-gated; `spec-codegen` produced ZERO drift to `Generated/`.
+
+**REVIEW 1 (categorize + teeth, workflow `wbauq2fyq`).** Categorized the 21 new modules into 6 groups by
+relation to the reversible core (ON-PATH / CONSUMES / OFF-PATH). Verdict: the reversible KERNEL is sound and
+trap-free (`refine . split == id`, sub-quantum witnesses correctly closed-`Bool`), but the SEAMS binding it to
+the object/rung/super-res wrappers delegated by prose, not teeth. Four confirmed defects.
+
+**FIXES LANDED (13 files).**
+- SameObjectJEPA test: `"OBJECTIVE:"` → `"SANITY"` (the law is an f-free Z2 identity the header demotes; the
+  marker is reserved for the genuine objective in DetailMaskedPrediction).
+- CubeTensor: `lawCubeTensorRoundTripsThroughKernel` (per-channel `octantSynthesize∘octantDistill`) +
+  `lawCorruptBridgeFailsRoundTrip` (negative teeth).
+- RungPivot: `lawRungRoundTripsThroughType`, `lawMkRungRejectsSideMismatch`, `lawLatentNeuronsStayContinuous`
+  (the `Rung`/`mkRung`/`latentNeurons` types were exported but exercised by NO law (dead structure)).
+- MaskedBandPrediction: `lawMaskedConsumesSiblingContext` + rewrote `lawMaskedReusesOnBothRungs` (was
+  reflexive + drove distinctness off the COARSE value with siblings zeroed; now rides a visible sibling, so an
+  option-A coarse-only model is provably excluded). Made it closed-`Bool`; rippled into SelfSupervisedRung +
+  DeferredSurfacing (both ALIASED it through by analogy; the ripple WAS the proof of the delegation finding).
+- SelfSupervisedRung: `lawOneOperatorTwoSupervisions` now also wires the numeric transfer law.
+- SuperResPalette: `lawOverBudgetBeatsClamp` (k reps strictly beat a single-colour clamp; certifies the
+  over-budget representative choice that was certified by nothing).
+
+**REVIEW 2 (rubric soundness, workflow `w06do6gb2`), the load-bearing finding.** Judged each law not on
+Haskell teeth but on "does passing it constrain the real MLX/Zig/Swift artifact?" Verdict **GO-WITH-TWEAKS**,
+with an honest reckoning: of 9 new laws, **6 have an EMPTY falsifier set over every real artifact** (they
+exercise Haskell-only constructs: the `Rung`/`IntermediateLatent` types, the Mac-side SoA bridge, a `[Double]`
+latent list, with no on-device counterpart and no golden). Two of the three with real grip
+(`lawMaskedConsumesSiblingContext`, rewritten `lawMaskedReusesOnBothRungs`) constrain θ_B's DESIGN SHAPE but
+emit no golden yet, so their bit-exact bite is INDIRECT. Only `lawOverBudgetBeatsClamp` fully clears the bar
+today. One honesty tweak applied pre-commit: relabelled the numeric conjunct in `lawOneOperatorTwoSupervisions`
+as "θ generalises across coarse INPUT ranges" (transfer fixtures zero the siblings, so it is NOT a
+sibling-reuse claim; an option-A model passes it).
+
+**STRATEGIC CONCLUSION (carry forward).** This commit is correct spec-internal HYGIENE; it is NOT progress on
+the Zig/MLX/Swift build, and the kernel↔wrapper seam it hardens is already the best-covered seam in the repo.
+The real, un-ported, golden-free build risk is untouched and is the NEXT gate: (1) emit a `predictMaskedBand`
+golden (fixed θ_B + fixed (coarse, siblings) → fixed Q16 byte, with a SIBLING-VARYING example) so the GOOD
+masked-band laws bind the artifact, not just intent; (2) stand up the 4D reversible-dithering DATA ENGINE with
+`s4_split`/`s4_redownsample` Zig kernels + a fixture (a non-invertible `_lift_quad` would pass every law added
+here); (3) pin the CubeTensor Morton↔row-major order permutation with a golden. Per Daniel's principle: a law
+earns its keep only when passing it constrains the real artifact.
+
+---
+
 ## 2026-06-22 — JEPA world-model spec: encoder + four loops settled EMPIRICALLY (branch `spec/jepa-world-model`)
 
 > **Session theme (Daniel's direction):** a GHCi-empirical, "nothing locked in" investigation of the JEPA

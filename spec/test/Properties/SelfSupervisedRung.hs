@@ -22,9 +22,8 @@ tests = testGroup "SelfSupervisedRung (two self-supervision regimes; one operato
       forAll (choose (1, 3)) $ \d ->
         forAll (choose (1, d)) $ \k ->
           forAll (genCube d) $ \fine -> lawInventedScoredByConsistency k d fine
-  , testProperty "one operator, two supervisions (scorers differ; θ_B reused)" $
-      forAll (vectorOf 63 (choose (-2.0, 2.0))) $ \ps ->
-        forAll (choose (0, 65536)) $ \v -> lawOneOperatorTwoSupervisions ps v
+  , testProperty "one operator, two supervisions (scorers differ; θ_B reused structurally AND numerically)" $
+      once lawOneOperatorTwoSupervisions
   , testProperty "the manufactured Held label is LEARNABLE (training drives heldLoss down)" $
       forAll (choose (0, 1000000)) lawSelfSupervisedLabelIsLearnable
   ]

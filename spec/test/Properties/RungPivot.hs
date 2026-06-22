@@ -21,4 +21,12 @@ tests = testGroup "RungPivot (the canonical 64³-pivot rung; never-surfaced 32³
       forAll (choose (0, 3)) $ \d ->
         forAll (choose (0, d)) $ \k ->
           forAll (genCapture d) $ \cap -> lawRungEndpointExact k d cap
+  , testProperty "TYPE round-trip: a Rung built by mkRung refines back to the capture" $
+      forAll (choose (0, 3)) $ \d ->
+        forAll (choose (0, d)) $ \k ->
+          forAll (genCapture d) $ \cap -> lawRungRoundTripsThroughType k d cap
+  , testProperty "mkRung rejects a direction/latent-side mismatch" $
+      once lawMkRungRejectsSideMismatch
+  , testProperty "latentNeurons keeps sub-quantum distinctions the surface would destroy" $
+      once lawLatentNeuronsStayContinuous
   ]

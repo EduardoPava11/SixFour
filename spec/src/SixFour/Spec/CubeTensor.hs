@@ -57,9 +57,12 @@ module SixFour.Spec.CubeTensor
   , lawChannelSoARoundTrip
   , lawChannelSoARoundTripBack
   , lawSearchSwapFixesCarrier
+  , lawCubeTensorRoundTripsThroughKernel
+  , lawCorruptBridgeFailsRoundTrip
   ) where
 
 import SixFour.Spec.Dim6          (Dim6(..), isUniversal, isSearch)
+import SixFour.Spec.OctreeCell    (octantDistill, octantSynthesize)
 import SixFour.Spec.OctreeGenome  (octreeLeafCount)
 import SixFour.Spec.SameObjectInvariance (Cube(..))
 
@@ -174,3 +177,32 @@ lawSearchSwapFixesCarrier ct =
   && swapSearch (swapSearch ct) == ct
   && toChannelSoA (swapSearch ct)
        == let Cube cl ca cb = toChannelSoA ct in Cube cl cb ca
+
+-- | The tensor round-trips through the ACTUAL reversible kernel, not just the id-rename
+-- bridge: bridge to the 'Cube', run EACH channel through the octant kernel
+-- (@octantSynthesize . octantDistill d@ — the same bijection 'SixFour.Spec.SuccessiveRefinement'
+-- @split@\/@refine@ ride), and bridge back. This is the seam-level reversibility the
+-- prose claimed but no law exercised: it puts the @L@\/@a@\/@b@ channels through the kernel
+-- the architecture assumes is lossless. Teeth: a lossy kernel, or a bridge that dropped or
+-- reordered a channel, changes a channel and fails on any well-formed tensor.
+lawCubeTensorRoundTripsThroughKernel :: CubeTensor -> Bool
+lawCubeTensorRoundTripsThroughKernel ct =
+  not (validCubeTensor ct) ||
+    let d             = ctDepth ct
+        thru ch       = octantSynthesize (octantDistill d ch)
+        Cube cl ca cb = toChannelSoA ct
+    in fromChannelSoA d (Cube (thru cl) (thru ca) (thru cb)) == ct
+
+-- | NEGATIVE teeth: a CORRUPTED bridge that swaps the @L@ carrier with a search channel
+-- does NOT round-trip — on a tensor whose channels differ, mis-mapping a channel changes
+-- the object. This proves 'lawChannelSoARoundTrip' is not vacuously true for ANY bridge (a
+-- dropped\/reordered channel is caught), which an id-rename round-trip alone cannot show.
+-- (@d = 0@ ⇒ @8^0 = 1@ voxel per channel, three distinct values.)
+lawCorruptBridgeFailsRoundTrip :: Bool
+lawCorruptBridgeFailsRoundTrip =
+  let ct            = CubeTensor 0 [10] [20] [30]   -- 1 voxel/channel, all distinct
+      Cube cl ca cb = toChannelSoA ct
+      corrupt       = Cube ca cl cb                 -- a WRONG bridge: L and a swapped
+  in validCubeTensor ct
+     && fromChannelSoA 0 (toChannelSoA ct) == ct    -- the REAL bridge round-trips
+     && fromChannelSoA 0 corrupt /= ct              -- the corrupted bridge does NOT
