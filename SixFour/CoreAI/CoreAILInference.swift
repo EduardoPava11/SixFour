@@ -20,9 +20,16 @@
 //     the Zig Q16 core (see `Native/`) before it can reach the GIF bytes. This
 //     type returns a float prediction; it never writes output pixels directly.
 //
-//  STATUS: SCAFFOLD. The Core AI load/run calls are sketched against the
-//  WWDC26 session-324 API (AIModel(contentsOf:), AIModelCache, NDArray). Wire +
-//  verify on a real iPhone with the Xcode 27 toolchain.
+//  STATUS: ORPHANED 2026-06-22. The target (frozen grayscale-L look-net) was
+//  abandoned 2026-06-17 (look_net_trained.s4ln deleted); it fed the V2-deferred
+//  global-palette path (Feature.globalPaletteV2 = false). The settled encoder needs
+//  NO learned L: the lift is frozen, theta_B (63 params) ships hand-written in
+//  Native/MaskedBandForward.swift with no Core AI, A/B stays MPSGraph, CarrierL is
+//  deterministic. Retired, not deleted: kept as the audit record of
+//  Core-AI-considered-and-dropped. Do NOT repoint at DisplayDecoder (a spec-only
+//  quarantine stub with no determinism need = no Core AI justification). Resurrect
+//  ONLY if a genuinely LARGE on-device generative-L head is roadmapped with a real
+//  trainer + weights. Zero callers; this annotation is comment-only, no behaviour change.
 //
 
 import Foundation
