@@ -132,10 +132,10 @@ enum SixFourNative {
     /// STBN3D mask bytes for the blue-noise dither modes (pass `nil` for the
     /// error-diffusion modes). Returns the GIF bytes, or `nil` on failure.
     ///
-    /// NOTE: the underlying `s4_gif_encode_burst` kernel is a declared contract
-    /// (header + this seam); its body lands across the spec-first rollout
-    /// stages. Until then it returns `S4_RC_NOT_IMPLEMENTED` and this returns
-    /// `nil` — the seam exists so the renderer can compile against it.
+    /// The underlying `s4_gif_encode_burst` is IMPLEMENTED (the deterministic fold
+    /// widen->oklab->quantize->dither->palette->assemble) and is byte-exact against
+    /// the Haskell golden `golden.gif` (pinned by `Native/src/gif_fixture_test.zig`).
+    /// `DeviceGifParityTests` re-asserts that byte-exactness ON the device.
     static func encodeBurst(
         linearHalfs: [UInt16],
         stbnMask: [UInt8]?,
@@ -231,6 +231,25 @@ enum SixFourNative {
         }
         guard rc == S4_RC_OK else { log.error("s4_quantize_frame rc=\(rc)"); return nil }
         return QuantResult(centroids: centroids, indices: indices)
+    }
+
+    /// Deterministic synthetic OKLab Q16 burst (`s4_synth_burst`) — the CAMERA-FREE
+    /// input generator. Returns `frameCount*side*side*3` interleaved Int32 OKLab Q16,
+    /// reproducible from `seed` (mode 0 = colour, 1 = grayscale). This is the
+    /// synthetic-data harness that lets a device test exercise the make/encode path
+    /// with no AVFoundation capture; the SAME generator the Mac trainer
+    /// (`trainer/zig_native.py`) uses, so device and Mac agree byte-for-byte per seed.
+    static func synthBurst(seed: UInt64, mode: Int32, frameCount: Int32, side: Int32,
+                           lMinQ16: Int32 = 5243, lMaxQ16: Int32 = 60293,
+                           chromaMaxQ16: Int32 = 18350) -> [Int32]? {
+        let count = Int(frameCount) * Int(side) * Int(side) * 3
+        guard count > 0 else { return nil }
+        var out = [Int32](repeating: 0, count: count)
+        let rc = out.withUnsafeMutableBufferPointer { o in
+            s4_synth_burst(seed, mode, frameCount, side, lMinQ16, lMaxQ16, chromaMaxQ16, o.baseAddress)
+        }
+        guard rc == S4_RC_OK else { log.error("s4_synth_burst rc=\(rc)"); return nil }
+        return out
     }
 
     /// Dither one frame against fixed centroids → indices. mode 0=FS 1=Atkinson
