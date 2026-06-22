@@ -22,35 +22,31 @@ import numpy as np
 from PIL import Image, ImageSequence
 from tqdm import tqdm
 
-
-# ---------- OKLab conversion (matches Swift ColorScience exactly) ----------
-
-def srgb_to_linear(c: np.ndarray) -> np.ndarray:
-    c = np.clip(c, 0.0, 1.0)
-    return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+from zig_native import srgb8_to_oklab_q16
 
 
-def linear_srgb_to_oklab(rgb: np.ndarray) -> np.ndarray:
-    # rgb: (..., 3) in linear sRGB
-    r = rgb[..., 0]; g = rgb[..., 1]; b = rgb[..., 2]
-    l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
-    m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
-    s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
-    l_, m_, s_ = np.cbrt(l), np.cbrt(m), np.cbrt(s)
-    L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_
-    A = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_
-    B = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
-    return np.stack([L, A, B], axis=-1)
+# ---------- OKLab conversion (THE canonical transform, owned Zig kernel) ----------
+# STRICT ENFORCEMENT: there is exactly ONE RGB→OKLab. We route 8-bit GIF frames
+# through the owned Zig kernel `s4_srgb8_to_oklab_q16` (integer matmul + icbrtQ16),
+# the SAME function the device uses to decode 8-bit colour and the one the Haskell
+# oracle is golden-pinned to (color_fixture_test.zig). A numpy `np.cbrt`
+# reimplementation is FORBIDDEN: it rounds differently, so the frozen encoder would
+# train on a different integer voxel than the device captures (train/capture skew).
+# Output is float OKLab = the canonical integer Q16 value / 65536.
+
+_Q16 = 65536.0
 
 
 def gif_frames_to_oklab(gif_path: pathlib.Path) -> np.ndarray:
-    """Return (frames, H, W, 3) OKLab tensor."""
+    """Return (frames, H, W, 3) float OKLab, via the canonical Zig 8-bit transform so
+    training preprocessing is byte-identical to the device substrate."""
     img = Image.open(gif_path)
     frames = []
     for frame in ImageSequence.Iterator(img):
-        rgb = np.asarray(frame.convert("RGB"), dtype=np.float32) / 255.0
-        linear = srgb_to_linear(rgb)
-        frames.append(linear_srgb_to_oklab(linear))
+        rgb = np.asarray(frame.convert("RGB"), dtype=np.uint8)      # (H, W, 3) sRGB8
+        h, w, _ = rgb.shape
+        lab_q16 = srgb8_to_oklab_q16(rgb.reshape(-1, 3))            # (H*W, 3) int32 OKLab Q16
+        frames.append((lab_q16.astype(np.float32) / _Q16).reshape(h, w, 3))
     return np.stack(frames, axis=0)
 
 

@@ -7,6 +7,46 @@ newest first.
 
 ---
 
+## 2026-06-22: Canonical RGB->OKLab unification (kill train/capture input skew) (branch `color/unify-forward-oklab`)
+
+> **Session theme (Daniel's direction):** "your findings are the work. continue. engineering by strict
+> enforcement and structure." Acting on the pretrain/Core-AI design workflow's load-bearing finding: the
+> FORWARD RGB->OKLab transform had FOUR divergent implementations, and the one the model trains on diverged
+> from the bit-exact substrate. This is the JEPA-level analogue of the overflow bug: a frozen param-free
+> encoder cannot adapt, so if training preprocesses colour differently from capture, it learns on a picture
+> the device never produces.
+
+**FINDING (verified by execution).** Four forward RGB->OKLab impls: (1) Zig `s4_linear_to_oklab_q16`
+(integer matmul + icbrtQ16) = canonical, (2) Haskell `ColorFixed.linearToOklabQ16` = PROVEN==Zig
+(color_fixture_test.zig), (3) device `ColorScience` float cbrtf -> oklabToQ16 round = DIVERGES, (4) trainer
+`train_metric.py` numpy np.cbrt = DIVERGES. Ran the numpy path vs the Zig kernel on sample colours: max
+divergence 35 Q16 LSBs on 9 of 10. Only the integer pair was pinned.
+
+**STRICT ENFORCEMENT (one transform, gated).**
+- Trainer: bound `s4_linear_to_oklab_q16` in zig_native.py; DELETED train_metric.py's numpy
+  `srgb_to_linear`/`linear_srgb_to_oklab`; `gif_frames_to_oklab` now routes 8-bit frames through the canonical
+  `s4_srgb8_to_oklab_q16`, so training preprocessing == device substrate byte-for-byte.
+- NEW GATE `trainer/test_color_canonical.py` (4/4 pass): the Zig forward == the Haskell oracle golden
+  (color_golden.json) byte-exact; numpy np.cbrt PROVABLY fails the golden (teeth proving why it is forbidden);
+  regression guard blocks re-adding np.cbrt. The trainer is now a golden-gated consumer.
+- Device: `SixFourNative.haarLevelColors` (the 16-colour shutter cascade) computed OKLab via float cbrtf
+  despite its own doc claiming "through the verified Zig kernels"; swapped to `srgb8ToOklab`
+  (s4_srgb8_to_oklab_q16). Compile-check: TEST BUILD SUCCEEDED (arm64).
+
+**VERIFIED.** Trainer gate 4/4 PASS (run); the 35-LSB skew reproduced then eliminated (new path == kernel);
+device build SUCCEEDED. The shipped GIF render already routes through `s4_gif_encode_burst` (canonical
+linear->OKLab internally), so it was never skewed.
+
+**RESIDUAL / NEXT (device-verified audit, not done here).** Remaining `oklabToQ16(float-OKLab)` committed
+callsites (DeterministicRenderer / CaptureViewModel / SurfaceView) quantize Metal-FLOAT OKLab rather than
+running the integer transform on the linear input; classifying which are model-committed vs display-only, and
+routing the committed ones through `s4_linear_to_oklab_q16`, is a Metal-pipeline refactor that needs iPhone 17
+Pro device verification. UI-display float OKLab (PaletteGrid/Cloud/Tree etc.) can stay float. Also still owed:
+the well-formedness typed decode (`decodeBurstToCubeTensor` + `lawShortBurstRejected`), the portable
+YCbCr10->linear decode, and the Core AI seam TODOs (predictL, .s4ln loader, fixed shape).
+
+---
+
 ## 2026-06-22: Invertibility-on-silicon break-hunt + total-function redesign (branch `test/invertibility-silicon`)
 
 > **Session theme (Daniel's direction):** "is the design invertible? could it work / does it work." Empirically
