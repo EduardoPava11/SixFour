@@ -56,6 +56,7 @@ module SixFour.Spec.SuperResPalette
   , lawWithinBudgetLossless
   , lawRequantSizeBounded
   , lawNearestMinimizesError
+  , lawOverBudgetBeatsClamp
   , lawMultiColourLegitimate
   , lawBrandReflectsBudget
   , lawUpscalePreservesLengthBudget
@@ -156,6 +157,23 @@ lawNearestMinimizesError k pixels =
            n = length pal
        in and [ all (\j -> distSqQ16 p (pal !! i) <= distSqQ16 p (pal !! j)) [0 .. n - 1]
               | (i, p) <- zip idx pixels ]
+
+-- | OVER budget, the @k@ chosen representatives genuinely BEAT a single-colour clamp: the
+-- total squared nearest-error of the requantization is STRICTLY LESS than mapping every
+-- pixel to one representative. This certifies the over-budget representative choice — the
+-- regime the other fidelity laws left unconstrained (a degenerate rep set, or a requantizer
+-- that effectively clamped, would lose this bound). It holds because each representative is
+-- itself a slice colour, so the pixel equal to a non-clamp rep contributes ZERO error under
+-- the @k@ reps but POSITIVE error under the clamp; every other pixel takes its nearest, so
+-- the total can only improve. Guarded to the genuine over-budget regime (distinct @> k ≥ 2@),
+-- where @pal@ holds @k ≥ 2@ distinct reps.
+lawOverBudgetBeatsClamp :: Int -> [PxQ16] -> Bool
+lawOverBudgetBeatsClamp k pixels =
+  k < 2 || sliceDistinctColors pixels <= k
+    || let (pal, idx) = requantizeSlice k pixels
+           reqErr     = sum [ distSqQ16 p (pal !! i) | (i, p) <- zip idx pixels ]
+           clampErr   = sum [ distSqQ16 p (head pal)  | p <- pixels ]   -- map every pixel to rep 0
+       in not (null pal) && reqErr < clampErr
 
 -- | A multi-colour slice yields a multi-colour palette (no collapse): if the slice has
 -- @≥ 2@ distinct colours and @k ≥ 2@, the requantized palette has @≥ 2@ distinct

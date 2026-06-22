@@ -40,9 +40,10 @@ tests = testGroup "MaskedBandPrediction (per-band I-JEPA, option B)"
           lawMaskedContextExcludesTarget ps v det m nv
   , testProperty "sibling context STRICTLY beats any coarse-only predictor" $
       forAll (choose (0, 1000000)) lawSiblingContextStrictlyHelps
+  , testProperty "prediction genuinely CONSUMES sibling context (coarse-only cannot)" $
+      once lawMaskedConsumesSiblingContext
   , testProperty "one θ_B reuses on BOTH self-similar rungs (16³→64³ ≡ 64³→256³)" $
-      forAll genParams $ \ps -> forAll genV $ \v ->
-        lawMaskedReusesOnBothRungs ps v
+      once lawMaskedReusesOnBothRungs
   , testProperty "NUMERIC TRANSFER: DOWN-trained θ recovers the gap on the unseen UP range (self-similar)" $
       once lawTransferRecoversGapUnderSelfSimilarity
   , testProperty "transfer DEGRADES under a law-shift (reuse is similarity-proportional, not magic)" $

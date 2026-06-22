@@ -58,8 +58,12 @@ module SixFour.Spec.RungPivot
   , lawIntermediateNeverSurfaces
   , lawDownIsHeldUpIsInvented
   , lawRungEndpointExact
+  , lawRungRoundTripsThroughType
+  , lawMkRungRejectsSideMismatch
+  , lawLatentNeuronsStayContinuous
   ) where
 
+import Data.Maybe                         (isJust)
 import SixFour.Spec.OctreeCell            (Detail, octreeDepth, levelsBetween)
 import SixFour.Spec.SuccessiveRefinement  (SurfacedSplit(..), split, refine)
 import SixFour.Spec.SelfSimilarReconstruct (levelsPerStep)
@@ -198,3 +202,49 @@ lawRungEndpointExact :: Int -> Int -> [Int] -> Bool
 lawRungEndpointExact k d cap =
   not (d >= 0 && k >= 0 && k <= d && length cap == octreeLeafCount d)
     || refine d (split k d cap) == take (octreeLeafCount d) cap
+
+-- | Round-trip on the ACTUAL 'Rung' type, end to end through 'mkRung'. A Down rung built
+-- from a real capture surfaces an endpoint that 'refine's back to the capture exactly.
+-- Unlike 'lawRungEndpointExact' (a bare 'SurfacedSplit'), this exercises the 'Rung'
+-- wrapper + the 'mkRung' smart constructor — closing the gap where the type carried the
+-- round-trip in prose but no law touched it. Teeth: a lossy down-rung, or an 'mkRung'
+-- that mangled or dropped the endpoint, fails. (Guarded to a valid @(k,d,capture)@.)
+lawRungRoundTripsThroughType :: Int -> Int -> [Int] -> Bool
+lawRungRoundTripsThroughType k d cap =
+  not (d >= 0 && k >= 0 && k <= d && length cap == octreeLeafCount d)
+    || case mkRung Down downMid (split k d cap) of
+         Nothing -> False        -- a side-matched Down latent MUST build
+         Just r  -> refine d (rungEndpoint r) == take (octreeLeafCount d) cap
+  where downMid = IntermediateLatent (intermediateSide Down) [0.0] []
+
+-- | 'mkRung' REJECTS a direction/latent-side mismatch: a Down rung cannot carry a 128³
+-- latent, an Up rung cannot carry a 32³ latent, and the side-matched build DOES succeed.
+-- This is the side-pinning invariant the keystone's continuity claim leans on — now
+-- law-checked, not enforced by the type signature alone. Teeth: a smart constructor that
+-- ignored 'irSide' would return a @Just@ for the mismatches and fail.
+lawMkRungRejectsSideMismatch :: Bool
+lawMkRungRejectsSideMismatch =
+     mkRung Down wrongDownMid ep == Nothing   -- Down carrying a 128³ latent: rejected
+  && mkRung Up   wrongUpMid   ep == Nothing   -- Up carrying a 32³ latent: rejected
+  && isJust (mkRung Down rightDownMid ep)     -- the side-matched build succeeds
+  where
+    ep           = SurfacedSplit [] []
+    wrongDownMid = IntermediateLatent (intermediateSide Up)   [0.0] []  -- 128, wrong for Down
+    wrongUpMid   = IntermediateLatent (intermediateSide Down) [0.0] []  -- 32, wrong for Up
+    rightDownMid = IntermediateLatent (intermediateSide Down) [0.0] []
+
+-- | The intermediate's 'latentNeurons' readout PRESERVES sub-quantum distinctions that
+-- surfacing through @reenterQ16@ would destroy. Two intermediates whose continuous
+-- @irCoarse@ differ by less than half a ULP have DISTINCT 'latentNeurons' (the latent
+-- keeps them apart) yet collapse to the SAME bytes once surfaced. This ties the
+-- never-surface keystone to the actual 'IntermediateLatent' type and its @[Double]@
+-- continuity, not bare lists. Teeth: an @[Int]@ @irCoarse@ (already surfaced) would make
+-- the two 'latentNeurons' equal and fail the first conjunct.
+lawLatentNeuronsStayContinuous :: Bool
+lawLatentNeuronsStayContinuous =
+  let ulp  = 1 / 65536
+      ilA  = IntermediateLatent (intermediateSide Down) [0.1 * ulp] []
+      ilB  = IntermediateLatent (intermediateSide Down) [0.3 * ulp] []
+      surf = map (fromIntegral . toByte . reenterQ16 . mkLatent)
+  in latentNeurons ilA /= latentNeurons ilB                                  -- latent keeps them apart
+     && surf (latentNeurons ilA) == (surf (latentNeurons ilB) :: [Double])   -- surfacing collapses them

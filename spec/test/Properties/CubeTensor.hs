@@ -15,6 +15,14 @@ genTensor = do
   let n = 8 ^ d
   CubeTensor d <$> vectorOf n genI <*> vectorOf n genI <*> vectorOf n genI
 
+-- a deeper well-formed tensor (d up to 2 = 64 voxels/channel) to exercise the octant
+-- kernel across more than one level
+genTensorDeep :: Gen CubeTensor
+genTensorDeep = do
+  d <- elements [0, 1, 2]
+  let n = 8 ^ d
+  CubeTensor d <$> vectorOf n genI <*> vectorOf n genI <*> vectorOf n genI
+
 tests :: TestTree
 tests = testGroup "CubeTensor (the one canonical voxel-tensor object)"
   [ testProperty "every channel has 8^d voxels" $
@@ -30,4 +38,8 @@ tests = testGroup "CubeTensor (the one canonical voxel-tensor object)"
         lawChannelSoARoundTripBack (ctDepth ct) (toChannelSoA ct)
   , testProperty "search-swap fixes the carrier and is involutive" $
       forAll genTensor lawSearchSwapFixesCarrier
+  , testProperty "ROUND-TRIP THROUGH THE REVERSIBLE KERNEL (octantDistill/Synthesize per channel)" $
+      forAll genTensorDeep lawCubeTensorRoundTripsThroughKernel
+  , testProperty "NEGATIVE: a corrupted (channel-swapped) bridge does NOT round-trip" $
+      once lawCorruptBridgeFailsRoundTrip
   ]

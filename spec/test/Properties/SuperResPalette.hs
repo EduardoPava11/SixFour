@@ -82,6 +82,9 @@ tests = testGroup "SuperResPalette (per-frame <=K palette brand + requantizer ov
   , testProperty "over budget, each pixel takes its NEAREST palette entry (no clamp)" $
       forAll genK $ \k -> forAll genSlice $ \px -> lawNearestMinimizesError k px
 
+  , testProperty "over budget, the k reps STRICTLY beat a single-colour clamp (rep choice has a quality floor)" $
+      forAll genK $ \k -> forAll genSlice $ \px -> lawOverBudgetBeatsClamp k px
+
   , testProperty "a multi-colour slice yields a multi-colour palette (no collapse)" $
       forAll genK $ \k -> forAll genSlice $ \px -> lawMultiColourLegitimate k px
 

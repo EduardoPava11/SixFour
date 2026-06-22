@@ -176,5 +176,5 @@ lawSurfacedOutputIsExact k d cap =
 -- commit. Delegates "SixFour.Spec.MaskedBandPrediction" @lawMaskedReusesOnBothRungs@: the
 -- two-rung reuse is exactly what lets one search run span the pair @16³→64³@ and
 -- @64³→256³@ and surface once at the end.
-lawSearchReusesBothRungs :: [Double] -> Int -> Bool
+lawSearchReusesBothRungs :: Bool
 lawSearchReusesBothRungs = lawMaskedReusesOnBothRungs

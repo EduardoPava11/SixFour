@@ -71,7 +71,7 @@ import SixFour.Spec.RedownsampleGate
   ( passesGate, redownsample, lawGateRejectsCoarseDrift, lawGateIgnoresInventedDetail )
 import SixFour.Spec.MaskedBandPrediction
   ( MaskedBandExample, maskedBandLoss, trainBandJoint, zeroParamsB
-  , lawMaskedReusesOnBothRungs )
+  , lawMaskedReusesOnBothRungs, lawTransferRecoversGapUnderSelfSimilarity )
 
 -- | The two rungs of the self-similar pair, named by their epistemic status. 'HeldRung'
 -- is within capture (a label can be manufactured); 'InventedRung' is beyond capture (no
@@ -161,13 +161,25 @@ lawInventedScoredByConsistency k d fine =
 
 -- | ONE OPERATOR, TWO SUPERVISIONS — what makes the rungs RELATED, not separate models.
 -- The two scorers genuinely DIFFER (@SelfSupervisedLoss /= ConsistencyGate@), yet the
--- predictor is the SAME 63-param @θ_B@ reused across both rungs (delegates
--- "SixFour.Spec.MaskedBandPrediction" @lawMaskedReusesOnBothRungs@). Teeth: a single-rung
--- operator fails the reuse conjunct; a collapsed supervision fails the first.
-lawOneOperatorTwoSupervisions :: [Double] -> Int -> Bool
-lawOneOperatorTwoSupervisions ps v =
+-- predictor is the SAME 63-param @θ_B@, pinned two ways:
+--
+--   * STRUCTURAL — @lawMaskedReusesOnBothRungs@ (one operator that CONSUMES sibling context,
+--     and the self-similar octant distance @levelsBetween 64 16 == levelsBetween 256 64@).
+--     This is where the option-B "siblings matter" claim lives.
+--   * NUMERIC GENERALISATION — @lawTransferRecoversGapUnderSelfSimilarity@: a θ_B trained on
+--     the DOWN-rung coarse range recovers most of the floor→oracle gap on the UNSEEN UP-rung
+--     range. NOTE this is GENERALISATION ACROSS COARSE INPUT RANGES, not sibling reuse: the
+--     transfer fixtures zero the siblings (band 0 masked, bands 1–6 = 0), so a coarse-only
+--     model would also pass it. The sibling-consumption teeth are carried by the structural
+--     conjunct above and by @lawMaskedConsumesSiblingContext@, NOT here.
+--
+-- Teeth: a single-rung operator fails the structural conjunct; a θ that did not generalise
+-- across the input range fails the numeric conjunct; a collapsed supervision fails the first.
+lawOneOperatorTwoSupervisions :: Bool
+lawOneOperatorTwoSupervisions =
      supervisionOf HeldRung /= supervisionOf InventedRung    -- the supervisions differ
-  && lawMaskedReusesOnBothRungs ps v                         -- the operator is shared/reused
+  && lawMaskedReusesOnBothRungs                              -- STRUCTURAL: one operator (consumes siblings), both rungs
+  && lawTransferRecoversGapUnderSelfSimilarity               -- NUMERIC: θ generalises across coarse input ranges
 
 -- | The data-manufactured Held label carries LEARNABLE structure (it is signal, not
 -- noise): from the floor, training on the held example drives 'heldLoss' strictly down.
