@@ -48,6 +48,7 @@ library
         SixFour.Spec.RGBTLift
         SixFour.Spec.OctreeCell
         SixFour.Spec.LadderIdentity
+        SixFour.Spec.LargeJepaHead
         SixFour.Spec.PerScaleWeights
         SixFour.Spec.ScalePonder
         SixFour.Spec.XYTLabDuality
@@ -380,6 +381,7 @@ test-suite spec-tests
         Properties.RGBTLift
         Properties.OctreeCell
         Properties.LadderIdentity
+        Properties.LargeJepaHead
         Properties.PerScaleWeights
         Properties.ScalePonder
         Properties.XYTLabDuality

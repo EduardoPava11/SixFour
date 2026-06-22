@@ -34,6 +34,7 @@ import qualified Properties.LadderIdentity as LadderIdentity
 import qualified Properties.PerScaleWeights as PerScaleWeights
 import qualified Properties.ScalePonder   as ScalePonder
 import qualified Properties.XYTLabDuality as XYTLabDuality
+import qualified Properties.LargeJepaHead as LargeJepaHead
 import qualified Properties.LBalanceOperator as LBalanceOperator
 import qualified Properties.OctreeGenome  as OctreeGenome
 import qualified Properties.SubstrateDomain as SubstrateDomain
@@ -198,6 +199,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , PerScaleWeights.tests
   , ScalePonder.tests
   , XYTLabDuality.tests
+  , LargeJepaHead.tests
   , LBalanceOperator.tests
   , OctreeGenome.tests
   , SubstrateDomain.tests

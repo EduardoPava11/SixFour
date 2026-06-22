@@ -140,6 +140,14 @@ pixels in different regions are comparable; the @phi6@ pairing @a<->x,b<->y,L<->
 it, the carriers @{L,t}@ are held out, and the LEARNED position residual is
 @7 bands x {x,y} = 14@ ints/octant (@relationalResidualLen@ = the user's @16-2=14@). The
 @+/-1@ nudge is one unit step on any axis),
+"SixFour.Spec.LargeJepaHead" (★ the genuinely-LARGE ViT-scale position-conditioned
+asymmetric I-JEPA head as a CONTROLLED DEVIATION above the proven small predictor: @d6@
+seeds a T5-style LEARNABLE relative-position attention bias @b_h(d)=beta-s*d@ (@s>0@) so the
+unit distance can GROW/SHRINK in the higher-dim relations (@lawBiasLearnsToScale@); KEYSTONE
+@lawDepth1ReducesToFeaturesBPos@ collapses the big head to @predictMaskedBandPos@ at the
+single-token limit, so @lawPositionConditioningStrictlyHelps@ is inherited and the float
+scale never bypasses Q16; no-EMA + VICReg-load-bearing delegated. Trains MLX -> coreai-torch
+-> Core AI = the flip condition),
 "SixFour.Spec.RemainderTail" (★ the discrete-surfaced / continuous-remainder TYPED
 SPLIT that closes audit B6+B1 — 'Surfaced' (integers) reconstructs EXACTLY while
 'Remainder' (continuous FlowAR tail) reconstructs only WITHIN @eps@ and is provably
