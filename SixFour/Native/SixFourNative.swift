@@ -452,11 +452,13 @@ enum SixFourNative {
     static func haarLevelColors(palette srgb: [SIMD3<UInt8>], level: Int) -> [SIMD3<UInt8>]? {
         let n = srgb.count
         guard n > 0, (n & (n - 1)) == 0, level >= 0, (1 << level) <= n else { return nil }
-        let floats = srgb.map { c -> SIMD3<Float> in
-            let lab = ColorScience.srgb8ToOKLab(c.x, c.y, c.z)
-            return SIMD3<Float>(lab.L, lab.a, lab.b)
-        }
-        let q16 = oklabToQ16(floats)
+        // CANONICAL forward: sRGB8 -> OKLab Q16 through the owned Zig kernel
+        // (s4_srgb8_to_oklab_q16: integer matmul + icbrtQ16), NOT ColorScience float
+        // cbrtf + round. This is the SAME transform training and the substrate use, so
+        // the surfaced shutter cascade is byte-exact with the Haskell golden (no
+        // train/display skew). Matches this function's own doc contract above.
+        let rgbFlat = srgb.flatMap { [$0.x, $0.y, $0.z] }
+        guard let q16 = srgb8ToOklab(rgb: rgbFlat, k: n) else { return nil }
         let leaves = (0 ..< n).map { SIMD3<Int32>(q16[$0 * 3], q16[$0 * 3 + 1], q16[$0 * 3 + 2]) }
         guard let hp = haarAnalyze(leaves: leaves),
               let nodes = haarLevelNodes(level: level, root: hp.root, offsets: hp.offsets) else { return nil }
