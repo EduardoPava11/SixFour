@@ -7,6 +7,43 @@ newest first.
 
 ---
 
+## 2026-06-22: Full encoder alignment = hand-written theta_B forward (Core AI NOT needed) (branch `align/coreai-lnet`)
+
+> **Session theme (Daniel's direction):** "continue with the full alignment." A workflow (wnzclasdm,
+> Core AI web-searched) resolved what the Core AI L-net IS, then I built the real alignment gap.
+
+**RESOLUTION (verified from canon): the current JEPA encoder does NOT need Core AI.** The encoder is the
+FROZEN reversible lift (encoderParamCount==0, EncoderFrozen.hs) + the 63-param theta_B masked-band predictor
+(the ONLY learned object). theta_B is a 9-wide dot product per band = a hand-written Swift forward per
+CLAUDE.md ("on-device NN inference = hand-written forward pass, never a CoreML black box"). The Core AI seam is
+ORPHANED: it targets a "frozen grayscale-L net" that was never trained (load_frozen_l_net = NotImplementedError,
+no look_net_trained.s4ln); the only blob is the defunct 384-DOF color look-net (look_net.s4ln); and the
+.aimodel toolchain is beta-absent (coreai-torch missing; coremltools 9 emits .mlpackage, a separate runtime, no
+bridge to Core AI). Core AI is device + iOS-27 only, absent from the simulator (coreai-models issue #49).
+
+**THE REAL ALIGNMENT GAP CLOSED.** The encoder chain: RGB->OKLab (unified+gated) -> frozen lift (Zig s4_haar,
+on device) -> featuresB (9-D) -> theta_B forward -> Q16 re-entry -> GIF (byte-exact on device). Hops featuresB +
+theta_B existed ONLY in the Haskell spec with ZERO device port. Closed:
+- `Codegen.MaskedBand` -> `SixFour/Generated/MaskedBandGolden.swift` (fixed theta_B + 5 cases -> rawMaskedBand +
+  the committed Q16 byte, computed by the spec; wired in spec.cabal + app/Spec.hs; regen via cabal run spec-codegen).
+- `SixFour/Native/MaskedBandForward.swift` (hand-written: featuresB + theta_B dot, left-fold to match Haskell
+  `sum` order; commit = round-half-to-even = the single reenterQ16 crossing).
+- `SixFourTests/MaskedBandForwardTests.swift` (the committed Q16 BYTE is BIT-EXACT vs golden, no tolerance; raw
+  within tolerance; shape sanity).
+
+**VERIFIED.** Python replica of the forward reproduces all 5 golden bytes EXACTLY (raw to 1e-12); cabal test
+**1191 passed** (codegen module compiles, suite intact); **TEST BUILD SUCCEEDED** (arm64). On-device run is
+Daniel's step (same as the GIF parity test).
+
+**NEEDS-DECISION (user) + OWED.** (1) Core AI seam disposition: RETIRE / REPOINT at the quarantined
+DisplayDecoder (the shown L-16^3, the only live object fitting Core AI's "float inference behind the Q16 floor"
+contract) / DEFER. Recommendation: defer + retag the orphaned files; do not delete (iterative-not-replacement);
+CLAUDE.md's 2026-06-20 Core AI amendment is UNTOUCHED pending this. (2) Owed: `s4_lift_oct` octant golden so
+featuresB consumes exactly the spec's 7 bands (Hop 2 gap); a theta_B `.s4ln` blob writer (its own tiny 63-float
+blob, NOT the 384-DOF look-net layout) + the MLX trainer (`trainBandJointStable`, mean gradient).
+
+---
+
 ## 2026-06-22: Device GIF make/encode verification strategy (branch `deploy/device-gif-verify`)
 
 > **Session theme (Daniel's direction):** "ensure the device can form the GIF and the encoder can run on the
