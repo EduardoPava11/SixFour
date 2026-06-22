@@ -36,6 +36,7 @@ import qualified Properties.ScalePonder   as ScalePonder
 import qualified Properties.XYTLabDuality as XYTLabDuality
 import qualified Properties.LBalanceOperator as LBalanceOperator
 import qualified Properties.OctreeGenome  as OctreeGenome
+import qualified Properties.SubstrateDomain as SubstrateDomain
 import qualified Properties.SuccessiveRefinement as SuccessiveRefinement
 import qualified Properties.SuperResPalette as SuperResPalette
 import qualified Properties.RemainderTail as RemainderTail
@@ -198,6 +199,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , XYTLabDuality.tests
   , LBalanceOperator.tests
   , OctreeGenome.tests
+  , SubstrateDomain.tests
   , SuccessiveRefinement.tests
   , SuperResPalette.tests
   , RemainderTail.tests
