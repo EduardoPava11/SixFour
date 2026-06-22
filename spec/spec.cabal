@@ -82,6 +82,7 @@ library
         SixFour.Spec.EncoderFrozen
         SixFour.Spec.ContinuousLoop
         SixFour.Spec.JepaTarget
+        SixFour.Spec.PerAxisTraining
         SixFour.Spec.SameObjectInvariance
         SixFour.Spec.SameObjectJEPA
         SixFour.Spec.CubeTensor
@@ -410,6 +411,7 @@ test-suite spec-tests
         Properties.EncoderFrozen
         Properties.ContinuousLoop
         Properties.JepaTarget
+        Properties.PerAxisTraining
         Properties.SameObjectInvariance
         Properties.SameObjectJEPA
         Properties.CubeTensor

@@ -283,6 +283,12 @@ I-JEPA's stop-grad/EMA enforces, here structural), @lawNoTargetEncoderNoEma@ (th
 param-free lift, encoderParamCount 0 ⇒ nothing to EMA), @lawCollapseIsRejected@ (a constant predictor incurs
 strictly positive loss), @lawTargetCarriesInfoBeyondContext@. Assembles teeth from
 SelfSupervisedRung/MaskedBandPrediction/EncoderFrozen/DetailMaskedPrediction; re-pins nothing),
+"SixFour.Spec.PerAxisTraining" (★ the six-axis ledger verified BY TRAINING (not op-structure): each
+of the 7 octant detail bands (search axes a,b,x,y + slots) is INDEPENDENTLY learnable.
+@lawBandLearnedInIsolation@ (train band 0 → recovers 3000, band 1 stays floor), @lawPerBandTargetsAreIndependent@
+(bands 0,1 learn 3000/5000 with no cross-talk), @lawEverySearchBandIsIndependentlyLearnable@ (all 7 bands
+trainable). Closes the "attribution is op-structural not trained" gap. Pure law module over MaskedBandPrediction;
+re-pins nothing),
 "SixFour.Spec.SameObjectInvariance" (★ the frontier keystone — the SAME 64³ object
 reconstructs identically under either XOR projection-ordering: @decodeUnder p . encodeUnder p
 == decodeUnder p' . encodeUnder p'@ (@lawReorderingPreservesObject@), the orbit under the

@@ -65,6 +65,7 @@ import qualified Properties.DisplayDecoder as DisplayDecoder
 import qualified Properties.EncoderFrozen as EncoderFrozen
 import qualified Properties.ContinuousLoop as ContinuousLoop
 import qualified Properties.JepaTarget as JepaTarget
+import qualified Properties.PerAxisTraining as PerAxisTraining
 import qualified Properties.SameObjectInvariance as SameObjectInvariance
 import qualified Properties.SameObjectJEPA as SameObjectJEPA
 import qualified Properties.CubeTensor     as CubeTensor
@@ -226,6 +227,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , EncoderFrozen.tests
   , ContinuousLoop.tests
   , JepaTarget.tests
+  , PerAxisTraining.tests
   , SameObjectInvariance.tests
   , SameObjectJEPA.tests
   , CubeTensor.tests
