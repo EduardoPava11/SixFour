@@ -49,6 +49,7 @@ import SixFour.Codegen.RGBT4D (emitRGBT4DGolden)
 import SixFour.Codegen.VoxelReduce (emitVoxelReduceGolden)
 import SixFour.Codegen.GenomePair (emitGenomePairGolden)
 import SixFour.Codegen.GenomeCarrier (emitGenomeCarrierGolden)
+import SixFour.Codegen.MaskedBand (emitMaskedBandGolden)
 import SixFour.Codegen.PairTree (emitPairTreeGolden)
 import SixFour.Codegen.QuartetDelta (emitQuartetDeltaGolden)
 import SixFour.Codegen.PaletteValue (emitPaletteValueGolden)
@@ -97,6 +98,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "GenomePairGolden.swift")     emitGenomePairGolden
   writeUtf8 (swiftOutDir   </> "GenomeCarrierGolden.swift")  emitGenomeCarrierGolden
   writeUtf8 (swiftOutDir   </> "PairTreeGolden.swift")       emitPairTreeGolden
+  writeUtf8 (swiftOutDir   </> "MaskedBandGolden.swift")     emitMaskedBandGolden
   writeUtf8 (swiftOutDir   </> "QuartetDeltaGolden.swift")   emitQuartetDeltaGolden
   writeUtf8 (swiftOutDir   </> "PaletteValueGolden.swift")   emitPaletteValueGolden
   writeUtf8 (swiftOutDir   </> "GenomeGolden.swift")         emitGenomeGolden

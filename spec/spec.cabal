@@ -193,6 +193,7 @@ library
         SixFour.Codegen.VoxelReduce
         SixFour.Codegen.GenomePair
         SixFour.Codegen.GenomeCarrier
+        SixFour.Codegen.MaskedBand
         SixFour.Codegen.PairTree
         SixFour.Codegen.QuartetDelta
         SixFour.Codegen.PaletteValue
