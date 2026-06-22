@@ -49,6 +49,7 @@ module SixFour.Spec.LargeJepaHead
   , lawBiasScalingNeverBypassesQ16
   , lawNoEmaTargetEncoderAtScale
   , lawLatentRedundancyLoadBearingAtScale
+  , lawHeadRunsBothRungsInLatent
   ) where
 
 import SixFour.Spec.Dim6 (Dim6(..))
@@ -58,6 +59,9 @@ import SixFour.Spec.MaskedBandPrediction
 import SixFour.Spec.EncoderFrozen   (lawEmbeddingNeverBypassesQ16)
 import SixFour.Spec.JepaTarget       (lawNoTargetEncoderNoEma, lawTargetFixedUnderPredictorTraining)
 import SixFour.Spec.NeuronRedundancy (lawRedundancyMeasuredInLatent, lawDecorrelatedNeuronsZeroRedundancy)
+import SixFour.Spec.RungPivot        (lawDownIsHeldUpIsInvented, lawIntermediateNeverSurfaces)
+import SixFour.Spec.DeferredSurfacing (lawSurfaceComesAfterBothRungs)
+import SixFour.Spec.SelfSupervisedRung (lawOneOperatorTwoSupervisions)
 
 -- | A single head's learnable distance bias: @(s, beta)@ with @s > 0@ the scale (the
 -- grow/shrink of the unit distance) and @beta@ the offset.
@@ -163,3 +167,33 @@ lawNoEmaTargetEncoderAtScale = lawNoTargetEncoderNoEma && lawTargetFixedUnderPre
 lawLatentRedundancyLoadBearingAtScale :: Bool
 lawLatentRedundancyLoadBearingAtScale =
   lawRedundancyMeasuredInLatent && lawDecorrelatedNeuronsZeroRedundancy
+
+-- | THE TWO RUNGS + the @2×2×2 → 1 + latent@ op, as the head's substrate, with the
+-- EPISTEMIC quadrants mapped exactly. The large head is the ONE operator (the grown
+-- @theta_B@) running BOTH self-similar rungs around the @64³@ pivot
+-- (@64³ → [32³ latent] → 16³ + residual@ DOWN; @64³ + residual → [128³ latent] → 256³@ UP)
+-- IN the never-surfaced intermediate latent, surfacing ONCE after rung 2. The four
+-- epistemic quadrants land on the rung structure:
+--
+--   * KNOWN KNOWN     = the surfaced coarse / carrier @L@ (the @16³@; the deterministic
+--     bit-exact floor; @zero-genome == floor@).
+--   * KNOWN UNKNOWN   = the DOWN-rung HELD residual — the band we KNOW is there;
+--     data-manufactured target; the head predicts it; @refine . split == id@ makes it
+--     exactly recoverable once predicted.
+--   * UNKNOWN UNKNOWN = the UP-rung INVENTED residual — super-res detail NOT in the
+--     capture; the head invents it; scored by re-downsample CONSISTENCY, not a label.
+--   * UNKNOWN KNOWN   = the @32³ / 128³@ INTERMEDIATE LATENT — the relational structure the
+--     head HOLDS but never surfaces (the @d6@ learnable-distance attention lives HERE).
+--
+-- Delegates "SixFour.Spec.RungPivot" (@lawDownIsHeldUpIsInvented@: DOWN=Held / UP=Invented;
+-- @lawIntermediateNeverSurfaces@: the @32³/128³@ latent is never committed),
+-- "SixFour.Spec.DeferredSurfacing" (@lawSurfaceComesAfterBothRungs@: the coarse surfaces ONCE,
+-- after both rungs), and "SixFour.Spec.SelfSupervisedRung" (@lawOneOperatorTwoSupervisions@:
+-- ONE operator, two supervisions). Teeth: a head that surfaced the intermediate latent, or
+-- used a second operator per rung, or committed before rung 2, fails a delegated conjunct.
+lawHeadRunsBothRungsInLatent :: Bool
+lawHeadRunsBothRungsInLatent =
+     lawOneOperatorTwoSupervisions    -- ONE operator (the grown theta_B), two rungs
+  && lawDownIsHeldUpIsInvented        -- DOWN = Held (known unknown); UP = Invented (unknown unknown)
+  && lawIntermediateNeverSurfaces     -- the 32³/128³ intermediate latent (the unknown known) never surfaces
+  && lawSurfaceComesAfterBothRungs    -- the coarse (the known known) surfaces ONCE, after both rungs

@@ -48,4 +48,6 @@ tests = testGroup "LargeJepaHead (the large ViT I-JEPA head as a controlled devi
       once lawNoEmaTargetEncoderAtScale
   , testProperty "VICReg redundancy guard is load-bearing at scale" $
       once lawLatentRedundancyLoadBearingAtScale
+  , testProperty "TWO RUNGS + 2x2x2->1+latent: one operator, both rungs, in the never-surfaced latent (the epistemics)" $
+      once lawHeadRunsBothRungsInLatent
   ]
