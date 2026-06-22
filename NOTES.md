@@ -7,6 +7,56 @@ newest first.
 
 ---
 
+## 2026-06-22 — JEPA world-model spec: encoder + four loops settled EMPIRICALLY (branch `spec/jepa-world-model`)
+
+> **Session theme (Daniel's direction):** a GHCi-empirical, "nothing locked in" investigation of the JEPA
+> learned world model — the encoder (GIF→embeddings), the two rungs of the `(2×2):(2×2)→1 + residual` op,
+> the Hierarchical-JEPA levels, the L-16³ chroma-bleed UX, and the train / infer / continuous-infer loops.
+> Several fan-out workflows, each adjudicated by agents RUNNING the real spec in `cabal repl`, not by
+> reasoning. Multiple prior claims were overturned by the runs. Spec suite **1126 → 1180**; all additive,
+> golden-gated; no shipped contract re-pinned. Two commits: `919df9d` (13 modules) + `ad45725` (PerAxisTraining).
+
+**THE ARCHITECTURE (settled, refuting the prior sketch).** ONE fixed reversible kernel + ONE learned
+predictor. The `liftOct` `(2×2):(2×2)→1` op is the FROZEN encoder (GIF→embeddings = `liftOct ∘ featuresB`,
+ZERO params, NO pre-training); the only learned object is the 63-param masked-band predictor `θ_B` that
+regresses the lift's held detail-band RESIDUAL. The "two predictors f + g" framing was **REFUTED in GHCi** —
+"cross-scale f" and "temporal g" are the SAME fixed S-transform kernel on different coordinate slots
+(`lawTemporalLiftMatchesHaar`), zero learned params. A rung = the op run twice around the 64³ pivot, exposing
+the never-surfaced 32³/128³ mid-latent.
+
+**14 new `Spec.*` modules (each: laws → golden gate → `Map` entry):**
+- `CubeTensor`, `ProjectionQuery` — the voxel-tensor RAG read-as-projections (a projection-ordering is a
+  lossless retrieval query; first lock on the 0-caller `orderingHash`).
+- `RungPivot`, `HJepaLevels` — the canonical 64³-pivot rung + the H-JEPA level spine: three axes
+  (SCALE × CHANNEL × TIME) but only SCALE is a level (only it has a never-surfaced symmetric intermediate).
+- `MaskedBandPrediction` (per-band θ_B + two-rung reuse + numeric self-similar transfer), `MaskedBandTrainer`
+  (byte-checkable training twin, golden `3000`; + `trainBandJointStable` fixing a real bug — below).
+- `DeferredSurfacing` (latent search, surface 16³+residual after rung 2), `SelfSupervisedRung`
+  (Held exact-label vs Invented consistency-gate; first consumer of `RedownsampleGate.passesGate`),
+  `NeuronRedundancy` (within-latent VICReg covariance).
+- `DisplayDecoder`, `ContinuousLoop` — the shown L-16³ is a LEARNED, quarantined decoder (NOT the
+  architecture); the live steering loop commits invariant under the display decoder (end-to-end quarantine).
+- `EncoderFrozen` (the encoder has zero params — a gate against a learned encoder), `JepaTarget`
+  (the I-JEPA correspondence: data-manufactured target ⇒ no EMA, no collapse).
+- `PerAxisTraining` — the six-axis ledger verified BY TRAINING (each of the 7 detail bands independently
+  learnable), not just by the op layout.
+
+**Overturned by GHCi (the value of running, not asserting):**
+- Barlow Twins REJECTED as the learning objective (predictor-free ⇒ vacuous by SixFour's own bar); committed
+  to cross-prediction with decorrelation demoted to a within-latent guard. The geometry (32³:128³ as a
+  self-similar pair) is sound; the loss form is not Barlow.
+- Self-similar reuse is CONFIRMED but CONDITIONAL (~99.9% under shared law, degrades under law-shift); the
+  earlier "worse than floor" claim did NOT reproduce.
+- The displayed L-16³ is a quarantined learned decode of the free latent, provably unable to move committed
+  bytes — answering "I want to show an L-16³ but it need not be the architecture."
+- Real bug found + fixed: `trainBandJoint`'s summed gradient with fixed η DIVERGES to NaN on a batch of 8
+  high-ṽ examples; `trainBandJointStable` (mean gradient) converges on the same fixture. Additive — the
+  original trainer and every golden trained against it are untouched.
+
+**NEXT (out of spec scope — a bigger implementation phase):** the 4D reversible-dithering DATA ENGINE
+(emit `(coarse, held, palettes, index-maps)` records; the standing #1 unblocker), then the Zig kernels
+(`s4_split`/`s4_redownsample`/`s4_passes_gate`), the MLX `θ_B` trainer, and the on-device hand-written forward.
+
 ## 2026-06-18 (late) — Per-frame PIVOT: VoxelReduce, global→V2 deferral, the A/B game (merged `e2b812c`)
 
 > **Session theme (Daniel's direction):** the global-palette collapse "takes away from the
