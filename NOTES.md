@@ -7,6 +7,37 @@ newest first.
 
 ---
 
+## 2026-06-22: Core AI seam RETIRED via retag (disposition resolved) (branch `chore/retire-coreai-seam`)
+
+> **Session theme (Daniel's direction):** "investigate this with a workflow, there is nuance." Workflow
+> w6mwkczx5 (Core AI web-searched) reconciled every meaning of "L" and resolved the disposition.
+
+**VERDICT: RETIRE the Core AI seam via retag (not delete, not repoint at DisplayDecoder).** Reconciliation of
+"L": CarrierL = DETERMINISTIC carrier (no net); the encoder's only learned object is the 63-param theta_B
+(hand-written, MaskedBandForward.swift); the grayscale-L look-net the seam was built to run was ABANDONED
+2026-06-17 (look_net_trained.s4ln deleted, global-palette path V2-deferred Feature.globalPaletteV2=false);
+DisplayDecoder is a spec-only quarantine STUB (no net, no trainer). Verified: look_net_trained.s4ln absent,
+globalPaletteV2=false, predictL has ZERO callers.
+
+**THE NUANCE (why not mechanical):** the 2026-06-20 amendment was NOT bad design, it was a correctly-built
+bridge whose far bank was demolished (look-net abandoned + encoder resolved to need no learned L). The trap
+avoided: repointing at DisplayDecoder is a SHAPE-match not a NEED-match (its quarantine guarantee means its
+float can never reach a committed byte = ZERO determinism pressure = the opposite of a Core AI justification;
+plus it is a one-line stub). Core AI's real niche is LARGE frozen models + ANE scheduling; for a 63-param net
+the repo's hand-written-forward (theta_B) and MPSGraph (A/B) precedents are strictly better and keep the
+zero-third-party ethos.
+
+**APPLIED (non-destructive, comment/header only, no golden touched):** retagged CoreAILInference.swift,
+export_l_coreai.py, coreai_export/README.md as ORPHANED 2026-06-22; demoted the CLAUDE.md 2026-06-20 Core AI
+amendment to a SUPERSEDED footnote (kept as historical record) and rewrote the deploy-L spine bullet to
+"Deploy theta_B: hand-written Swift forward, no Core AI." No files deleted (audit trail + iterative-not-replacement).
+
+**FLIP CONDITION:** resurrect Core AI ONLY if a genuinely LARGE on-device generative-L head ("L = generative GPT
+over the cube ladder") is roadmapped with a real trainer + weights (Core AI's actual niche). Currently
+superseded and unscheduled.
+
+---
+
 ## 2026-06-22: Full encoder alignment = hand-written theta_B forward (Core AI NOT needed) (branch `align/coreai-lnet`)
 
 > **Session theme (Daniel's direction):** "continue with the full alignment." A workflow (wnzclasdm,

@@ -1,5 +1,11 @@
 # `coreai_export/` — the L-channel deploy bridge (Mac-side)
 
+> **ORPHANED 2026-06-22.** Target look-net abandoned 2026-06-17; the global-palette
+> path it served is V2-deferred. The settled encoder needs no learned L (frozen lift +
+> hand-written 63-param `theta_B`, no Core AI). Retained for audit only; resurrect only
+> if a genuinely LARGE on-device generative-L head is roadmapped. See the CLAUDE.md
+> 2026-06-22 supersession note.
+
 **PURPOSE.** This is the one new seam of the 2026-06-20 pivot: it converts the
 **frozen L (grayscale) net** — trained by MLX/PyTorch on the Mac — into a Core AI
 `.aimodel` asset that the iPhone loads for *inference*. See CLAUDE.md

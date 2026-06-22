@@ -7,11 +7,14 @@ this script exports it for INFERENCE on the iPhone via Apple Core AI.
 SCOPE: L only, inference only. Core AI cannot train; the A/B chroma channels
 learn on-device with MPSGraph and never pass through here.
 
-STATUS: SCAFFOLD. The Core AI conversion call sequence below is the real,
-verified coreai-torch API (coreai-torch 0.4.0, verified 2026-06-20: a round-trip
-matched PyTorch to 6 d.p.). The TODOs are the SixFour-specific wiring: loading
-the MLX-trained L weights from the .s4ln blob into the nn.Module, and the
-optional TorchMetalKernel that embeds the owned cube-ladder collapse.
+STATUS: ORPHANED 2026-06-22. Exporter for the frozen grayscale-L look-net, which
+was ABANDONED 2026-06-17 (look_net_trained.s4ln deleted) and fed the V2-deferred
+global-palette path. The settled encoder needs no learned L (frozen lift + the
+63-param theta_B, deployed HAND-WRITTEN in SixFour/Native/MaskedBandForward.swift,
+no Core AI). There is no live model to export; load_frozen_l_net stays
+NotImplementedError by design. Retired, not deleted (audit record). See the
+CoreAILInference.swift header + the CLAUDE.md 2026-06-22 supersession note.
+Resurrect only if a genuinely LARGE on-device generative-L head is roadmapped.
 
 Requires: Apple-Silicon Mac, Python 3.11/3.12, `uv pip install coreai-torch`.
 """

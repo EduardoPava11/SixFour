@@ -42,6 +42,18 @@ box. Never the ANE via an opaque runtime.** The model is tiny (~115K params), so
 GPU/CPU latency and power are negligible — there is no performance reason to
 take on a dependency.
 
+> **SUPERSEDED 2026-06-22 (encoder needs no learned L).** The JEPA encoder is the
+> frozen reversible lift (zero params) plus the 63-param `theta_B`, which ships
+> HAND-WRITTEN in `SixFour/Native/MaskedBandForward.swift` (golden-gated, no Core AI).
+> The frozen grayscale-L net this amendment served was the MLX look-net abandoned
+> 2026-06-17 (its global-palette path is V2-deferred, `Feature.globalPaletteV2 = false`).
+> Core AI is RETIRED from the spine; the seam (`SixFour/CoreAI/`, `trainer/coreai_export/`)
+> is kept ORPHANED as an audit record only. Resurrect ONLY if a genuinely LARGE
+> on-device generative-L head is roadmapped with a real trainer + weights. The Tier-2
+> rule stands unchanged: on-device NN inference is a hand-written forward pass, never a
+> CoreML black box, never an opaque ANE runtime. The amendment below is the historical
+> record of why Core AI was considered.
+>
 > **AMENDMENT 2026-06-20 — Core AI for L-inference only.** `CoreAI.framework` is
 > an Apple *system* framework (it satisfies the zero-third-party rule), and it is
 > adopted for **exactly one job**: running the **frozen L (grayscale) net** for
@@ -74,10 +86,11 @@ take on a dependency.
   were deleted; their essentials live in these rules and the purpose-headers in
   `SixFour/Atlas/`.
 - **Verify:** Haskell spec (golden vectors gate every backend).
-- **Deploy (L, frozen):** MLX (Mac train) → `trainer/coreai_export/` → `L.aimodel`
-  → **Core AI** inference on device (`SixFour/CoreAI/`), behind the Zig
-  `zero-genome == floor` short-circuit. Owned Metal kernels ride inside the asset
-  via `TorchMetalKernel`. (Per the 2026-06-20 amendment above.)
+- **Deploy (theta_B, the only learned object):** MLX-trained 63-param blob →
+  HAND-WRITTEN Swift forward in `SixFour/Native/MaskedBandForward.swift`,
+  golden-gated (`MaskedBandGolden`) and byte-exact on device. NO Core AI.
+  (SUPERSEDES the 2026-06-22-retired "Deploy L via Core AI" line; see the amendment
+  block above. The `trainer/coreai_export/` → `L.aimodel` → Core AI path is ORPHANED.)
 - **Deploy (A/B + integer core):** hand-written Swift + Metal + Zig on the iPhone
   17 Pro (zero third-party deps).
 - **Fallback:** the older PyTorch→CoreML→ANE distillation is superseded by the
