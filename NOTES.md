@@ -7,6 +7,52 @@ newest first.
 
 ---
 
+## 2026-06-22: I-JEPA link + Core AI to be TRAINED (the large head) (branch `model/relational-residual`)
+
+> **Session theme (Daniel's direction):** "find the link between this encoding and the I-JEPA architecture.
+> Core AI is to be trained." Workflow waw4p81tr (I-JEPA + Core AI web-searched).
+
+**THE LINK (precise, web-grounded vs Assran et al. 2023).** SixFour was already I-JEPA in shape: masking =
+`MaskedBandPrediction` (predict 1 masked band from coarse + 6 visible siblings; `lawSiblingContextStrictlyHelps`);
+latent-space loss = `DeferredSurfacing` (predict in latent, defer the single reenterQ16 surface); the EMA
+target-encoder = the DATA-MANUFACTURED target (`JepaTarget`, the lift's held band) = a DEGENERATE I-JEPA (no
+EMA, collapse structurally impossible). The MISSING piece I-JEPA weights most = the predictor's POSITION
+CONDITIONING (mask token + positional embedding = "predict the embedding AT this location"). **That is exactly
+`RelationalResidual`:** the 6D point `P6 (L,a,b,x,y,t)` + the `d6` metric + the `phi6` pairing (a<->x,b<->y,L<->t)
+promote position from an implicit Morton index to a carried relational coordinate. phi6 makes it DEEPER than
+I-JEPA: the conditioning position is the DUAL of the predicted colour.
+
+**REALIZED AS A THEOREM (1199 -> 1200).** Added `RelationalResidual.dColour` + `lawPositionDistinguishesSameColour`:
+two voxels with the SAME colour but different position are INVISIBLE to colour-only distance (dColour==0) yet
+DISTINCT under d6 (==0 iff positions also match). So position carries info colour/the index cannot = the I-JEPA
+positional value, proven. Additive; no settled law touched.
+
+**ARCHITECTURE DECISION: ASYMMETRIC I-JEPA.** Frozen lift = TOKENIZER (and manufactures the collapse-proof
+target), a LARGE learned position-conditioned PREDICTOR grows ON TOP. This does NOT reverse `EncoderFrozen`
+(encoder stays parameter-free; `encoderParamCount==0`, `lawNoPreTrainPhase`, `lawPredictorIsTheOnlyLearnedObject`
+all still hold; the predictor just grows). A full learned EMA TARGET encoder (symmetric I-JEPA) is NOT adopted
+(it reintroduces the collapse problem the manufactured target eliminated) without explicit go.
+
+**"CORE AI IS TO BE TRAINED" = train the large head on Mac, deploy to Core AI inference.** Core AI cannot train;
+the path is MLX (Mac) -> `coreai-torch` (torch.export -> to_coreai -> save_asset .aimodel) -> Core AI inference
+on device, float re-entering the Zig Q16 floor. A ViT-scale position-conditioned I-JEPA head DOES meet the
+documented Core AI FLIP CONDITION, so Core AI is UN-RETIRED as a ROADMAP. coreai-torch is beta-absent here
+(deploy-time gate, not a design blocker).
+
+**APPLIED (this commit, all additive / docs-only, 1200 green):** `RelationalResidual` gains `dColour` +
+`lawPositionDistinguishesSameColour`; CLAUDE.md gains a dated REDIRECT amendment (Core AI un-retired as the large
+I-JEPA head, asymmetric path, EncoderFrozen NOT reversed, tiny-theta_B + zero-dep rules stand); `EncoderFrozen`
+header scope-noted (candidate-b rejection scoped to the tiny path; large head lives above the encoder).
+
+**NEXT (ordered, spec-first).** (1) add the positional channel to the predictor's context (a new `featuresBPos`,
+ADDITIVE, do NOT re-pin the 63-param featuresB/golden) + `lawPositionConditioningStrictlyHelps` (mirrors the
+sibling keystone). GATED: (2) MLX trainer for the large position-conditioned head (the thing that actually trips
+the flip condition); (3) coreai-torch -> .aimodel -> device inference (beta + device only); (4) un-orphan the
+Core AI seam ONLY when a real trainer + weights exist. CONFIRM before symmetric path (learned EMA target encoder)
+- it flips lawNoPreTrainPhase + makes NeuronRedundancy/VICReg load-bearing.
+
+---
+
 ## 2026-06-22: Core AI seam RETIRED via retag (disposition resolved) (branch `chore/retire-coreai-seam`)
 
 > **Session theme (Daniel's direction):** "investigate this with a workflow, there is nuance." Workflow

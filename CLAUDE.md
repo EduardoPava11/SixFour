@@ -42,6 +42,24 @@ box. Never the ANE via an opaque runtime.** The model is tiny (~115K params), so
 GPU/CPU latency and power are negligible — there is no performance reason to
 take on a dependency.
 
+> **REDIRECT 2026-06-22 (Core AI is to be TRAINED, as the I-JEPA large head).** The
+> relational-residual encoding (`Spec.RelationalResidual`: the 6D point `P6 (L,a,b,x,y,t)`
+> with the `d6` metric, the `phi6` pairing `a<->x,b<->y,L<->t`, the 14-int position
+> residual) is the I-JEPA POSITION-CONDITIONING: it lets the predictor be conditioned on
+> WHERE it predicts (`lawPositionDistinguishesSameColour` proves position carries info
+> colour cannot). DIRECTION: grow the learned predictor into a genuinely LARGE
+> position-conditioned I-JEPA head and TRAIN it (MLX on the Mac) -> `coreai-torch` ->
+> `L.aimodel` -> **Core AI inference** on device. This MEETS the documented Core AI flip
+> condition, so Core AI is UN-RETIRED as a roadmap. ARCHITECTURE = ASYMMETRIC I-JEPA: the
+> frozen reversible lift stays the TOKENIZER (and manufactures the collapse-proof target,
+> so `EncoderFrozen` is NOT reversed and no settled law breaks); the LARGE learned object
+> rides on top. The hand-written-forward rule still governs anything small (`theta_B` stays
+> `MaskedBandForward.swift`); zero-third-party shipped core stands; Core AI float still
+> re-enters the Zig Q16 floor. A full learned EMA TARGET encoder (symmetric I-JEPA) is NOT
+> adopted (it reintroduces the collapse problem) without explicit go. Below: the 2026-06-22
+> retirement note, now scoped to "tiny theta_B did not need Core AI" rather than "no learned
+> head ever will".
+>
 > **SUPERSEDED 2026-06-22 (encoder needs no learned L).** The JEPA encoder is the
 > frozen reversible lift (zero params) plus the 63-param `theta_B`, which ships
 > HAND-WRITTEN in `SixFour/Native/MaskedBandForward.swift` (golden-gated, no Core AI).

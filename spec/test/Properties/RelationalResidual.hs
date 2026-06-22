@@ -33,4 +33,6 @@ tests = testGroup "RelationalResidual (residual as relational memory: d6 metric 
       forAll genP6 $ \p -> forAll genP6 $ \q -> forAll genP6 $ \r -> lawD6TriangleInequality p q r
   , testProperty "the +/-1 quantum is one step on any axis" $
       forAll genAxis $ \ax -> forAll genP6 $ \p -> lawUnitQuantumIsOneStep ax p
+  , testProperty "I-JEPA POSITION CONDITIONING: position distinguishes what colour cannot" $
+      forAll genP6 $ \p -> forAll genP6 $ \q -> lawPositionDistinguishesSameColour p q
   ]

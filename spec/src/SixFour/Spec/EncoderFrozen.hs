@@ -11,6 +11,12 @@ embeddings)?" with a gate rather than prose. The settled answer is __(c)-degener
   * Candidate (b), "a learned continuous encoder self-supervised PRE-TRAINED on top of
     the lift", is REJECTED on the established one-kernel/one-predictor path: the encoder
     has zero parameters, so there is nothing to pre-train.
+    SCOPE NOTE (2026-06-22 I-JEPA redirect): this rejection is scoped to the TINY path.
+    The asymmetric I-JEPA direction (CLAUDE.md REDIRECT) grows the LEARNED PREDICTOR large
+    and trains it for Core AI, while the encoder STAYS the frozen parameter-free lift o
+    featuresB. So this law is UNCHANGED: a large learned head lives ABOVE the encoder, not
+    inside it. A learned TARGET encoder (symmetric I-JEPA) WOULD flip 'lawNoPreTrainPhase'
+    and is gated behind explicit go.
   * "Pre-training the encoder" therefore has NO referent on this path. Its work is
     absorbed: the frozen-by-proof lift ('lawOctReversible') both DEFINES the embedding
     space AND manufactures the JEPA target (the held detail band), so encoder and

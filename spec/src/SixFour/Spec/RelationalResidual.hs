@@ -34,6 +34,7 @@ module SixFour.Spec.RelationalResidual
   ( -- * The comparable 6D point + its relational distance
     P6(..)
   , d6
+  , dColour
   , nudge
     -- * The residual budget (carriers held out)
   , residualBands
@@ -48,6 +49,7 @@ module SixFour.Spec.RelationalResidual
   , lawD6IdentityOfIndiscernibles
   , lawD6TriangleInequality
   , lawUnitQuantumIsOneStep
+  , lawPositionDistinguishesSameColour
   ) where
 
 import SixFour.Spec.Dim6 (Dim6(..), phi6, isUniversal, isSearch)
@@ -70,6 +72,12 @@ coords (P6 l a b x y t) = [l, a, b, x, y, t]
 -- on any axis.
 d6 :: P6 -> P6 -> Int
 d6 p q = sum (zipWith (\a b -> abs (a - b)) (coords p) (coords q))
+
+-- | The COLOUR-ONLY distance (Q16 L1 over just @(L,a,b)@) — what a position-blind
+-- representation can see. Contrast with 'd6': this is what the model was limited to before
+-- position became a carried value.
+dColour :: P6 -> P6 -> Int
+dColour (P6 l a b _ _ _) (P6 l' a' b' _ _ _) = abs (l - l') + abs (a - a') + abs (b - b')
 
 -- | Move a single axis by @delta@ (the @+/-1@ gesture; via @phi6@ a nudge on search
 -- colour @a@ is the same step as on position @x@).
@@ -154,3 +162,18 @@ lawD6TriangleInequality p q r = d6 p r <= d6 p q + d6 q r
 -- paired position axis. Teeth: a non-unit metric weight fails.
 lawUnitQuantumIsOneStep :: Dim6 -> P6 -> Bool
 lawUnitQuantumIsOneStep ax p = d6 p (nudge ax 1 p) == 1 && d6 p (nudge ax (-1) p) == 1
+
+-- | THE I-JEPA position-conditioning theorem: position carries DISTINGUISHING information
+-- that colour alone (and the old implicit array index) cannot. Two voxels with the SAME
+-- colour @(L,a,b)@ but different position @(x,y,t)@ are INVISIBLE to a colour-only distance
+-- (@dColour == 0@) yet DISTINCT under @d6@ (@d6 == 0@ iff their positions also match). This
+-- is why the relational residual IS the I-JEPA positional embedding: it lets the predictor
+-- be conditioned on WHERE it predicts, comparing octants in different regions a Morton
+-- index never could. Teeth: a position-blind metric (or dropping x,y,t from @d6@) collapses
+-- the two and fails the second conjunct.
+lawPositionDistinguishesSameColour :: P6 -> P6 -> Bool
+lawPositionDistinguishesSameColour p q =
+  let q' = q { p6L = p6L p, p6A = p6A p, p6B = p6B p }   -- force the SAME colour as p
+      samePos = p6X p == p6X q' && p6Y p == p6Y q' && p6T p == p6T q'
+  in dColour p q' == 0                                    -- colour-only is blind to position
+     && (d6 p q' == 0) == samePos                         -- d6 sees it: zero IFF positions match too
