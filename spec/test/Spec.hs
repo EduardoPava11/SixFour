@@ -39,6 +39,7 @@ import qualified Properties.OctreeGenome  as OctreeGenome
 import qualified Properties.SubstrateDomain as SubstrateDomain
 import qualified Properties.SuccessiveRefinement as SuccessiveRefinement
 import qualified Properties.SuperResPalette as SuperResPalette
+import qualified Properties.RelationalResidual as RelationalResidual
 import qualified Properties.RemainderTail as RemainderTail
 import qualified Properties.ByteCarrier   as ByteCarrier
 import qualified Properties.DetailEntropy as DetailEntropy
@@ -202,6 +203,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SubstrateDomain.tests
   , SuccessiveRefinement.tests
   , SuperResPalette.tests
+  , RelationalResidual.tests
   , RemainderTail.tests
   , ByteCarrier.tests
   , DetailEntropy.tests
