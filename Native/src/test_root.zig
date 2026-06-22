@@ -17,6 +17,13 @@ test {
     _ = @import("quant_fixture_test.zig"); // cross-language quantizer golden
     _ = @import("collapse_fixture_test.zig"); // cross-language global-collapse golden (GIFA→GIFB)
     _ = @import("haar_fixture_test.zig"); // cross-language integer-Haar golden (reversible lifting)
+    _ = @import("haar_barrier_hazard_test.zig"); // adversarial: dropped inter-level barrier (untracked hazard mode) breaks reconstruct∘analyze
+    _ = @import("haar_barrier_race_test.zig"); // adversarial: level-sequential stale-read race (missing global barrier) breaks reconstruct∘analyze
+    _ = @import("haar_inplace_intralevel_race_test.zig"); // adversarial: INTRA-level write-before-read alias (naive ascending/parallel map) breaks reconstruct∘analyze
+    _ = @import("haar_tensor_float_test.zig"); // adversarial: fp16/bf16 Metal-4 tensor/cooperative-matrix lift drops low Q16 bits → breaks reconstruct∘analyze
+    _ = @import("haar_coherency_premature_read_test.zig"); // adversarial: CPU reads GPU shared (unified-memory) Haar buffer before command-buffer completion (no waitUntilCompleted) breaks reconstruct∘analyze
+    _ = @import("invertibility_break_test.zig"); // adversarial break-hunt: i32 overflow, leaf-override unclamped, divfloor-vs-trunc, in-place race, fp16 tensor, unified-memory, Core-AI ULP bypass, widen golden
+    _ = @import("totality_test.zig"); // total-function redesign: T1 totality (all 10 refuse OOR), T3 intermediate-truth via i64, T5 ship-mode parity, T6 domain-boundary knife-edge
     _ = @import("temporal_fixture_test.zig"); // cross-language temporal one-level Haar split golden (VoxelReduce temporal half)
     _ = @import("rgbt4d_fixture_test.zig"); // cross-language RGBT-4D lift + cube-ladder golden (Metal/Zig alignment)
     _ = @import("gif_fixture_test.zig"); // cross-language full-burst GIF golden (Stage 6)
