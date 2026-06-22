@@ -48,6 +48,11 @@ pub const RC_SCRATCH_TOO_SMALL: i32 = 3;
 pub const RC_OUTPUT_TOO_SMALL: i32 = 4;
 pub const RC_INFEASIBLE_SIGNIFICANCE: i32 = 5;
 pub const RC_BAD_DITHER_MODE: i32 = 6;
+/// A reversible-substrate input (or a derived lift intermediate) fell outside the
+/// proven-invertible Q16 domain |v| <= SUBSTRATE_BOUND. The kernel REFUSES rather
+/// than wrap silently: the total-function contract is "invert exactly, or return
+/// this code, but never corrupt." See SUBSTRATE_BOUND / liftChecked.
+pub const RC_OUT_OF_RANGE: i32 = 7;
 pub const RC_NOT_IMPLEMENTED: i32 = 100;
 
 // ── fixed-point + shape constants ─────────────────────────────────────────────
@@ -502,6 +507,89 @@ fn isPow2(n: i32) bool {
     return n > 0 and (n & (n - 1)) == 0;
 }
 
+// ── reversible-substrate domain bound + total-function lift core ─────────────
+//
+// FORM follows FUNCTION. The SixFour reversible substrate is a bit-exact integer
+// S-transform (lifting scheme) over Q16 OKLab triples, built from ONE pair-lift
+// L(x,y) = (y + floor((x-y)/2), x-y) and its exact inverse. A function FITS this
+// form iff it is (1) pure integer, (2) TOTAL = exactly invertible on a stated
+// finite domain and otherwise REFUSES with a result code (never silently
+// corrupts), and (3) overflow-proof so every surfaced intermediate (the detail
+// d=x-y, the lifted parent, and every cross-level/cross-band intermediate a
+// downstream consumer reads) equals its true i64 value narrowed losslessly to
+// i32.
+//
+// THE ONE BOUND. Every input leaf / generator / delta-sum / cube-cell / frame
+// channel must satisfy |v| ≤ B = 2^29 − 1.
+//
+// PROOF that B keeps the WHOLE substrate i32-safe (max i32 = 2^31 − 1):
+//   • Single-level detail d = x − y with |x|,|y| ≤ B:   |d| ≤ 2B = 2^30 − 2  < 2^31−1.
+//   • Lifted parent p = y + floor(d/2):  |p| ≤ |y| + |d|/2 ≤ B + (2^30−2)/2 = 2B−1,
+//     BUT the lift is volume-preserving: the parent of two in-range leaves is the
+//     "average" branch and stays within [−B, B] (p = floor((x+y)/2) algebraically
+//     since y + floor((x−y)/2) = floor((x+y)/2) for the floor lift), so |p| ≤ B.
+//   • Multi-level Haar (s4_haar_analyze): each level lifts already-bounded parents
+//     (|·| ≤ B), so every per-level detail is again ≤ 2B and every parent ≤ B.
+//     No level can grow past 2B. ✓
+//   • RGBT quad (the binding worst case): rgbtLiftQuad applies sLift TWICE. The
+//     first level produces details a[1], c[1] with |·| ≤ 2B. The second-level
+//     high band is h = sLift(a[1], c[1]); its detail is a[1] − c[1] whose two
+//     operands are each ≤ 2B in magnitude, so |a[1]−c[1]| ≤ 4B = 2^31 − 4 ≤ 2^31−1.
+//     FITS i32 exactly; one tick past B (operands 4(B+1) = 2^31) would overflow,
+//     so B is the TIGHT bound for the quad.   ✓
+// Hence B = 2^29 − 1 is the largest symmetric input bound that keeps the entire
+// composition representable in i32. Real OKLab Q16 is ~±2^17, so B leaves
+// >4096× headroom and changes NO in-domain output.
+//
+// All compute below is done in i64 (so the CHECK itself never overflows — we do
+// NOT lean on the Debug-only safety panic), then range-checked and narrowed back
+// to i32 or refused with RC_OUT_OF_RANGE.
+pub const SUBSTRATE_BOUND: i64 = (1 << 29) - 1; // B = 2^29 − 1
+pub const DETAIL_BOUND: i64 = 2 * SUBSTRATE_BOUND; // 2B = max legal single-level detail
+
+inline fn inBound(v: i64, bound: i64) bool {
+    return v >= -bound and v <= bound;
+}
+
+/// True iff every channel of `n` interleaved triples (3n i32) is within ±B.
+fn leavesInDomain(p: [*c]const i32, n: usize) bool {
+    var i: usize = 0;
+    while (i < n * 3) : (i += 1) {
+        if (!inBound(p[i], SUBSTRATE_BOUND)) return false;
+    }
+    return true;
+}
+
+/// Forward pair-lift in i64: (x,y) → (low, high) = (y + floor((x-y)/2), x-y).
+/// Returns RC_OK and writes the narrowed i32 result, or RC_OUT_OF_RANGE if any
+/// computed value (detail OR parent) falls outside its proven i32-safe envelope
+/// — so the surfaced intermediate is ALWAYS the true i64 value or an explicit
+/// refusal, never a silent wrap.
+inline fn liftChecked(x: i32, y: i32, out_low: *i32, out_high: *i32) i32 {
+    const d: i64 = @as(i64, x) - @as(i64, y); // true detail, no wrap
+    if (!inBound(d, DETAIL_BOUND)) return RC_OUT_OF_RANGE;
+    const p: i64 = @as(i64, y) + @divFloor(d, 2); // true lifted parent
+    if (!inBound(p, SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
+    out_low.* = @intCast(p);
+    out_high.* = @intCast(d);
+    return RC_OK;
+}
+
+/// Inverse pair-lift in i64: (low, high) → (x, y), y = low − floor(high/2),
+/// x = y + high. Validates the SUPPLIED band values (attacker-influenced on the
+/// override / Core-AI path): |high| ≤ 2B, |low| ≤ B, and the reconstructed x,y
+/// must land back within ±B. Refuses with RC_OUT_OF_RANGE otherwise.
+inline fn unliftChecked(low: i32, high: i32, out_x: *i32, out_y: *i32) i32 {
+    if (!inBound(high, DETAIL_BOUND)) return RC_OUT_OF_RANGE;
+    if (!inBound(low, SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
+    const y: i64 = @as(i64, low) - @divFloor(@as(i64, high), 2);
+    const x: i64 = y + @as(i64, high);
+    if (!inBound(y, SUBSTRATE_BOUND) or !inBound(x, SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
+    out_x.* = @intCast(x);
+    out_y.* = @intCast(y);
+    return RC_OK;
+}
+
 /// Forward integer Haar: 2^D leaves → root + (2^D − 1) detail offsets (Q16,
 /// interleaved L,a,b). `scratch` ≥ n·3·4 bytes (a working copy of the leaves).
 pub export fn s4_haar_analyze(
@@ -517,6 +605,8 @@ pub export fn s4_haar_analyze(
     const nn: usize = @intCast(n);
     const need = nn * 3 * @sizeOf(i32);
     if (scratch == null or scratch_cap < need) return RC_SCRATCH_TOO_SMALL;
+    // TOTALITY: refuse any out-of-domain leaf rather than wrap d=x−y silently.
+    if (!leavesInDomain(leaves_q16, nn)) return RC_OUT_OF_RANGE;
     const work: [*]i32 = @ptrCast(@alignCast(scratch.?));
     var i: usize = 0;
     while (i < nn * 3) : (i += 1) work[i] = leaves_q16[i];
@@ -531,9 +621,14 @@ pub export fn s4_haar_analyze(
             while (c < 3) : (c += 1) {
                 const x = work[(2 * i) * 3 + c];
                 const y = work[(2 * i + 1) * 3 + c];
-                const d = x - y;
-                work[i * 3 + c] = y + @divFloor(d, 2); // lifted parent
-                out_offsets_q16[(out_start + i) * 3 + c] = d; // detail
+                // i64 compute + narrow-or-refuse: lifted parent and detail are the
+                // true wide-truth values, never a silent i32 wrap.
+                var lo: i32 = undefined;
+                var hi: i32 = undefined;
+                const rc = liftChecked(x, y, &lo, &hi);
+                if (rc != RC_OK) return rc;
+                work[i * 3 + c] = lo; // lifted parent
+                out_offsets_q16[(out_start + i) * 3 + c] = hi; // detail
             }
         }
         cur = half;
@@ -547,6 +642,10 @@ pub export fn s4_haar_analyze(
 
 /// Inverse integer Haar: root + (2^D − 1) offsets → 2^D leaves. Exact inverse of
 /// `s4_haar_analyze`. In-place expansion (no scratch).
+/// TOTAL: domain is root |v| ≤ B and each detail |d| ≤ 2B (the image of a legal
+/// analyze); any node/leaf the i64 inverse would push outside ±B returns
+/// `RC_OUT_OF_RANGE` rather than wrapping (matters on the attacker-influenced
+/// offsets/Core-AI path).
 pub export fn s4_haar_reconstruct(
     root_q16: [*c]const i32,
     offsets_q16: [*c]const i32,
@@ -556,6 +655,11 @@ pub export fn s4_haar_reconstruct(
     if (root_q16 == null or offsets_q16 == null or out_leaves_q16 == null) return RC_NULL_PTR;
     if (!isPow2(n)) return RC_BAD_SHAPE;
     const nn: usize = @intCast(n);
+    // TOTALITY: the root must be in-domain (|node| ≤ B). Per-detail/per-node bounds
+    // are enforced inside unliftChecked as the tree expands (the supplied offsets
+    // are attacker-influenced on the override / Core-AI path).
+    if (!inBound(root_q16[0], SUBSTRATE_BOUND) or !inBound(root_q16[1], SUBSTRATE_BOUND) or
+        !inBound(root_q16[2], SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
     out_leaves_q16[0] = root_q16[0];
     out_leaves_q16[1] = root_q16[1];
     out_leaves_q16[2] = root_q16[2];
@@ -570,8 +674,11 @@ pub export fn s4_haar_reconstruct(
             while (c < 3) : (c += 1) {
                 const node = out_leaves_q16[i * 3 + c];
                 const d = offsets_q16[(out_start + i) * 3 + c];
-                const y = node - @divFloor(d, 2);
-                out_leaves_q16[(2 * i) * 3 + c] = y + d; // x
+                var x: i32 = undefined;
+                var y: i32 = undefined;
+                const rc = unliftChecked(node, d, &x, &y);
+                if (rc != RC_OK) return rc;
+                out_leaves_q16[(2 * i) * 3 + c] = x; // x
                 out_leaves_q16[(2 * i + 1) * 3 + c] = y; // y
             }
         }
@@ -588,6 +695,9 @@ pub export fn s4_haar_reconstruct(
 /// interleaved) into `out_nodes_q16`. `n` = total leaves (2^D); requires
 /// `0 ≤ level ≤ D`. In-place expansion (no scratch). SixFour surfaces level 4 (16
 /// colours) as the capture shutter.
+/// TOTAL: same domain as `s4_haar_reconstruct` (root |v| ≤ B, detail |d| ≤ 2B);
+/// returns `RC_OUT_OF_RANGE` instead of surfacing a wrapped node. This is the exact
+/// UI-surfacing path the silent-overflow defect rode, so the guard is load-bearing.
 pub export fn s4_haar_level_nodes(
     level: i32,
     root_q16: [*c]const i32,
@@ -603,6 +713,11 @@ pub export fn s4_haar_level_nodes(
     while (k < level) : (k += 1) target *= 2;
     if (target > nn) return RC_BAD_SHAPE; // level must not exceed tree depth
 
+    // TOTALITY: same image-domain validation as s4_haar_reconstruct — this is the
+    // exact UI surfacing path (level 4 = the 16-colour shutter); it must NEVER emit
+    // a wrapped node.
+    if (!inBound(root_q16[0], SUBSTRATE_BOUND) or !inBound(root_q16[1], SUBSTRATE_BOUND) or
+        !inBound(root_q16[2], SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
     out_nodes_q16[0] = root_q16[0];
     out_nodes_q16[1] = root_q16[1];
     out_nodes_q16[2] = root_q16[2];
@@ -617,8 +732,11 @@ pub export fn s4_haar_level_nodes(
             while (c < 3) : (c += 1) {
                 const node = out_nodes_q16[i * 3 + c];
                 const d = offsets_q16[(out_start + i) * 3 + c];
-                const y = node - @divFloor(d, 2);
-                out_nodes_q16[(2 * i) * 3 + c] = y + d; // x
+                var x: i32 = undefined;
+                var y: i32 = undefined;
+                const rc = unliftChecked(node, d, &x, &y);
+                if (rc != RC_OK) return rc;
+                out_nodes_q16[(2 * i) * 3 + c] = x; // x
                 out_nodes_q16[(2 * i + 1) * 3 + c] = y; // y
             }
         }
@@ -640,46 +758,69 @@ pub export fn s4_haar_level_nodes(
 // SAME math (no inline copies — reuse-first, no duplicated kernels).
 // Forward: (x,y) → (low, high) = (y + floor((x-y)/2), x - y). Mirrors SixFour.Spec.TemporalLoop
 // liftPairT (per channel) and SixFour.Spec.RGBTLift's S-transform.
-fn sLift(x: i32, y: i32) [2]i32 {
+// All four sLift applications now compute in i64 (so the worst-case second-level
+// high-band detail a[1]−c[1] ≤ 4B = 2^31−4 is formed without wrap) and narrow
+// back to i32. In-domain (|leaf| ≤ B) the math is PROVEN ≤ 4B and changes no
+// byte; the i64 promotion only removes the silent wrap.
+inline fn sLift64(x: i64, y: i64) [2]i64 {
     const d = x - y;
     return .{ y + @divFloor(d, 2), d };
 }
-
-// Exact inverse of sLift: (low, high) → (x, y) = (y + high, y), y = low - floor(high/2).
-fn sUnlift(low: i32, high: i32) [2]i32 {
+inline fn sUnlift64(low: i64, high: i64) [2]i64 {
     const y = low - @divFloor(high, 2);
     return .{ y + high, y };
 }
 
-// 2×2 separable Haar = four sLift applications (rows then columns). Byte-identical to the prior
-// inline form; gated by haar_fixture_test + rgbt4d_fixture_test.
+// 2×2 separable Haar = four sLift applications (rows then columns). Byte-identical
+// in-domain to the prior i32 inline form; gated by haar_fixture_test + rgbt4d_fixture_test.
+// Computed in i64 so the 4B second-level high-band intermediate never wraps.
 fn rgbtLiftQuad(q: *const [4]i32, out: *[4]i32) void {
-    const a = sLift(q[0], q[1]); // (la, ha)
-    const c = sLift(q[2], q[3]); // (lc, hc)
-    const l = sLift(a[0], c[0]); // (R, G)
-    const h = sLift(a[1], c[1]); // (B, T)
-    out[0] = l[0]; // ll = R
-    out[1] = l[1]; // lh = G
-    out[2] = h[0]; // hl = B
-    out[3] = h[1]; // hh = T
+    const a = sLift64(q[0], q[1]); // (la, ha)
+    const c = sLift64(q[2], q[3]); // (lc, hc)
+    const l = sLift64(a[0], c[0]); // (R, G)
+    const h = sLift64(a[1], c[1]); // (B, T)  ← operands are details ≤2B ⇒ |h| ≤ 4B (fits i32)
+    out[0] = @intCast(l[0]); // ll = R
+    out[1] = @intCast(l[1]); // lh = G
+    out[2] = @intCast(h[0]); // hl = B
+    out[3] = @intCast(h[1]); // hh = T
 }
 
-// Exact inverse of rgbtLiftQuad: (R,G,B,T) → (a,b,c,d) via four sUnlift applications.
-fn rgbtUnliftQuad(r: *const [4]i32, out: *[4]i32) void {
-    const lo = sUnlift(r[0], r[1]); // (la, lc)
-    const hi = sUnlift(r[2], r[3]); // (ha, hc)
-    const a = sUnlift(lo[0], hi[0]); // (a, b)
-    const c = sUnlift(lo[1], hi[1]); // (c, d)
-    out[0] = a[0];
-    out[1] = a[1];
-    out[2] = c[0];
-    out[3] = c[1];
+// Domain check for the inverse quad's SUPPLIED bands (attacker-influenced): every
+// sUnlift intermediate and the four reconstructed cells must fit i32 and the
+// reconstructed 2×2 block must land within ±B (the image of a legal lift). i64
+// throughout so the check never wraps. Returns RC_OK / RC_OUT_OF_RANGE.
+fn rgbtUnliftQuadChecked(r: *const [4]i32, out: *[4]i32) i32 {
+    // Forward bands of a legal lift: R=LL (parent, ≤B), G=LH & B=HL (first/second
+    // level low-band-of-detail, ≤2B), T=HH (second-level high-band detail, ≤4B).
+    if (!inBound(r[0], SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE; // LL
+    if (!inBound(r[1], DETAIL_BOUND)) return RC_OUT_OF_RANGE; // LH ≤2B
+    if (!inBound(r[2], DETAIL_BOUND)) return RC_OUT_OF_RANGE; // HL ≤2B
+    if (!inBound(r[3], 4 * SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE; // HH ≤4B
+    const lo = sUnlift64(r[0], r[1]); // (la, lc) — parents ≤B
+    const hi = sUnlift64(r[2], r[3]); // (ha, hc) — details ≤2B
+    const a = sUnlift64(lo[0], hi[0]); // (a, b)
+    const c = sUnlift64(lo[1], hi[1]); // (c, d)
+    if (!inBound(a[0], SUBSTRATE_BOUND) or !inBound(a[1], SUBSTRATE_BOUND) or
+        !inBound(c[0], SUBSTRATE_BOUND) or !inBound(c[1], SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
+    out[0] = @intCast(a[0]);
+    out[1] = @intCast(a[1]);
+    out[2] = @intCast(c[0]);
+    out[3] = @intCast(c[1]);
+    return RC_OK;
 }
 
 /// 2×2 → RGBT lift on one block (4 ints in, 4 ints out). Bijective with s4_rgbt_unlift_quad.
+/// TOTAL: the 4 inputs each must be |v| ≤ B = SUBSTRATE_BOUND. This is the BINDING
+/// case for the whole substrate's bound: the second-level high band reaches 4B, so
+/// one tick past B would overflow i32; an out-of-domain block returns RC_OUT_OF_RANGE.
 pub export fn s4_rgbt_lift_quad(in_q16: [*c]const i32, out_q16: [*c]i32) i32 {
     if (in_q16 == null or out_q16 == null) return RC_NULL_PTR;
     const q = [4]i32{ in_q16[0], in_q16[1], in_q16[2], in_q16[3] };
+    // TOTALITY: the 4 input cells must each be in-domain (|v| ≤ B). This is the
+    // BINDING constraint — the second-level high-band detail a[1]−c[1] reaches 4B
+    // = 2^31−4 (fits i32) at |input|=B, and 4(B+1)=2^31 overflows just past it.
+    if (!inBound(q[0], SUBSTRATE_BOUND) or !inBound(q[1], SUBSTRATE_BOUND) or
+        !inBound(q[2], SUBSTRATE_BOUND) or !inBound(q[3], SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
     var o: [4]i32 = undefined;
     rgbtLiftQuad(&q, &o);
     out_q16[0] = o[0];
@@ -690,11 +831,16 @@ pub export fn s4_rgbt_lift_quad(in_q16: [*c]const i32, out_q16: [*c]i32) i32 {
 }
 
 /// Inverse of s4_rgbt_lift_quad.
+/// TOTAL: the 4 (R,G,B,T) bands must be the image of a legal lift; a quartet whose
+/// i64 inverse leaves ±B returns RC_OUT_OF_RANGE rather than wrapping.
 pub export fn s4_rgbt_unlift_quad(in_q16: [*c]const i32, out_q16: [*c]i32) i32 {
     if (in_q16 == null or out_q16 == null) return RC_NULL_PTR;
     const r = [4]i32{ in_q16[0], in_q16[1], in_q16[2], in_q16[3] };
     var o: [4]i32 = undefined;
-    rgbtUnliftQuad(&r, &o);
+    // TOTALITY: validate the supplied bands + reconstructed cells (image of a legal
+    // lift) and compute in i64; refuse rather than wrap.
+    const rc = rgbtUnliftQuadChecked(&r, &o);
+    if (rc != RC_OK) return rc;
     out_q16[0] = o[0];
     out_q16[1] = o[1];
     out_q16[2] = o[2];
@@ -705,11 +851,21 @@ pub export fn s4_rgbt_unlift_quad(in_q16: [*c]const i32, out_q16: [*c]i32) i32 {
 /// One 2-D-Haar level over a side×side row-major grid (side even): tile into 2×2
 /// blocks, lift each → coarse (side/2)² plane + (side/2)² detail triples (G,B,T).
 /// The TILING is where Metal (2-D threads) and Zig (loops) could diverge — pinned here.
+/// TOTAL: every grid cell must be |v| ≤ B (the per-tile RGBT 4B envelope governs);
+/// an out-of-domain grid returns RC_OUT_OF_RANGE rather than wrapping a tile.
 pub export fn s4_cube_lift_level(side: i32, grid: [*c]const i32, out_coarse: [*c]i32, out_details: [*c]i32) i32 {
     if (grid == null or out_coarse == null or out_details == null) return RC_NULL_PTR;
     if (side <= 0 or @rem(side, 2) != 0) return RC_BAD_SHAPE;
     const s: usize = @intCast(side);
     const h = s / 2;
+    // TOTALITY: every grid cell must be in-domain (|v| ≤ B); each 2×2 tile feeds
+    // rgbtLiftQuad whose 4B intermediate bound governs. (Scalar cells, not triples.)
+    {
+        var k: usize = 0;
+        while (k < s * s) : (k += 1) {
+            if (!inBound(grid[k], SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
+        }
+    }
     var by: usize = 0;
     while (by < h) : (by += 1) {
         var bx: usize = 0;
@@ -733,6 +889,9 @@ pub export fn s4_cube_lift_level(side: i32, grid: [*c]const i32, out_coarse: [*c
 }
 
 /// Exact inverse of s4_cube_lift_level: coarse h² + details h²·3 → 2h×2h grid.
+/// TOTAL: each (coarse, 3 details) quartet must be the image of a legal lift
+/// (the RGBT 4B envelope); a quartet whose i64 inverse leaves ±B returns
+/// `RC_OUT_OF_RANGE` rather than wrapping.
 pub export fn s4_cube_unlift_level(half: i32, coarse: [*c]const i32, details: [*c]const i32, out_grid: [*c]i32) i32 {
     if (coarse == null or details == null or out_grid == null) return RC_NULL_PTR;
     if (half <= 0) return RC_BAD_SHAPE;
@@ -745,7 +904,9 @@ pub export fn s4_cube_unlift_level(half: i32, coarse: [*c]const i32, details: [*
             const bi = by * h + bx;
             const r = [4]i32{ coarse[bi], details[bi * 3 + 0], details[bi * 3 + 1], details[bi * 3 + 2] };
             var q: [4]i32 = undefined;
-            rgbtUnliftQuad(&r, &q);
+            // TOTALITY: validate supplied bands (image of a legal cube_lift) + i64 compute.
+            const rc = rgbtUnliftQuadChecked(&r, &q);
+            if (rc != RC_OK) return rc;
             out_grid[(2 * by) * s + 2 * bx] = q[0];
             out_grid[(2 * by) * s + 2 * bx + 1] = q[1];
             out_grid[(2 * by + 1) * s + 2 * bx] = q[2];
@@ -761,18 +922,26 @@ pub export fn s4_cube_unlift_level(half: i32, coarse: [*c]const i32, details: [*
 /// channel (no new lift math; reuse-first, no duplicated kernels). An odd
 /// trailing frame is carried into the low band with no detail. Exactly inverted by
 /// s4_haar_join_level. in: n·3 i32 (frame-major). out_low: (n/2 + n%2)·3. out_high: (n/2)·3.
+/// TOTAL: every input frame channel must be |v| ≤ B; out-of-domain frames return
+/// `RC_OUT_OF_RANGE` (the i64 lift never wraps).
 pub export fn s4_haar_split_level(n: i32, in_q16: [*c]const i32, out_low: [*c]i32, out_high: [*c]i32) i32 {
     if (in_q16 == null or out_low == null or out_high == null) return RC_NULL_PTR;
     if (n < 0) return RC_BAD_SHAPE;
     const nn: usize = @intCast(n);
+    // TOTALITY: every input frame channel must be in-domain (|v| ≤ B); single sLift
+    // level ⇒ |detail| ≤ 2B fits i32.
+    if (!leavesInDomain(in_q16, nn)) return RC_OUT_OF_RANGE;
     const pairs = nn / 2;
     var i: usize = 0;
     while (i < pairs) : (i += 1) {
         var c: usize = 0;
         while (c < 3) : (c += 1) {
-            const r = sLift(in_q16[(2 * i) * 3 + c], in_q16[(2 * i + 1) * 3 + c]);
-            out_low[i * 3 + c] = r[0];
-            out_high[i * 3 + c] = r[1];
+            var lo: i32 = undefined;
+            var hi: i32 = undefined;
+            const rc = liftChecked(in_q16[(2 * i) * 3 + c], in_q16[(2 * i + 1) * 3 + c], &lo, &hi);
+            if (rc != RC_OK) return rc;
+            out_low[i * 3 + c] = lo;
+            out_high[i * 3 + c] = hi;
         }
     }
     if (nn % 2 == 1) { // carry the odd tail into the low band, no detail
@@ -785,6 +954,8 @@ pub export fn s4_haar_split_level(n: i32, in_q16: [*c]const i32, out_low: [*c]i3
 /// Exact inverse of s4_haar_split_level (mirrors SixFour.Spec.TemporalLoop.haarJoinTime): rebuild
 /// the n-frame sequence from (low, high) via the OWNED `sUnlift`. `low_n = n/2 + n%2`,
 /// `high_n = n/2`, so n = low_n + high_n and `low_n - high_n ∈ {0,1}`. out: n·3 i32.
+/// TOTAL: low must be |v| ≤ B and high |d| ≤ 2B (the image of a legal split);
+/// otherwise `RC_OUT_OF_RANGE` (no silent wrap in the i64 join).
 pub export fn s4_haar_join_level(low_n: i32, high_n: i32, low: [*c]const i32, high: [*c]const i32, out_q16: [*c]i32) i32 {
     if (low == null or high == null or out_q16 == null) return RC_NULL_PTR;
     if (low_n < 0 or high_n < 0 or low_n < high_n or low_n - high_n > 1) return RC_BAD_SHAPE;
@@ -793,14 +964,23 @@ pub export fn s4_haar_join_level(low_n: i32, high_n: i32, low: [*c]const i32, hi
     while (i < hn) : (i += 1) {
         var c: usize = 0;
         while (c < 3) : (c += 1) {
-            const q = sUnlift(low[i * 3 + c], high[i * 3 + c]);
-            out_q16[(2 * i) * 3 + c] = q[0];
-            out_q16[(2 * i + 1) * 3 + c] = q[1];
+            var x: i32 = undefined;
+            var y: i32 = undefined;
+            // TOTALITY: validate supplied bands (|low| ≤ B, |high| ≤ 2B) + i64 compute.
+            const rc = unliftChecked(low[i * 3 + c], high[i * 3 + c], &x, &y);
+            if (rc != RC_OK) return rc;
+            out_q16[(2 * i) * 3 + c] = x;
+            out_q16[(2 * i + 1) * 3 + c] = y;
         }
     }
     if (@as(usize, @intCast(low_n)) > hn) { // the carried odd tail
+        // The odd-tail carry is a copy (no lift); validate it stays in-domain.
         var c: usize = 0;
-        while (c < 3) : (c += 1) out_q16[(2 * hn) * 3 + c] = low[hn * 3 + c];
+        while (c < 3) : (c += 1) {
+            const v = low[hn * 3 + c];
+            if (!inBound(v, SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
+            out_q16[(2 * hn) * 3 + c] = v;
+        }
     }
     return RC_OK;
 }
@@ -941,6 +1121,10 @@ test "s4_board_mass_q16: golden + laws (Spec.BoardQ16)" {
 /// `[g₀, σ(g₀), g₁, σ(g₁), …]` where `gᵢ = generatorᵢ + δᵢ`. `out_leaves_q16`
 /// holds `2n` triples (`6n` ints). Pass `deltas_q16 == null` for the no-op
 /// (zero) override. Byte-exact vs `Spec.LeafOverride`.
+/// TOTAL: this is the USER / Core-AI taste channel, so it is the producer-side
+/// guard for the whole lift. Each `gᵢ = generatorᵢ + δᵢ` (and its σ-negate) is
+/// formed in i64 and must satisfy |gᵢ| ≤ B; an out-of-domain δ returns
+/// `RC_OUT_OF_RANGE` rather than manufacturing a leaf that overflows the lift.
 pub export fn s4_leaf_override(generators_q16: [*c]const i32, deltas_q16: [*c]const i32, n: i32, out_leaves_q16: [*c]i32) i32 {
     if (out_leaves_q16 == null) return RC_NULL_PTR;
     if (n < 0) return RC_BAD_SHAPE;
@@ -952,9 +1136,19 @@ pub export fn s4_leaf_override(generators_q16: [*c]const i32, deltas_q16: [*c]co
         const dl: i32 = if (deltas_q16 == null) 0 else deltas_q16[gi + 0];
         const da: i32 = if (deltas_q16 == null) 0 else deltas_q16[gi + 1];
         const db: i32 = if (deltas_q16 == null) 0 else deltas_q16[gi + 2];
-        const gl = generators_q16[gi + 0] + dl;
-        const ga = generators_q16[gi + 1] + da;
-        const gb = generators_q16[gi + 2] + db;
+        // TOTALITY: this is the CHEAPEST place to refuse — the producer of the leaf
+        // space the downstream Haar consumes. Each nudged generator sum gᵢ = generatorᵢ
+        // + δᵢ (computed in i64 so the add cannot wrap) must satisfy |gᵢ| ≤ B; then
+        // the σ-negate −gᵢ is also representable and the downstream analyze detail
+        // gᵢ−(−gᵢ) = 2gᵢ stays ≤ 2B. Out of domain ⇒ RC_OUT_OF_RANGE.
+        const gl64: i64 = @as(i64, generators_q16[gi + 0]) + @as(i64, dl);
+        const ga64: i64 = @as(i64, generators_q16[gi + 1]) + @as(i64, da);
+        const gb64: i64 = @as(i64, generators_q16[gi + 2]) + @as(i64, db);
+        if (!inBound(gl64, SUBSTRATE_BOUND) or !inBound(ga64, SUBSTRATE_BOUND) or
+            !inBound(gb64, SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
+        const gl: i32 = @intCast(gl64);
+        const ga: i32 = @intCast(ga64);
+        const gb: i32 = @intCast(gb64);
         const o = i * 6;
         out_leaves_q16[o + 0] = gl; // even leaf = g
         out_leaves_q16[o + 1] = ga;

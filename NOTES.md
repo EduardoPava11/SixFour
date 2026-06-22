@@ -7,6 +7,55 @@ newest first.
 
 ---
 
+## 2026-06-22: Invertibility-on-silicon break-hunt + total-function redesign (branch `test/invertibility-silicon`)
+
+> **Session theme (Daniel's direction):** "is the design invertible? could it work / does it work." Empirically
+> verified the reversible core round-trips (Haskell 16/64/256 cubed on adversarial integers; Zig 33/33 incl. the
+> negative floor-div sign trap), THEN ran an adversarial break-hunt across the real silicon path (Zig + Metal
+> unified memory + SIMT/tensors + Core AI, agents reading Zig + Apple docs), found a real break, chose the fix
+> philosophy (total function / reject), mapped form-follows-function, and actioned the redesign. Three workflows
+> (9 / 42 / 4 agents). Zig tests 33 to 71; all additive; in-domain behaviour byte-unchanged.
+
+**CONFIRMED BREAK (silent corruption on the SHIP path).** The owned Zig kernel gated only `isPow2(n)`; magnitude
+was unchecked. On the shipped ReleaseFast build (`build-ios.sh:45` maps Xcode Release to `ReleaseFast`), an
+out-of-domain Q16 value reachable through the user/Core-AI-controlled `s4_leaf_override` delta made `d = x - y`
+(i32) WRAP SILENTLY: returned `RC_OK`, the LEAF round-tripped (wrap is bijective mod 2^32, so the leaf golden AND
+the 64-bit Haskell oracle were BOTH blind), but the surfaced intermediate node was poison (detail -294,967,296
+for true 4e9; parent INT_MIN). Debug/ReleaseSafe panicked loud; only the ship mode corrupted silent. LESSON: an
+endpoint-only `reconstruct(analyze(x)) == x` test is insufficient for a multi-level lift; intermediates must be
+asserted against i64 wide-truth (that is what the next level / the 16-colour shutter / Core AI actually read).
+
+**TOTAL-FUNCTION REDESIGN (form follows function).** The form of the model is a bit-exact integer S-transform; a
+function FITS it iff it is pure-integer, TOTAL, and invert-or-refuse. All 10 reversible exports made total
+(`s4_haar_analyze/reconstruct/level_nodes`, `s4_rgbt_lift/unlift_quad`, `s4_cube_lift/unlift_level`,
+`s4_haar_split/join_level`, `s4_leaf_override`). Added `RC_OUT_OF_RANGE = 7`; `SUBSTRATE_BOUND` B = 2^29-1,
+`DETAIL_BOUND` 2B. Bound proof: the RGBT quad's 2nd-level high band is the binding 4B case = 2^31-4 (fits i32);
+B+1 gives 2^31 (overflow), so B is tight; real OKLab Q16 is ~2^17, >4096x headroom, zero in-domain change.
+`liftChecked`/`unliftChecked` compute the pair-lift in i64 then narrow-or-refuse (the check itself cannot
+overflow; does NOT lean on the Debug-only panic). Domain guards at every C-ABI head; `s4_leaf_override` rejects
+`|g+delta| > B` at the producer (the cheapest refusal point for the taste / Core-AI channel).
+
+**TESTS (derived from the form).** 7 adversarial Zig files. The overflow/leaf-override witnesses now assert the
+kernel RETURNS `RC_OUT_OF_RANGE` (refuses) instead of documenting silent wrap. New `totality_test.zig`: T1
+totality (all 10 refuse out-of-range), T3 intermediate-truth via i64 oracle, T5 ship-mode parity, T6
+domain-boundary knife-edge (B passes + round-trips, B+1 refuses). Plus CPU-proxy tests for the future
+Metal/SIMT port hazards (in-place race, missing inter-level barrier, fp16 tensor bit-loss, unified-memory
+premature read) which the CORRECT kernel survives and a naive port provably fails.
+
+**VERIFIED (re-run independently, not on the agent's word).** 71/71 tests pass in Debug, ReleaseSafe AND
+ReleaseFast. Direct ReleaseFast proof: the break witness returns rc=7 (refused, no corruption);
+`s4_leaf_override(INT_MAX+1)` refused; in-domain analyze/reconstruct round-trip == id byte-exact. All
+cross-language goldens (haar/rgbt4d/temporal) present and passing byte-for-byte. All 10 public function
+doc-headers state the domain + refusal contract; `RC_OUT_OF_RANGE` documented.
+
+**RESIDUAL (honest).** The on-device Metal/SIMT/Core-AI hazards are pinned by CPU-PROXY tests only; the real
+`threadgroup_barrier`, the unified-memory completion-fence, and the float-to-Q16 `reenterQ16` quarantine still
+need DEVICE tests on an iPhone 17 Pro once those layers exist (none are built yet). FOLLOW-UP: add a matching
+Haskell-spec domain law so the oracle documents the same +-B domain the Zig kernel now enforces (the Haskell
+`Int` is unbounded and would not refuse, so the cross-language golden compares in-domain only).
+
+---
+
 ## 2026-06-22: Reversible-seam hardening + rubric-soundness review (branch `spec/harden-reversible-seams`)
 
 > **Session theme (Daniel's direction):** review the prior JEPA-session work with a workflow, anchored on
