@@ -53,6 +53,7 @@ library
         SixFour.Spec.XYTLabDuality
         SixFour.Spec.LBalanceOperator
         SixFour.Spec.OctreeGenome
+        SixFour.Spec.SubstrateDomain
         SixFour.Spec.SuccessiveRefinement
         SixFour.Spec.SuperResPalette
         SixFour.Spec.RemainderTail
@@ -382,6 +383,7 @@ test-suite spec-tests
         Properties.XYTLabDuality
         Properties.LBalanceOperator
         Properties.OctreeGenome
+        Properties.SubstrateDomain
         Properties.SuccessiveRefinement
         Properties.SuperResPalette
         Properties.RemainderTail

@@ -128,6 +128,12 @@ the net" code — Equitz-Cover successive refinement over the octant ladder: @sp
 collapses the k finest levels into the surfaced cube + held detail bands, @refine@
 replays them exactly; @lawMarkovByPooling@ = the coarse is a deterministic pool of
 the fine, the no-rate-penalty guarantee; @remainderRate@ = the held info budget),
+"SixFour.Spec.SubstrateDomain" (the @|v| <= B = 2^29-1@ invertible-DOMAIN contract:
+the lift round-trips for all 64-bit Int, but the SHIPPED i32 Zig substrate is only
+TOTAL on this domain; @lawDomainFitsI32@ proves every band fits i32 in-domain and
+@lawBoundIsTight@ proves B is tight (the 4B HH band of @liftQuad@ is the binding case);
+mirrors the Zig @SUBSTRATE_BOUND@ / @RC_OUT_OF_RANGE@ total-function guard so the oracle
+and the kernel share ONE domain),
 "SixFour.Spec.RemainderTail" (★ the discrete-surfaced / continuous-remainder TYPED
 SPLIT that closes audit B6+B1 — 'Surfaced' (integers) reconstructs EXACTLY while
 'Remainder' (continuous FlowAR tail) reconstructs only WITHIN @eps@ and is provably
