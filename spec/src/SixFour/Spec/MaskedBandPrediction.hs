@@ -89,6 +89,16 @@ module SixFour.Spec.MaskedBandPrediction
   , lawMaskedReusesOnBothRungs
   , lawTransferRecoversGapUnderSelfSimilarity
   , lawTransferDegradesUnderLawShift
+    -- * Position-conditioned context (I-JEPA position conditioning; ADDITIVE)
+  , MaskedBandExamplePos
+  , positionFeatureCount
+  , paramCountBPos
+  , zeroParamsBPos
+  , featuresBPos
+  , rawMaskedBandPos
+  , predictMaskedBandPos
+  , trainBandJointPos
+  , lawPositionConditioningStrictlyHelps
   ) where
 
 import SixFour.Spec.AtlasGame      (toQ16)
@@ -479,3 +489,104 @@ lawTransferDegradesUnderLawShift =
       sameLawL  = maskedBandLossSum thetaDown transferUpExamples
       shiftedL  = maskedBandLossSum thetaDown transferUpShifted
   in shiftedL > sameLawL
+
+-- ============================================================================
+-- POSITION-CONDITIONED context — the I-JEPA position conditioning. ADDITIVE: the
+-- base featuresB / theta_B (63 params) and their golden are UNTOUCHED. The predictor
+-- gains the octant's (x,y) search-position token (the phi6 search-position lanes of
+-- "SixFour.Spec.RelationalResidual"; carriers {L,t} held out), so it is conditioned on
+-- WHERE it predicts — exactly I-JEPA's mask-token positional embedding.
+-- ============================================================================
+
+-- | The position-conditioned feature width: the 9-D coarse+sibling basis PLUS the @(x,y)@
+-- search-position token ⇒ @9 + 2 = 11@.
+positionFeatureCount :: Int
+positionFeatureCount = featureCountB + 2
+
+-- | Position-conditioned flat param count: @7 bands x 11 = 77@.
+paramCountBPos :: Int
+paramCountBPos = numBands * positionFeatureCount
+
+-- | The position-conditioned floor (all-zero) params.
+zeroParamsBPos :: [Double]
+zeroParamsBPos = replicate paramCountBPos 0
+
+-- | A position-conditioned example: a 'MaskedBandExample' plus the octant @(x,y)@ position.
+type MaskedBandExamplePos = (Int, Detail, Int, (Int, Int))
+
+baseOf :: MaskedBandExamplePos -> MaskedBandExample
+baseOf (v, det, m, _) = (v, det, m)
+
+-- | @φ_B(v, sibs) ++ [x̃, ỹ]@ — the coarse+sibling basis with the search-position token
+-- appended (the carriers @{L,t}@ are NOT included). Always 'positionFeatureCount' wide.
+featuresBPos :: Int -> [Int] -> (Int, Int) -> [Double]
+featuresBPos v sibs (x, y) = featuresB v sibs ++ [toQ16 x, toQ16 y]
+
+rowsBPos :: [Double] -> [[Double]]
+rowsBPos ps = [ take positionFeatureCount (drop (j * positionFeatureCount) ps)
+              | j <- [0 .. numBands - 1] ]
+
+-- | RAW position-conditioned readout @θₘ · featuresBPos@ (a Mac-side Latent).
+rawMaskedBandPos :: [Double] -> MaskedBandExamplePos -> Double
+rawMaskedBandPos ps ex@(_, _, _, xy) =
+  let b   = baseOf ex
+      phi = featuresBPos (mbeCoarse b) (siblingsOf b) xy
+      row = rowsBPos ps !! mbeMasked b
+  in sum (zipWith (*) row phi)
+
+-- | The position-conditioned prediction (Q16 byte via the single @reenterQ16@ crossing).
+predictMaskedBandPos :: [Double] -> MaskedBandExamplePos -> Int
+predictMaskedBandPos ps ex = toByte (reenterQ16 (mkLatent (rawMaskedBandPos ps ex)))
+
+maskedBandLossPos :: [Double] -> MaskedBandExamplePos -> Double
+maskedBandLossPos ps ex =
+  let r = rawMaskedBandPos ps ex
+      t = toQ16 (maskedTargetBand (baseOf ex))
+  in 0.5 * (r - t) * (r - t)
+
+maskedBandLossSumPos :: [Double] -> [MaskedBandExamplePos] -> Double
+maskedBandLossSumPos ps = sum . map (maskedBandLossPos ps)
+
+maskedBandGradientPos :: [Double] -> MaskedBandExamplePos -> [Double]
+maskedBandGradientPos ps ex@(_, _, _, xy) =
+  let b   = baseOf ex
+      m   = mbeMasked b
+      phi = featuresBPos (mbeCoarse b) (siblingsOf b) xy
+      err = rawMaskedBandPos ps ex - toQ16 (maskedTargetBand b)
+  in concat [ if j == m then map (err *) phi else replicate positionFeatureCount 0
+            | j <- [0 .. numBands - 1] ]
+
+-- | Full-batch position-conditioned training from the floor (mean gradient, η = 0.2).
+trainBandJointPos :: Int -> [MaskedBandExamplePos] -> [Double]
+trainBandJointPos n exs =
+  let mlen = fromIntegral (max 1 (length exs))
+      step ps = zipWith (\p g -> p - 0.2 * g) ps
+                  (map (/ mlen) (foldr (zipWith (+)) (replicate paramCountBPos 0)
+                                       (map (maskedBandGradientPos ps) exs)))
+  in iterate step zeroParamsBPos !! max 0 n
+
+-- | THE I-JEPA POSITION-CONDITIONING keystone: position conditioning STRICTLY helps. On two
+-- examples IDENTICAL in coarse AND siblings but at DIFFERENT positions with DIFFERENT
+-- targets, a position-BLIND predictor sees ONE input and is forced to emit one value, so the
+-- best summed loss it can reach is bounded below by @0.25·(t̃1 − t̃2)²@; the position-aware
+-- model fits BOTH (loss strictly below the floor) using the @(x,y)@ token. Mirrors
+-- 'lawSiblingContextStrictlyHelps' with POSITION as the distinguisher. This is the theorem
+-- that earns the relational residual its place — the I-JEPA value (the predictor learns
+-- WHERE), made provable. (@w@ varies example 2's off-floor target.)
+lawPositionConditioningStrictlyHelps :: Int -> Bool
+lawPositionConditioningStrictlyHelps w =
+  let v    = 20000                                   -- shared coarse
+      m    = 0                                        -- mask band 0
+      t1   = 0
+      t2   = 6000 + (abs w `mod` 12000)               -- off-floor, t1 /= t2
+      -- IDENTICAL coarse + siblings (bands 1..6 all zero); ONLY position and target differ.
+      det1 = fromBands (t1 : replicate (numBands - 1) 0)
+      det2 = fromBands (t2 : replicate (numBands - 1) 0)
+      ex1  = (v, det1, m, (0,     0))                 -- position A
+      ex2  = (v, det2, m, (32768, 0))                 -- position B (x̃ = 0.5)
+      t1'  = toQ16 t1
+      t2'  = toQ16 t2
+      -- the floor a position-BLIND predictor must pay (identical featuresB ⇒ one value):
+      blindFloor = 0.25 * (t1' - t2') * (t1' - t2')
+      lPos = maskedBandLossSumPos (trainBandJointPos 1500 [ex1, ex2]) [ex1, ex2]
+  in t1 == t2 || lPos < blindFloor

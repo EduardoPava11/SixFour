@@ -48,4 +48,6 @@ tests = testGroup "MaskedBandPrediction (per-band I-JEPA, option B)"
       once lawTransferRecoversGapUnderSelfSimilarity
   , testProperty "transfer DEGRADES under a law-shift (reuse is similarity-proportional, not magic)" $
       once lawTransferDegradesUnderLawShift
+  , testProperty "I-JEPA POSITION CONDITIONING strictly helps (beats the position-blind floor)" $
+      forAll (choose (0, 1000000)) lawPositionConditioningStrictlyHelps
   ]
