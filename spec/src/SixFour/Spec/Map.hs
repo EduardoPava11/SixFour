@@ -204,12 +204,107 @@ SAME octant operator applied twice: 16³→64³ replays HELD EXACT detail (deleg
 @SuccessiveRefinement.refine@), 64³→256³ synthesises INVENTED CONTINUOUS detail (the
 latent tail re-entered to Q16 via @ByteCarrier.reenterQ16@); same shape
 (@OctreeCell.lawLadderSelfSimilar@), different DETAIL SOURCE as a type),
+"SixFour.Spec.DeferredSurfacing" (★ the two-rung SEARCH discipline — rung 1 is a
+LATENT-SPACE search (continuous @rawMaskedBand@, the @latentScore@), and the single
+@reenterQ16@ crossing that SURFACES the bit-exact 16³+residual (@surfaceBand@ =
+@predictMaskedBand@) is DEFERRED until AFTER rung 2: @lawDeferredSurfacingPreservesSubQuantum@
+= the KEYSTONE/teeth (two candidates with DIFFERENT latents but the SAME surfaced byte ⇒
+surfacing early collapses a distinction the search needs), @lawSurfaceComesAfterBothRungs@ =
+both rungs latent then ONE terminal surface (no early commit), @lawSurfacedOutputIsExact@ =
+the committed 16³+residual refines back bit-exact (delegates SuccessiveRefinement.lawRefineRoundTrip),
+@lawSearchReusesBothRungs@ = one θ_B spans the pair (delegates MaskedBandPrediction.lawMaskedReusesOnBothRungs).
+Composes MaskedBandPrediction's latent/surfaced seam; re-pins nothing),
+"SixFour.Spec.SelfSupervisedRung" (★ the SELF-SUPERVISION split — TWO regimes, one per
+rung: the within-capture @HeldRung@ (16³→64³) MANUFACTURES an exact label from the data via
+the reversible lift (@lawHeldLabelIsDataManufactured@ = @refine.split==id@; scored by
+@heldLoss@), the beyond-capture @InventedRung@ (64³→256³) has NO label and self-supervises by
+CONSISTENCY (@inventedAccepts@ = @RedownsampleGate.passesGate@ — this is the gate's FIRST
+consumer; @lawInventedScoredByConsistency@ rejects coarse drift, accepts invented high-freq):
+@lawSupervisionMatchesRung@ = the dichotomy is total/exclusive, @lawOneOperatorTwoSupervisions@
+= one θ_B, two scorers (what makes the rungs RELATED), @lawSelfSupervisedLabelIsLearnable@ =
+the manufactured label is signal not noise. A JEPA learns with zero annotation; this types
+WHERE the signal comes from. Re-pins nothing),
+"SixFour.Spec.NeuronRedundancy" (★ REDUNDANCY of the intermediate-latent neuron outputs —
+a rung @64³→[32³]→16³@ / @256³→[128³]→64³@ passes through an intermediate that never
+surfaces; it is the only level the net organises, so the self-supervised efficiency pressure
+(VICReg covariance / decorrelation — one view, NOT cross-view Barlow) applies there. @crossRedundancy@ = sum of squared off-diagonal
+neuron cross-correlations (0 iff decorrelated): @lawIdenticalNeuronsAreFullyRedundant@ /
+@lawDecorrelatedNeuronsZeroRedundancy@ = teeth, @lawRedundancyMeasuredInLatent@ = surfacing
+destroys the sub-quantum correlation so it MUST be read in latent space (the
+DeferredSurfacing argument). Information view = DetailEntropy. Re-pins nothing),
+"SixFour.Spec.RungPivot" (★ the CANONICAL "rung" — the 64³ capture is the PIVOT; a rung is
+one self-similar 2-octant-level hop carrying a NEVER-SURFACED intermediate latent one level
+off the pivot: DOWN @64³→[32³]→16³+residual@ (Held), UP @64³+residual→[128³]→256³@ (Invented).
+@lawIntermediateIsMidLevel@ = the 32³/128³ sit symmetrically (octreeDepth ±1, 32·128=64²),
+@lawIntermediateNeverSurfaces@ = KEYSTONE, the intermediate is latent-only (surfacing collapses
+sub-quantum info), @lawDownIsHeldUpIsInvented@ ties to SelfSupervisedRung, @lawRungEndpointExact@
+= the down endpoint round-trips (refine.split==id). Types the 32³/128³ gap that was prose-only.
+Re-pins nothing),
+"SixFour.Spec.HJepaLevels" (★ WHERE ARE THE LEVELS — the H-JEPA hierarchy as a TYPE: three
+orthogonal axes (SCALE × CHANNEL × TIME) but SCALE is the level SPINE, CHANNEL/TIME factor each
+level. @lawScaleIsTheSpine@ = KEYSTONE/TEETH (only SCALE owns a never-surfaced symmetric
+intermediate — 32·128=64², the one level the net organises = precondition for planning; delegates
+RungPivot @lawIntermediateIsMidLevel@), @lawChannelFactorsEachScale@ (L is the fixed DC carrier;
+delegates CarrierL @lawCarrierIsDC@), @lawTemporalIndexesEachScale@ (closed loop; delegates
+TemporalLoop @lawTemporalLoopClosesExact@), @lawInterLevelPredictorIsCrossScale@ = the
+plan→execution hop is the unique inter-level edge (Analysis 16³ → Synthesis 256³). A FLAT hierarchy
+fails. Pure index/law module, no golden. Re-pins nothing),
+"SixFour.Spec.DisplayDecoder" (★ the shown L-16³ is a LEARNED, lossy, NON-deterministic decode of the
+free latent — a steering VIEW, provably NOT the architecture (HJepaLevels untouched). @lawCommitQuarantinedFromDisplay@
+= KEYSTONE: the committed Q16 bytes are the latent's floor ALONE, blind to the display decoder (a forbidden
+@commitLeaky@ that folded the display in DIVERGES — teeth), so the float preview can NEVER contaminate the
+integer output; @lawDisplayIsLossyFloat@ = decoder-dependent float view (the accepted approximation);
+@lawSteeringActsOnLatent@ = a chroma action moves the deterministic commit (the approximate preview drives a
+real result). The "max decoupling" choice made SAFE under the Q16 contract. Re-pins nothing),
+"SixFour.Spec.EncoderFrozen" (★ WHAT IS THE ENCODER (GIF → embeddings) — the four-phase gate.
+Answer (c)-degenerate: the encoder is @liftOct@ (fixed Int bijection) ∘ @featuresB@ (fixed 9-D φ_B),
+ZERO learnable params, so there is NO pre-training phase. @lawEmbeddingFeatureMapIsParameterFree@ =
+the embedding is blind to θ_B (locks candidate (b) — a learned encoder — out by gate),
+@lawPredictorIsTheOnlyLearnedObject@ = the 63-param θ_B rides ABOVE the embedding (encoderParamCount 0
+vs predictorParamCount 63), @lawEmbeddingNeverBypassesQ16@ = INFER: the float embedding reaches a byte
+ONLY through the single @reenterQ16@ crossing (1.5 → 98304), @lawRawEmbeddingCommitIsUnsafe@ = CONTINUOUS
+teeth: 1.0 vs 1.0000001 floor to the SAME byte (sub-quantum) while 1.0 vs 2.0 differ (whole-unit) —
+committing the raw float is unsafe, @lawNoPreTrainPhase@ = KEYSTONE: the frozen lift DEFINES the
+embedding space AND manufactures the JEPA label, so encoder+predictor are one object. Consolidating GATE
+over OctreeCell/MaskedBandPrediction/ByteCarrier; re-pins nothing),
+"SixFour.Spec.ContinuousLoop" (★ CONTINUOUS-INFERENCE — the live steering loop as a proven state machine:
+hold ONE latent, @step@ steers the latent + decodes a cheap quarantined preview and NEVER commits, commit is
+on-demand. @lawStepNeverCommits@ = a tick stays continuous (not the Q16 bytes), @lawIdentityGestureIsFixpoint@
+= the zero gesture leaves latent+commit invariant, @lawLoopClosesOverT@ = a full 64-frame period of no-gesture
+ticks returns the latent (delegates TemporalLoop closure), @lawCommitInvariantUnderDisplayDecoder@ = KEYSTONE:
+two DIFFERENT display decoders give DIFFERENT previews but the SAME committed bytes (the end-to-end quarantine,
+the strongest form of DisplayDecoder.lawCommitQuarantinedFromDisplay). Composes DisplayDecoder+TemporalLoop;
+re-pins nothing),
+"SixFour.Spec.JepaTarget" (★ the I-JEPA CORRESPONDENCE as theorems — SixFour's JEPA target is a
+DATA-MANUFACTURED exact label (the lift's held band), NOT a learned EMA target-encoder output, so no EMA and
+no collapse. @lawTargetIsDataManufacturedNotEncoded@ (refine.split==id makes the label),
+@lawTargetFixedUnderPredictorTraining@ = NO-COLLAPSE: the target is θ-free so training can't move it (what
+I-JEPA's stop-grad/EMA enforces, here structural), @lawNoTargetEncoderNoEma@ (the target's encoder = the
+param-free lift, encoderParamCount 0 ⇒ nothing to EMA), @lawCollapseIsRejected@ (a constant predictor incurs
+strictly positive loss), @lawTargetCarriesInfoBeyondContext@. Assembles teeth from
+SelfSupervisedRung/MaskedBandPrediction/EncoderFrozen/DetailMaskedPrediction; re-pins nothing),
 "SixFour.Spec.SameObjectInvariance" (★ the frontier keystone — the SAME 64³ object
 reconstructs identically under either XOR projection-ordering: @decodeUnder p . encodeUnder p
 == decodeUnder p' . encodeUnder p'@ (@lawReorderingPreservesObject@), the orbit under the
 @Z2@ is the object; @lawDifferentEncodingsSameObject@ = same object / orthogonal projection;
 @lawEquivariance@ = swap-the-ordering == swap-the-input. Why the projection-choice is a safe
 RL action. Delegates OctreeCell octant bijection + ProjectionOrdering XOR self-inverse),
+"SixFour.Spec.CubeTensor" (★ the ONE canonical voxel-tensor object — Q16 OKLab over the
+(x,y,t) lattice, channel-split (L carrier + a,b search), octant-Morton: @toChannelSoA@/
+@fromChannelSoA@ is a LOSSLESS rename onto @SameObjectInvariance.Cube@
+(@lawChannelSoARoundTrip@), @lawCarrierChannelIsL@ pins channel 0 = @Dim6.DimL@ carrier,
+@lawSearchSwapFixesCarrier@ = the Z2 swap never moves L. The in-memory home the "soup"
+was missing; lets VoxelReduce feed SameObjectJEPA and a projection become a query.
+Additive rename, no golden re-pin),
+"SixFour.Spec.ProjectionQuery" (★ RAG READ-AS-PROJECTIONS — a projection-ordering used
+as a LOSSLESS retrieval QUERY against a stored @CubeTensor@, returning the SAME object
+viewed differently: @queryByOrdering@/@queryByHash@ (the token-keyed read, the lock the
+0-caller @orderingHash@ key was missing), @lawQueryReadConsistency@ = two ordering-keys
+decode to the SAME object (the RAG correctness theorem, delegates
+@SameObjectInvariance.lawReorderingPreservesObject@), @lawCarrierFixedAcrossQueries@ =
+the L carrier band is identical under every query (L-anchored retrieval),
+@lawHashKeyRejectsUnknown@ = the lock is not vacuous. Why a projection-query is a safe
+RL READ. Swift landing = the un-built GeneStore.retrieve/nearest),
 "SixFour.Spec.SameObjectJEPA" (the same-object ROUND-TRIP — a 'JepaPair' (smart-ctor
 from ONE cube + two orderings, so context & target are GUARANTEED co-projections) with
 @predictTarget@; @lawJepaPredictsTarget@ is a SANITY check NOT a learning objective
@@ -224,6 +319,29 @@ masked target makes a CONSTANT (f-free) predictor incur STRICTLY POSITIVE loss A
 SGD step reduces it (the existential failure the SameObjectJEPA round-trip lacks),
 @lawTrainingDrivesLossDown@ = the mask is recoverable by learning, @lawFittingOneTargetMissesAnother@
 = the masked band carries info beyond the context. Replaces the vacuous JEPA twin),
+"SixFour.Spec.MaskedBandPrediction" (★ the PER-BAND masked-prediction (I-JEPA) objective,
+option B — predict ONE masked octant band from the coarse value PLUS the six VISIBLE
+sibling bands (@φ_B = [1,ṽ,ṽ²] ++ siblings@, 63 params): @lawMaskedContextExcludesTarget@
+= the prediction never sees the masked band (the I-JEPA masking guarantee, teeth against a
+leak), @lawSiblingContextStrictlyHelps@ = the KEYSTONE: on two examples sharing a coarse
+value but differing in a sibling, the sibling-aware model beats the @0.25·(t̃₁−t̃₂)²@ floor
+that bounds EVERY coarse-only predictor (why B is worth its params over A),
+@lawMaskedGradientFiniteDiff@/@lawMaskedZeroParamsIsFloor@ = backprop + zero-genome==floor,
+@lawMaskedReusesOnBothRungs@ = THE TWO-RUNG LAW: one trained θ_B (63 params) reused UNCHANGED
+across the self-similar pair 16³→64³ and 64³→256³ (mirrors DetailPredictor.lawReusesOnBothRungs;
+teeth = distinct visible context ⇒ distinct prediction with the masked target held fixed, rejects
+any one-rung/context-ignoring predictor; delegates levelsBetween 64 16 == levelsBetween 256 64).
+Converts B from a one-rung island into ONE RUNG of the self-similar ladder.
+Additive sibling of DetailMaskedPrediction; DetailPredictor untouched),
+"SixFour.Spec.MaskedBandTrainer" (★ the θ_B TRAINING contract as a byte-checkable twin for the MLX
+descent: a fixed golden fixture (coarse 20000, target 3000) trained @trainerSteps@=2000 must take a
+pinned trajectory. @lawZeroGenomeIsFloor@ = floor band 0 start, @lawTrainingDrivesLossDown@ = loss → <1e-3
+of floor, @lawTrainedForwardIsGolden@ = THE TWIN: the committed band is exactly @goldenTrainedBand@=3000
+(MLX-trained θ_B AND the device forward must reproduce it), @lawTrainingDescendsMonotonically@ = the descent
+never increases loss. @lawStableTrainerSurvivesBatchDivergence@ = DEFECT+FIX (GHCi-verified): summed-gradient
+@trainBandJoint@ DIVERGES to NaN on a batch of 8 high-ṽ examples (η·N·λ past stability); the additive mean-gradient
+@trainBandJointStable@ converges on the same fixture (use it for real batches). Pure law module over MaskedBandPrediction;
+trainBandJoint + all its goldens untouched; re-pins nothing),
 "SixFour.Spec.CarrierL" (★ L CARRIES THE SIGNAL (frontier 1b) — the coarse/DC band is
 the backbone, A/B search is the perturbation L re-balances: @lawCarrierIsDC@ (lBalance =
 ocCoarse), @lawZeroSearchIsCarrierFloor@ (A/B=0 ⇒ pure-L constant floor),

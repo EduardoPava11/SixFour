@@ -42,6 +42,8 @@ import qualified Properties.RemainderTail as RemainderTail
 import qualified Properties.ByteCarrier   as ByteCarrier
 import qualified Properties.DetailEntropy as DetailEntropy
 import qualified Properties.DetailMaskedPrediction as DetailMaskedPrediction
+import qualified Properties.MaskedBandPrediction as MaskedBandPrediction
+import qualified Properties.MaskedBandTrainer as MaskedBandTrainer
 import qualified Properties.DetailPredictor as DetailPredictor
 import qualified Properties.Dim6          as Dim6
 import qualified Properties.ProjectionOrdering as ProjectionOrdering
@@ -54,8 +56,19 @@ import qualified Properties.NudgeStep      as NudgeStep
 import qualified Properties.LatentProjection as LatentProjection
 import qualified Properties.OctreeForward  as OctreeForward
 import qualified Properties.SelfSimilarReconstruct as SelfSimilarReconstruct
+import qualified Properties.DeferredSurfacing as DeferredSurfacing
+import qualified Properties.SelfSupervisedRung as SelfSupervisedRung
+import qualified Properties.NeuronRedundancy as NeuronRedundancy
+import qualified Properties.RungPivot as RungPivot
+import qualified Properties.HJepaLevels as HJepaLevels
+import qualified Properties.DisplayDecoder as DisplayDecoder
+import qualified Properties.EncoderFrozen as EncoderFrozen
+import qualified Properties.ContinuousLoop as ContinuousLoop
+import qualified Properties.JepaTarget as JepaTarget
 import qualified Properties.SameObjectInvariance as SameObjectInvariance
 import qualified Properties.SameObjectJEPA as SameObjectJEPA
+import qualified Properties.CubeTensor     as CubeTensor
+import qualified Properties.ProjectionQuery as ProjectionQuery
 import qualified Properties.CarrierL      as CarrierL
 import qualified Properties.SteeringSpine as SteeringSpine
 import qualified Properties.RedownsampleGate as RedownsampleGate
@@ -190,6 +203,8 @@ main = defaultMain $ testGroup "sixfour-spec"
   , ByteCarrier.tests
   , DetailEntropy.tests
   , DetailMaskedPrediction.tests
+  , MaskedBandPrediction.tests
+  , MaskedBandTrainer.tests
   , DetailPredictor.tests
   , Dim6.tests
   , ProjectionOrdering.tests
@@ -202,8 +217,19 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LatentProjection.tests
   , OctreeForward.tests
   , SelfSimilarReconstruct.tests
+  , DeferredSurfacing.tests
+  , SelfSupervisedRung.tests
+  , NeuronRedundancy.tests
+  , RungPivot.tests
+  , HJepaLevels.tests
+  , DisplayDecoder.tests
+  , EncoderFrozen.tests
+  , ContinuousLoop.tests
+  , JepaTarget.tests
   , SameObjectInvariance.tests
   , SameObjectJEPA.tests
+  , CubeTensor.tests
+  , ProjectionQuery.tests
   , CarrierL.tests
   , SteeringSpine.tests
   , RedownsampleGate.tests
