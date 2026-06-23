@@ -39,6 +39,7 @@ module SixFour.Spec.MoveSignal
   , lawTexturedMoveStrictlyExceedsFlat
   , lawSignalIsDeterministicFiniteFloat
   , lawSignalQuarantinedFromCommit
+  , lawSensitivityReadsContent
   ) where
 
 import SixFour.Spec.OctreeCell (Detail)
@@ -53,19 +54,21 @@ bandEnergy :: Detail -> Double
 bandEnergy (a, b, c, e, f, g, h) =
   fromIntegral (abs a + abs b + abs c + abs e + abs f + abs g + abs h)
 
--- | The per-move SENSITIVITY: the (learned) local chroma gain of the head along the move's axis.
--- Pinned to @1@ in v1 — non-vacuous before the large head trains. The trained Jacobian
--- @||d predictMaskedBandPos / d(a,b)||@ (HARD #1 candidate c) multiplies in HERE once weights
--- exist; the signal's EXISTENCE and DETERMINISM never depend on the trainer, only this factor's
--- VALUE-correctness does.
-moveSensitivity :: AbMove -> Double
-moveSensitivity _ = 1.0
+-- | The per-move SENSITIVITY: the (learned) local chroma gain of the head along the move's axis,
+-- evaluated AT the landing octant's content. Pinned to @1@ in v1 — non-vacuous before the large
+-- head trains. The trained Jacobian @||d predictMaskedBandPos / d(a,b)||@ (HARD #1 candidate c)
+-- multiplies in HERE once weights exist; because that Jacobian is a function of the landing
+-- octant's 'Detail' (the position-conditioning the head reads), the TYPE now FORCES the content
+-- argument to be in scope — a future implementer pinning it content-blind must do so deliberately
+-- (@\\_ _ -> 1.0@), not structurally by a signature that never received the content.
+moveSensitivity :: AbMove -> Detail -> Double
+moveSensitivity _ _ = 1.0
 
--- | THE content-responsive signal: @sensitivity(move) * energy(landing octant)@ = "how much THIS
--- move moves THIS texture". v1 = energy only (sensitivity @== 1@). Float, display-side; the
--- integer 'Detail' is the bit-exact substrate it reads, the float gain never re-enters Q16.
+-- | THE content-responsive signal: @sensitivity(move, landing) * energy(landing octant)@ = "how
+-- much THIS move moves THIS texture". v1 = energy only (sensitivity @== 1@). Float, display-side;
+-- the integer 'Detail' is the bit-exact substrate it reads, the float gain never re-enters Q16.
 signalAt :: AbMove -> Detail -> Double
-signalAt m d = moveSensitivity m * bandEnergy d
+signalAt m d = moveSensitivity m d * bandEnergy d
 
 -- ============================================================================
 -- Laws (predicates; QuickCheck'd in Properties.MoveSignal)
@@ -98,6 +101,17 @@ lawSignalIsDeterministicFiniteFloat :: AbMove -> Detail -> Bool
 lawSignalIsDeterministicFiniteFloat m d =
   let s = signalAt m d
   in s == signalAt m d && not (isNaN s) && not (isInfinite s) && s >= 0
+
+-- | DORMANT-TEETH (the re-pin's reward): 'moveSensitivity' now RECEIVES the landing 'Detail', so a
+-- non-trivial sensitivity (the trained Jacobian, HARD #1 candidate c) CAN read content — the type
+-- permits it. This law states the v1 baseline HONESTLY: sensitivity is pinned to a content-blind
+-- constant TODAY, so two different landings under the same move agree (@== 1@). When the Jacobian
+-- lands, this law is the one to FLIP to @/=@ (two contentful landings must differ) — it cannot be
+-- flipped while the signature is @AbMove -> Double@, because there is no content to read. The
+-- promotion is that the wrong-input vacuity is now a deliberate body, not a structural ceiling.
+lawSensitivityReadsContent :: AbMove -> Detail -> Detail -> Bool
+lawSensitivityReadsContent m d1 d2 =
+  moveSensitivity m d1 == moveSensitivity m d2   -- v1: pinned constant; FLIP to /= when Jacobian lands
 
 -- | The signal is QUARANTINED from the commit: it lives on the DISPLAY side, and the committed
 -- byte is a pure function of the latent, blind to the display (delegates

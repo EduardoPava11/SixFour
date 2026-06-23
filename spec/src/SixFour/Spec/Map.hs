@@ -162,6 +162,16 @@ zero on a flat octant) times a learned SENSITIVITY pinned to 1 in v1 (the traine
 multiplies in later). KEYSTONE @lawTexturedMoveStrictlyExceedsFlat@ = the property the constant
 @moveMagnitude@ cannot have. Float, DISPLAY-SIDE, quarantined from the commit
 (@lawSignalQuarantinedFromCommit@ delegates DisplayDecoder). Reuses DetailEntropy/CarrierL),
+"SixFour.Spec.BoundedP6" (TYPE-ENFORCED domain: a @BoundedP6@ is in-domain @|v|<=B@ BY
+CONSTRUCTION (constructor HIDDEN, only @mkBoundedP6 :: P6 -> Maybe BoundedP6@ builds one), so a
+committing op typed to CONSUME a @BoundedP6@ cannot receive an unchecked @P6@ -- out-of-domain
+commit is a COMPILE error, not the runtime @safeNudge@/Zig @RC_OUT_OF_RANGE@ refusal. The
+"SixFour.Spec.ByteCarrier" pattern applied to the substrate domain. Additive leaf),
+"SixFour.Spec.Sided" (TYPE-ENFORCED quarantine: a phantom @Sided DisplaySide@/@CommitSide@ tag
+(orthogonal to ByteCarrier's @MacTag@) with hidden constructor, so a DISPLAY-side float (a render
+or a "SixFour.Spec.MoveSignal" signal) PHYSICALLY cannot reach @commitS@ -- promotes the runtime
+@lawCommitQuarantinedFromDisplay@/@lawSignalQuarantinedFromCommit@ into one compile boundary.
+@commitS (signalAtS x)@ does not type-check. Additive leaf),
 "SixFour.Spec.RemainderTail" (★ the discrete-surfaced / continuous-remainder TYPED
 SPLIT that closes audit B6+B1 — 'Surfaced' (integers) reconstructs EXACTLY while
 'Remainder' (continuous FlowAR tail) reconstructs only WITHIN @eps@ and is provably
