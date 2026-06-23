@@ -28,4 +28,7 @@ tests = testGroup "MoveSignal (the content-responsive move signal v1: texture en
       forAll genMove $ \m -> forAll genDetail $ \d -> lawSignalIsDeterministicFiniteFloat m d
   , testProperty "the signal is quarantined from the commit (cannot move bytes)" $
       once lawSignalQuarantinedFromCommit
+  , testProperty "v1 sensitivity is pinned content-blind (FLIP to /= when the Jacobian lands)" $
+      forAll genMove $ \m -> forAll genDetail $ \d1 -> forAll genDetail $ \d2 ->
+        lawSensitivityReadsContent m d1 d2
   ]

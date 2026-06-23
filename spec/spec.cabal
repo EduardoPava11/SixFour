@@ -60,6 +60,7 @@ library
         SixFour.Spec.TwoMoveOctave
         SixFour.Spec.MoveSignal
         SixFour.Spec.RelationalResidual
+        SixFour.Spec.BoundedP6
         SixFour.Spec.RemainderTail
         SixFour.Spec.ByteCarrier
         SixFour.Spec.DetailEntropy
@@ -84,6 +85,7 @@ library
         SixFour.Spec.RungPivot
         SixFour.Spec.HJepaLevels
         SixFour.Spec.DisplayDecoder
+        SixFour.Spec.Sided
         SixFour.Spec.EncoderFrozen
         SixFour.Spec.ContinuousLoop
         SixFour.Spec.JepaTarget
@@ -394,6 +396,8 @@ test-suite spec-tests
         Properties.SuperResPalette
         Properties.TwoMoveOctave
         Properties.MoveSignal
+        Properties.BoundedP6
+        Properties.Sided
         Properties.RelationalResidual
         Properties.RemainderTail
         Properties.ByteCarrier
