@@ -53,11 +53,17 @@ module SixFour.Spec.NeuronRedundancy
     -- * The redundancy measure
   , crossRedundancy
   , surfaceColumn
+    -- * The variance hinge + the full coding-rate floor (the active anti-collapse guard)
+  , vicGamma
+  , vicEps
+  , varianceFloorPenalty
+  , latentCodingFloor
     -- * Laws (QuickCheck'd in @Properties.NeuronRedundancy@)
   , lawRedundancyNonNegative
   , lawIdenticalNeuronsAreFullyRedundant
   , lawDecorrelatedNeuronsZeroRedundancy
   , lawRedundancyMeasuredInLatent
+  , lawConstantCollapseHasZeroCovarianceButPositiveVarianceHinge
   ) where
 
 import Data.List (transpose)
@@ -122,6 +128,36 @@ crossRedundancy batch =
 surfaceColumn :: [Double] -> [Double]
 surfaceColumn = map (fromIntegral . toByte . reenterQ16 . mkLatent)
 
+-- | The VICReg VARIANCE floor: @gamma@, the per-neuron standard-deviation the latent must
+-- keep. Flooring the std at @gamma@ floors each neuron's differential entropy
+-- @½ln(2πe·std²)@, so this is a per-neuron coding-rate floor.
+vicGamma :: Double
+vicGamma = 1.0
+
+-- | The variance-hinge ridge @eps@ (keeps @sqrt@ differentiable at zero variance).
+vicEps :: Double
+vicEps = 1e-4
+
+-- | THE VARIANCE TERM 'crossRedundancy' is missing. @crossRedundancy@ (the covariance term)
+-- is BLIND to CONSTANT collapse — a zero-variance neuron reads correlation 0 (the guard in
+-- 'correlationOf') and so adds NO redundancy, falsely "healthy". This term sees it: each
+-- neuron whose standard deviation falls below @gamma@ contributes @gamma - std@. It is the
+-- hinge on the STD (not the variance) so the gradient does not vanish exactly at collapse
+-- (VICReg, Bardes et al. 2022). Together with 'crossRedundancy' it forbids BOTH flat
+-- (low-variance) and redundant (high-covariance) latents — the two-term coding-rate floor.
+varianceFloorPenalty :: Double -> Double -> NeuronBatch -> Double
+varianceFloorPenalty gamma eps batch =
+  sum [ max 0 (gamma - sqrt (varianceOf col + eps)) | col <- neuronColumns batch ]
+
+-- | The full anti-collapse coding-rate floor on the intermediate latent: the covariance
+-- (decorrelation) term PLUS the variance (per-neuron entropy) hinge. Zero iff the latent is
+-- both full-variance and pairwise-decorrelated — the full-rank isotropic representation
+-- that is the objective's global minimum. This is the active regularizer the LeCun
+-- non-contrastive JEPA requires to stop the energy surface collapsing flat.
+latentCodingFloor :: NeuronBatch -> Double
+latentCodingFloor batch =
+  crossRedundancy batch + varianceFloorPenalty vicGamma vicEps batch
+
 -- ============================================================================
 -- Laws (predicates; QuickCheck'd in Properties.NeuronRedundancy)
 -- ============================================================================
@@ -159,3 +195,16 @@ lawRedundancyMeasuredInLatent =
       batch   = [ [a, a] | a <- col ]                          -- two identical latent neurons
       surfaced = transpose (map surfaceColumn (transpose batch))
   in crossRedundancy batch > crossRedundancy surfaced + 0.5     -- latent ≈1, surfaced ≈0
+
+-- | THE DECISIVE TEETH for the two-term floor: covariance ('crossRedundancy') is BLIND to
+-- constant/dimensional collapse, the variance hinge ('varianceFloorPenalty') is NOT. A batch
+-- of all-constant neurons — the collapse fixed point a wide learned latent can fall into even
+-- against a fixed target — reads @crossRedundancy == 0@ (every column zero-variance ⇒
+-- 'correlationOf' returns 0 ⇒ falsely healthy), yet @varianceFloorPenalty > 0@ (every column's
+-- std sits below @gamma@). So the two terms are complementary and BOTH are needed; the hinge
+-- alone catches the failure mode the decorrelation term cannot see (C-JEPA, 2024).
+lawConstantCollapseHasZeroCovarianceButPositiveVarianceHinge :: Bool
+lawConstantCollapseHasZeroCovarianceButPositiveVarianceHinge =
+  let collapsed = replicate 4 [7, 7, 7]   -- 4 samples, 3 neurons, every neuron constant
+  in crossRedundancy collapsed <= 1e-9
+     && varianceFloorPenalty vicGamma vicEps collapsed > 0.5

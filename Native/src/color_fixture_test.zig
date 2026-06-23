@@ -31,6 +31,10 @@ test "cross-language: Q16 linear→OKLab matches the Haskell color golden byte-e
 
     const raw = readFileAlloc(alloc, dir, "color_golden.json") catch |e| {
         if (e == error.SkipZigTest) {
+            if (build_options.require_fixtures) {
+                std.debug.print("\n  [FAIL] color_golden.json absent but -Drequire_fixtures=true; run `cd spec && cabal run spec-fixtures`\n", .{});
+                return error.FixtureRequired;
+            }
             std.debug.print(
                 "\n  [skip] color_golden.json not in '{s}'; run `cd spec && cabal run spec-fixtures`\n",
                 .{dir},

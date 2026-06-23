@@ -22,4 +22,6 @@ tests = testGroup "NeuronRedundancy (Barlow-Twins redundancy of the intermediate
       once lawDecorrelatedNeuronsZeroRedundancy
   , testProperty "redundancy must be read in LATENT space (surfacing destroys it)" $
       once lawRedundancyMeasuredInLatent
+  , testProperty "TEETH: constant collapse is covariance-INVISIBLE but variance-hinge-POSITIVE" $
+      once lawConstantCollapseHasZeroCovarianceButPositiveVarianceHinge
   ]

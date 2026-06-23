@@ -52,6 +52,7 @@ import qualified Properties.RelationalResidual as RelationalResidual
 import qualified Properties.RelationalMemory as RelationalMemory
 import qualified Properties.RemainderTail as RemainderTail
 import qualified Properties.ByteCarrier   as ByteCarrier
+import qualified Properties.Q16           as Q16
 import qualified Properties.DetailEntropy as DetailEntropy
 import qualified Properties.DetailMaskedPrediction as DetailMaskedPrediction
 import qualified Properties.MaskedBandPrediction as MaskedBandPrediction
@@ -236,6 +237,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , RelationalMemory.tests
   , RemainderTail.tests
   , ByteCarrier.tests
+  , Q16.tests
   , DetailEntropy.tests
   , DetailMaskedPrediction.tests
   , MaskedBandPrediction.tests

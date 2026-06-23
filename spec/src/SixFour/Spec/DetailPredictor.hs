@@ -69,7 +69,7 @@ module SixFour.Spec.DetailPredictor
   , lawReusesOnBothRungs
   ) where
 
-import SixFour.Spec.AtlasGame      (toQ16)
+import SixFour.Spec.Q16      (toQ16)
 import SixFour.Spec.ByteCarrier    (mkLatent, reenterQ16, toByte)
 import SixFour.Spec.OctreeCell     (Detail, levelsBetween)
 import SixFour.Spec.PairedResidual (floorResidual)

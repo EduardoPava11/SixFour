@@ -52,7 +52,7 @@ module SixFour.Spec.ByteCarrier
   , lawBatchedReentryIsElementwise
   ) where
 
-import SixFour.Spec.AtlasGame (quantizeQ16, toQ16)
+import SixFour.Spec.Q16 (quantizeQ16, toQ16)
 
 -- | Phantom tag: a value that carries a DEVICE byte (bit-exact, shipped).
 data DeviceTag
