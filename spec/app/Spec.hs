@@ -44,6 +44,7 @@ import SixFour.Codegen.Burn   (emitBurnContract)
 import SixFour.Codegen.CoreML (emitLookNetTorch,  emitBuildMlpackage)
 import SixFour.Codegen.MLX    (emitLookNetMLX)
 import SixFour.Codegen.Golden (emitLookNetGolden, emitAxisNetGolden)
+import SixFour.Codegen.JepaData (emitJepaDataGolden)
 import SixFour.Codegen.Collapse (emitCollapseGolden)
 import SixFour.Codegen.RGBT4D (emitRGBT4DGolden)
 import SixFour.Codegen.VoxelReduce (emitVoxelReduceGolden)
@@ -109,6 +110,7 @@ main = do
   writeUtf8 (mlxOutDir     </> "net_shape.py")         emitNetShapePy
   writeUtf8 (mlxOutDir     </> "look_net_mlx.py")      emitLookNetMLX
   writeUtf8 (mlxOutDir     </> "look_net_golden.json") emitLookNetGolden
+  writeUtf8 (mlxOutDir     </> "jepa_data_golden.json") emitJepaDataGolden
   writeUtf8 (mlxOutDir     </> "axisnet_golden.json")  emitAxisNetGolden
   writeUtf8 (mlxOutDir     </> "look_net_torch.py")    emitLookNetTorch
   writeUtf8 (mlxOutDir     </> "build_mlpackage.py")   emitBuildMlpackage

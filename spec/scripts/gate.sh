@@ -62,6 +62,12 @@ if command -v zig >/dev/null 2>&1; then
   "
 fi
 
+# The I-JEPA DATA ENGINE (Python) must reproduce the spec-emitted corpus byte-exact -- the data
+# design is spec-FORCED, not described. A one-integer drift in the Python lift fails this.
+if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/jepa_data.py" ]; then
+  run "JEPA data engine (Python lift == spec corpus golden)" "python3 '$root/trainer/jepa_data.py'"
+fi
+
 echo ""
 if [ "$fail" -ne 0 ]; then
   echo "GATE: FAIL"
