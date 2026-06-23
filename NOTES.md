@@ -1,9 +1,15 @@
 # NOTES — design decisions, session log
 
-> NOTES.md is a chronological session log (history), NOT current status. For current build-state see docs/STATUS.md (canonical), gated by scripts/verify-doc-claims.sh.
+> NOTES.md is a chronological session log (history), NOT current status. For current build-state, canon = CLAUDE.md (the contract) + SixFour.Spec.Map (the spec index) + the module doc-comments. (docs/STATUS.md was deleted; do not recreate.)
 
 Running notes on architectural pivots and their tensor evidence. Entries are
 newest first.
+
+---
+
+## 2026-06-22: doc-staleness sweep after the I-JEPA redirect + compartment pivot + module splits (branch `model/relational-residual`)
+
+This session landed three structural changes that staled the docs, and this sweep reconciles them. (1) THE I-JEPA REDIRECT: the relational-residual -> LargeJepaHead asymmetric I-JEPA head is now the LIVE learned core (frozen reversible lift = param-free tokenizer + collapse-proof JepaTarget; trained MLX -> coreai-torch -> Core AI), landing the new live modules RelationalMemory, LargeJepaHead, JepaTarget, JepaMemory (the memory-budget tripwire), JepaData (data engine, KEYSTONE lawDataEngineRoundTrips), MaskedBandPrediction/MaskedBandTrainer, DeferredSurfacing, NeuronRedundancy, MoveSignal, TwoMoveOctave, BoundedP6, Sided, DataParallel; the look-NN is now the ABANDONED V2-deferred path, NOT the core. (2) THE COMPARTMENT PIVOT: every Spec module carries a `-- COMPARTMENT: <c> | tag:<t>` line and Spec.Map grew a BACKEND COMPARTMENTS super-category (4 phantom-tag walls ByteCarrier/Sided/BoundedP6/DataParallel), enforced by scripts/check-compartments.sh. (3) MODULE SPLITS: RelationalResidual -> RelationalResidual (Zig P6/nudge/safeNudge substrate) + RelationalMemory (MLX d6/14-int residual/metric laws); Collapse -> Collapse (float maximin baseline, Metal) + GlobalCollapseQ16 (byte-exact Q16 collapse, Zig). GATE HARDENING: spec/scripts/gate.sh is now the single gate (cabal test + hermetic codegen via spec-codegen + git diff --exit-code + check-compartments + lints + Zig cross-language goldens with -Drequire_fixtures=true + python3 trainer/jepa_data.py); ~1249 spec tests + 72 Zig test blocks green. The doc sweep re-pointed all moved-symbol Haddock cross-refs (Collapse.globalCollapseQ16 -> GlobalCollapseQ16; RelationalResidual.d6 -> RelationalMemory) and stripped every broken @docs/*.md@ link (the docs/ dir was emptied this session; canon = CLAUDE.md + Spec.Map + module doc-comments, do not recreate the deleted plan files).
 
 ---
 

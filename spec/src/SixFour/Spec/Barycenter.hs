@@ -47,7 +47,7 @@ This is a /design-surface/ spec, not the shipped path: it gives the redesign bri
 an executable, golden-checkable candidate move with proven gamut-closure, to be
 scored by 'SixFour.Spec.PaletteOracle' / searched by 'SixFour.Spec.PaletteSearch'
 before any Swift/Metal port. The byte-exact shipped collapse remains
-'SixFour.Spec.Collapse.globalCollapseQ16' until a move is settled.
+'SixFour.Spec.GlobalCollapseQ16.globalCollapseQ16' until a move is settled.
 -}
 -- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Barycenter

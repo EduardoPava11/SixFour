@@ -6,7 +6,7 @@ This is the spec's landing page: a categorised map of every module, so the spec 
 the Haddock HTML and click through) and *navigable* as the app changes. It defines nothing — it only links.
 
 Regenerate the browsable HTML + search with @spec/scripts/spec-docs.sh@ (Haddock + Hoogle). The categories
-below mirror @docs/SIXFOUR-SPEC-BROWSABLE-WORKFLOW.md@; keep them in sync when adding a module.
+below are the canonical browsable index; keep them in sync when adding a module (the maintenance contract in @CLAUDE.md@).
 
 == ★ BACKEND COMPARTMENTS — the translation map (orthogonal cross-cut of the categories below)
 
@@ -47,9 +47,9 @@ index cross-cut; physically the modules stay where they are, gated by golden vec
     fact = the destructive-pivot tripwire: latent capacity @32³/128³@, the 14-int residual unit
     bound to its 77-param trained carrier, 7 detail bands, 64-512 tokens, @{L,t}@-carrier /
     @{a,b,x,y}@-search partition; re-pins no golden, fires the gate if a split drops a budget).
-    __GAP (mostly):__ no I-JEPA-head MLX emitter, no Python trainer twin, NO DATA ENGINE
-    (manufacture the @(context,mask,held-target,position)@ tuples via the reversible lift),
-    @coreai_export@ stub.
+    __GAP (mostly):__ no I-JEPA-head MLX emitter (@Codegen.JepaHead@), no Python head-trainer twin,
+    @coreai_export@ stub still aimed at the deleted L-net. (The DATA ENGINE now EXISTS:
+    "SixFour.Spec.JepaData" + @trainer/jepa_data.py@ + @Codegen.JepaData@, gate-forced.)
 
   * __METAL GPU__ (data-parallel, shipped). Mechanism: hand-ported @.metal@ (NO @Codegen.Metal@ emitter
     yet). Modules: the palette quantizers, float "SixFour.Spec.Color", the ordered branch of
@@ -71,14 +71,23 @@ THE I-JEPA MODEL COMPARTMENT makes Core AI CHECKABLE: the large head is @MacTag@
 @theta_B@ forward already passes, and "SixFour.Spec.MaskedBandTrainer" pins the descent endpoints. So
 a clean model compartment with EncoderFrozen as its lower wall and @reenterQ16@ as its only exit is
 exactly what lets the float Core AI head be verified against the integer floor. Prereqs (ordered):
-(1) @s4_octant_lift@ Zig kernel, (2) the data engine, (3) the @Codegen.JepaHead@ MLX emitter +
-Python trainer twin, (4) wire the Core AI socket to the trained weights.
+(1) @s4_octant_lift@ Zig kernel, (2) the data engine — DONE ("SixFour.Spec.JepaData" + @trainer/jepa_data.py@),
+(3) the @Codegen.JepaHead@ MLX emitter + Python trainer twin, (4) wire the Core AI socket to the trained weights.
 
 == ★ The core: the NN design
-The look-NN is the heart everything orbits. It takes the per-frame palettes (cat. 2), sees them collapsed
-(cat. 3), and emits a genome in the palette-tree space (cat. 4), scored by a value oracle and searched.
-The verdict (see @docs/SIXFOUR-256-SUPERRES-WORKFLOW.md@): __no JEPA core__ — the net is a __gated, gap-only
-residual head__ on a deterministic statistical base; every cell still emits an exact 1-byte index.
+The LIVE learned core (CLAUDE.md, the 2026-06-22 I-JEPA redirect) is an __asymmetric I-JEPA__: the frozen
+reversible lift is the param-free TOKENIZER ("SixFour.Spec.EncoderFrozen") that also MANUFACTURES the
+collapse-proof target ("SixFour.Spec.JepaTarget", no EMA), and a genuinely LARGE position-conditioned
+predictor ("SixFour.Spec.LargeJepaHead", @d6@ learnable attention) rides on top — TRAINED MLX ->
+coreai-torch -> Core AI. The 63-param @theta_B@ ("SixFour.Spec.MaskedBandPrediction") ships hand-written
+byte-exact; the float head re-enters the Zig Q16 floor. See the __BACKEND COMPARTMENTS__ section above for
+the I-JEPA roster (@RelationalMemory@ the @d6@ metric, @JepaMemory@ the memory budget, @JepaData@ the data
+engine) and its compartment.
+
+The look-NN below is the EARLIER MLX global-palette path — abandoned 2026-06-17, __V2-deferred__
+(@Feature.globalPaletteV2 = false@), NOT the live core. It takes per-frame palettes (cat. 2), sees them
+collapsed (cat. 3), and emits a genome in the palette-tree space (cat. 4), scored by a value oracle and
+searched; every cell still emits an exact 1-byte index. Kept + golden-gated for V2:
 
   * "SixFour.Spec.Net"            — pinned NN shapes (io dims, MoR depth) → @NetContract@
   * "SixFour.Spec.LookNet"        — the look-NN top-level
@@ -96,8 +105,8 @@ residual head__ on a deterministic statistical base; every cell still emits an e
 
 == ★★ The Color Atlas — on-device personalization (north-star training surface)
 The first spec footprint of the north-star: the user curates a 16³ board, picks become Bradley–Terry
-comparisons, and a small per-user delta head is updated on device (proven on hardware, see
-@docs/COLOR-ATLAS.md@ + the UPDATE block in @docs/STATUS.md@).
+comparisons, and a small per-user delta head is updated on device (proven on the physical iPhone 17 Pro
+2026-06-12; see @CLAUDE.md@ and the @SixFour/Atlas/@ purpose-headers).
 
   * "SixFour.Spec.AtlasBoard"      — the 16³ curation board state
   * "SixFour.Spec.AtlasState"      — the Atlas session state
@@ -146,14 +155,13 @@ along the seam), "SixFour.Spec.GlobalVolume", "SixFour.Spec.Cyclic",
 "SixFour.Spec.Barycenter" is the free-support W₂ /particle-flow/ move — the next rung of the
 GIFA→GIFB redesign — that lets atoms transport, not merely select; "SixFour.Spec.Entropy" is the
 capture information analysis — RGBT pool weights + the per-frame↔global scope cost — that DECIDES
-where global vs per-frame is justified, see @docs/SIXFOUR-CUBE-LADDER-GAP-ANALYSIS.md@. The NN
+where global vs per-frame is justified. The NN
 learns this barycenter.)
 
 == 4. Palette structure / genome — the NN OUTPUT space (16² / 4⁴ / 2⁸)
 "SixFour.Spec.SplitTree", "SixFour.Spec.PairTree", "SixFour.Spec.PairTreeFixed",
 "SixFour.Spec.RGBTLift" (the @2×2 ↔ RGBT@ reversible integer lifting — the spatial sibling of the
-1-D PairTreeFixed S-transform; the @(2×2)<->1@ bijection that makes the cube ladder lossless, see
-@docs/SIXFOUR-RGBT4D-BUFFER-HARDENING-WORKFLOW.md@),
+1-D PairTreeFixed S-transform; the @(2×2)<->1@ bijection that makes the cube ladder lossless),
 "SixFour.Spec.OctreeCell" (★ octree keystone — the @2×2×2 → 1@ structured-leaf
 fixpoint @Fix (OctF l)@: collapse = catamorphism, lift = anamorphism, octant edge
 @liftOct@ lifts "SixFour.Spec.RGBTLift" to @8→8@; PROVES "1 at the bottom" is a
@@ -558,7 +566,6 @@ GIF89a Application-Extension, CRC32-checked, total Absent\/Corrupt\/VersionMisma
 "SixFour.Spec.StageA" (Act I, @16²@ per-frame) · "SixFour.Spec.QuartetDelta" (Act II, @4⁴@ quartet core) ·
 "SixFour.Spec.HaarRibbon" (Act III, @2⁸@ Haar abstraction) · "SixFour.Spec.Export" (Act IV, the global pack
 @{16³,64³,256³}@) · "SixFour.Spec.Upscale256" (Act IV, the residual-seeded @256³@ super-res of the export pack).
-See @docs/SIXFOUR-PALETTE-STORY-WORKFLOW.md@.
 
 == 6. Dither & index encoding
 "SixFour.Spec.Dither", "SixFour.Spec.SpatialDither", "SixFour.Spec.STBN3D", "SixFour.Spec.Indices",
@@ -576,12 +583,13 @@ See @docs/SIXFOUR-PALETTE-STORY-WORKFLOW.md@.
 
 == 9. Codegen — emitters to the app (Swift / Zig / Python), golden-pinned
 @SixFour.Codegen.Swift@, @.Shapes@, @.Golden@, @.Collapse@, @.RGBT4D@, @.PairTree@, @.QuartetDelta@, @.Genome@,
-@.GenomeFixed@, @.PaletteValue@, @.MLX@, @.CoreML@, @.Burn@.
+@.GenomeFixed@, @.PaletteValue@, @.MLX@, @.CoreML@, @.Burn@, @.MaskedBand@ (the byte-exact theta_B forward),
+@.JepaData@ (the I-JEPA data-engine emitter).
 
 == 10. Look transfer / LUT extraction (R3D .cube)
 The on-screen "look" and the exported 3D LUT are two projections of ONE OKLab palette→palette
 transform derived from the captured palette's luminance-zone chroma profile (a port of
-@~/lut-generator/src/python/gif_palette_lut.py@). See @docs/SIXFOUR-LOOK-LUT-WORKFLOW.md@.
+@~/lut-generator/src/python/gif_palette_lut.py@).
 
   * "SixFour.Spec.ZoneProfile"  — luminance-zone mean a/b/chroma profile of a palette
   * "SixFour.Spec.LookTransfer" — the chrominance-only transfer (preview ≡ cube core)

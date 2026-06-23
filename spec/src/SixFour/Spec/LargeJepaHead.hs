@@ -8,7 +8,7 @@ TOKENIZER (and manufactures the collapse-proof target, "SixFour.Spec.JepaTarget"
 ViT-scale learned predictor rides ON TOP. "SixFour.Spec.EncoderFrozen" is NOT reversed.
 
 THE MECHANISM (the user's "units distance that can grow or shrink"): the proven metric
-@d6@ ("SixFour.Spec.RelationalResidual": Q16 L1 over @P6 (L,a,b,x,y,t)@, with the @+/-1@
+@d6@ ("SixFour.Spec.RelationalMemory": Q16 L1 over @P6 (L,a,b,x,y,t)@, with the @+/-1@
 unit quantum) is the GROUND metric and seeds a T5-style per-head learnable relative-
 position attention bias
 
@@ -142,7 +142,7 @@ lawBiasLearnsToScale a b d =
 
 -- | The bias is PHI6-CONSISTENT: because it is a function of @d6@ alone (which weights all
 -- axes equally), a colour-axis nudge and its @phi6@-paired position-axis nudge get the SAME
--- distance, hence the SAME bias. Delegates "SixFour.Spec.RelationalResidual" @d6@. Teeth: a
+-- distance, hence the SAME bias. Delegates "SixFour.Spec.RelationalMemory" @d6@. Teeth: a
 -- metric that weighted @a@ and its partner @x@ unequally fails.
 lawBiasIsPhi6Consistent :: P6 -> Bool
 lawBiasIsPhi6Consistent p =

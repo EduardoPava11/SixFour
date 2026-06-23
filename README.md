@@ -93,7 +93,7 @@ widen → linear → OKLab → quantize (maximin = Gonzalez farthest-first + Llo
 
 plus `s4_global_collapse` (per-frame → one global palette), the `s4_haar_*`
 projections, the `s4_*_q16` look/LUT kernels, and `s4_load_look_net`. The header
-(`Native/include/sixfour_native.h`) declares all **24** exports, and a gate
+(`Native/include/sixfour_native.h`) declares all **35** exports, and a gate
 asserts the header symbol set equals the Zig export set.
 
 The **maximin** step (Gonzalez 1985 farthest-first, then Lloyd) is the canonical
@@ -152,7 +152,7 @@ behaviour is the user's verification step.)
 ```bash
 cd spec
 cabal build
-cabal test                 # 595 tests; the gate
+cabal test                 # ~1249 tests; one leg of the gate (spec/scripts/gate.sh is the full gate)
 cabal run spec-codegen     # regenerate the per-tier contracts
 ```
 
@@ -188,7 +188,7 @@ generated/trained artifacts (e.g. the gitignored `trainer/out/` fixtures), and
 `docs/STATUS.md` is the **single canonical status ledger** (gated by
 `scripts/verify-doc-claims.sh`). Current state:
 
-- **Spec suite: 595 Haskell tests pass** (`cabal test`).
+- **Spec suite: ~1249 Haskell tests pass** (`cabal test`).
 - The **deterministic Zig render core is built and is the default path**
   (`useDeterministicCore = true`); the GPU-float Swift `GIFRenderer` is the
   throw-fallback only.
@@ -199,7 +199,7 @@ generated/trained artifacts (e.g. the gitignored `trainer/out/` fixtures), and
   pooled-maximin collapse, **not** a learned NN genome.
 - **Swipe-to-LOOK + R3D `.cube` LUT export is built**
   (`Spec.{ZoneProfile,LookTransfer,RedFrontEnd,CubeLut}`; Zig
-  `s4_zone_profile_q16` / `s4_look_transfer_q16` / `s4_build_cube_q16`; 28 Zig
+  `s4_zone_profile_q16` / `s4_look_transfer_q16` / `s4_build_cube_q16`; 72 Zig
   tests; iOS build succeeds — on-device verification is the user's step).
 - The **look-NN forward path is proven in Haskell** (`LookNetE/R/D`, a 384-DOF
   `SigmaPairTree` decoder) but **nothing runs it on device**: `loadLookNet` has
@@ -227,8 +227,8 @@ excludes discrete measures, and the exact discrete W₂ barycenter is NP-hard �
 `buresBarycenter` was deleted.
 
 The honest substrate is **OKLab + the deterministic maximin floor** (Gonzalez
-farthest-first / Lloyd-Max) in `Spec.Collapse` (`farthestPointCollapse` /
-`globalCollapseQ16`), gamut-closed and golden-pinned. `Spec.Bures` now supplies
+farthest-first / Lloyd-Max) (`farthestPointCollapse` in `Spec.Collapse` /
+`globalCollapseQ16` in `Spec.GlobalCollapseQ16`), gamut-closed and golden-pinned. `Spec.Bures` now supplies
 only a Gaussian-*summary* backbone — `buresDistanceSq` as a fidelity term and
 `buresBarycenterCov` as a covariance fixed point that the Rust analysis oracle
 cross-checks — i.e. a moment-matched spread prior, **not** the collapse. See

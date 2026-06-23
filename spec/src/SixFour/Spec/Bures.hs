@@ -5,7 +5,7 @@ Description : Bures–Wasserstein (Gaussian W₂) distance + covariance backbone
 
 The per-frame palettes are DISCRETE empirical measures (≤256 weighted OKLab atoms).
 The actual collapse to one palette is the maximin floor in "SixFour.Spec.Collapse"
-('SixFour.Spec.Collapse.farthestPointCollapse' / 'SixFour.Spec.Collapse.globalCollapseQ16')
+('SixFour.Spec.Collapse.farthestPointCollapse' / 'SixFour.Spec.GlobalCollapseQ16.globalCollapseQ16')
 — gamut-closed, deterministic, golden-pinned. THIS module supplies only the
 Gaussian-summary backbone: 'buresDistanceSq' (the spread-aware fidelity term the loss
 uses) and 'buresBarycenterCov' (the covariance fixed point the Rust analysis oracle
