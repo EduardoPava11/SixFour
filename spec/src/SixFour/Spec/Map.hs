@@ -155,6 +155,13 @@ funnel"), the 12 ordered magnitude-2 paths over 8 endpoints, one composed @d6@ a
 per-two-move SIGNAL. OCTAVE answer: VALUE distance LINEAR (@d6@), SCALE distance OCTAVE
 (@levelsBetween@=log2); @s_h@ the learned octave scale stays in @LargeJepaHead@. KEYSTONE
 @lawDiagonalOrderingsDifferAtIntermediate@. Reuses NudgeStep/DetentNudge/DisplayDecoder),
+"SixFour.Spec.MoveSignal" (the CONTENT-RESPONSIVE move signal v1, closing the
+@moveMagnitude@-is-a-constant gap = HARD #1: @signalAt = sensitivity(move) * bandEnergy(landing
+octant)@, the deterministic texture-energy factor (band L1 norm of the reversible-lift detail,
+zero on a flat octant) times a learned SENSITIVITY pinned to 1 in v1 (the trained Jacobian
+multiplies in later). KEYSTONE @lawTexturedMoveStrictlyExceedsFlat@ = the property the constant
+@moveMagnitude@ cannot have. Float, DISPLAY-SIDE, quarantined from the commit
+(@lawSignalQuarantinedFromCommit@ delegates DisplayDecoder). Reuses DetailEntropy/CarrierL),
 "SixFour.Spec.RemainderTail" (★ the discrete-surfaced / continuous-remainder TYPED
 SPLIT that closes audit B6+B1 — 'Surfaced' (integers) reconstructs EXACTLY while
 'Remainder' (continuous FlowAR tail) reconstructs only WITHIN @eps@ and is provably
