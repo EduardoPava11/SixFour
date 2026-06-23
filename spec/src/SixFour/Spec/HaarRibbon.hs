@@ -20,7 +20,7 @@ This is the @2⁸@ specialisation of the collapse lever, made a *gesture* (scrol
 the protect-refinement on top. Refines "SixFour.Spec.SplitTree"; consumes Act II's protect-set. Self-
 contained (imports only 'SplitTree' + 'Color'). Laws are the parity gate (Properties.HaarRibbon).
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.HaarRibbon
   ( RibbonGroup(..)
   , ribbonLevels

@@ -25,7 +25,7 @@ Laws (see @Properties.InfluenceField@): the reaches are positive; the fractions
 DIMS (@liftDim < 1@); the ramp + drift are positive; the inks are in gamut and the
 far-field ink is darker than the seam neutral.
 -}
--- COMPARTMENT: METAL-GPU | tag:none | STRADDLER
+-- COMPARTMENT: METAL-GPU | tag:DataParallelTag
 module SixFour.Spec.InfluenceField
   ( -- * Falloff / radiation
     driftPerTick, reachArrangement, reachSet, usageReachMin

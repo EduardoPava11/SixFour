@@ -24,7 +24,7 @@ The gate verifies the COMPUTATION, not a particular model: any weights work as
 long as every port reproduces this output given them. Bounded ⇒ no NaN/Inf
 (which JSON cannot represent).
 -}
--- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.LookNetEval
   ( LookNetWeights(..)
   , deterministicTestWeights

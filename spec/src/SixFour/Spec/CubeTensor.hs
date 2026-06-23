@@ -38,7 +38,7 @@ Additive: reuses "SixFour.Spec.SameObjectInvariance" @Cube@, "SixFour.Spec.Dim6"
 GHC-boot-only (base). Laws are exported predicates, QuickCheck'd in
 "Properties.CubeTensor".
 -}
--- COMPARTMENT: PURE-SPEC-WALL | tag:none | STRADDLER
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.CubeTensor
   ( -- * The one canonical voxel-tensor object
     CubeTensor(..)

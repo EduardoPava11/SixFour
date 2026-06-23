@@ -38,7 +38,7 @@ Additive: a pure law module assembling existing teeth from "SixFour.Spec.SelfSup
 "SixFour.Spec.DetailMaskedPrediction". Re-pins NOTHING; no golden vector. GHC-boot-only;
 laws @once@-tested in "Properties.JepaTarget".
 -}
--- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.JepaTarget
   ( -- * Laws (closed :: Bool; @once@-tested in @Properties.JepaTarget@)
     lawTargetIsDataManufacturedNotEncoded

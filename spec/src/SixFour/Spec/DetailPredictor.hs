@@ -46,7 +46,7 @@ Additive: a new sibling of "SixFour.Spec.PairedResidual" (table) and
 contract is re-pinned. GHC-boot only; the device output is integer Q16, the gradient
 is Mac-side float.
 -}
--- COMPARTMENT: MLX-MODEL | tag:DeviceTag | STRADDLER
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.DetailPredictor
   ( -- * Shape
     PredictorShape(..)

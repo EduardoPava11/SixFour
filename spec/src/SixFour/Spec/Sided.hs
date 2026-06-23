@@ -35,7 +35,7 @@ Additive: a NEW leaf module + 'Sided'-typed VARIANTS of the existing operations.
 migrate opt-in. Kept at the ADT\/smart-constructor layer (phantom tags + export discipline),
 NOT DataKinds\/LiquidHaskell, per the project's spec methodology.
 -}
--- COMPARTMENT: PURE-SPEC-WALL | tag:CommitSide | STRADDLER
+-- COMPARTMENT: PURE-SPEC-WALL | tag:CommitSide
 module SixFour.Spec.Sided
   ( -- * The sided carrier (constructor HIDDEN on purpose)
     Sided

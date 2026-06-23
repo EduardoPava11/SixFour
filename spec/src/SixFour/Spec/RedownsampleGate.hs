@@ -31,7 +31,7 @@ equality is exact. The continuous remainder never reaches the gate.
 
 Additive: imports only proven octant ops, re-pins no golden contract, deletes nothing.
 -}
--- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.RedownsampleGate
   ( gateLevels
   , redownsample

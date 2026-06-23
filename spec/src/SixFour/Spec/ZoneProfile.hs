@@ -22,7 +22,7 @@ Means are computed SUM-then-DIVIDE (not a running mean), so the profile is
 permutation-invariant under integer truncation — the same gauge-invariance ethos
 as "SixFour.Spec.Collapse". All arithmetic is @Int@ (i64 in the Zig port).
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.ZoneProfile
   ( ZoneProfileQ16(..)
   , numZonesDefault

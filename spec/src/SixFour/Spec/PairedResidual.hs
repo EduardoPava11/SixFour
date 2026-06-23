@@ -35,7 +35,7 @@ path stays byte-identical (free/exploratory vs anchored/shippable — keep both)
 GHC-boot (@containers@). The codebook keys & values are integers already on the Q16
 floor, so it is bit-exact and cross-device stable.
 -}
--- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.PairedResidual
   ( ResidualBook            -- opaque: build only via 'mkResidualBook'
   , floorResidual

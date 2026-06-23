@@ -51,7 +51,7 @@ contract (slotLookDims\/NetContract\/net_shape untouched), deletes nothing.
 
 GHC-boot-only. Laws are exported predicates, QuickCheck'd in @Properties.NudgeStep@.
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DeviceTag | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.NudgeStep
   ( -- * The ONE shared cube-shaped latent (stage 1)
     LatentCube(..)

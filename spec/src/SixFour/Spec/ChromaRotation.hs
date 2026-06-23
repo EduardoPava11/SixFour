@@ -25,7 +25,7 @@ user's detents @C12@/@C8@/@C6@ (30/45/60deg) have irrational @cos@/@sin@, so
 
 GHC-boot-only. Laws QuickCheck'd in @Properties.ChromaRotation@.
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DeviceTag | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DeviceTag
 module SixFour.Spec.ChromaRotation
   ( -- * Detents (the option space)
     Detent(..)

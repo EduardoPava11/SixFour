@@ -45,7 +45,7 @@ The 'Held'\/'Invented' naming follows "SixFour.Spec.SelfSimilarReconstruct" @Det
 (the detail-provenance analogue at the band level). Laws QuickCheck'd in
 "Properties.SelfSupervisedRung".
 -}
--- COMPARTMENT: MLX-MODEL | tag:DeviceTag | STRADDLER
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.SelfSupervisedRung
   ( -- * The two rungs and their supervision kinds
     Rung(..)

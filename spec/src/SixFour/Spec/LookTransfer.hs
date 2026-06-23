@@ -20,7 +20,7 @@ pin the "preview ≡ cube" equality as a LAW, not a hope.
 A look variant is a choice of 'TransferParamsQ16' (strength + polarity); the
 PROFILE is always live-derived, so the look is data-driven, not canned.
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.LookTransfer
   ( TransferParamsQ16(..)
   , defaultTransferParamsQ16

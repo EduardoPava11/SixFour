@@ -28,7 +28,7 @@ References:
     Analysis/, ACM Transactions on Graphics, 1992
     (the original "Wu" algorithm, not what is implemented here).
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.StageA
   ( Frame(..)
   , StageA(..)

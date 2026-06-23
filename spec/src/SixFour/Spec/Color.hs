@@ -6,7 +6,7 @@ Every constant in this module appears verbatim in
 @SixFour/Color/ColorScience.swift@. The QuickCheck round-trip property
 asserts the two implementations agree to within 1e-6.
 -}
--- COMPARTMENT: METAL-GPU | tag:none | STRADDLER
+-- COMPARTMENT: METAL-GPU | tag:none
 module SixFour.Spec.Color
   ( OKLab(..)
   , SRGB(..)
