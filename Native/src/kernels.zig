@@ -848,6 +848,67 @@ pub export fn s4_rgbt_unlift_quad(in_q16: [*c]const i32, out_q16: [*c]i32) i32 {
     return RC_OK;
 }
 
+/// The 2×2×2 → 1 OCTANT lift (OctreeCell.liftOct): 8 cells (a,b,c,d near-z face,
+/// e,f,g,h far-z face) → 1 coarse + 7 detail. Two xy-quad lifts (s4_rgbt_lift_quad's
+/// rgbtLiftQuad) then one Haar (liftChecked) along z on the two coarse R=LL values.
+/// out = [rr, g0,b0,t0, g1,b1,t1, dz] = OctBand coarse + (the 6 face details + z detail).
+/// TOTAL: the 8 inputs must each be |v| ≤ B; refuses with RC_OUT_OF_RANGE rather than wrap.
+/// The learned-token VolumeOctant substrate, byte-exact against OctreeCell.liftOct.
+pub export fn s4_octant_lift(in_q16: [*c]const i32, out_q16: [*c]i32) i32 {
+    if (in_q16 == null or out_q16 == null) return RC_NULL_PTR;
+    var i: usize = 0;
+    while (i < 8) : (i += 1) {
+        if (!inBound(in_q16[i], SUBSTRATE_BOUND)) return RC_OUT_OF_RANGE;
+    }
+    const near = [4]i32{ in_q16[0], in_q16[1], in_q16[2], in_q16[3] };
+    const far = [4]i32{ in_q16[4], in_q16[5], in_q16[6], in_q16[7] };
+    var o0: [4]i32 = undefined; // (r0,g0,b0,t0)
+    var o1: [4]i32 = undefined; // (r1,g1,b1,t1)
+    rgbtLiftQuad(&near, &o0);
+    rgbtLiftQuad(&far, &o1);
+    var rr: i32 = undefined;
+    var dz: i32 = undefined;
+    const rc = liftChecked(o0[0], o1[0], &rr, &dz); // sLift(r0, r1)
+    if (rc != RC_OK) return rc;
+    out_q16[0] = rr; // coarse
+    out_q16[1] = o0[1]; // g0
+    out_q16[2] = o0[2]; // b0
+    out_q16[3] = o0[3]; // t0
+    out_q16[4] = o1[1]; // g1
+    out_q16[5] = o1[2]; // b1
+    out_q16[6] = o1[3]; // t1
+    out_q16[7] = dz; // z detail
+    return RC_OK;
+}
+
+/// The exact inverse of s4_octant_lift (OctreeCell.unliftOct): sUnlift the z stage,
+/// then unlift each face quad. TOTAL: validates the supplied bands (coarse ≤B, z-detail
+/// ≤2B, face bands via rgbtUnliftQuadChecked) and refuses rather than wrap.
+pub export fn s4_octant_unlift(in_q16: [*c]const i32, out_q16: [*c]i32) i32 {
+    if (in_q16 == null or out_q16 == null) return RC_NULL_PTR;
+    var r0: i32 = undefined;
+    var r1: i32 = undefined;
+    const rc_z = unliftChecked(in_q16[0], in_q16[7], &r0, &r1); // sUnlift(rr, dz)
+    if (rc_z != RC_OK) return rc_z;
+    const near_bands = [4]i32{ r0, in_q16[1], in_q16[2], in_q16[3] }; // (r0,g0,b0,t0)
+    const far_bands = [4]i32{ r1, in_q16[4], in_q16[5], in_q16[6] }; // (r1,g1,b1,t1)
+    var near_cells: [4]i32 = undefined;
+    var far_cells: [4]i32 = undefined;
+    const rc0 = rgbtUnliftQuadChecked(&near_bands, &near_cells);
+    if (rc0 != RC_OK) return rc0;
+    const rc1 = rgbtUnliftQuadChecked(&far_bands, &far_cells);
+    if (rc1 != RC_OK) return rc1;
+    out_q16[0] = near_cells[0];
+    out_q16[1] = near_cells[1];
+    out_q16[2] = near_cells[2];
+    out_q16[3] = near_cells[3];
+    out_q16[4] = far_cells[0];
+    out_q16[5] = far_cells[1];
+    out_q16[6] = far_cells[2];
+    out_q16[7] = far_cells[3];
+    return RC_OK;
+}
+
 /// One 2-D-Haar level over a side×side row-major grid (side even): tile into 2×2
 /// blocks, lift each → coarse (side/2)² plane + (side/2)² detail triples (G,B,T).
 /// The TILING is where Metal (2-D threads) and Zig (loops) could diverge — pinned here.
@@ -1104,6 +1165,31 @@ test "s4_board_mass_q16: golden + laws (Spec.BoardQ16)" {
     try std.testing.expectEqual(RC_OK, s4_board_counts_to_mass_q16(&counts, @intCast(BOARD_BINS), 3, &massC));
     try std.testing.expectEqual(@as(i32, 43691), massC[2288]); // (2·65536+1)/3
     try std.testing.expectEqual(@as(i32, 21845), massC[136]); // (1·65536+1)/3
+}
+
+test "s4_octant_lift: golden + reversible + refuses out-of-domain (Spec.OctreeCell.liftOct)" {
+    // GOLDEN: liftOct (V8 1 2 3 4 5 6 7 8) == [4,-2,-1,0,-2,-1,0,-4] (computed in GHCi).
+    const in8 = [8]i32{ 1, 2, 3, 4, 5, 6, 7, 8 };
+    var band: [8]i32 = undefined;
+    try std.testing.expectEqual(RC_OK, s4_octant_lift(&in8, &band));
+    const golden = [8]i32{ 4, -2, -1, 0, -2, -1, 0, -4 };
+    try std.testing.expect(std.mem.eql(i32, &band, &golden));
+    // REVERSIBLE: unlift(lift(x)) == x, exactly.
+    var back: [8]i32 = undefined;
+    try std.testing.expectEqual(RC_OK, s4_octant_unlift(&band, &back));
+    try std.testing.expect(std.mem.eql(i32, &back, &in8));
+    // round-trip on a spread of values incl. negatives.
+    const in8b = [8]i32{ -1000, 2000, -3, 40000, 5, -60000, 700, -8 };
+    var bandb: [8]i32 = undefined;
+    var backb: [8]i32 = undefined;
+    try std.testing.expectEqual(RC_OK, s4_octant_lift(&in8b, &bandb));
+    try std.testing.expectEqual(RC_OK, s4_octant_unlift(&bandb, &backb));
+    try std.testing.expect(std.mem.eql(i32, &backb, &in8b));
+    // TOTAL: an out-of-domain input (|v| > B) is REFUSED, not wrapped.
+    var oob = [8]i32{ 0, 0, 0, 0, 0, 0, 0, 0 };
+    oob[3] = @intCast(SUBSTRATE_BOUND + 1);
+    var dump: [8]i32 = undefined;
+    try std.testing.expectEqual(RC_OUT_OF_RANGE, s4_octant_lift(&oob, &dump));
 }
 
 // ─────────────────────────────────────────────────────────────────────────
