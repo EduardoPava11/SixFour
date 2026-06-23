@@ -40,6 +40,7 @@ import qualified Properties.OctreeGenome  as OctreeGenome
 import qualified Properties.SubstrateDomain as SubstrateDomain
 import qualified Properties.SuccessiveRefinement as SuccessiveRefinement
 import qualified Properties.SuperResPalette as SuperResPalette
+import qualified Properties.SynthesisPolicyValue as SynthesisPolicyValue
 import qualified Properties.TwoMoveOctave as TwoMoveOctave
 import qualified Properties.MoveSignal as MoveSignal
 import qualified Properties.BoundedP6 as BoundedP6
@@ -177,6 +178,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SubstrateDomain.tests
   , SuccessiveRefinement.tests
   , SuperResPalette.tests
+  , SynthesisPolicyValue.tests
   , TwoMoveOctave.tests
   , MoveSignal.tests
   , BoundedP6.tests

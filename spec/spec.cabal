@@ -58,6 +58,7 @@ library
         SixFour.Spec.SubstrateDomain
         SixFour.Spec.SuccessiveRefinement
         SixFour.Spec.SuperResPalette
+        SixFour.Spec.SynthesisPolicyValue
         SixFour.Spec.TwoMoveOctave
         SixFour.Spec.MoveSignal
         SixFour.Spec.RelationalResidual
@@ -312,6 +313,7 @@ test-suite spec-tests
         Properties.SubstrateDomain
         Properties.SuccessiveRefinement
         Properties.SuperResPalette
+        Properties.SynthesisPolicyValue
         Properties.TwoMoveOctave
         Properties.MoveSignal
         Properties.BoundedP6
