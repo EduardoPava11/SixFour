@@ -43,9 +43,11 @@ GPU/CPU latency and power are negligible — there is no performance reason to
 take on a dependency.
 
 > **REDIRECT 2026-06-22 (Core AI is to be TRAINED, as the I-JEPA large head).** The
-> relational-residual encoding (`Spec.RelationalResidual`: the 6D point `P6 (L,a,b,x,y,t)`
-> with the `d6` metric, the `phi6` pairing `a<->x,b<->y,L<->t`, the 14-int position
-> residual) is the I-JEPA POSITION-CONDITIONING: it lets the predictor be conditioned on
+> relational-residual encoding (the 6D point `P6 (L,a,b,x,y,t)` + `safeNudge` domain guard
+> live in `Spec.RelationalResidual` (Zig-floor substrate); the `d6` metric, the `phi6`
+> pairing `a<->x,b<->y,L<->t`, and the 14-int position residual live in `Spec.RelationalMemory`
+> (MLX-model, split out by the compartment pivot))
+> is the I-JEPA POSITION-CONDITIONING: it lets the predictor be conditioned on
 > WHERE it predicts (`lawPositionDistinguishesSameColour` proves position carries info
 > colour cannot). DIRECTION: grow the learned predictor into a genuinely LARGE
 > position-conditioned I-JEPA head and TRAIN it (MLX on the Mac) -> `coreai-torch` ->

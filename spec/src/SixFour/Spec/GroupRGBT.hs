@@ -5,7 +5,7 @@ Description : 64 frames = 16 RGBT groups of 4; GROUP-SELECT drives the global co
 The capture is 64 frames; the user reads them as **16 groups of 4** (each group of 4 = one
 R/G/B/T quartet, @docs/SIXFOUR-LAB-CHOICES.md@). The load-bearing LAB choice (group-select,
 the 8.5-ranked one) is: **which groups feed the one global palette.** Today
-'SixFour.Spec.Collapse.globalCollapseQ16' pools ALL 64 frames, so the picks change nothing —
+'SixFour.Spec.GlobalCollapseQ16.globalCollapseQ16' pools ALL 64 frames, so the picks change nothing —
 this module makes them real.
 
 == Why SELECT, not weight ==

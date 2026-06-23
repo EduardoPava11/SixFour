@@ -11,7 +11,7 @@ content-conditioned octant detail bands. This module pins the move ALGEBRA + INV
 (geodesic, reversible, commuting, domain-respecting), the substrate the signal rides on.
 
 OCTAVE (resolved): there are TWO orthogonal distances. The VALUE distance @d6@
-("SixFour.Spec.RelationalResidual") is LINEAR (Q16 L1; a @+/-1@ nudge is distance 1 at every
+("SixFour.Spec.RelationalMemory") is LINEAR (Q16 L1; a @+/-1@ nudge is distance 1 at every
 level). The SCALE/LEVEL distance is OCTAVE (log2): one octree level = one octave
 ("SixFour.Spec.OctreeCell" @octreeDepth = log2 side@; a rung = @levelsPerStep == 2@ octaves).
 So GLOBAL = a move organised at the COARSER octave, LOCAL = a move at the FINER octave; the
@@ -27,7 +27,7 @@ scalar @(da+db)/65536@ shift that cannot distinguish either; left untouched, thi
 The KEYSTONE 'lawDiagonalOrderingsDifferAtIntermediate' proves the global-then-local structure
 carries signal a single magnitude-2 jump does not.
 
-GHC-boot-only. Additive; re-pins nothing. Reuses @RelationalResidual@ (@P6@, @d6@, @nudge@),
+GHC-boot-only. Additive; re-pins nothing. Reuses @RelationalResidual@ (@P6@, @nudge@, @safeNudge@) and @RelationalMemory@ (@d6@),
 @Dim6@, and delegates the octave fact to @OctreeCell@ / @SelfSimilarReconstruct@. Laws
 QuickCheck'd in "Properties.TwoMoveOctave".
 -}

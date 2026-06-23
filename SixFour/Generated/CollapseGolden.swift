@@ -3,7 +3,7 @@
 //
 // Byte-exact golden for the Q16 global-palette collapse (GIFA → GIFB):
 // maximin farthest-point selection over the pooled per-frame palettes
-// (SixFour.Spec.Collapse.globalCollapseQ16, reusing the Zig-mirrored
+// (SixFour.Spec.GlobalCollapseQ16.globalCollapseQ16, reusing the Zig-mirrored
 // farthestPointSeedsQ16) + nearest-centroid re-index. Every value is a Q16
 // OKLab integer (scale 2^16); the Swift FarthestPointCollapse must reproduce
 // them EXACTLY (no tolerance).

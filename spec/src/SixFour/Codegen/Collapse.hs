@@ -3,7 +3,7 @@ Module      : SixFour.Codegen.Collapse
 Description : Emit CollapseGolden.swift — the byte-exact gate for the Q16 collapse.
 
 The shipped per-frame → global palette collapse (GIFA → GIFB) is
-'SixFour.Spec.Collapse.globalCollapseQ16': maximin farthest-point selection over
+'SixFour.Spec.GlobalCollapseQ16.globalCollapseQ16': maximin farthest-point selection over
 the pooled per-frame palettes, in Q16 integers. Because it is integer-exact (and
 reuses the Zig-mirrored 'farthestPointSeedsQ16'), the golden is emitted as plain
 Swift integer literals — no IEEE-754 hex transport, no tolerance — and the Swift
@@ -51,7 +51,7 @@ emitCollapseGolden = T.unlines
   , "//"
   , "// Byte-exact golden for the Q16 global-palette collapse (GIFA → GIFB):"
   , "// maximin farthest-point selection over the pooled per-frame palettes"
-  , "// (SixFour.Spec.Collapse.globalCollapseQ16, reusing the Zig-mirrored"
+  , "// (SixFour.Spec.GlobalCollapseQ16.globalCollapseQ16, reusing the Zig-mirrored"
   , "// farthestPointSeedsQ16) + nearest-centroid re-index. Every value is a Q16"
   , "// OKLab integer (scale 2^16); the Swift FarthestPointCollapse must reproduce"
   , "// them EXACTLY (no tolerance)."
