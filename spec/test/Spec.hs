@@ -41,6 +41,7 @@ import qualified Properties.SubstrateDomain as SubstrateDomain
 import qualified Properties.SuccessiveRefinement as SuccessiveRefinement
 import qualified Properties.SuperResPalette as SuperResPalette
 import qualified Properties.TwoMoveOctave as TwoMoveOctave
+import qualified Properties.MoveSignal as MoveSignal
 import qualified Properties.RelationalResidual as RelationalResidual
 import qualified Properties.RemainderTail as RemainderTail
 import qualified Properties.ByteCarrier   as ByteCarrier
@@ -207,6 +208,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SuccessiveRefinement.tests
   , SuperResPalette.tests
   , TwoMoveOctave.tests
+  , MoveSignal.tests
   , RelationalResidual.tests
   , RemainderTail.tests
   , ByteCarrier.tests
