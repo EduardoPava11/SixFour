@@ -33,6 +33,7 @@ so the properties run on tiny cubes; the app instantiates T = S = 64, P = 256.
 The golden pin uses a deterministic FNV-1a 64 checksum ('outputChecksum') —
 the spec-side stand-in for the SHA-256 the device asserts.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.Upscale256
   ( -- * Q16 pixels (the SpatialDither wire type)
     PxQ16

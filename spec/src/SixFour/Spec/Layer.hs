@@ -31,6 +31,7 @@ in "SixFour.Spec.LookCore" already prove that it cannot break the contract.
 >  HaarPalette     ──[Reconstruct]──▶ [OKLab] (256 leaves) (L6, det)
 >  LookInput t h w k ──[WholeLookNet]──▶ LookOutput t h w k (the whole GIF)
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Layer
   ( -- * The layer typeclass
     Layer(..)

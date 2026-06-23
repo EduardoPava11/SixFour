@@ -15,6 +15,7 @@ dyadic topology and the by-construction balance) and exposes the free parameters
 See @spec/NN_SPACE_NOTES.md@. Contract-first: every function here is a total
 reference implementation (no stubs); the network is one inhabitant.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.PairTree
   ( -- * The pairing tree
     HaarPalette(..)

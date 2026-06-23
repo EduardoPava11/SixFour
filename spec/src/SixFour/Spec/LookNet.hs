@@ -32,6 +32,7 @@ The layer table ('lookNetLayers'):
 everything else is pinned by @T,H,W,K@ and the Haar tree (@768@). See
 @spec/LOOKNET_LAYERS.md@ and @spec/NN_SPACE_NOTES.md@.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
 module SixFour.Spec.LookNet
   ( -- * The dimensional table
     LayerKind(..)

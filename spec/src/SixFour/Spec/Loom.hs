@@ -25,6 +25,7 @@ No forced depth, no forced fold-count: 'activeCount' can be any N ∈ [1, |palet
 Laws live in @Properties.Loom@. All laws are exact (no float tolerance): split keeps the
 children verbatim, and midpoint/conservation move OKLab values without recomputation.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
 module SixFour.Spec.Loom
   ( -- * The merge forest
     Node(..)

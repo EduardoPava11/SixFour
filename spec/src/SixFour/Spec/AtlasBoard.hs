@@ -31,6 +31,7 @@ boundaries ('okLabBin' floors-and-clamps, so colours ON a lattice plane break
 the mirror). 'lawSigmaMirrorOffBoundary' is stated with that caveat; the
 QuickCheck generators avoid exact lattice points.
 -}
+-- COMPARTMENT: METAL-GPU | tag:none | STRADDLER
 module SixFour.Spec.AtlasBoard
   ( -- * Bins (the 16³ lattice over 'Coverage.okLabBin')
     BinIdx(..)

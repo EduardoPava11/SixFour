@@ -86,6 +86,7 @@ library
         SixFour.Spec.HJepaLevels
         SixFour.Spec.DisplayDecoder
         SixFour.Spec.Sided
+        SixFour.Spec.DataParallel
         SixFour.Spec.EncoderFrozen
         SixFour.Spec.ContinuousLoop
         SixFour.Spec.JepaTarget
@@ -398,6 +399,7 @@ test-suite spec-tests
         Properties.MoveSignal
         Properties.BoundedP6
         Properties.Sided
+        Properties.DataParallel
         Properties.RelationalResidual
         Properties.RemainderTail
         Properties.ByteCarrier

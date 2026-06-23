@@ -79,6 +79,7 @@ golden-vector parity test, and the perspective @eye@ + population→radius range
 currently diverge in the renderer. Closing that (a codegen emitter + parity
 test) is the remaining spec-first debt before P4 ships.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.CloudProjection
   ( -- * World basis
     Vec3(..)

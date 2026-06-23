@@ -27,6 +27,7 @@ north-star still lacked (both flagged in @docs/SIXFOUR-DEBT-CLEANUP-REPORT.md@):
 
 Contract-first, no stubs. Laws in @Properties.LookCategory@.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.LookCategory
   ( -- * The look taxonomy (named coordinate system over taste)
     LookCategory(..)

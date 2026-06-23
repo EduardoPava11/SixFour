@@ -25,6 +25,7 @@ be wired as those modules are refactored onto the octree.
 
 GHC-boot-only. Laws are exported predicates, QuickCheck'd in @Properties.LBalanceOperator@.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.LBalanceOperator
   ( -- * The balance operator
     lBalance

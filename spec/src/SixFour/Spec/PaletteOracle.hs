@@ -19,6 +19,7 @@ look-NN can vs cannot stand in for:
 
 'referenceOracle' assembles both into the 'Oracle' the search consumes.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.PaletteOracle
   ( RewardWeights(..)
   , defaultWeights

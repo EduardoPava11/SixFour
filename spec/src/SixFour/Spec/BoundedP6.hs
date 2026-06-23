@@ -31,6 +31,7 @@ approach the edge); only the committing surface is typed to @BoundedP6@. No gold
 codegen contract references @P6@, so no shipped backend is re-pinned. GHC-boot-only (base).
 Laws QuickCheck'd in "Properties.BoundedP6".
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:BoundedP6
 module SixFour.Spec.BoundedP6
   ( -- * The in-domain carrier (constructor HIDDEN on purpose)
     BoundedP6

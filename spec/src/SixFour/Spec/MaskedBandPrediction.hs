@@ -54,6 +54,7 @@ Additive: a new sibling of "SixFour.Spec.DetailMaskedPrediction" (coarse-only) r
 "SixFour.Spec.DetailMaskedPrediction" / "SixFour.Spec.DetailPredictor" are untouched.
 GHC-boot only; device output is integer Q16, the gradient is Mac-side float.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:DeviceTag | STRADDLER
 module SixFour.Spec.MaskedBandPrediction
   ( -- * Shape
     numBands

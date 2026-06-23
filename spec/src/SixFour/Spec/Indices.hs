@@ -15,6 +15,7 @@ completeness contract now that the cube ships one per-frame palette per
 frame (the old global 'Surjective256' witness, used only by the removed
 Sinkhorn Stage B merger, is gone).
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.Indices
   ( IndexTensor(..)
   , CompleteVoxelVolume

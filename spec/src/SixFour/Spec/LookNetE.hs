@@ -53,6 +53,7 @@ properties enforce — at test time — that the reference baseline really
 satisfies its claimed laws. The trainer then has a /hard/ equivariance target
 (commute with these fixed involutions), not a heuristic.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.LookNetE
   ( -- * The set / context types (the L3 boundary)
     GmmTokenSet(..)

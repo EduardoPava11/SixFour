@@ -25,6 +25,7 @@ Tonemap runs BEFORE OKLab (so values land in [0,1) and the OKLab clamp never
 crushes highlights); black-lift runs BEFORE gamut-compress. Both are pinned as
 laws. The filmic LUT's 'filmicXMaxQ16' domain constant MUST equal the Zig const.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.RedFrontEnd
   ( -- * Double oracles (reference; not on the runtime path)
     log3g10DecodeD

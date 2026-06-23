@@ -30,6 +30,7 @@ Laws (see @Properties.LinAlg@): @matVecMul@ is linear; @transpose . transpose
 = id@; columns of @modifiedGramSchmidt@'s output are orthonormal; projecting
 a vector in @im(Q)@ onto @Q@ recovers the vector; @residualFraction@ ∈ [0, 1].
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.LinAlg
   ( -- * The matrix type
     Matrix

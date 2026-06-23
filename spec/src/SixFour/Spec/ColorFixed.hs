@@ -23,6 +23,7 @@ Constants below are the Ottosson M1/M2 matrices rounded to Q16; the SAME integer
 literals are hard-coded in @Native/src/kernels.zig@. Do not "simplify" either copy
 independently.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.ColorFixed
   ( q16One
   , icbrtQ16

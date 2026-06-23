@@ -19,6 +19,7 @@ net's latent remainder.
 
 GHC-boot-only. Laws QuickCheck'd in @Properties.Dimensions@.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.Dimensions
   ( -- * The axis ledger
     Axis(..)

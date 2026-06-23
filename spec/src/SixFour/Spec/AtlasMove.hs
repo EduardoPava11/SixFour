@@ -22,6 +22,7 @@ never edited ('lawBaseChannelsUntouched'). The board is therefore re-derivable
 by folding the decision log ('boardFromLog' — the replay-determinism law the
 SF64 container relies on, design §3.3).
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.AtlasMove
   ( -- * Wire-scalar newtypes
     Q88(..)

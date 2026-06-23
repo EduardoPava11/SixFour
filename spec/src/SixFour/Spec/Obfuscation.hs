@@ -29,6 +29,7 @@ would make "show L, hide a,b" false.
 
 Laws live in @Properties.Obfuscation@.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Obfuscation
   ( -- * The obfuscation operator Ω (Def 45)
     shown

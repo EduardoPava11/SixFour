@@ -27,6 +27,7 @@ Separation of concerns: ORDER answers slot→rank only. The geometric placement
 rank→rect is 'SixFour.Spec.Lattice' (EMBEDDING); colour rank→sRGB8 is
 'SixFour.Spec.CellFiber' (COLOR). The three compose as @EMBEDDING :> COLOR :> ORDER@.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.Order
   ( -- * The permutation algebra
     FinitePerm(..)

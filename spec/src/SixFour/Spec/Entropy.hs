@@ -47,6 +47,7 @@ This module decides; it does not render. The shipped collapse stays the Q16 maxi
 "SixFour.Spec.Collapse"; the temporal pool it feeds is "SixFour.Spec.GroupRGBT" / the planned
 @Spec.TemporalPool@.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
 module SixFour.Spec.Entropy
   ( -- * Q2 — RGBT pool weights
     RGBTWeights(..)

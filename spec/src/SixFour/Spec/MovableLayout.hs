@@ -42,6 +42,7 @@ BOTH in-bounds AND disjoint. The eight laws below are golden-pinned in
 
 GHC-boot-only: base, containers, plus "SixFour.Spec.GridLayout" / ".Lattice".
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.MovableLayout
   ( -- * The closed color-identity alphabet (the ONLY movable widgets)
     ColorIdentity(..)

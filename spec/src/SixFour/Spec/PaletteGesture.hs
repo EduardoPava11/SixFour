@@ -22,6 +22,7 @@ Two supporting laws: the 2-D drag → 3-D OKLab δ decode is invertible with no 
 ('lawDragDecodeRoundTrip', exact integers), and the generator-space ops are flagged distinct
 from the additive 'SixFour.Spec.LeafOverride' slot ('lawGeneratorSpaceOpsAreNotAdditiveDelta').
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.PaletteGesture
   ( -- * The partition coordinate
     Region(..)

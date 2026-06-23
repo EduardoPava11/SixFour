@@ -32,6 +32,7 @@ Additive: composes "SixFour.Spec.DisplayDecoder" and "SixFour.Spec.TemporalLoop"
 NOTHING. Laws are closed @:: Bool@ over explicit witnesses (whole-unit separation, no
 sub-quantum rounding ambiguity), @once@-tested in "Properties.ContinuousLoop". GHC-boot-only.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
 module SixFour.Spec.ContinuousLoop
   ( -- * The loop
     Gesture

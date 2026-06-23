@@ -41,6 +41,7 @@ Accept = a calm green breath; reject = an urgent red flit.
 
 GHC-boot-only: base, containers, plus "SixFour.Spec.MovableLayout".
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.CellMechanics
   ( -- * The interaction lifetime (FSM)
     GesturePhase(..), GestureEvent(..)

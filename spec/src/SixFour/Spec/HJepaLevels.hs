@@ -38,6 +38,7 @@ Additive: pure index\/law module (no substrate, no golden vectors, no codegen â€
 "SixFour.Spec.OctreeForward" idiom). Delegates to landed laws only. Re-pins NOTHING;
 GHC-boot-only. Laws QuickCheck'd in "Properties.HJepaLevels".
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.HJepaLevels
   ( -- * The three abstraction axes
     Axis(..)

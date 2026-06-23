@@ -21,6 +21,7 @@ bit-exact-equal to the floor at zero genome.
 
 GHC-boot-only.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.ExportFamily
   ( -- * Tiers
     RungTier(..)

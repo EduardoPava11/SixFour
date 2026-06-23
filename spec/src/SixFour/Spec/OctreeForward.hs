@@ -25,6 +25,7 @@ trainer-side.
 
 GHC-boot-only. Laws QuickCheck'd in @Properties.OctreeForward@.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DeviceTag | STRADDLER
 module SixFour.Spec.OctreeForward
   ( -- * The session FSM
     Phase(..)

@@ -23,6 +23,7 @@ block, gamut-closed), GIFB 64³ = identity, GIFD 256³ = 'replicate2D'. @16 = 64
 so the pack is @{16,64,256}@ spatially and in frames. The downsample is index-domain too (mode
 picks an actual block index — no colour invented), so GIFC shares GIFB's exact palette.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.Export
   ( upscaleFactor
   , sourceSide

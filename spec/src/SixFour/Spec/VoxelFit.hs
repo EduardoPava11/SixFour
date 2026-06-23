@@ -43,6 +43,7 @@ discharge full S0 byte-identity with the 2D GIF; the rungs extend it crisply int
 
 GHC-boot-only: base + 'SixFour.Spec.Lattice'.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.VoxelFit
   ( -- * The volume + art-grid constants
     ArtVec, Rung

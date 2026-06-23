@@ -16,6 +16,7 @@ integer floor-division (matching 'okLabBin' off the lattice planes); occupancy i
 the Q16 mass is ONE rounding of @count·2^16 / total@ per bin, never an order-dependent float
 accumulation.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.BoardQ16
   ( -- * Q16 grid constants
     q16One, binWidthQ16, halfQ16

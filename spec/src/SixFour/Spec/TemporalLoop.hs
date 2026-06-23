@@ -51,6 +51,7 @@ temporal low band is byte-identical to what the @s4_haar_*@ kernel produces — 
 GHC-boot-only. Laws are exported predicates, to be QuickCheck'd in
 @Properties.TemporalLoop@ (test wiring pending — this module lands at build step 5.5).
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.TemporalLoop
   ( -- * The 64-frame period
     period

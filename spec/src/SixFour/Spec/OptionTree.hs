@@ -20,6 +20,7 @@ Per the 2026-06-20 reframe there is ONE swipe-navigated search (A/B retired); a
 
 GHC-boot-only. Laws QuickCheck'd in @Properties.OptionTree@.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DeviceTag | STRADDLER
 module SixFour.Spec.OptionTree
   ( -- * Nodes and edges
     OptionNode(..)

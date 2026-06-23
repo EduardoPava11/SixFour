@@ -36,6 +36,7 @@ So a node stores the integer detail @d@ and a lifted parent; the tree is the
 recursive application, identical in shape to 'PairTree' (level @i@ has @2^i@
 offsets, @2^D@ leaves).
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.PairTreeFixed
   ( -- * The integer Haar palette
     OKLabI

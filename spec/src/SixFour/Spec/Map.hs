@@ -16,9 +16,12 @@ only through a tagged seam; the only float->floor crossing is @ByteCarrier.reent
 index cross-cut; physically the modules stay where they are, gated by golden vectors per backend.)
 
   * __THE WALLS (pure-spec, no backend code — they DEFINE the boundaries):__
-      "SixFour.Spec.ByteCarrier" (@MacTag@ float vs @DeviceTag@ byte; no exported @Latent -> Int@),
-      "SixFour.Spec.Sided" (@DisplaySide@ preview vs @CommitSide@ commit), "SixFour.Spec.BoundedP6"
-      (in-domain @|v|<=B@ by construction). The seam is @reenterQ16@ (= @AtlasGame.quantizeQ16@).
+      "SixFour.Spec.ByteCarrier" (@MacTag@ float vs @DeviceTag@ byte; no exported @Latent -> Int@;
+      @reenterQ16Many@ = the batched float->floor door for a vector head), "SixFour.Spec.Sided"
+      (@DisplaySide@ preview vs @CommitSide@ commit), "SixFour.Spec.BoundedP6" (in-domain @|v|<=B@
+      by construction), "SixFour.Spec.DataParallel" (the 4th wall: @DataParallelTag@; a GPU op is a
+      pure @PixelMap@ and every reduction declares its @DetClass@ @Exact@/@Tol@ = the determinism
+      hierarchy as a type). The float->byte seam is @reenterQ16@ (= @AtlasGame.quantizeQ16@).
 
   * __ZIG FLOOR__ (tag: @DeviceTag@/@CommitSide@/@BoundedP6@ — bit-exact integer, shipped). Mechanism:
     golden-vector-gated HAND-PORT (@Codegen.Golden@ -> ~30 @s4_*@ kernels in @Native/src/kernels.zig@;
@@ -567,4 +570,5 @@ transform derived from the captured palette's luminance-zone chroma profile (a p
   * "SixFour.Spec.RedFrontEnd"  — Log3G10 decode + RWG→Rec.709 + filmic tonemap (LUT-driven, Q16)
   * "SixFour.Spec.CubeLut"      — the 65³ .cube grid builder
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.Map () where

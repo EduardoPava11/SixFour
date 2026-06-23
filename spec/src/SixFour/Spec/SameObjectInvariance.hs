@@ -31,6 +31,7 @@ JEPA: it cannot corrupt the object, only re-coordinate it.
 Additive law module: reuses "SixFour.Spec.OctreeCell" + "SixFour.Spec.ProjectionOrdering";
 no new substrate, no golden re-pin. GHC-boot.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.SameObjectInvariance
   ( -- * The object and its per-ordering encoding
     Cube(..)

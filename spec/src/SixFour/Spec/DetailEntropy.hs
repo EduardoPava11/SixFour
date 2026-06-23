@@ -37,6 +37,7 @@ The histogram keys/counts are integers on the Q16 floor; entropy is a Mac-side
 @Double@ used only for bit-budget DECISIONS (a coding mode, like
 "SixFour.Spec.Entropy" @scopeVerdict@), never on the bit-exact device path.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.DetailEntropy
   ( -- * Histogram + entropy of an integer coefficient multiset
     histogram

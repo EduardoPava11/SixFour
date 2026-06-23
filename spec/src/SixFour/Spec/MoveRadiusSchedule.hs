@@ -27,6 +27,7 @@ Laws (QuickCheck'd in @Properties.MoveRadiusSchedule@, EXACT — no ε):
 
 GHC-boot-only.
 -}
+-- COMPARTMENT: METAL-GPU | tag:CommitSide
 module SixFour.Spec.MoveRadiusSchedule
   ( MoveRadiusSchedule(..)
   , defaultMoveSchedule

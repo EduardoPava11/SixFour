@@ -17,6 +17,7 @@ how much OKLab volume a colour set spans.
 
 The Rust functions remain the oracle (golden cross-checks in @Properties.Diversity@).
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
 module SixFour.Spec.Diversity
   ( Cov3
   , weightedCovariance

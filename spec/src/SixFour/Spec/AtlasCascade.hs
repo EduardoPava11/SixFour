@@ -30,6 +30,7 @@ mirror bias.zig's flux: @divTrunc(sum * 256, mass)@.
 The consumption side ('SixFour.Spec.Upscale256.quantizePrior') ships in the
 SAME milestone — the anti-latent-carry rule all three judges demanded.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.AtlasCascade
   ( -- * Layout constants (compile-time sums)
     exitSlotCount

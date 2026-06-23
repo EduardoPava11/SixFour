@@ -31,6 +31,7 @@ bounded by @K@ — NOT @K × |Source|@. Ownership/provenance
 
 GHC-boot-only: base, containers (Data.Set). No QuickCheck (test-suite only).
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.CellFiber
   ( -- * The fiber carrier
     Color(..)

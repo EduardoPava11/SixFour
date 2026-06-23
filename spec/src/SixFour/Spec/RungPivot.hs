@@ -35,6 +35,7 @@ latent), NEVER @[Int]@: an integer intermediate would already be surfaced and wo
 silently weaken every downstream alignment law. Re-pins NOTHING; GHC-boot-only. Laws
 QuickCheck'd in "Properties.RungPivot".
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.RungPivot
   ( -- * Pivot and direction
     pivotSide

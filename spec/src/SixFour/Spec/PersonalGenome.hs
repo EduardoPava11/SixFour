@@ -46,6 +46,7 @@ has no fixed point; only boundedness, local decrease, and a monotone trust ramp)
 GHC-boot-only. Laws are exported predicates, to be QuickCheck'd in
 @Properties.PersonalGenome@ (test wiring pending — this module lands at build step 3).
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:none
 module SixFour.Spec.PersonalGenome
   ( -- * The personal genome
     PersonalGenome(..)

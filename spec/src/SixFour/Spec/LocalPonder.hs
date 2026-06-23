@@ -28,6 +28,7 @@ Additive: imports "SixFour.Spec.ScalePonder" (for the per-level type it subsumes
 "SixFour.Spec.OctreeCell" (the octant ops) and "SixFour.Spec.DetailEntropy" (the bit
 measure). No golden contract touched. GHC-boot (@base@).
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
 module SixFour.Spec.LocalPonder
   ( -- * The per-(level,octant) mask
     LocalMask

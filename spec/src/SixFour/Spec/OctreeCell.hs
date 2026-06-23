@@ -33,6 +33,7 @@ A scalar leaf is exact only on a per-octant-constant cube
 ('lawScalarLeafFailsUnlessSmooth'), the measure-zero set of
 @CubeLadder.lawSynthBeyondExactOnSmooth@.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag | STRADDLER
 module SixFour.Spec.OctreeCell
   ( -- * The cell functor and its fixpoint
     V8(..)

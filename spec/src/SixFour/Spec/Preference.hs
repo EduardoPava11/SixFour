@@ -26,6 +26,7 @@ The continuous replacement has two research-grounded pieces, both **category-fre
 Contract-first, no stubs: every function is a total reference; the GP / trained
 utility is one inhabitant of the utility contract. Laws in @Properties.Preference@.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
 module SixFour.Spec.Preference
   ( -- * Embeddings and utility
     Embedding

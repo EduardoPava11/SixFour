@@ -20,6 +20,7 @@ The cores are parameterised (@…N t p k@) for cheap QuickCheck; the Shape-bound
 aliases are what 'Codegen.Swift.emitGlobalVolumeContract' mirrors into
 @GlobalVolumeContract.swift@.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.GlobalVolume
   ( globalCompleteN
   , globalSignificantN

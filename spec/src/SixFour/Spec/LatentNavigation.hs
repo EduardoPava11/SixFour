@@ -31,6 +31,7 @@ The gesture action here is the reversible (integer, bit-exact) layer on the surf
 rung; the JEPA predictor that turns a local edit into a globally-coherent pattern is
 a separate, frozen, lossy pure-function readout (Mac-side) and is NOT modelled here.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.LatentNavigation
   ( -- * Gestures (the non-abelian steering group C4 ⋉ ℤ²)
     Gesture(..)

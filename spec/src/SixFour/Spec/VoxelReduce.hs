@@ -36,6 +36,7 @@ a SEPARATE, non-invertible step; it does not live here.)
 
 GHC-boot-only. Laws are exported predicates, QuickCheck'd in @Properties.VoxelReduce@.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.VoxelReduce
   ( -- * The voxel cube and its reduced form
     VoxelCube

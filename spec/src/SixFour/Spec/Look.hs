@@ -21,6 +21,7 @@ control safely user-modulable. This module hardens that contract:
 
 The laws live here (not "SixFour.Spec.Laws") to stay self-contained.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Look
   ( LookCode
   , unLookCode

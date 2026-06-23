@@ -23,6 +23,7 @@ plugs in entirely through the abstract 'Oracle':
     Zero weights (n = 0 or no θ) ⇒ the pure pinned 'shapedReward' — the day-1,
     golden-testable value.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:none
 module SixFour.Spec.AtlasOracle
   ( -- * Weights (zero = the deterministic day-1 oracle)
     AtlasWeights(..)

@@ -20,6 +20,7 @@ Laws (see @Properties.Coverage@): fraction ∈ [0,1]; occupied ≤ total; monoto
 under union; @S_K@ gauge-invariant (palette reorder); a single-colour palette
 occupies exactly one bin; bin indices stay in @[0, n)@.
 -}
+-- COMPARTMENT: METAL-GPU | tag:none | STRADDLER
 module SixFour.Spec.Coverage
   ( coverageBinsPerAxis
   , okLabBin

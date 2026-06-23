@@ -21,6 +21,7 @@ The index field @localIndex t y x = (4·(x+y)+t) mod 256@ makes each frame use o
 residue-class of slots (per-frame __incomplete__) while the loop-union is all 256 (globally
 __surjective__) — so the L8 contract is exhibited by the synth itself.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Scale
   ( -- * The real shape
     scaleT, scaleH, scaleW, scaleK

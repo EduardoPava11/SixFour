@@ -22,6 +22,7 @@ order-independent — SGD never is. Replay therefore stores pairs in decision
 order (the SF64 DECN chunk is ordered) and the law suite does not claim fold
 commutativity.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:none
 module SixFour.Spec.PreferenceUpdate
   ( -- * Dimensions and default hyperparameters
     thetaDim

@@ -26,6 +26,7 @@ Voxels are Q16 sRGB-encoded (via 'srgbEncodeLutQ16', a 16-bit sibling of
 @gamma_lut@), formatted to 6 decimals in the @.cube@ — banding-free, unlike an
 8-bit table.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.CubeLut
   ( cubeSizeDefault
   , cubeSizeGolden

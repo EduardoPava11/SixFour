@@ -83,6 +83,7 @@ against the hard unroll.
 reference the trainer is a controlled deviation from — matching the Pipeline.hs
 philosophy of "deterministic boundary, learned middle."
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.LookNetR
   ( -- * Core structure
     coreDepth

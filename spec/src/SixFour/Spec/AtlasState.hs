@@ -24,6 +24,7 @@ Both embedding and reward therefore route through
 through the leaves, plus the board-shaped curation terms (anchors, weights,
 kills) — the day-1, zero-weights value function (design §1, the flywheel rule).
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:MacTag
 module SixFour.Spec.AtlasState
   ( -- * The σ-pair search state
     SigmaSearchState(..)

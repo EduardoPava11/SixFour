@@ -44,6 +44,7 @@ extensions) drops the block — that surfaces as @NoBlock@, not silent corruptio
 GHC-boot-only. Laws are exported predicates, to be QuickCheck'd in
 @Properties.GenomeCarrier@ (test wiring pending — this module lands at build step 6).
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.GenomeCarrier
   ( -- * Types
     S4GNHeader(..)

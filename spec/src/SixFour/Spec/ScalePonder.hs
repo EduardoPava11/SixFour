@@ -18,6 +18,7 @@ over the octant ladder's ("SixFour.Spec.OctreeCell") detail bands.
 
 GHC-boot-only. Laws are exported predicates, QuickCheck'd in @Properties.ScalePonder@.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
 module SixFour.Spec.ScalePonder
   ( -- * The per-scale ponder mask
     Ponder

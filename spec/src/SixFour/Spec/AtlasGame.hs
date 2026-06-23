@@ -31,6 +31,7 @@ game's three load-bearing rules, WITHOUT editing 'PaletteSearch' or 'AtlasMove':
      ('lawTerminalQuantizationIdempotent'). A 'terminal' position admits no further play
      ('lawTerminalHasNoMoves').
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none | STRADDLER
 module SixFour.Spec.AtlasGame
   ( -- * The unified move ADT
     Tier(..)

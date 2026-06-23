@@ -28,6 +28,7 @@ thin newtype over the existing 'CellFiber.Color'.
 
 GHC-boot-only: base + 'SixFour.Spec.CellFiber' / '.ColorFixed'.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.Ownership
   ( -- * The closed owner alphabet
     Owner(..)

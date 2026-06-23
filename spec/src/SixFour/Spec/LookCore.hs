@@ -21,6 +21,7 @@ The network is one inhabitant: it produces the @residual@ (a Haar-shaped delta) 
 encoder context + preference latent. The floor and the laws are fixed scaffold. Mirrors
 the bounded/neutral/gamut pattern of 'SixFour.Spec.Look', lifted onto the Haar tree.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.LookCore
   ( lookCoreScale
   , zeroResidualLike

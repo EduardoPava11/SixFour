@@ -35,6 +35,7 @@ in-memory log keeps 'Float' for those planes — encode∘decode is then EXACT
 ('Maybe'), skips unknown tags ('lawUnknownTagSkip'), and accepts the
 chunks in any order ('lawTLVOrderInsensitive').
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:none | STRADDLER
 module SixFour.Spec.DecisionLog
   ( -- * Layout constants (compile-time sums)
     sf64Magic

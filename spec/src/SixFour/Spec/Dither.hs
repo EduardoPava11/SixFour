@@ -19,6 +19,7 @@ near zero. This module pins that contract with reference functions + laws; the
 network never produces the binary stream directly, only the continuous @p@ field.
 See @spec/NN_SPACE_NOTES.md@ §4.
 -}
+-- COMPARTMENT: METAL-GPU | tag:none | STRADDLER
 module SixFour.Spec.Dither
   ( -- * Realising a pair
     ditheredColor

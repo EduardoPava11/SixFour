@@ -30,6 +30,7 @@ The @+/-1@ quantum is one step in a search axis; 'd6' of two points one step apa
 GHC-boot-only. Additive: reuses @Dim6@\/@phi6@, @OctreeCell@ (the 7-band count),
 @CarrierL@ (the carrier identity). Laws QuickCheck'd in "Properties.RelationalResidual".
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DeviceTag | STRADDLER
 module SixFour.Spec.RelationalResidual
   ( -- * The comparable 6D point + its relational distance
     P6(..)

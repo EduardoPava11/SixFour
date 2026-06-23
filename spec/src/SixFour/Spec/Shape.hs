@@ -13,6 +13,7 @@ tensor literally fails to compile.
 Stage B's surjectivity obligation is "all 'K' palette entries are used"
 — see "SixFour.Spec.Indices".
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.Shape
   ( T, H, W, K
   , PixelsPerFrame, PixelsPerGIF

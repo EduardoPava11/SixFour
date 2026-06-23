@@ -12,6 +12,7 @@ are unobservable. The 'gaugeAction' function performs both at once;
 the 'gather' function (the canonical input to the NN) absorbs the
 group entirely by replacing indices with their palette lookups.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.Gauge
   ( Permutation
   , mkPermutation

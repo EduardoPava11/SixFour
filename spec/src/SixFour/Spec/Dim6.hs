@@ -18,6 +18,7 @@ FINITE CLOSED enumeration, and @Enum@\/@Bounded@ give the permutation\/coverage 
 for free. No payload, no DataKinds — type-level perms over a fixed 6-set would be pure
 ceremony.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.Dim6
   ( Dim6(..)
   , allDims

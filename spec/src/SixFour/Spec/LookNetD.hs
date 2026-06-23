@@ -63,6 +63,7 @@ encodes — and lets the trainer apply a per-level weight schedule (e.g. the φ
 golden-decay hypothesis from 'SixFour.Spec.PairTree.goldenDecay'). The spec
 pins the head sizes; the trainer specializes weights per level.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.LookNetD
   ( -- * Structural constants
     decoderOutputDim

@@ -28,6 +28,7 @@ proven for 'SixFour.Spec.Pipeline.Quad4ReconAchroma' (achromatic root σ-fixed) 
 
 Laws live in @Properties.AxisNet@.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.AxisNet
   ( -- * The colour axes
     ColorAxis(..)
