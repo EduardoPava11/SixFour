@@ -25,8 +25,18 @@ pub fn build(b: *std.Build) void {
         "Directory holding look_net.s4ln + look_net.spot.json (default: ../trainer/out)",
     ) orelse default_fixture_dir;
 
+    // require_fixtures=true turns the cross-language fixture tests from SKIP-if-absent
+    // (dev convenience) into FAIL-if-absent (the gate), so the GIF + blob goldens can
+    // never pass green vacuously. gate.sh produces the fixtures then sets this.
+    const require_fixtures = b.option(
+        bool,
+        "require_fixtures",
+        "Fail (not skip) the cross-language fixture tests if their artifacts are absent (default: false)",
+    ) orelse false;
+
     const opts = b.addOptions();
     opts.addOption([]const u8, "fixture_dir", fixture_dir);
+    opts.addOption(bool, "require_fixtures", require_fixtures);
 
     // Host shared library for the Python trainer (ctypes can't dlopen a static
     // .a). `zig build` installs zig-out/lib/libsixfour_native.dylib; the trainer's

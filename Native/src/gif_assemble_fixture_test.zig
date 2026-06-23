@@ -28,6 +28,10 @@ test "cross-language: s4_gif_assemble reproduces the Haskell GIF golden byte-exa
 
     const meta_raw = readFileAlloc(alloc, dir, "gif_golden.json") catch |e| {
         if (e == error.SkipZigTest) {
+            if (build_options.require_fixtures) {
+                std.debug.print("\n  [FAIL] gif_golden.json absent but -Drequire_fixtures=true; produce the fixtures first\n", .{});
+                return error.FixtureRequired;
+            }
             std.debug.print(
                 "\n  [skip] gif_golden.json not in '{s}'; run `cd spec && cabal run spec-fixtures`\n",
                 .{dir},
