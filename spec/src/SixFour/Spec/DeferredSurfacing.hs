@@ -43,7 +43,7 @@ Additive: composes "SixFour.Spec.MaskedBandPrediction" (the latent/surfaced seam
 the only float→device crossing is the deferred 'surfaceBand' (= @predictMaskedBand@ =
 @reenterQ16@). Laws QuickCheck'd in "Properties.DeferredSurfacing".
 -}
--- COMPARTMENT: MLX-MODEL | tag:DeviceTag | STRADDLER
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.DeferredSurfacing
   ( -- * The rung phase: latent search until the deferred surface commit
     RungPhase(..)
@@ -102,9 +102,12 @@ pipelinePhases = replicate numRungs LatentSearch ++ [Surfaced]
 latentScore :: [Double] -> [MaskedBandExample] -> Double
 latentScore = maskedBandLossSum
 
--- | The DEFERRED surface crossing: the single @ByteCarrier.reenterQ16@ step that commits
--- a continuous latent readout to a bit-exact integer band
--- (= 'MaskedBandPrediction.predictMaskedBand'). Applied ONCE, AFTER rung 2.
+-- | The DEFERRED surface crossing: the model's single commit EXIT, applied ONCE AFTER rung 2.
+-- It is exactly 'MaskedBandPrediction.predictMaskedBand', which ALREADY routes through the
+-- "SixFour.Spec.ByteCarrier" wall (@predictMaskedBand = toByte (reenterQ16 (mkLatent (rawMaskedBand
+-- ...))))@) — so this is NOT a backend straddle: the module is MLX-MODEL latent-search logic
+-- (MacTag @[Double]@) that merely REFERENCES its already-wall-routed commit exit to prove the
+-- deferral matters ('lawDeferredSurfacingPreservesSubQuantum').
 surfaceBand :: [Double] -> MaskedBandExample -> Int
 surfaceBand = predictMaskedBand
 
