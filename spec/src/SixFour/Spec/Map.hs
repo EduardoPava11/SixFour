@@ -8,6 +8,59 @@ the Haddock HTML and click through) and *navigable* as the app changes. It defin
 Regenerate the browsable HTML + search with @spec/scripts/spec-docs.sh@ (Haddock + Hoogle). The categories
 below mirror @docs/SIXFOUR-SPEC-BROWSABLE-WORKFLOW.md@; keep them in sync when adding a module.
 
+== ★ BACKEND COMPARTMENTS — the translation map (orthogonal cross-cut of the categories below)
+
+The spec is the ONE source of truth that translates OUTWARD to four backends. Each compartment is
+bounded by a PHANTOM TAG: organising by compartment IS organising by tag. A value crosses a boundary
+only through a tagged seam; the only float->floor crossing is @ByteCarrier.reenterQ16@. (This is the
+index cross-cut; physically the modules stay where they are, gated by golden vectors per backend.)
+
+  * __THE WALLS (pure-spec, no backend code — they DEFINE the boundaries):__
+      "SixFour.Spec.ByteCarrier" (@MacTag@ float vs @DeviceTag@ byte; no exported @Latent -> Int@),
+      "SixFour.Spec.Sided" (@DisplaySide@ preview vs @CommitSide@ commit), "SixFour.Spec.BoundedP6"
+      (in-domain @|v|<=B@ by construction). The seam is @reenterQ16@ (= @AtlasGame.quantizeQ16@).
+
+  * __ZIG FLOOR__ (tag: @DeviceTag@/@CommitSide@/@BoundedP6@ — bit-exact integer, shipped). Mechanism:
+    golden-vector-gated HAND-PORT (@Codegen.Golden@ -> ~30 @s4_*@ kernels in @Native/src/kernels.zig@;
+    NO @.zig@ emitter, by design). Modules: "SixFour.Spec.SubstrateDomain", "SixFour.Spec.BoundedP6",
+    "SixFour.Spec.RGBTLift", "SixFour.Spec.CubeLadder", "SixFour.Spec.OctreeCell",
+    "SixFour.Spec.ByteCarrier", "SixFour.Spec.QuantFixed", "SixFour.Spec.ColorFixed",
+    "SixFour.Spec.LeafOverride", + the @safeNudge@/domain half of "SixFour.Spec.RelationalResidual" and
+    the Held rung of "SixFour.Spec.SelfSimilarReconstruct". __GAP:__ @liftOct@ (the @2x2x2->1@ octant
+    edge, the learned-token substrate) has NO @s4_octant_lift@ kernel (constructible from the two
+    existing quad kernels; the single highest-value floor kernel to add).
+
+  * __PYTHON/MLX MODEL + TRAINER__ (tag: @MacTag@ — float latent, Mac-side, NOT shipped). Mechanism:
+    a @Codegen.MLX@-style emitter (today emits the ABANDONED look-net). Modules: "SixFour.Spec.LargeJepaHead",
+    the trainer twin in "SixFour.Spec.MaskedBandPrediction" + "SixFour.Spec.MaskedBandTrainer",
+    "SixFour.Spec.JepaTarget", "SixFour.Spec.EncoderFrozen", "SixFour.Spec.NeuronRedundancy",
+    "SixFour.Spec.DeferredSurfacing", the Jacobian half of "SixFour.Spec.MoveSignal". __GAP (mostly):__
+    no I-JEPA-head MLX emitter, no Python trainer twin, NO DATA ENGINE (manufacture the
+    @(context,mask,held-target,position)@ tuples via the reversible lift), @coreai_export@ stub.
+
+  * __METAL GPU__ (data-parallel, shipped). Mechanism: hand-ported @.metal@ (NO @Codegen.Metal@ emitter
+    yet). Modules: the palette quantizers, float "SixFour.Spec.Color", the ordered branch of
+    "SixFour.Spec.SpatialDither", the accumulation of "SixFour.Spec.GMM", "SixFour.Spec.IsometryMove"
+    (SIMT-claimed, strongest A/B-throughput candidate, no kernel today), "SixFour.Spec.Coverage".
+    __GAP:__ a @Codegen.Metal@ emitter (template on the @InfluenceField@ dual-emit pattern).
+
+  * __SWIFT + CORE AI DEVICE__ (tag: @DisplaySide@ + the device, Tier-2 shipped). Mechanism:
+    @Codegen.Swift@ + golden-gated hand-port. DONE: the UI/FSM half + the 63-param @theta_B@ forward
+    ("SixFour.Spec.MaskedBandForward", byte-exact). __GAP:__ the ENTIRE steering chain is 0% Swift
+    ("SixFour.Spec.NudgeStep", "SixFour.Spec.LatentNavigation", "SixFour.Spec.SteeringSpine",
+    "SixFour.Spec.TwoMoveOctave", the @bandEnergy@ half of "SixFour.Spec.MoveSignal",
+    "SixFour.Spec.DisplayDecoder", "SixFour.Spec.ContinuousLoop"); the Core AI socket
+    (@CoreAILInference@) is ORPHANED (TODO stub, aimed at the deleted L-net) — it is the SOCKET the
+    large I-JEPA head must plug into once trained.
+
+THE I-JEPA MODEL COMPARTMENT makes Core AI CHECKABLE: the large head is @MacTag@ float, but
+@lawDepth1ReducesToFeaturesBPos@ pins its single-token limit to the SAME goldens the byte-exact
+@theta_B@ forward already passes, and "SixFour.Spec.MaskedBandTrainer" pins the descent endpoints. So
+a clean model compartment with EncoderFrozen as its lower wall and @reenterQ16@ as its only exit is
+exactly what lets the float Core AI head be verified against the integer floor. Prereqs (ordered):
+(1) @s4_octant_lift@ Zig kernel, (2) the data engine, (3) the @Codegen.JepaHead@ MLX emitter +
+Python trainer twin, (4) wire the Core AI socket to the trained weights.
+
 == ★ The core: the NN design
 The look-NN is the heart everything orbits. It takes the per-frame palettes (cat. 2), sees them collapsed
 (cat. 3), and emits a genome in the palette-tree space (cat. 4), scored by a value oracle and searched.
