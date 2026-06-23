@@ -1,10 +1,14 @@
 {- |
 Module      : SixFour.Spec.TwoMoveOctave
-Description : The two-move (GLOBAL coarse-octave then LOCAL fine-octave) @(a,b)@ chroma navigation: axis-aware @+/-1@ moves, the 12 ordered magnitude-2 paths over 8 endpoints, with one composed @d6@ as the per-two-move SIGNAL and the intermediate 16³ kept as the "mid funnel".
+Description : The two-move (GLOBAL coarse-octave then LOCAL fine-octave) @(a,b)@ chroma navigation: axis-aware @+/-1@ moves, the 12 ordered magnitude-2 paths over 8 endpoints, the composed @d6@ MOVE COST (a constant 2), and the intermediate 16³ kept as the "mid funnel". DOMAIN-respecting (refuses past @+/-B@).
 
 The user's next build step: let the user make TWO MOVES, GLOBAL then LOCAL, by @+/-1@ in
-the @(a,b)@ chroma directions; each move re-projects a fresh 16³ and the @d6@ distance is
-the SIGNAL that drives the GIF update.
+the @(a,b)@ chroma directions; each move re-projects a fresh 16³. The composed @d6@ is the
+move's abstract lattice COST (a constant @== 2@, 'moveMagnitude'), NOT a content signal:
+a uniform-translation move is content-blind, so the CONTENT-RESPONSIVE signal (how much the
+rendered 16³ actually changes) is a separate NEXT step that couples the move to the
+content-conditioned octant detail bands. This module pins the move ALGEBRA + INVARIANTS
+(geodesic, reversible, commuting, domain-respecting), the substrate the signal rides on.
 
 OCTAVE (resolved): there are TWO orthogonal distances. The VALUE distance @d6@
 ("SixFour.Spec.RelationalResidual") is LINEAR (Q16 L1; a @+/-1@ nudge is distance 1 at every
@@ -38,21 +42,30 @@ module SixFour.Spec.TwoMoveOctave
   , twoMoveEndpoints
   , midFunnel
   , finalPoint
-  , moveSignal
+  , moveMagnitude
+  , inverseMove
+  , safeApplyMove
     -- * Laws (QuickCheck'd in @Properties.TwoMoveOctave@)
   , lawDiagonalOrderingsDifferAtIntermediate
   , lawGlobalIsCoarserOctave
   , lawValueDistanceIsLinear
   , lawScaleDistanceIsOctave
   , lawTwoMoveEndpointsAreEight
-  , lawSignalIsComposedD6
+  , lawMoveCostIsTwo
+  , lawMoveMagnitudeIsConstant
   , lawMidFunnelIsOneGlobalStep
+  , lawTwoMoveIsGeodesic
+  , lawEveryPathIsMagnitudeTwo
+  , lawMoveIsReversible
+  , lawMovesCommute
+  , lawTwoMoveRespectsDomain
   ) where
 
 import Data.List (nub)
 
 import SixFour.Spec.Dim6 (Dim6(..))
-import SixFour.Spec.RelationalResidual (P6(..), d6, nudge)
+import SixFour.Spec.RelationalResidual (P6(..), d6, nudge, safeNudge, p6Coords)
+import SixFour.Spec.SubstrateDomain (inDomain)
 import SixFour.Spec.OctreeCell (octreeDepth, levelsBetween)
 import SixFour.Spec.SelfSimilarReconstruct (levelsPerStep)
 
@@ -117,10 +130,29 @@ midFunnel (g, _) = applyMove g
 finalPoint :: (AbMove, AbMove) -> P6 -> P6
 finalPoint (g, l) p = applyMove l (applyMove g p)
 
--- | THE per-two-move SIGNAL: one composed @d6@ between the start and the final 16³-coordinate
--- (the net signal that drives the GIF update). Linear, integer, Zig-floor, octave-invariant.
-moveSignal :: (AbMove, AbMove) -> P6 -> Int
-moveSignal path p = d6 p (finalPoint path p)
+-- | The abstract MOVE MAGNITUDE: the composed @d6@ between the start and the final
+-- coordinate. This is a CONSTANT @== 2@ for every magnitude-2 path (two unit axis steps add
+-- in L1), so it is the move's lattice COST, NOT a content signal. The CONTENT-RESPONSIVE
+-- signal (how much the rendered 16³ actually changes, which depends on local texture) is the
+-- NEXT build step and requires coupling the move to the content-conditioned octant detail
+-- bands ("SixFour.Spec.MaskedBandPrediction"): a uniform-translation move is content-blind, so
+-- no @d6@-on-the-coordinate (nor a uniform-nudge render readout) can vary with the picture.
+-- (Renamed from @moveSignal@; the old "drives the GIF update" claim was false — it is a
+-- constant, proven by 'lawMoveMagnitudeIsConstant'.)
+moveMagnitude :: (AbMove, AbMove) -> P6 -> Int
+moveMagnitude path p = d6 p (finalPoint path p)
+
+-- | The inverse of a move: same axis and octave, NEGATED delta. Undo-by-history applies the
+-- inverse (the move group has inverses).
+inverseMove :: AbMove -> AbMove
+inverseMove (AbMove ax d oct) = AbMove ax (negate d) oct
+
+-- | A DOMAIN-RESPECTING apply: @Just@ the moved point iff it stays in the substrate domain,
+-- @Nothing@ (the @RC_OUT_OF_RANGE@ sibling) otherwise. Routes through
+-- "SixFour.Spec.RelationalResidual" 'safeNudge' so the navigation cannot emit a P6 the shipped
+-- Zig kernel refuses. (Raw 'applyMove' stays for the in-domain laws.)
+safeApplyMove :: AbMove -> P6 -> Maybe P6
+safeApplyMove (AbMove ax d _) = safeNudge ax d
 
 -- ============================================================================
 -- Laws (predicates; QuickCheck'd in Properties.TwoMoveOctave)
@@ -176,12 +208,21 @@ lawTwoMoveEndpointsAreEight =
      length twoMoveEndpoints == 8
   && all (\(da, db) -> abs da + abs db == 2) twoMoveEndpoints
 
--- | The reported SIGNAL is one composed @d6@ between the start and the final coordinate.
--- Teeth: any other readout (e.g. summing the two step distances, which over-counts a
--- back-and-forth) fails against the net @d6@.
-lawSignalIsComposedD6 :: P6 -> Bool
-lawSignalIsComposedD6 p =
-  all (\path -> moveSignal path p == d6 p (finalPoint path p)) twoMovePaths
+-- | The move COST is the composed @d6@ between start and final (was @lawSignalIsComposedD6@;
+-- the cost is a lattice fact, NOT a content signal). Teeth: a readout that summed step
+-- distances (over-counting a back-and-forth) fails against the net @d6@.
+lawMoveCostIsTwo :: P6 -> Bool
+lawMoveCostIsTwo p =
+  all (\path -> moveMagnitude path p == d6 p (finalPoint path p)) twoMovePaths
+
+-- | HONESTY: 'moveMagnitude' is a CONSTANT @== 2@ for EVERY path at EVERY start — it is the
+-- move's abstract lattice cost, blind to the picture. This law exists to STOP the canon
+-- calling it "the signal that drives the GIF update": the content-responsive signal is a
+-- separate (next-step) object on the rendered 16³, not this constant. Teeth: a claim that
+-- @moveMagnitude@ varies (the old "signal" reading) fails.
+lawMoveMagnitudeIsConstant :: P6 -> Bool
+lawMoveMagnitudeIsConstant p =
+  all (\path -> moveMagnitude path p == 2) twoMovePaths
 
 -- | The mid funnel is exactly one GLOBAL step from the start (@d6 == 1@): the waypoint the
 -- user keeps known is a single unit move away, and the local move proceeds from it. Teeth: a
@@ -189,3 +230,55 @@ lawSignalIsComposedD6 p =
 lawMidFunnelIsOneGlobalStep :: P6 -> Bool
 lawMidFunnelIsOneGlobalStep p =
   all (\path -> d6 p (midFunnel path p) == 1) twoMovePaths
+
+-- | GEODESIC: every two-move's legs ADD with NO cancellation —
+-- @d6(start,mid) + d6(mid,final) == d6(start,final)@, with each leg exactly 1. So the mid
+-- funnel lies ON the shortest path and the move set contains no canceling pair (e.g. a
+-- @(+1a,-1a)@ would give legs @1+1@ but net @0@ and fail). Teeth: a canceling or off-geodesic
+-- path fails.
+lawTwoMoveIsGeodesic :: P6 -> Bool
+lawTwoMoveIsGeodesic p =
+  all (\path ->
+        let leg1 = d6 p (midFunnel path p)
+            leg2 = d6 (midFunnel path p) (finalPoint path p)
+        in leg1 == 1 && leg2 == 1 && leg1 + leg2 == d6 p (finalPoint path p)) twoMovePaths
+
+-- | SOUNDNESS: every path in the set is magnitude 2 (no magnitude-1 or canceling path leaked
+-- in). Teeth: injecting a @(+1a,-1a)@ (net 0) or a single-step path flips this False.
+lawEveryPathIsMagnitudeTwo :: P6 -> Bool
+lawEveryPathIsMagnitudeTwo p = all (\path -> moveMagnitude path p == 2) twoMovePaths
+
+-- | REVERSIBILITY (undo-by-history is well-formed): applying a move's 'inverseMove' restores
+-- the start, AND the inverse keeps the axis + octave and only flips the delta (an
+-- octave-changing "inverse" would still round-trip the coordinate, so the structural conjuncts
+-- are load-bearing). Teeth: a malformed inverse fails the structural conjuncts.
+lawMoveIsReversible :: Dim6 -> Int -> Octave -> P6 -> Bool
+lawMoveIsReversible ax d oct p =
+  let m  = AbMove ax d oct
+      im = inverseMove m
+  in applyMove im (applyMove m p) == p          -- round-trips
+     && mvAxis im == mvAxis m                    -- same axis
+     && mvOctave im == mvOctave m                -- same octave
+     && mvDelta im == negate (mvDelta m)         -- delta flipped
+
+-- | The single moves COMMUTE (the abelian backbone the keystone's "same endpoint" leans on):
+-- two integer axis-adds in either order land identically. Teeth: an order-dependent
+-- (gamut-clamping) move fails.
+lawMovesCommute :: Dim6 -> Int -> Dim6 -> Int -> P6 -> Bool
+lawMovesCommute ax1 d1 ax2 d2 p =
+  applyMove (AbMove ax1 d1 CoarseGlobal) (applyMove (AbMove ax2 d2 FineLocal) p)
+  == applyMove (AbMove ax2 d2 FineLocal) (applyMove (AbMove ax1 d1 CoarseGlobal) p)
+
+-- | DOMAIN: a two-move taken near the substrate edge REFUSES (via 'safeApplyMove') exactly
+-- when a step would leave the domain @|v| <= B@, matching the shipped Zig kernel. Teeth: the
+-- raw 'applyMove' would silently emit an out-of-domain point where the law demands @Nothing@.
+-- (Non-vacuous only at the edge — QuickCheck'd with @genP6Edge@.)
+lawTwoMoveRespectsDomain :: P6 -> Bool
+lawTwoMoveRespectsDomain p =
+  all (\(g, l) ->
+        case safeApplyMove g p of
+          Nothing  -> True                                   -- global step refused: fine
+          Just mid -> case safeApplyMove l mid of
+                        Nothing  -> True                      -- local step refused: fine
+                        Just fin -> all inDomain (p6Coords fin)  -- both accepted => in-domain
+      ) twoMovePaths

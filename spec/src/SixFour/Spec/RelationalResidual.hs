@@ -36,6 +36,9 @@ module SixFour.Spec.RelationalResidual
   , d6
   , dColour
   , nudge
+  , p6Coords
+  , axisVal
+  , safeNudge
     -- * The residual budget (carriers held out)
   , residualBands
   , searchPositionChannels
@@ -50,9 +53,11 @@ module SixFour.Spec.RelationalResidual
   , lawD6TriangleInequality
   , lawUnitQuantumIsOneStep
   , lawPositionDistinguishesSameColour
+  , lawNudgeRespectsDomain
   ) where
 
 import SixFour.Spec.Dim6 (Dim6(..), phi6, isUniversal, isSearch)
+import SixFour.Spec.SubstrateDomain (inDomain)
 
 -- | The comparable point: @(L,a,b,x,y,t)@ in Q16 integer units. Colour @(L,a,b)@ is
 -- stored today; position @(x,y,t)@ is lifted from the implicit Morton index into a real
@@ -65,6 +70,19 @@ data P6 = P6
 -- | The six coordinates in axis order (@L,a,b,x,y,t@).
 coords :: P6 -> [Int]
 coords (P6 l a b x y t) = [l, a, b, x, y, t]
+
+-- | The six coordinates (exported view of 'coords').
+p6Coords :: P6 -> [Int]
+p6Coords = coords
+
+-- | Read one axis's value off a point.
+axisVal :: Dim6 -> P6 -> Int
+axisVal DimL = p6L
+axisVal DimA = p6A
+axisVal DimB = p6B
+axisVal DimX = p6X
+axisVal DimY = p6Y
+axisVal DimT = p6T
 
 -- | The RELATIONAL DISTANCE: Q16 L1 over the 6D point. Symmetric, non-negative, zero iff
 -- equal, triangle-respecting (a genuine metric) — so the residual is a memory KEY any two
@@ -88,6 +106,16 @@ nudge DimB d p = p { p6B = p6B p + d }
 nudge DimX d p = p { p6X = p6X p + d }
 nudge DimY d p = p { p6Y = p6Y p + d }
 nudge DimT d p = p { p6T = p6T p + d }
+
+-- | A DOMAIN-RESPECTING move: @Just@ the nudged point iff every resulting coordinate stays
+-- inside the substrate domain @|v| <= B@ ("SixFour.Spec.SubstrateDomain" 'inDomain'),
+-- @Nothing@ otherwise — the @RC_OUT_OF_RANGE@ sibling. The raw 'nudge' adds silently past B
+-- (a P6 the shipped Zig kernel REFUSES, @liftChecked@); committing callers must route through
+-- 'safeNudge' so the spec cannot emit a point the substrate rejects.
+safeNudge :: Dim6 -> Int -> P6 -> Maybe P6
+safeNudge ax d p =
+  let q = nudge ax d p
+  in if all inDomain (coords q) then Just q else Nothing
 
 -- | The octant's detail-band count — @7@ ("SixFour.Spec.OctreeCell" @liftOct@ = 1 coarse
 -- + 7 detail).
@@ -177,3 +205,15 @@ lawPositionDistinguishesSameColour p q =
       samePos = p6X p == p6X q' && p6Y p == p6Y q' && p6T p == p6T q'
   in dColour p q' == 0                                    -- colour-only is blind to position
      && (d6 p q' == 0) == samePos                         -- d6 sees it: zero IFF positions match too
+
+-- | 'safeNudge' REFUSES exactly when the result would leave the substrate domain, matching
+-- the shipped Zig @liftChecked@ / @RC_OUT_OF_RANGE@: @Just@ implies every coordinate is
+-- in-domain; @Nothing@ implies the nudged axis value is out of domain. Teeth: the raw 'nudge'
+-- (which adds silently past B) would return an out-of-domain point where this law demands
+-- @Nothing@ — caught only when QuickCheck'd at the DOMAIN EDGE (genP6Edge), not the
+-- 16384x-inside-B default generator.
+lawNudgeRespectsDomain :: Dim6 -> Int -> P6 -> Bool
+lawNudgeRespectsDomain ax d p =
+  case safeNudge ax d p of
+    Just q  -> all inDomain (coords q)
+    Nothing -> not (inDomain (axisVal ax p + d))
