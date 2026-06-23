@@ -53,10 +53,13 @@ check_frozen 'globalCollapse' \
   spec/app/Fixtures.hs \
   spec/test/Properties/GroupRGBT.hs \
   spec/test/Properties/Collapse.hs \
+  spec/test/Properties/GlobalCollapseQ16.hs \
   spec/src/SixFour/Spec/Barycenter.hs \
   spec/src/SixFour/Spec/GroupRGBT.hs \
   spec/src/SixFour/Spec/Bures.hs \
   spec/src/SixFour/Spec/Collapse.hs \
+  spec/src/SixFour/Spec/GlobalCollapseQ16.hs \
+  spec/src/SixFour/Spec/Map.hs \
   spec/src/SixFour/Codegen/Collapse.hs
 
 check_frozen 's4_global_collapse' \
@@ -65,7 +68,9 @@ check_frozen 's4_global_collapse' \
   SixFour/Encoder/DeterministicRenderer.swift \
   Native/src/collapse_fixture_test.zig \
   Native/src/kernels.zig \
-  spec/app/Fixtures.hs
+  spec/app/Fixtures.hs \
+  spec/src/SixFour/Spec/GlobalCollapseQ16.hs \
+  spec/src/SixFour/Spec/Map.hs
 
 check_frozen 'renderGlobalPalette' \
   SixFour/UI/Screens/Capture/CaptureViewModel.swift \

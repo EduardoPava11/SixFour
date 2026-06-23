@@ -27,7 +27,7 @@ import           Data.Text (Text)
 import           Data.List (foldl')
 
 import SixFour.Spec.ColorFixed (linearToOklabQ16, goldenLinearInputsQ16)
-import SixFour.Spec.Collapse
+import SixFour.Spec.GlobalCollapseQ16
   ( PxQ16, pooledCandidatesQ16, globalCollapseQ16, globalCollapseIndicesQ16
   , reindexFrameQ16 )
 

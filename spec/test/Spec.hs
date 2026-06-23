@@ -14,6 +14,7 @@ import qualified Properties.Wu           as Wu
 import qualified Properties.QuantFixed   as QuantFixed
 import qualified Properties.Coverage     as Coverage
 import qualified Properties.Collapse     as Collapse
+import qualified Properties.GlobalCollapseQ16 as GlobalCollapseQ16
 import qualified Properties.Diversity    as Diversity
 import qualified Properties.GMM          as GMM
 import qualified Properties.Bures        as Bures
@@ -186,6 +187,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , QuantFixed.tests
   , Coverage.tests
   , Collapse.tests
+  , GlobalCollapseQ16.tests
   , Diversity.tests
   , GMM.tests
   , Bures.tests

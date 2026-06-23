@@ -3,7 +3,7 @@ module Properties.RGBTFeature (tests) where
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
-import SixFour.Spec.Collapse  (PxQ16)
+import SixFour.Spec.GlobalCollapseQ16  (PxQ16)
 import SixFour.Spec.Entropy   (RGBTWeights(..))
 import SixFour.Spec.RGBTFeature
 
