@@ -24,7 +24,6 @@ import qualified Properties.Entropy      as Entropy
 import qualified Properties.RGBTFeature  as RGBTFeature
 import qualified Properties.CubeLadder   as CubeLadder
 import qualified Properties.VoxelReduce  as VoxelReduce
-import qualified Properties.DivergenceSchedule as DivergenceSchedule
 import qualified Properties.ABSurface    as ABSurface
 import qualified Properties.GenomeCarrier as GenomeCarrier
 import qualified Properties.PairTree     as PairTree
@@ -61,7 +60,6 @@ import qualified Properties.DetailPredictor as DetailPredictor
 import qualified Properties.Dim6          as Dim6
 import qualified Properties.ProjectionOrdering as ProjectionOrdering
 import qualified Properties.Dimensions    as Dimensions
-import qualified Properties.OptionTree    as OptionTree
 import qualified Properties.ChromaRotation as ChromaRotation
 import qualified Properties.LatentNavigation as LatentNavigation
 import qualified Properties.DetentNudge   as DetentNudge
@@ -101,12 +99,6 @@ import qualified Properties.CanonicalPhase as CanonicalPhase
 import qualified Properties.SigmaPairFixed as SigmaPairFixed
 import qualified Properties.LeafOverride  as LeafOverride
 import qualified Properties.LocalPonder   as LocalPonder
-import qualified Properties.IsometryMove  as IsometryMove
-import qualified Properties.MoveRadiusSchedule as MoveRadiusSchedule
-import qualified Properties.GenomePair    as GenomePair
-import qualified Properties.Proposer      as Proposer
-import qualified Properties.ValueHead     as ValueHead
-import qualified Properties.ThetaToDelta  as ThetaToDelta
 import qualified Properties.PaletteGesture as PaletteGesture
 import qualified Properties.GroupRGBT     as GroupRGBT
 import qualified Properties.Quad4Fixed   as Quad4Fixed
@@ -131,57 +123,17 @@ import qualified Properties.FrontProjection as FrontProjection
 import qualified Properties.VoxelFit     as VoxelFit
 import qualified Properties.CellShapes   as CellShapes
 import qualified Properties.SevenSeg     as SevenSeg
-import qualified Properties.CloudProjection as CloudProjection
-import qualified Properties.PaletteSearch as PaletteSearch
-import qualified Properties.LookCategory as LookCategory
 import qualified Properties.HaarRibbon as HaarRibbon
 import qualified Properties.QuartetDelta as QuartetDelta
-import qualified Properties.LinAlg as LinAlg
-import qualified Properties.PaletteOracle as PaletteOracle
 import qualified Properties.Dither       as Dither
 import qualified Properties.SpatialDither as SpatialDither
-import qualified Properties.LookNet      as LookNet
-import qualified Properties.LookCore     as LookCore
-import qualified Properties.Layer        as Layer
-import qualified Properties.Scale        as Scale
-import qualified Properties.Preference   as Preference
 import qualified Properties.Bottleneck16 as Bottleneck16
-import qualified Properties.SigmaDecomp  as SigmaDecomp
-import qualified Properties.Quad4        as Quad4
-import qualified Properties.SigmaPairHead as SigmaPairHead
-import qualified Properties.Pipeline     as Pipeline
-import qualified Properties.AxisNet      as AxisNet
-import qualified Properties.Obfuscation  as Obfuscation
 import qualified Properties.Loom         as Loom
 import qualified Properties.Significance as Significance
 import qualified Properties.SignificanceFixed as SignificanceFixed
 import qualified Properties.STBN3D       as STBN3D
 import qualified Properties.Cyclic       as Cyclic
 import qualified Properties.PlaybackClock as PlaybackClock
-import qualified Properties.Look         as Look
-import qualified Properties.Tensor       as Tensor
-import qualified Properties.LookNetE     as LookNetE
-import qualified Properties.LookNetR     as LookNetR
-import qualified Properties.LookNetD     as LookNetD
-import qualified Properties.LookNetCompose as LookNetCompose
-import qualified Properties.CoreMLContract as CoreMLContract
-import qualified Properties.MLXContract  as MLXContract
-import qualified Properties.GoldenForward as GoldenForward
-import qualified Properties.AtlasNetEval as AtlasNetEval
-import qualified Properties.AtlasGame    as AtlasGame
-import qualified Properties.BoardQ16     as BoardQ16
-import qualified Properties.GLRM         as GLRM
-import qualified Properties.GumbelSearch as GumbelSearch
-import qualified Properties.Loss         as Loss
-import qualified Properties.AtlasBoard   as AtlasBoard
-import qualified Properties.AtlasMove    as AtlasMove
-import qualified Properties.AtlasState   as AtlasState
-import qualified Properties.DeltaCodebook as DeltaCodebook
-import qualified Properties.AtlasOracle  as AtlasOracle
-import qualified Properties.PreferenceUpdate as PreferenceUpdate
-import qualified Properties.PersonalGenome as PersonalGenome
-import qualified Properties.GenomeBlend  as GenomeBlend
-import qualified Properties.DecisionLog  as DecisionLog
 import qualified Properties.AtlasCascade as AtlasCascade
 import qualified Properties.Upscale256   as Upscale256
 
@@ -209,7 +161,6 @@ main = defaultMain $ testGroup "sixfour-spec"
   , RGBTFeature.tests
   , CubeLadder.tests
   , VoxelReduce.tests
-  , DivergenceSchedule.tests
   , ABSurface.tests
   , GenomeCarrier.tests
   , PairTree.tests
@@ -246,7 +197,6 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Dim6.tests
   , ProjectionOrdering.tests
   , Dimensions.tests
-  , OptionTree.tests
   , ChromaRotation.tests
   , LatentNavigation.tests
   , DetentNudge.tests
@@ -286,12 +236,6 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SigmaPairFixed.tests
   , LeafOverride.tests
   , LocalPonder.tests
-  , IsometryMove.tests
-  , MoveRadiusSchedule.tests
-  , GenomePair.tests
-  , Proposer.tests
-  , ValueHead.tests
-  , ThetaToDelta.tests
   , PaletteGesture.tests
   , GroupRGBT.tests
   , Quad4Fixed.tests
@@ -316,57 +260,17 @@ main = defaultMain $ testGroup "sixfour-spec"
   , VoxelFit.tests
   , CellShapes.tests
   , SevenSeg.tests
-  , CloudProjection.tests
-  , PaletteSearch.tests
-  , PaletteOracle.tests
-  , LookCategory.tests
   , HaarRibbon.tests
   , QuartetDelta.tests
-  , LinAlg.tests
   , Dither.tests
   , SpatialDither.tests
-  , LookNet.tests
-  , LookCore.tests
-  , Layer.tests
-  , Preference.tests
   , Bottleneck16.tests
-  , SigmaDecomp.tests
-  , Quad4.tests
-  , SigmaPairHead.tests
-  , Pipeline.tests
-  , AxisNet.tests
-  , Obfuscation.tests
   , Loom.tests
   , Significance.tests
   , SignificanceFixed.tests
   , STBN3D.tests
   , Cyclic.tests
   , PlaybackClock.tests
-  , Look.tests
-  , Scale.tests
-  , Tensor.tests
-  , LookNetE.tests
-  , LookNetR.tests
-  , LookNetD.tests
-  , LookNetCompose.tests
-  , CoreMLContract.tests
-  , MLXContract.tests
-  , GoldenForward.tests
-  , AtlasNetEval.tests
-  , AtlasGame.tests
-  , BoardQ16.tests
-  , GLRM.tests
-  , GumbelSearch.tests
-  , Loss.tests
-  , AtlasBoard.tests
-  , AtlasMove.tests
-  , AtlasState.tests
-  , DeltaCodebook.tests
-  , AtlasOracle.tests
-  , PreferenceUpdate.tests
-  , PersonalGenome.tests
-  , GenomeBlend.tests
-  , DecisionLog.tests
   , AtlasCascade.tests
   , Upscale256.tests
   ]

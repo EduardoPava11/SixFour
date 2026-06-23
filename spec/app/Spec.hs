@@ -32,31 +32,23 @@ import           System.Environment (getArgs)
 import           Data.Maybe (fromMaybe)
 
 import SixFour.Codegen.Swift
-  ( emitStageContract, emitNetContract, emitSTBN3DContract, emitSignificanceContract
+  ( emitStageContract, emitSTBN3DContract, emitSignificanceContract
   , emitGlobalVolumeContract, emitLatticeContract, emitBoundaryContract
   , emitFieldTuningContract, emitFieldTuningMetalHeader, emitInfluenceFieldGolden
   , emitCellShapesContract
   , emitSevenSegContract, emitPlaybackClockContract, emitCellContract
   , emitDisplayContract, emitABSurfaceContract, emitFrontProjectionGolden, emitVoxelFitContract, emitOrderContract, emitExportContract
   , emitGridLayoutContract, emitMoveContract, emitCellMechanicsContract, emitOwnershipContract )
-import SixFour.Codegen.Shapes (emitStagesPy,      emitNetShapePy)
-import SixFour.Codegen.Burn   (emitBurnContract)
-import SixFour.Codegen.CoreML (emitLookNetTorch,  emitBuildMlpackage)
-import SixFour.Codegen.MLX    (emitLookNetMLX)
-import SixFour.Codegen.Golden (emitLookNetGolden, emitAxisNetGolden)
+import SixFour.Codegen.Shapes (emitStagesPy)
 import SixFour.Codegen.JepaData (emitJepaDataGolden)
 import SixFour.Codegen.Collapse (emitCollapseGolden)
 import SixFour.Codegen.RGBT4D (emitRGBT4DGolden)
 import SixFour.Codegen.VoxelReduce (emitVoxelReduceGolden)
-import SixFour.Codegen.GenomePair (emitGenomePairGolden)
 import SixFour.Codegen.GenomeCarrier (emitGenomeCarrierGolden)
 import SixFour.Codegen.MaskedBand (emitMaskedBandGolden)
 import SixFour.Codegen.PairTree (emitPairTreeGolden)
 import SixFour.Codegen.QuartetDelta (emitQuartetDeltaGolden)
-import SixFour.Codegen.PaletteValue (emitPaletteValueGolden)
-import SixFour.Codegen.Genome (emitGenomeGolden)
 import SixFour.Codegen.GenomeFixed (emitGenomeFixedGolden)
-import SixFour.Codegen.CloudProjection (emitCloudProjectionGolden)
 import SixFour.Codegen.GridAxis (emitGridAxisGolden)
 import SixFour.Spec.STBN3D    (Mask3D(..), generateSTBN3D)
 
@@ -70,7 +62,6 @@ main = do
       burnOutDir    = fromMaybe "../studio/look-nn-baseline/src/generated" (lookup "--burn-out" opts)
 
   writeUtf8 (swiftOutDir   </> "StageContract.swift")  emitStageContract
-  writeUtf8 (swiftOutDir   </> "NetContract.swift")    emitNetContract
   writeUtf8 (swiftOutDir   </> "STBN3DContract.swift") emitSTBN3DContract
   writeUtf8 (swiftOutDir   </> "SignificanceContract.swift") emitSignificanceContract
   writeUtf8 (swiftOutDir   </> "GlobalVolumeContract.swift") emitGlobalVolumeContract
@@ -96,25 +87,14 @@ main = do
   writeUtf8 (swiftOutDir   </> "CollapseGolden.swift")       emitCollapseGolden
   writeUtf8 (swiftOutDir   </> "RGBT4DGolden.swift")         emitRGBT4DGolden
   writeUtf8 (swiftOutDir   </> "VoxelReduceGolden.swift")    emitVoxelReduceGolden
-  writeUtf8 (swiftOutDir   </> "GenomePairGolden.swift")     emitGenomePairGolden
   writeUtf8 (swiftOutDir   </> "GenomeCarrierGolden.swift")  emitGenomeCarrierGolden
   writeUtf8 (swiftOutDir   </> "PairTreeGolden.swift")       emitPairTreeGolden
   writeUtf8 (swiftOutDir   </> "MaskedBandGolden.swift")     emitMaskedBandGolden
   writeUtf8 (swiftOutDir   </> "QuartetDeltaGolden.swift")   emitQuartetDeltaGolden
-  writeUtf8 (swiftOutDir   </> "PaletteValueGolden.swift")   emitPaletteValueGolden
-  writeUtf8 (swiftOutDir   </> "GenomeGolden.swift")         emitGenomeGolden
   writeUtf8 (swiftOutDir   </> "GenomeFixedGolden.swift")    emitGenomeFixedGolden
-  writeUtf8 (swiftOutDir   </> "CloudProjectionGolden.swift") emitCloudProjectionGolden
   writeUtf8 (swiftOutDir   </> "GridAxisGolden.swift")        emitGridAxisGolden
   writeUtf8 (mlxOutDir     </> "stages.py")            emitStagesPy
-  writeUtf8 (mlxOutDir     </> "net_shape.py")         emitNetShapePy
-  writeUtf8 (mlxOutDir     </> "look_net_mlx.py")      emitLookNetMLX
-  writeUtf8 (mlxOutDir     </> "look_net_golden.json") emitLookNetGolden
   writeUtf8 (mlxOutDir     </> "jepa_data_golden.json") emitJepaDataGolden
-  writeUtf8 (mlxOutDir     </> "axisnet_golden.json")  emitAxisNetGolden
-  writeUtf8 (mlxOutDir     </> "look_net_torch.py")    emitLookNetTorch
-  writeUtf8 (mlxOutDir     </> "build_mlpackage.py")   emitBuildMlpackage
-  writeUtf8 (burnOutDir    </> "contract.rs")          emitBurnContract
 
   -- Drop a Python __init__.py so `from generated import …` works.
   writeUtf8 (mlxOutDir </> "__init__.py") T.empty

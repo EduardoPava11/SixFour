@@ -74,7 +74,6 @@ library
         SixFour.Spec.Dim6
         SixFour.Spec.ProjectionOrdering
         SixFour.Spec.Dimensions
-        SixFour.Spec.OptionTree
         SixFour.Spec.ChromaRotation
         SixFour.Spec.LatentNavigation
         SixFour.Spec.DetentNudge
@@ -116,17 +115,11 @@ library
         SixFour.Spec.PairedResidual
         SixFour.Spec.TemporalLoop
         SixFour.Spec.VoxelReduce
-        SixFour.Spec.DivergenceSchedule
         SixFour.Spec.ABSurface
         SixFour.Spec.CanonicalPhase
         SixFour.Spec.SigmaPairFixed
         SixFour.Spec.LeafOverride
         SixFour.Spec.LocalPonder
-        SixFour.Spec.IsometryMove
-        SixFour.Spec.MoveRadiusSchedule
-        SixFour.Spec.ThetaToDelta
-        SixFour.Spec.GenomePair
-        SixFour.Spec.GenomeBlend
         SixFour.Spec.GenomeCarrier
         SixFour.Spec.PaletteGesture
         SixFour.Spec.GroupRGBT
@@ -153,76 +146,28 @@ library
         SixFour.Spec.VoxelFit
         SixFour.Spec.CellShapes
         SixFour.Spec.SevenSeg
-        SixFour.Spec.CloudProjection
-        SixFour.Spec.PaletteSearch
-        SixFour.Spec.Proposer
-        SixFour.Spec.ValueHead
-        SixFour.Spec.PaletteOracle
         SixFour.Spec.Dither
-        SixFour.Spec.LookNet
-        SixFour.Spec.LookCore
-        SixFour.Spec.Layer
-        SixFour.Spec.Scale
-        SixFour.Spec.Preference
-        SixFour.Spec.LookCategory
         SixFour.Spec.Bottleneck16
-        SixFour.Spec.SigmaDecomp
-        SixFour.Spec.Quad4
-        SixFour.Spec.LinAlg
-        SixFour.Spec.SigmaPairHead
-        SixFour.Spec.Pipeline
-        SixFour.Spec.AxisNet
-        SixFour.Spec.Obfuscation
         SixFour.Spec.Loom
         SixFour.Spec.Significance
         SixFour.Spec.SignificanceFixed
-        SixFour.Spec.Net
         SixFour.Spec.Cyclic
         SixFour.Spec.PlaybackClock
-        SixFour.Spec.Look
         SixFour.Spec.Laws
-        SixFour.Spec.Tensor
-        SixFour.Spec.LookNetE
-        SixFour.Spec.LookNetR
-        SixFour.Spec.LookNetD
-        SixFour.Spec.LookNetCompose
-        SixFour.Spec.LookNetEval
-        SixFour.Spec.AtlasNetEval
-        SixFour.Spec.AtlasGame
-        SixFour.Spec.BoardQ16
-        SixFour.Spec.GLRM
-        SixFour.Spec.GumbelSearch
-        SixFour.Spec.Loss
         SixFour.Spec.STBN3D
-        SixFour.Spec.AtlasBoard
-        SixFour.Spec.AtlasMove
-        SixFour.Spec.AtlasState
-        SixFour.Spec.DeltaCodebook
-        SixFour.Spec.AtlasOracle
-        SixFour.Spec.PreferenceUpdate
-        SixFour.Spec.PersonalGenome
-        SixFour.Spec.DecisionLog
         SixFour.Spec.AtlasCascade
         SixFour.Spec.Upscale256
         SixFour.Codegen.Swift
         SixFour.Codegen.Shapes
-        SixFour.Codegen.Burn
-        SixFour.Codegen.CoreML
-        SixFour.Codegen.MLX
-        SixFour.Codegen.Golden
         SixFour.Codegen.JepaData
         SixFour.Codegen.Collapse
         SixFour.Codegen.RGBT4D
         SixFour.Codegen.VoxelReduce
-        SixFour.Codegen.GenomePair
         SixFour.Codegen.GenomeCarrier
         SixFour.Codegen.MaskedBand
         SixFour.Codegen.PairTree
         SixFour.Codegen.QuartetDelta
-        SixFour.Codegen.PaletteValue
-        SixFour.Codegen.Genome
         SixFour.Codegen.GenomeFixed
-        SixFour.Codegen.CloudProjection
         SixFour.Codegen.GridAxis
     build-depends:
         base       >=4.16 && <5
@@ -295,56 +240,12 @@ executable spec-fixtures
       , KindSignatures
       , TypeOperators
 
-executable spec-tui
-    import:           warnings
-    main-is:          Tui.hs
-    build-depends:
-        base
-      , sixfour-spec
-      , vector
-      , mtl    >=2.2 && <2.4
-      , brick  >=1.0 && <2.0
-      , vty    >=5.33 && <6.0
-    hs-source-dirs:   app
-    default-language: Haskell2010
-    default-extensions:
-        DataKinds
-      , TypeApplications
-      , ScopedTypeVariables
-      , TypeOperators
-
--- Renders the look-NN's problem + proofs as animated GIFs (the visual medium).
--- JuicyPixels (BSD-3) is isolated to this exe — it never enters the spec library.
-executable spec-gif
-    import:           warnings
-    main-is:          Gif.hs
-    other-modules:
-        SixFour.Viz.Gif
-    build-depends:
-        base
-      , sixfour-spec
-      , vector
-      , containers
-      , bytestring  >=0.11 && <0.13
-      , directory   >=1.3  && <1.4
-      , filepath    >=1.4  && <1.6
-      , JuicyPixels >=3.3  && <3.4
-    hs-source-dirs:   viz app
-    default-language: Haskell2010
-    default-extensions:
-        DataKinds
-      , TypeApplications
-      , ScopedTypeVariables
-
--- Generates FULL 64^3 GIFs that mimic the app's GIFEncoder.swift output, for
--- look-NN design + testing. Pure bytestring encoder/decoder — no JuicyPixels.
 executable spec-gen
     import:           warnings
     main-is:          Gen.hs
     other-modules:
         SixFour.Gen.GifWire
         SixFour.Gen.GifDecode
-        SixFour.Gen.AxisInput
         SixFour.Gen.Battery
         SixFour.Gen.Synth
         SixFour.Gen.Realize
@@ -395,7 +296,6 @@ test-suite spec-tests
         Properties.RGBTFeature
         Properties.CubeLadder
         Properties.VoxelReduce
-        Properties.DivergenceSchedule
         Properties.ABSurface
         Properties.GenomeCarrier
         Properties.PairTree
@@ -432,7 +332,6 @@ test-suite spec-tests
         Properties.Dim6
         Properties.ProjectionOrdering
         Properties.Dimensions
-        Properties.OptionTree
         Properties.ChromaRotation
         Properties.LatentNavigation
         Properties.DetentNudge
@@ -472,12 +371,6 @@ test-suite spec-tests
         Properties.SigmaPairFixed
         Properties.LeafOverride
         Properties.LocalPonder
-        Properties.IsometryMove
-        Properties.MoveRadiusSchedule
-        Properties.GenomePair
-        Properties.Proposer
-        Properties.ValueHead
-        Properties.ThetaToDelta
         Properties.PaletteGesture
         Properties.GroupRGBT
         Properties.Quad4Fixed
@@ -502,57 +395,17 @@ test-suite spec-tests
         Properties.VoxelFit
         Properties.CellShapes
         Properties.SevenSeg
-        Properties.CloudProjection
-        Properties.PaletteSearch
-        Properties.PaletteOracle
-        Properties.LookCategory
         Properties.HaarRibbon
         Properties.QuartetDelta
-        Properties.LinAlg
         Properties.Dither
         Properties.SpatialDither
-        Properties.LookNet
-        Properties.LookCore
-        Properties.Layer
-        Properties.Scale
-        Properties.Preference
         Properties.Bottleneck16
-        Properties.SigmaDecomp
-        Properties.Quad4
-        Properties.SigmaPairHead
-        Properties.Pipeline
-        Properties.AxisNet
-        Properties.Obfuscation
         Properties.Loom
         Properties.Significance
         Properties.SignificanceFixed
         Properties.STBN3D
         Properties.Cyclic
         Properties.PlaybackClock
-        Properties.Look
-        Properties.Tensor
-        Properties.LookNetE
-        Properties.LookNetR
-        Properties.LookNetD
-        Properties.LookNetCompose
-        Properties.CoreMLContract
-        Properties.MLXContract
-        Properties.GoldenForward
-        Properties.AtlasNetEval
-        Properties.AtlasGame
-        Properties.BoardQ16
-        Properties.GLRM
-        Properties.GumbelSearch
-        Properties.Loss
-        Properties.AtlasBoard
-        Properties.AtlasMove
-        Properties.AtlasState
-        Properties.DeltaCodebook
-        Properties.AtlasOracle
-        Properties.PreferenceUpdate
-        Properties.PersonalGenome
-        Properties.GenomeBlend
-        Properties.DecisionLog
         Properties.AtlasCascade
         Properties.Upscale256
     build-depends:
@@ -586,7 +439,6 @@ test-suite gen-tests
     other-modules:
         SixFour.Gen.GifWire
         SixFour.Gen.GifDecode
-        SixFour.Gen.AxisInput
         SixFour.Gen.Synth
         SixFour.Gen.Realize
         SixFour.Gen.Stats
