@@ -37,6 +37,7 @@ library
         SixFour.Spec.QuartetDelta
         SixFour.Spec.Diversity
         SixFour.Spec.EncoderModalityLoad
+        SixFour.Spec.EncoderWidthAlloc
         SixFour.Spec.SpatialDither
         SixFour.Spec.GMM
         SixFour.Spec.Bures
@@ -292,6 +293,7 @@ test-suite spec-tests
         Properties.GlobalCollapseQ16
         Properties.Diversity
         Properties.EncoderModalityLoad
+        Properties.EncoderWidthAlloc
         Properties.GMM
         Properties.Bures
         Properties.Sinkhorn
