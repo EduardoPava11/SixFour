@@ -41,12 +41,14 @@ module SixFour.Spec.ByteCarrier
   , unLatent
   , q16
   , toByte
-    -- * The single float -> device crossing
+    -- * The single float -> device crossing (scalar + batched)
   , reenterQ16
+  , reenterQ16Many
     -- * Laws (QuickCheck'd in @Properties.ByteCarrier@)
   , lawByteOnlyFromQ16
   , lawReentryIsFloor
   , lawDeviceRoundTrips
+  , lawBatchedReentryIsElementwise
   ) where
 
 import SixFour.Spec.AtlasGame (quantizeQ16, toQ16)
@@ -89,6 +91,14 @@ toByte = unCarried
 reenterQ16 :: Latent -> Q16
 reenterQ16 (Carried x) = Carried (quantizeQ16 x)
 
+-- | THE BATCHED float→device crossing: a large I-JEPA / Core AI head emits a VECTOR of
+-- bands (an @NDArray@ of float logits), not a scalar. This is the ONLY sanctioned batched
+-- door — it is exactly the elementwise 'reenterQ16' (no cross-element coupling, no reduction
+-- that could leak one band's float into another's byte), so the vector head re-enters the Q16
+-- floor band-by-band through the same single crossing. ('lawBatchedReentryIsElementwise'.)
+reenterQ16Many :: [Latent] -> [Q16]
+reenterQ16Many = map reenterQ16
+
 -- ============================================================================
 -- Laws (predicates; QuickCheck'd in Properties.ByteCarrier)
 -- ============================================================================
@@ -107,3 +117,11 @@ lawReentryIsFloor q = toByte (reenterQ16 (mkLatent (toQ16 q))) == q
 -- | The device carrier round-trips trivially: @toByte . q16 == id@.
 lawDeviceRoundTrips :: Int -> Bool
 lawDeviceRoundTrips n = toByte (q16 n) == n
+
+-- | The BATCHED door is exactly elementwise 'reenterQ16': each band re-enters the floor
+-- independently, so a vector head's committed bytes are the per-band re-entries with NO
+-- cross-band coupling. Teeth: a batched door that summed/normalised across bands (leaking one
+-- band's float into another's byte) would differ from the elementwise map and fail.
+lawBatchedReentryIsElementwise :: [Double] -> Bool
+lawBatchedReentryIsElementwise xs =
+  map toByte (reenterQ16Many (map mkLatent xs)) == map (\x -> toByte (reenterQ16 (mkLatent x))) xs

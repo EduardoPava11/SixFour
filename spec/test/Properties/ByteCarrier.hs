@@ -18,6 +18,8 @@ tests = testGroup "ByteCarrier (typed device-byte vs Mac-float boundary; leak = 
 
   , testProperty "the device carrier round-trips: toByte . q16 = id" $
       forAll (choose (-1000000, 1000000)) lawDeviceRoundTrips
+  , testProperty "the BATCHED door is elementwise (a vector head re-enters band-by-band)" $
+      lawBatchedReentryIsElementwise
 
     -- NOTE: `toByte someLatent` is a TYPE ERROR (no exported Latent -> Int), which is
     -- the real guarantee; it cannot be expressed as a runtime property.
