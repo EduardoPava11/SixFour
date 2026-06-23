@@ -1,0 +1,103 @@
+digraph SixFourNetworks {
+  rankdir=TB;
+  graph [fontname="Helvetica", fontsize=11, splines=true, nodesep=0.35, ranksep=0.6, bgcolor="white", labelloc="t",
+         label="SixFour neural networks and how they relate (master 623392b). Blue = LIVE I-JEPA core; coral/dashed = LookNet (V2-deferred); green = on-device self-reinforcement; gray = frozen, zero-param."];
+  node  [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled", fillcolor="white", color="#555555"];
+  edge  [fontname="Helvetica", fontsize=8, color="#666666", arrowsize=0.7];
+
+  // ---- input ----
+  cube   [label="octant cube\n(8 voxels, Q16)", shape=oval, fillcolor="#eeeeee"];
+
+  // ================= FROZEN SUBSTRATE (zero params = the tokenizer) =================
+  subgraph cluster_frozen {
+    label="FROZEN SUBSTRATE  (zero params — the I-JEPA tokenizer; bit-exact Zig floor)";
+    style="rounded,filled"; fillcolor="#f4f4f4"; color="#999999"; fontsize=11;
+    liftOct   [label="liftOct  [OctreeCell]\nreversible 2x2x2 -> 1 + 7 detail", fillcolor="#dddddd"];
+    bands     [label="coarse (carrier L)  +  7 detail bands", shape=oval, fillcolor="#eeeeee"];
+    feats     [label="featuresBPos  [MaskedBandPrediction]\nparameter-free: coarse + 6 siblings + (x,y)", fillcolor="#dddddd"];
+  }
+
+  // ================= I-JEPA HEAD (LIVE, learned) =================
+  subgraph cluster_ijepa {
+    label="I-JEPA HEAD  (LIVE learned core — the current direction)";
+    style="rounded,filled"; fillcolor="#e8f0fc"; color="#3a6ea5"; fontsize=11;
+    thetaB    [label="theta_B  [MaskedBandPrediction]\n63->77 params, the masked-band predictor\nSHIPS: MaskedBandForward.swift (golden)", fillcolor="#bcd4f0"];
+    largeHead [label="LargeJepaHead\nViT-scale, d6 learnable attention bias\nreduces to theta_B at depth-1", fillcolor="#9ec0ec"];
+    d6        [label="RelationalMemory.d6\nthe metric = attention ground-distance", fillcolor="#cfe0f7"];
+    target    [label="JepaTarget\nmanufactured target (no EMA, collapse-proof)", fillcolor="#cfe0f7"];
+    deferred  [label="DeferredSurfacing\ntwo-rung latent search, surface once", fillcolor="#cfe0f7"];
+    vicreg    [label="NeuronRedundancy (VICReg)\ncollapse guard (load-bearing at scale)", fillcolor="#cfe0f7"];
+  }
+
+  // ================= TRAINING (the data engine -> descent -> weights) =================
+  subgraph cluster_train {
+    label="TRAINING  (spec-forced as of this session)";
+    style="rounded,filled"; fillcolor="#eef7ee"; color="#4a8a4a"; fontsize=11;
+    jepaData  [label="JepaData  +  Codegen.JepaData\ncorpus golden (reconstruct == cube)\n<- Python jepa_data.py forced byte-exact", fillcolor="#cdeccd"];
+    trainer   [label="MaskedBandTrainer\ntrainBandJoint descent -> theta_B weights", fillcolor="#cdeccd"];
+  }
+
+  // ================= LOOKNET FAMILY (legacy / V2-deferred) =================
+  subgraph cluster_looknet {
+    label="LOOKNET FAMILY  (V2-deferred sigma-pair genome MoR transformer)";
+    style="rounded,filled,dashed"; fillcolor="#fbeeee"; color="#b56b6b"; fontsize=11;
+    palettes  [label="64 per-frame palettes", shape=oval, fillcolor="#f3dede"];
+    lnE       [label="LookNetE\nEncoder (set -> sigma-equivariant context, L3)", fillcolor="#f0cccc", style="rounded,filled,dashed"];
+    lnR       [label="LookNetR\nRecursion core (Mixture-of-Recursions, L4)", fillcolor="#f0cccc", style="rounded,filled,dashed"];
+    lnD       [label="LookNetD\nDecoder -> 384-DOF sigma-pair genome (L5)", fillcolor="#f0cccc", style="rounded,filled,dashed"];
+    lnLoss    [label="Loss (OT / reconstruction)\nNet: pinned shapes -> NetContract", fillcolor="#f3dede", style="rounded,filled,dashed"];
+  }
+
+  // ================= ATLAS / SELF-REINFORCEMENT (on-device MPSGraph) =================
+  subgraph cluster_atlas {
+    label="ATLAS — on-device SELF-REINFORCEMENT (MPSGraph, proven on iPhone 17 Pro)";
+    style="rounded,filled"; fillcolor="#eef7ee"; color="#4a8a4a"; fontsize=11;
+    atlasNet  [label="AtlasNetEval\npolicy + value forward (reuses LookNetE context)", fillcolor="#cdeccd"];
+    valueHead [label="ValueHead  (learned value)", fillcolor="#dff0df"];
+    oracle    [label="PaletteOracle\ndeterministic REWARD target (Ou-Luo + entropy)", fillcolor="#dff0df"];
+    pref      [label="PreferenceUpdate\nBradley-Terry from user A/B picks -> PersonalGenome", fillcolor="#cdeccd"];
+    search    [label="PaletteSearch / GumbelSearch\nsearch over scored candidates", fillcolor="#dff0df"];
+  }
+
+  // ================= DEPLOY TARGETS =================
+  subgraph cluster_deploy {
+    label="DEPLOY";
+    style="rounded,filled"; fillcolor="#fffbe6"; color="#b8a73a"; fontsize=11;
+    zig       [label="Zig Q16 floor\n(bit-exact, shipped)", fillcolor="#fff2b8"];
+    coreai    [label="Core AI\n(large head inference, float -> reenterQ16)", fillcolor="#fff2b8"];
+  }
+
+  // ---- frozen substrate flow ----
+  cube -> liftOct -> bands -> feats;
+
+  // ---- I-JEPA flow ----
+  feats -> thetaB [label="predict masked band"];
+  thetaB -> largeHead [label="depth-1 reduction", dir=back, style=dashed, color="#3a6ea5"];
+  d6 -> largeHead [label="learnable bias", color="#3a6ea5"];
+  target -> thetaB [label="latent loss", color="#3a6ea5"];
+  deferred -> thetaB [label="surface once", style=dotted, color="#3a6ea5"];
+  vicreg -> largeHead [label="anti-collapse", style=dotted, color="#3a6ea5"];
+
+  // ---- training flow ----
+  cube -> jepaData [label="manufacture\n(context,mask,target)", color="#4a8a4a"];
+  jepaData -> trainer [color="#4a8a4a"];
+  trainer -> thetaB [label="trained weights", color="#4a8a4a", penwidth=1.6];
+
+  // ---- LookNet flow (legacy) ----
+  palettes -> lnE -> lnR -> lnD -> lnLoss [style=dashed, color="#b56b6b"];
+
+  // ---- Atlas / self-reinforcement ----
+  lnE -> atlasNet [label="reuses context", style=dotted, color="#b56b6b"];
+  oracle -> valueHead [label="reward target", color="#4a8a4a"];
+  valueHead -> atlasNet [color="#4a8a4a"];
+  atlasNet -> search [color="#4a8a4a"];
+  pref -> atlasNet [label="A/B picks -> weights", color="#4a8a4a", penwidth=1.6];
+
+  // ---- deploy ----
+  thetaB -> zig [label="forward (hand-written)", color="#b8a73a"];
+  largeHead -> coreai [label="MLX-train -> coreai-torch", color="#b8a73a"];
+  thetaB -> coreai [style=invis];
+
+  // ---- THE SELF-REINFORCING LOOP (capture -> GIF -> A/B -> weights -> GIF) ----
+  search -> pref [label="user A/B pick (the loop)", constraint=false, color="#cc5500", penwidth=1.8, fontcolor="#cc5500"];
+}
