@@ -60,6 +60,7 @@ library
         SixFour.Spec.TwoMoveOctave
         SixFour.Spec.MoveSignal
         SixFour.Spec.RelationalResidual
+        SixFour.Spec.RelationalMemory
         SixFour.Spec.BoundedP6
         SixFour.Spec.RemainderTail
         SixFour.Spec.ByteCarrier
@@ -403,6 +404,7 @@ test-suite spec-tests
         Properties.DataParallel
         Properties.JepaMemory
         Properties.RelationalResidual
+        Properties.RelationalMemory
         Properties.RemainderTail
         Properties.ByteCarrier
         Properties.DetailEntropy

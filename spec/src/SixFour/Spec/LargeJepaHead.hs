@@ -54,7 +54,8 @@ module SixFour.Spec.LargeJepaHead
   ) where
 
 import SixFour.Spec.Dim6 (Dim6(..))
-import SixFour.Spec.RelationalResidual (P6(..), d6, nudge)
+import SixFour.Spec.RelationalResidual (P6(..), nudge)
+import SixFour.Spec.RelationalMemory (d6)
 import SixFour.Spec.MaskedBandPrediction
   (MaskedBandExamplePos, predictMaskedBandPos)
 import SixFour.Spec.EncoderFrozen   (lawEmbeddingNeverBypassesQ16)

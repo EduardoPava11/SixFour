@@ -195,12 +195,15 @@ TOTAL on this domain; @lawDomainFitsI32@ proves every band fits i32 in-domain an
 @lawBoundIsTight@ proves B is tight (the 4B HH band of @liftQuad@ is the binding case);
 mirrors the Zig @SUBSTRATE_BOUND@ / @RC_OUT_OF_RANGE@ total-function guard so the oracle
 and the kernel share ONE domain),
-"SixFour.Spec.RelationalResidual" (the residual as a RELATIONAL MEMORY UNIT: a voxel
-becomes a 6D point @P6 (L,a,b,x,y,t)@ with a distance @d6@ (Q16 L1, a real metric) so
-pixels in different regions are comparable; the @phi6@ pairing @a<->x,b<->y,L<->t@ grounds
-it, the carriers @{L,t}@ are held out, and the LEARNED position residual is
-@7 bands x {x,y} = 14@ ints/octant (@relationalResidualLen@ = the user's @16-2=14@). The
-@+/-1@ nudge is one unit step on any axis),
+"SixFour.Spec.RelationalResidual" (ZIG-FLOOR: the bit-exact 6D-point SUBSTRATE the relational
+memory rides on — the @P6 (L,a,b,x,y,t)@ point, the @+/-1@ @nudge@, and the @safeNudge@ DOMAIN
+GUARD (the @RC_OUT_OF_RANGE@ sibling). The I-JEPA memory half split out below),
+"SixFour.Spec.RelationalMemory" (MLX-MODEL: the I-JEPA RELATIONAL MEMORY UNIT split out of
+RelationalResidual (pivot STEP 4): the @d6@ metric (Q16 L1, a real metric = the attention
+ground-distance / memory KEY) + the @phi6@ pairing @a<->x,b<->y,L<->t@ + the LEARNED
+@7 bands x {x,y} = 14@-int position residual (@relationalResidualLen@ = the user's @16-2=14@,
+carriers @{L,t}@ held out). Rides on the RelationalResidual substrate; budget carried by
+@JepaMemory@),
 "SixFour.Spec.LargeJepaHead" (★ the genuinely-LARGE ViT-scale position-conditioned
 asymmetric I-JEPA head as a CONTROLLED DEVIATION above the proven small predictor: @d6@
 seeds a T5-style LEARNABLE relative-position attention bias @b_h(d)=beta-s*d@ (@s>0@) so the

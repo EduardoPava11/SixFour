@@ -38,7 +38,7 @@ module SixFour.Spec.JepaMemory
 import SixFour.Spec.Dim6 (Dim6(..), isUniversal)
 import SixFour.Spec.RungPivot
   (RungDir(..), intermediateSide, lawIntermediateIsMidLevel, lawIntermediateNeverSurfaces)
-import SixFour.Spec.RelationalResidual
+import SixFour.Spec.RelationalMemory
   (relationalResidualLen, residualBands, searchPositionChannels
   , lawResidualIsFourteen, lawCarriersAreLandT)
 import SixFour.Spec.MaskedBandPrediction
