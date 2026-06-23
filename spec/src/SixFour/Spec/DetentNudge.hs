@@ -24,6 +24,7 @@ re-enters the Q16 floor (ChromaRotation), out of this integer-exact module's sco
 
 Additive, GHC-boot, smart-ctor newtype.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.DetentNudge
   ( Sign(..)
   , ABAxis(..)

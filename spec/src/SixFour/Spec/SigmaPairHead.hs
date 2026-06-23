@@ -45,6 +45,7 @@ Laws (see @Properties.SigmaPairHead@):
   * 'sigmaPairResidual' is substantially > 0 on random palettes — the
     contrast that proves the architecture is preferentially σ-aligned.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.SigmaPairHead
   ( -- * The σ-pair-paired tree
     SigmaPairTree(..)

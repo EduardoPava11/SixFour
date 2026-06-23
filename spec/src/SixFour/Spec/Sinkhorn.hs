@@ -50,6 +50,7 @@ is deterministic and golden-pinnable. This is a /reference/ surface (the trainer
 mirrors it); the on-device shipped collapse stays the byte-exact Q16 maximin in
 "SixFour.Spec.Collapse".
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Sinkhorn
   ( -- * Discrete measures
     Measure

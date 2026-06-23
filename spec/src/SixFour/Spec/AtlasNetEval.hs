@@ -33,6 +33,7 @@ cross-device invariant is the argmax and @sign(V_w - V_l)@, not the float). Weig
 are stored RAW (pre-mask); 'atlasForward' applies the sigma-masks at call time,
 exactly as the on-device module will.
 -}
+-- COMPARTMENT: METAL-GPU | tag:MacTag | STRADDLER
 module SixFour.Spec.AtlasNetEval
   ( AtlasNetWeights(..)
   , deterministicAtlasWeights

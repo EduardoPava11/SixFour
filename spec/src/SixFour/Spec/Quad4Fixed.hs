@@ -20,6 +20,7 @@ This keeps the 4⁴ GIFB global colour table byte-exact cross-device (the 2⁸ g
 is 'SixFour.Spec.SigmaPairFixed'; 16² is the identity). The trained look-NN is a
 separate concern (dyadic fixed-point quantization), not these exact genome transforms.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.Quad4Fixed
   ( Quad4PaletteI(..)
   , quad4FixedDepth

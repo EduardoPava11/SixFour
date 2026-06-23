@@ -30,6 +30,7 @@ orthogonal 'SixFour.Spec.GenomePair' pair. 'lawABCellGrid' pins their disjointne
 
 GHC-boot-only. Laws QuickCheck'd in @Properties.ABSurface@.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.ABSurface
   ( -- * Alphabet
     ABPhase(..)

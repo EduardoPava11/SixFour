@@ -36,6 +36,7 @@ Additive: delegates "SixFour.Spec.DetailPredictor" entirely (no new arithmetic);
 demotion of "SixFour.Spec.SameObjectJEPA" @lawJepaPredictsTarget@ is a header/Map
 re-label, NOT a deletion (the law stays as a sanity check). GHC-boot.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.DetailMaskedPrediction
   ( -- * The masked example (coarse context + masked target band)
     MaskedExample

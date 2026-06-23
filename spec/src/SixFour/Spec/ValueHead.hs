@@ -37,6 +37,7 @@ Params are a flat vector (so the finite-difference law is a clean per-scalar bum
 laid out @θ(n) ++ W₁(h·n, row-major) ++ b₁(h) ++ w₂(h)@. GHC-boot-only; laws are
 QuickCheck'd in 'Properties.ValueHead'.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
 module SixFour.Spec.ValueHead
   ( -- * Shape
     ValueShape(..)

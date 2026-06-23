@@ -24,6 +24,7 @@ same treatment via a nested integer lift (future 'Spec.Quad4Fixed').
 The σ-pair palette is @[c_0, σ(c_0), c_1, σ(c_1), …]@ with @σ(L,a,b) = (L,−a,−b)@,
 the exact integer negation of the chroma channels.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.SigmaPairFixed
   ( sigmaReflectI
   , sigmaSwapAndReflectI

@@ -30,6 +30,7 @@ Laws (see @Properties.SevenSeg@): ten digits; every segment cell is inside the
 @10×18@ box; the segments are disjoint; digit 8 lights all seven; digit 0 omits the
 middle; digit 1 lights exactly the two right verticals; and pinned cell-count goldens.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.SevenSeg
   ( -- * Geometry
     digitBoxCols

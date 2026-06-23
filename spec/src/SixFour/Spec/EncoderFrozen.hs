@@ -57,6 +57,7 @@ IMPORTS nothing that imports it and re-pins NO shipped contract; no golden vecto
 established modules are untouched — this is their consolidating GATE. GHC-boot-only; laws
 @once@-tested in "Properties.EncoderFrozen".
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
 module SixFour.Spec.EncoderFrozen
   ( -- * The encoder as a composition (lift ∘ fixed feature map)
     encodeEmbedding

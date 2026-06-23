@@ -28,6 +28,7 @@ Contract-first: every function is a total reference implementation (no stubs). T
 port (@SixFour/Palette/SplitTree.swift@) is verified bit-for-bit against this; determinism
 under the pinned @(axisCoord, paletteIndex)@ tie-break is what makes that parity exact.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.SplitTree
   ( -- * Geometry primitives
     SplitAxis(..)

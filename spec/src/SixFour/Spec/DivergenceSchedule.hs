@@ -20,6 +20,7 @@ Double-valued search GUIDANCE (not byte-exact state — like the float search su
 @SIXFOUR-ALPHAZERO-COLLAPSE-DESIGN.md@ §3.4); the equality laws use a 1e-9 tolerance.
 GHC-boot-only. Laws QuickCheck'd in @Properties.DivergenceSchedule@.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:CommitSide
 module SixFour.Spec.DivergenceSchedule
   ( DivergenceSchedule(..)
   , defaultSchedule

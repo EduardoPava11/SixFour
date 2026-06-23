@@ -32,6 +32,7 @@ quarantine), so this module adds only the genuinely-new bias mechanism + the red
 
 GHC-boot-only. Additive; re-pins nothing. Laws QuickCheck'd in "Properties.LargeJepaHead".
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
 module SixFour.Spec.LargeJepaHead
   ( -- * The learnable d6 relative-position attention bias
     HeadBias(..)

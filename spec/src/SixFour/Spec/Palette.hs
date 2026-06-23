@@ -5,6 +5,7 @@ Description : A length-'K' palette of OKLab colors.
 The palette is a flat vector of length 'K' = 256 (compile-time). The 'S_K'
 gauge group acts on palettes by permuting entries — see 'SixFour.Spec.Gauge'.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.Palette
   ( Palette(..)
   , mkPalette

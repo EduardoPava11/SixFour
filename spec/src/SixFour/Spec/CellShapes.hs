@@ -28,6 +28,7 @@ Laws (see @Properties.CellShapes@): 64 endpoints; the top tick is exactly @(30,1
 60×60 sprite; the table is vertically symmetric (row @k@ = row @64−k@); no two
 adjacent ticks merge into one cell; and a pinned disc-cell count.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.CellShapes
   ( -- * The 64-tick ring endpoint table
     ringTickRadius

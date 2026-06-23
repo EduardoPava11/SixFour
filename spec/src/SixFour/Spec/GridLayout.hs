@@ -32,6 +32,7 @@ is proven here.) Emitted to @SixFour/Generated/GridLayoutContract.swift@; the Sw
 
 GHC-boot-only: base, containers, plus 'SixFour.Spec.CellFiber' / '.Lattice'.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.GridLayout
   ( -- * The region + the scene
     LRegion(..)

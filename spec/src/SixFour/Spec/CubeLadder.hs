@@ -27,6 +27,7 @@ lives strictly above captured resolution. The ladder itself never loses.
 
 The grids here are scalar (one OKLab channel); the cube applies them per channel, per feature frame.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.CubeLadder
   ( -- * One reversible 2-D-Haar level
     liftLevel

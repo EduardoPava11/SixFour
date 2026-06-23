@@ -53,6 +53,7 @@ re-pins NO golden contract (@slotLookDims@\/@NetContract@\/@net_shape@ untouched
 and deletes nothing. GHC-boot-only; laws are exported predicates, QuickCheck'd in
 @Properties.LatentProjection@.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DeviceTag | STRADDLER
 module SixFour.Spec.LatentProjection
   ( -- * The lossy, many-to-one pool (Mac-side, where information dies)
     poolToRung

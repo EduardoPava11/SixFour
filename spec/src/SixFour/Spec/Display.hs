@@ -28,6 +28,7 @@ type signature of 'observe': @DisplayState -> [Pixel]@ with NO 'Input' argument.
 
 GHC-boot-only: base + the listed Spec modules.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.Display
   ( -- * State + alphabet (the CLOCK half — the phase half is now Spec.ABSurface)
     DisplayState(..)

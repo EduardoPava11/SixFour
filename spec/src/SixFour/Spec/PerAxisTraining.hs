@@ -24,6 +24,7 @@ Additive: a pure law module over "SixFour.Spec.MaskedBandPrediction"
 vector. Moderate coarse value (ṽ ≈ 0.305) keeps the trainer convergent. GHC-boot-only; laws
 @once@-tested in "Properties.PerAxisTraining".
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.PerAxisTraining
   ( -- * Laws (closed :: Bool; @once@-tested in @Properties.PerAxisTraining@)
     lawBandLearnedInIsolation

@@ -52,6 +52,7 @@ Laws (see @Properties.Pipeline@):
   * 'lawSigmaSymmetricRange' holds for SymSelect.
   * @once@ property: 'option4Theorem' compiles ⇒ Pipeline4Boundary is σ-eq.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Pipeline
   ( -- * The classes
     Stage(..)

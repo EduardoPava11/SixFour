@@ -41,6 +41,7 @@ Additive: imports only proven organs, re-pins no golden contract, deletes nothin
 The deeper unification (feeding the shown rung itself into 'commitReconstruct'
 instead of a separate capture split) is a future refinement, noted not forced.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
 module SixFour.Spec.SteeringSpine
   ( -- * The visible dataflow (form follows function)
     steerShown

@@ -14,6 +14,7 @@ pulls toward density and AWAY from diversity) is offered as an OPTIONAL step
 empty cluster keeps its old centroid. Nearest-centroid ties resolve to the lowest
 index (strict @<@), as everywhere in the core.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.QuantFixed
   ( quantizeFrameQ16
   , farthestPointSeedsQ16

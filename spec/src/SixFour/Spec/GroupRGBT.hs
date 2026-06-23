@@ -35,6 +35,7 @@ Laws (QuickCheck'd in @Properties.GroupRGBT@, EXACT — no tolerance):
   * deselecting a group removes exactly that group's frames from the pool (scoped);
   * an empty selection yields an empty pool (and an empty collapse).
 -}
+-- COMPARTMENT: METAL-GPU | tag:CommitSide | STRADDLER
 module SixFour.Spec.GroupRGBT
   ( -- * The 16×4 grouping
     groupSize

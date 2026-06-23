@@ -20,6 +20,7 @@ to recompute live; in shipping it is precomputed once per quartet.
 Contract-first reference in 'Double' (mirrors the 'SixFour.Spec.Collapse' baseline style); a Q16 mirror
 follows for the byte-exact device path. Laws are the parity gate (Properties.QuartetDelta).
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.QuartetDelta
   ( -- * The quartet
     QSlot(..)

@@ -56,6 +56,7 @@ the deterministic pipeline maps every input to the zero decoder output. The
 trained pipeline is a controlled deviation; its σ-equivariance is exactly the
 theorem this module proves typeable.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.LookNetCompose
   ( -- * Pipeline tag
     LookNetPipeline

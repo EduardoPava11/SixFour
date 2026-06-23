@@ -37,6 +37,7 @@ Laws (QuickCheck'd in @Properties.IsometryMove@, EXACT — no ε):
 
 GHC-boot-only. The Swift\/Zig port is one integer negate+add per channel per lane (SIMT).
 -}
+-- COMPARTMENT: METAL-GPU | tag:CommitSide
 module SixFour.Spec.IsometryMove
   ( -- * The move
     IsoMove(..)

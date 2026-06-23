@@ -27,6 +27,7 @@ in-domain output.
 GHC-boot-only (base). Laws are exported predicates, QuickCheck'd in
 "Properties.SubstrateDomain".
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:DeviceTag
 module SixFour.Spec.SubstrateDomain
   ( -- * The domain bound (mirrors Zig @SUBSTRATE_BOUND@ / @DETAIL_BOUND@)
     substrateBound

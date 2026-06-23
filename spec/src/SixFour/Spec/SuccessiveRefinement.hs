@@ -18,6 +18,7 @@ exactly @total − surfaced@ dims ('lawRemainderRateIsHeld'), i.e. the condition
 
 GHC-boot-only. Laws are exported predicates, QuickCheck'd in @Properties.SuccessiveRefinement@.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.SuccessiveRefinement
   ( -- * The surfaced / held split
     SurfacedSplit(..)

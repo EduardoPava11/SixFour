@@ -30,6 +30,7 @@ Three guarantees the player UX rests on:
     auto-advances ('frozenStream' is constantly @0@); only discrete scrub may
     move it. One check in the clock propagates to every consumer.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.PlaybackClock
   ( -- * Frame count
     FrameCount

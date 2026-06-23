@@ -28,6 +28,7 @@ No new geometric argument is introduced.
 
 GHC-boot-only: base + 'SixFour.Spec.PlaybackClock' / '.Lattice' / '.PairTreeFixed'.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.FrontProjection
   ( -- * The cube and its faces
     IndexCube, Palettes, Pixel

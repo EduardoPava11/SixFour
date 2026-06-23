@@ -19,6 +19,7 @@ learned or classical, must satisfy. It reuses the same maximin idea as the
 Swift `KMeansPalettePipeline.farthestPointSeedCentroids` and the Coverage metric
 that scores it.
 -}
+-- COMPARTMENT: METAL-GPU | tag:DeviceTag | STRADDLER
 module SixFour.Spec.Collapse
   ( pooledCandidates
   , farthestPointCollapse

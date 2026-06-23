@@ -31,6 +31,7 @@ crossing). Re-pins NOTHING. The displayed L-16³ is hereby a QUARANTINED VIEW, p
 a level — "SixFour.Spec.HJepaLevels" (the architecture) is untouched. GHC-boot-only; laws
 QuickCheck'd in "Properties.DisplayDecoder".
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
 module SixFour.Spec.DisplayDecoder
   ( -- * The three spaces
     Latent

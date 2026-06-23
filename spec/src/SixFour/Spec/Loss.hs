@@ -79,6 +79,7 @@ flows through them deterministically, and any drift in a primitive surfaces as
 a unit-test failure in the corresponding @Properties@ module rather than as
 silent training instability.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Loss
   ( -- * Component losses
     fidelityLoss

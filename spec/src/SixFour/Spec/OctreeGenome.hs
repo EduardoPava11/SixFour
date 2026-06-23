@@ -20,6 +20,7 @@ feed into the formulas below; the formulas themselves are fixed.
 
 GHC-boot-only. Laws are exported predicates, QuickCheck'd in @Properties.OctreeGenome@.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.OctreeGenome
   ( -- * The genome (bijective octant code)
     Genome

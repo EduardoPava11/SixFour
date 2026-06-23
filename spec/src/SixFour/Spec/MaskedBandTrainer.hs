@@ -25,6 +25,7 @@ Additive: a pure law module over "SixFour.Spec.MaskedBandPrediction"
 golden vector file — the goldens are exported constants. GHC-boot-only; laws @once@-tested
 in "Properties.MaskedBandTrainer".
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.MaskedBandTrainer
   ( -- * The golden training fixture + its pinned trajectory endpoints
     trainerExample

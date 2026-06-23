@@ -49,6 +49,7 @@ Laws: @σ_bin@ is an involution; the sym/asym parts are orthogonal; Parseval;
 the uniform histogram has @H_asym = 0@ (it lies entirely in H_sym); a
 σ-paired-OKLab list produces @sigmaSymFraction = 1@.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.SigmaDecomp
   ( -- * σ on bin indices
     sigmaBinPerm

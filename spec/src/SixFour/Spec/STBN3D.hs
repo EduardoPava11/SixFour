@@ -28,6 +28,7 @@ in favour of the math-first global-palette pipeline (Spec.LookNetE/R/D).
 STBN3D is kept because it generates the production blue-noise mask
 that PaletteGenerator.swift's @.blueNoise@ dither path loads at runtime.
 -}
+-- COMPARTMENT: METAL-GPU | tag:DeviceTag
 module SixFour.Spec.STBN3D
   ( Mask3D(..)
   , mkMask3D

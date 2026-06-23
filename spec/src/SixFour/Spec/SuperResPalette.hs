@@ -41,6 +41,7 @@ alphabet, it never adds a @(K+1)@th colour.
 Additive: a new sibling over Upscale256; nothing re-pinned. GHC-boot (@containers@,
 @vector@). Colours are Q16 integers, so the brand and requantizer are bit-exact.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DeviceTag
 module SixFour.Spec.SuperResPalette
   ( -- * The per-frame palette brand (hidden constructor; build via 'mkPaletteFrame')
     PaletteFrame

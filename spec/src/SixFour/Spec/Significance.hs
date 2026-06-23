@@ -40,6 +40,7 @@ and the Swift @KMeansPalettePipeline.farthestPointSeedCentroids@ — so the
 significant palette also maximises gamut coverage ('lawSigMaximinVariety',
 tying to 'SixFour.Spec.Coverage').
 -}
+-- COMPARTMENT: METAL-GPU | tag:none | STRADDLER
 module SixFour.Spec.Significance
   ( -- * Codegen-pinned constants
     confidenceZ

@@ -27,6 +27,7 @@ so the Gaussian summary degenerates to the discrete k-means/maximin floor. No
 eigendecomposition, no metric weights: the metric is identity OKLab, the research
 default — never the deleted hand-set @[4,2,1]@.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Bures
   ( -- * 3×3 matrices
     Mat3(..)

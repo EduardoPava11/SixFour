@@ -36,6 +36,7 @@ set (no loss/dup); dimensions are @side × side@; columns are X-ordered blocks; 
 are Y-sorted within a column; deterministic under input permutation; and a pinned
 golden (@side=2@) fixes the exact placement.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.GridAxis
   ( -- * Axes
     GridAxis(..)

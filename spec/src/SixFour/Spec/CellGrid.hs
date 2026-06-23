@@ -27,6 +27,7 @@ spatial face of the FSM state Σ observed up to the S_K gauge; 'gridJoin' totali
 
 GHC-boot-only: base, containers, plus 'SixFour.Spec.Lattice' / '.CellFiber'.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.CellGrid
   ( -- * The base
     Place(..)

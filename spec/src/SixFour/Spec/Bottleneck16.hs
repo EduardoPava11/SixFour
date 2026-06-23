@@ -22,6 +22,7 @@ Laws (see @Properties.Bottleneck16@): mass-preservation; non-negativity;
 coverage compatibility (#non-zero bins of a palette's histogram recovers
 'Spec.Coverage.occupiedBins').
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:BoundedP6
 module SixFour.Spec.Bottleneck16
   ( -- * The branded 4096-bin histogram
     Histogram4096(..)

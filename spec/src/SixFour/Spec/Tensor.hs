@@ -66,6 +66,7 @@ algebraic vocabulary the learnable layers need (typed shape, channel axis,
 σ-action on the token); the actual L3/L4/L5 'Stage' instances live in their own
 modules ('SixFour.Spec.LookNet.E', '.R', '.D') and depend on this one.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Tensor
   ( -- * Typed tensors (Naperian)
     Tensor1(..)

@@ -21,6 +21,7 @@ The mixture's first two moments use the **law of total covariance**
 (Σᵢ = 0) this reduces to 'SixFour.Spec.Diversity.weightedCovariance' — the
 cross-check law in @Properties.GMM@.
 -}
+-- COMPARTMENT: METAL-GPU | tag:none | STRADDLER
 module SixFour.Spec.GMM
   ( -- * The mixture
     Gaussian(..)

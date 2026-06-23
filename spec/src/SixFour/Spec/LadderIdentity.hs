@@ -26,6 +26,7 @@ pins the role-split that resolves B2 __without deleting either__:
 The role-split closes the tension by giving each operator one job (learned
 substrate vs bit-exact decode), not by deletion — additive, golden-safe.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.LadderIdentity
   ( -- * The two operators, named apart
     Ladder(..)

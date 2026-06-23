@@ -567,4 +567,5 @@ transform derived from the captured palette's luminance-zone chroma profile (a p
   * "SixFour.Spec.RedFrontEnd"  — Log3G10 decode + RWG→Rec.709 + filmic tonemap (LUT-driven, Q16)
   * "SixFour.Spec.CubeLut"      — the 65³ .cube grid builder
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.Map () where

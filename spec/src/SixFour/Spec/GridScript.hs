@@ -24,6 +24,7 @@ blend — matching 'SixFour.Spec.CellFiber.lawNoSynthesis'): position @rank@ sho
 @palette !! slotAt order rank@. Polymorphic in the element so the layout law is
 proven independently of colour space (the Swift port carries @SIMD3<UInt8>@).
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.GridScript
   ( GridScript(..)
   , captureScript

@@ -31,6 +31,7 @@ GHC-boot-only. Additive; re-pins nothing. Reuses @RelationalResidual@ (@P6@, @d6
 @Dim6@, and delegates the octave fact to @OctreeCell@ / @SelfSimilarReconstruct@. Laws
 QuickCheck'd in "Properties.TwoMoveOctave".
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.TwoMoveOctave
   ( -- * Octave-tagged axis-aware moves
     Octave(..)

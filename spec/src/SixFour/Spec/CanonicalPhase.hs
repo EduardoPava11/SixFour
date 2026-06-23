@@ -29,6 +29,7 @@ Keys are integers (Q16 per-frame scalars), so the comparison is exact — no flo
 bit-identical Mac↔device (the @lawPhaseStableUnderQ16@ obligation is met by construction). This is
 the reference (an @O(n²)@ scan); the device may use Booth's @O(n)@ least-rotation — same result.
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.CanonicalPhase
   ( -- * Cyclic rotation
     rotateBy

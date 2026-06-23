@@ -21,6 +21,7 @@ detail right adjoint, and the adjunction UNIT is the exact round-trip
 
 GHC-boot-only. Laws are exported predicates, QuickCheck'd in @Properties.XYTLabDuality@.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.XYTLabDuality
   ( -- * The dual axis labels
     Axis(..)

@@ -40,6 +40,7 @@ only repo coupling is "SixFour.Spec.ByteCarrier" (the surfacing seam, for the la
 surfaced law). Re-pins NOTHING; GHC-boot-only. Laws QuickCheck'd in
 "Properties.NeuronRedundancy".
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.NeuronRedundancy
   ( -- * The intermediate-latent neuron batch
     NeuronBatch

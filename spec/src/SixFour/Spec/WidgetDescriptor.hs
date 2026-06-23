@@ -29,6 +29,7 @@ numbers, just read through one struct).
 
 GHC-boot-only: base, plus "SixFour.Spec.MovableLayout" / ".CellMechanics".
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.WidgetDescriptor
   ( -- * What a widget draws (orthogonal to geometry)
     RenderMode(..), allRenderModes, renderModeName, renderModeFor

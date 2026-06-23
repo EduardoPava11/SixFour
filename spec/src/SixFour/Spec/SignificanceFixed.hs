@@ -22,6 +22,7 @@ The cell statistics (@cellsQ16@) are a fresh Q16 definition: population mean
 floor sqrt). They never enter the GIF bytes; they back the
 'SignificantVoxelVolume' brand (σ ≥ 0, μ within range).
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.SignificanceFixed
   ( rescueQ16
   , cellsQ16

@@ -25,6 +25,7 @@ the slots return when their trainers do.
 The on-device estimator @θ̂@ (@spec/MATH.md §5@) is acknowledged in MATH.md
 as a future workstream; it has no slot here because it has no producer.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
 module SixFour.Spec.Net
   ( NetSlot(..)
   , NetIO(..)

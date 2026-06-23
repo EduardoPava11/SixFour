@@ -71,6 +71,7 @@ if that ruling differs; the orthogonality\/validity guarantees are independent o
 GHC-boot-only. Laws are exported predicates, to be QuickCheck'd in
 @Properties.GenomePair@ (test wiring pending — this module lands at build step 2).
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:CommitSide
 module SixFour.Spec.GenomePair
   ( -- * Types
     GenomeDisplacement

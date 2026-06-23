@@ -79,6 +79,7 @@ until closure is proven).
 GHC-boot-only (base + Data.List + Data.Word). Smart-ctor newtype; laws are
 exported predicates, QuickCheck'd in "Properties.ProjectionOrdering".
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.ProjectionOrdering
   ( -- * The ordering type (smart-ctor newtype)
     Ordering6

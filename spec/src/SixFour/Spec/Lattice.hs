@@ -54,6 +54,7 @@ interactive widget ≥ 11 gifPx = 44 pt, exact); the size monotonicity
 (shutter ≥ control ≥ touch floor); the wordmark fits the preview width; and every
 governed dimension is an integer @gifPx@ count.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.Lattice
   ( -- * Anchor (the physical screen, iPhone 17 Pro portrait)
     screenWidthPt, screenHeightPt, scale

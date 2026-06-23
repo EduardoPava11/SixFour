@@ -25,6 +25,7 @@ Two design commitments (see @MATH.md §8@):
     measured by @K − tr(M)@ (a trace, hence conjugation- i.e.
     cyclic-shift-invariant), never a Frobenius norm.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
 module SixFour.Spec.Cyclic
   ( -- * Types
     Weights

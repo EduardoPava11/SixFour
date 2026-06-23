@@ -40,6 +40,7 @@ log + gate, not in a special learning rate — so replay determinism is preserve
 GHC-boot-only. Laws are exported predicates, to be QuickCheck'd in @Properties.GenomeBlend@
 (test wiring pending — this module lands at build step 7).
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:CommitSide
 module SixFour.Spec.GenomeBlend
   ( -- * The foreign payload and extraction outcome
     ForeignGenome(..)

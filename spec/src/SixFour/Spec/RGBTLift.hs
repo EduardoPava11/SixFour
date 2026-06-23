@@ -32,6 +32,7 @@ resolution invents anything.
 Integer-exact, deterministic, golden-pinnable — it ports to a hand-written Swift/Metal
 @simd_shuffle@ stencil byte-for-byte (the SIMD over the 4 lanes; the 2×2 grid is the SIMT domain).
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.RGBTLift
   ( -- * Types
     Quad

@@ -51,6 +51,7 @@ Laws (see @Properties.Quad4@): leaf count = 256; DOF = 513;
 balanced mean (mean of leaves = root); σ-equivariance
 (@reconstruct (σ qp) ≡ map σ (reconstruct qp)@).
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.Quad4
   ( -- * The 4-ary opponent-quadrant tree
     Quad4Palette(..)

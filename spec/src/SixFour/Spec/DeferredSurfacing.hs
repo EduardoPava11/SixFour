@@ -43,6 +43,7 @@ Additive: composes "SixFour.Spec.MaskedBandPrediction" (the latent/surfaced seam
 the only float→device crossing is the deferred 'surfaceBand' (= @predictMaskedBand@ =
 @reenterQ16@). Laws QuickCheck'd in "Properties.DeferredSurfacing".
 -}
+-- COMPARTMENT: MLX-MODEL | tag:DeviceTag | STRADDLER
 module SixFour.Spec.DeferredSurfacing
   ( -- * The rung phase: latent search until the deferred surface commit
     RungPhase(..)

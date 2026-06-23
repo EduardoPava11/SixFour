@@ -18,6 +18,7 @@ Two guards:
     candidate embeddings are too close carries ~no BT gradient, so it gets ZERO weight. Gating
     informative pairs at the source keeps @lawStepDecreasesLoss@'s precondition non-vacuous.
 -}
+-- COMPARTMENT: SWIFT-COREAI | tag:none | STRADDLER
 module SixFour.Spec.GLRM
   ( -- * Features + samples
     Features

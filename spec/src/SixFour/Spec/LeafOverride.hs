@@ -28,6 +28,7 @@ Laws (QuickCheck'd in @Properties.LeafOverride@, EXACT — no ε):
   * an override on generator @i@ touches ONLY leaves @2i@ and @2i+1@ — every other leaf is
     byte-identical (brush-scoped editing, 'lawSigmaOverrideScopedToGenerator').
 -}
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.LeafOverride
   ( -- * The generator-space override
     SigmaOverride

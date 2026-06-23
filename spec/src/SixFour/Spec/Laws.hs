@@ -7,6 +7,7 @@ predicates that the property test modules call. Keeping them here
 documents the contract in one place and lets the codegen mention
 each by name in the emitted Swift / Python doc-comments.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.Laws
   ( -- * Color laws
     lawOKLabRoundTrip

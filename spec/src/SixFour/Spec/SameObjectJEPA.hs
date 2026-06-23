@@ -37,6 +37,7 @@ evidence of an information gain or as a training signal.
 
 Additive law module, GHC-boot.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.SameObjectJEPA
   ( JepaPair          -- opaque: build only via 'mkJepaPair'
   , jpDepth
