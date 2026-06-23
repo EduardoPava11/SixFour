@@ -37,9 +37,14 @@ index cross-cut; physically the modules stay where they are, gated by golden vec
     a @Codegen.MLX@-style emitter (today emits the ABANDONED look-net). Modules: "SixFour.Spec.LargeJepaHead",
     the trainer twin in "SixFour.Spec.MaskedBandPrediction" + "SixFour.Spec.MaskedBandTrainer",
     "SixFour.Spec.JepaTarget", "SixFour.Spec.EncoderFrozen", "SixFour.Spec.NeuronRedundancy",
-    "SixFour.Spec.DeferredSurfacing", the Jacobian half of "SixFour.Spec.MoveSignal". __GAP (mostly):__
-    no I-JEPA-head MLX emitter, no Python trainer twin, NO DATA ENGINE (manufacture the
-    @(context,mask,held-target,position)@ tuples via the reversible lift), @coreai_export@ stub.
+    "SixFour.Spec.DeferredSurfacing", the Jacobian half of "SixFour.Spec.MoveSignal", and the
+    cohesive memory wall "SixFour.Spec.JepaMemory" (★ the I-JEPA MEMORY BUDGET pinned as ONE tested
+    fact = the destructive-pivot tripwire: latent capacity @32³/128³@, the 14-int residual unit
+    bound to its 77-param trained carrier, 7 detail bands, 64-512 tokens, @{L,t}@-carrier /
+    @{a,b,x,y}@-search partition; re-pins no golden, fires the gate if a split drops a budget).
+    __GAP (mostly):__ no I-JEPA-head MLX emitter, no Python trainer twin, NO DATA ENGINE
+    (manufacture the @(context,mask,held-target,position)@ tuples via the reversible lift),
+    @coreai_export@ stub.
 
   * __METAL GPU__ (data-parallel, shipped). Mechanism: hand-ported @.metal@ (NO @Codegen.Metal@ emitter
     yet). Modules: the palette quantizers, float "SixFour.Spec.Color", the ordered branch of

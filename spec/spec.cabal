@@ -87,6 +87,7 @@ library
         SixFour.Spec.DisplayDecoder
         SixFour.Spec.Sided
         SixFour.Spec.DataParallel
+        SixFour.Spec.JepaMemory
         SixFour.Spec.EncoderFrozen
         SixFour.Spec.ContinuousLoop
         SixFour.Spec.JepaTarget
@@ -400,6 +401,7 @@ test-suite spec-tests
         Properties.BoundedP6
         Properties.Sided
         Properties.DataParallel
+        Properties.JepaMemory
         Properties.RelationalResidual
         Properties.RemainderTail
         Properties.ByteCarrier
