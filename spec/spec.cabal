@@ -38,6 +38,7 @@ library
         SixFour.Spec.Diversity
         SixFour.Spec.EncoderModalityLoad
         SixFour.Spec.EncoderWidthAlloc
+        SixFour.Spec.EncoderDepthAlloc
         SixFour.Spec.SpatialDither
         SixFour.Spec.GMM
         SixFour.Spec.Bures
@@ -294,6 +295,7 @@ test-suite spec-tests
         Properties.Diversity
         Properties.EncoderModalityLoad
         Properties.EncoderWidthAlloc
+        Properties.EncoderDepthAlloc
         Properties.GMM
         Properties.Bures
         Properties.Sinkhorn

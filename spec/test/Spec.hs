@@ -18,6 +18,7 @@ import qualified Properties.GlobalCollapseQ16 as GlobalCollapseQ16
 import qualified Properties.Diversity    as Diversity
 import qualified Properties.EncoderModalityLoad as EncoderModalityLoad
 import qualified Properties.EncoderWidthAlloc as EncoderWidthAlloc
+import qualified Properties.EncoderDepthAlloc as EncoderDepthAlloc
 import qualified Properties.GMM          as GMM
 import qualified Properties.Bures        as Bures
 import qualified Properties.Sinkhorn     as Sinkhorn
@@ -159,6 +160,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Diversity.tests
   , EncoderModalityLoad.tests
   , EncoderWidthAlloc.tests
+  , EncoderDepthAlloc.tests
   , GMM.tests
   , Bures.tests
   , Sinkhorn.tests
