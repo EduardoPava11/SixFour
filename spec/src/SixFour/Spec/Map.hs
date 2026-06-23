@@ -37,7 +37,12 @@ index cross-cut; physically the modules stay where they are, gated by golden vec
     a @Codegen.MLX@-style emitter (today emits the ABANDONED look-net). Modules: "SixFour.Spec.LargeJepaHead",
     the trainer twin in "SixFour.Spec.MaskedBandPrediction" + "SixFour.Spec.MaskedBandTrainer",
     "SixFour.Spec.JepaTarget", "SixFour.Spec.EncoderFrozen", "SixFour.Spec.NeuronRedundancy",
-    "SixFour.Spec.DeferredSurfacing", the Jacobian half of "SixFour.Spec.MoveSignal", and the
+    "SixFour.Spec.DeferredSurfacing", the Jacobian half of "SixFour.Spec.MoveSignal",
+    "SixFour.Spec.JepaData" (the I-JEPA DATA ENGINE: manufacture the @(context,mask,held-target)@
+    records from octants via the reversible @liftOct@; KEYSTONE @lawDataEngineRoundTrips@ proves
+    @reconstruct (manufacture cube m) == cube@ = the held band is a TRUE label, closing the
+    non-invertibility trap a buggy generator would otherwise pass silently. The dependency root
+    of spec-owned TRAINING), and the
     cohesive memory wall "SixFour.Spec.JepaMemory" (★ the I-JEPA MEMORY BUDGET pinned as ONE tested
     fact = the destructive-pivot tripwire: latent capacity @32³/128³@, the 14-int residual unit
     bound to its 77-param trained carrier, 7 detail bands, 64-512 tokens, @{L,t}@-carrier /
