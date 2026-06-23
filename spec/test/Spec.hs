@@ -44,6 +44,7 @@ import qualified Properties.TwoMoveOctave as TwoMoveOctave
 import qualified Properties.MoveSignal as MoveSignal
 import qualified Properties.BoundedP6 as BoundedP6
 import qualified Properties.Sided as Sided
+import qualified Properties.DataParallel as DataParallel
 import qualified Properties.RelationalResidual as RelationalResidual
 import qualified Properties.RemainderTail as RemainderTail
 import qualified Properties.ByteCarrier   as ByteCarrier
@@ -213,6 +214,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , MoveSignal.tests
   , BoundedP6.tests
   , Sided.tests
+  , DataParallel.tests
   , RelationalResidual.tests
   , RemainderTail.tests
   , ByteCarrier.tests
