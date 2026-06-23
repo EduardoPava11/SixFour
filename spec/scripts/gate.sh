@@ -22,6 +22,17 @@ run() {
 # The law + golden gate (includes Spec.JepaMemory's memory-budget laws — the destructive tripwire).
 run "cabal test (laws + golden vectors + JepaMemory budget)" "cabal test"
 
+# HERMETIC CODEGEN: regenerate every contract from the spec and FAIL if the committed
+# Generated/ files differ. This is what makes the spec the DESIGN AUTHORITY, not just a
+# checker: every emitter is byte-equal-to-spec ENFORCED (a stale regen or a hand-edit of a
+# generated file fails the build), so "the app/trainer/UI match the spec" is a build theorem,
+# not a hope. (BuildStamp.swift is auto-stamped gitSHA+time noise — restored before the diff.)
+run "hermetic codegen (Generated == spec emits, no drift)" "
+  cabal run -v0 spec-codegen >/dev/null 2>&1 &&
+  git -C '$(cd "$here/.." && pwd)' checkout -q SixFour/Generated/BuildStamp.swift 2>/dev/null;
+  git -C '$(cd "$here/.." && pwd)' diff --exit-code -- SixFour/Generated trainer/generated studio/look-nn-baseline/src/generated
+"
+
 # The compartment gate: every Spec module carries a valid BACKEND COMPARTMENT tag.
 run "check-compartments (every module tagged to one backend)" "bash scripts/check-compartments.sh"
 
