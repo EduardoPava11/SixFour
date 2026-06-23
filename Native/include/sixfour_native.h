@@ -170,6 +170,11 @@ int32_t s4_haar_level_nodes(int32_t level, const int32_t *root_q16,
 int32_t s4_rgbt_lift_quad(const int32_t *in_q16, int32_t *out_q16);
 // Inverse of s4_rgbt_lift_quad.
 int32_t s4_rgbt_unlift_quad(const int32_t *in_q16, int32_t *out_q16);
+// 2×2×2 → 1 OCTANT lift (OctreeCell.liftOct): 8 cells in (a,b,c,d near-z, e,f,g,h far-z),
+// out = [coarse, g0,b0,t0, g1,b1,t1, dz]. TOTAL: refuses RC_OUT_OF_RANGE if any |in| > B.
+int32_t s4_octant_lift(const int32_t *in_q16, int32_t *out_q16);
+// Inverse of s4_octant_lift.
+int32_t s4_octant_unlift(const int32_t *in_q16, int32_t *out_q16);
 // One 2-D-Haar level over a side×side row-major grid (side even): tile into 2×2
 // blocks → coarse (side/2)² plane + (side/2)² detail triples (G,B,T).
 int32_t s4_cube_lift_level(int32_t side, const int32_t *grid,
