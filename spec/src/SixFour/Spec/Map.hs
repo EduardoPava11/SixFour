@@ -131,7 +131,12 @@ Gaussian-summary; shared by "SixFour.Spec.Loss" and "SixFour.Spec.Barycenter").
 "SixFour.Spec.SignificanceFixed".
 
 == 3. Collapse → the global palette
-"SixFour.Spec.Collapse", "SixFour.Spec.GlobalVolume", "SixFour.Spec.Cyclic",
+"SixFour.Spec.Collapse" (METAL-GPU: the float OKLab maximin BASELINE only — pooledCandidates /
+farthestPointCollapse), "SixFour.Spec.GlobalCollapseQ16" (ZIG-FLOOR: the SHIPPED byte-exact Q16
+collapse split out of Collapse (pivot) — PxQ16 / globalCollapseQ16 / reindexFrameQ16, the Zig
+@s4_global_collapse@ reference via QuantFixed, + the HARD-MUST-1 PaletteScope gate. The float
+baseline and the byte-exact device collapse have different determinism classes, so they split
+along the seam), "SixFour.Spec.GlobalVolume", "SixFour.Spec.Cyclic",
 "SixFour.Spec.Barycenter", "SixFour.Spec.Entropy". (Baseline = maximin pick;
 "SixFour.Spec.Barycenter" is the free-support W₂ /particle-flow/ move — the next rung of the
 GIFA→GIFB redesign — that lets atoms transport, not merely select; "SixFour.Spec.Entropy" is the

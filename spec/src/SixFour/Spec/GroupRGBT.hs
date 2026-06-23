@@ -65,7 +65,7 @@ module SixFour.Spec.GroupRGBT
 
 import Data.List (isSubsequenceOf, sort)
 
-import SixFour.Spec.Collapse      (PxQ16, pooledCandidatesQ16, globalCollapseQ16)
+import SixFour.Spec.GlobalCollapseQ16      (PxQ16, pooledCandidatesQ16, globalCollapseQ16)
 import SixFour.Spec.CanonicalPhase (rotateBy)
 
 -- | Frames per RGBT group (R, G, B, T).

@@ -3,7 +3,7 @@ module Properties.GroupRGBT (tests) where
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
-import SixFour.Spec.Collapse   (PxQ16, globalCollapseQ16)
+import SixFour.Spec.GlobalCollapseQ16   (PxQ16, globalCollapseQ16)
 import SixFour.Spec.GroupRGBT
 
 -- A Q16 OKLab triple (same bounds as the other Q16 generators).

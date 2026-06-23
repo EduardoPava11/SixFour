@@ -39,7 +39,7 @@ module SixFour.Spec.RGBTFeature
   , lawFeatureGaugeConsistent
   ) where
 
-import SixFour.Spec.Collapse       (PxQ16)
+import SixFour.Spec.GlobalCollapseQ16       (PxQ16)
 import SixFour.Spec.Entropy        (RGBTWeights(..))
 import SixFour.Spec.GroupRGBT      (circularWindows)
 import SixFour.Spec.CanonicalPhase (rotateBy)

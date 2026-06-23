@@ -33,6 +33,7 @@ library
         SixFour.Spec.QuantFixed
         SixFour.Spec.Coverage
         SixFour.Spec.Collapse
+        SixFour.Spec.GlobalCollapseQ16
         SixFour.Spec.QuartetDelta
         SixFour.Spec.Diversity
         SixFour.Spec.SpatialDither
@@ -371,6 +372,7 @@ test-suite spec-tests
         Properties.QuantFixed
         Properties.Coverage
         Properties.Collapse
+        Properties.GlobalCollapseQ16
         Properties.Diversity
         Properties.GMM
         Properties.Bures
