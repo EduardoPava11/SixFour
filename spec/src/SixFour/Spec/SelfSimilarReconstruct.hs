@@ -46,7 +46,7 @@ No golden contract (@slotLookDims@ / @NetContract@ / @net_shape@) is touched and
 golden-gated module is edited. GHC-boot-only; laws are exported predicates,
 QuickCheck'd in @Properties.SelfSimilarReconstruct@.
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DeviceTag | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.SelfSimilarReconstruct
   ( -- * The two detail sources (the epistemic split, as a type)
     DetailSource(..)

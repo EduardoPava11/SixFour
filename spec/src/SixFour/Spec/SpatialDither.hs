@@ -18,7 +18,7 @@ the app runs in the GIF path — a Q16 port of @Dither.swift@:
 Nearest-centroid ties resolve to the lowest index (strict @<@), matching
 @Dither.swift@'s @d < bestD@ and the Zig kernel.
 -}
--- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag | STRADDLER
+-- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.SpatialDither
   ( DitherMode(..)
   , ditherFrameQ16

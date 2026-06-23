@@ -20,7 +20,7 @@ THE COUNT (judge resolution, §3.2): a depth-7 σ-pair tree has
 modifies the LEVELS list — the root is UNADDRESSABLE. The vocabulary is
 therefore @127 × 12 = 1524@, not 1536 ('lawVocab1524' pins it).
 -}
--- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag | STRADDLER
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.DeltaCodebook
   ( -- * The 12-entry σ-paired codebook
     deltaCodebook

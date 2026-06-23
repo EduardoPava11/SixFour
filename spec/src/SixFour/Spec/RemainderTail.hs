@@ -33,7 +33,7 @@ learned FlowAR output. The bit-exact GIF still comes from re-quantising the
 __surfaced__ part to Q16 (see the proposer→Q16 seam, a later module); the tail never
 enters the integer floor.
 -}
--- COMPARTMENT: PURE-SPEC-WALL | tag:DeviceTag | STRADDLER
+-- COMPARTMENT: PURE-SPEC-WALL | tag:DeviceTag
 module SixFour.Spec.RemainderTail
   ( -- * The two layers (distinct types — that is the whole point)
     Surfaced(..)

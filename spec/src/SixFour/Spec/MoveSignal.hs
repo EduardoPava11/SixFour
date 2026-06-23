@@ -29,7 +29,7 @@ entropy), kept for a future field signal; the per-octant energy here is the L1 n
 
 GHC-boot-only. Additive LEAF (nothing depends on it). Laws QuickCheck'd in "Properties.MoveSignal".
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.MoveSignal
   ( -- * The content-responsive signal (v1)
     bandEnergy

@@ -20,7 +20,7 @@ cube. Two properties pin the canon:
 
 GHC-boot-only. Laws are exported predicates, QuickCheck'd in @Properties.PerScaleWeights@.
 -}
--- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.PerScaleWeights
   ( -- * Per-scale weights
     ScaleWeights

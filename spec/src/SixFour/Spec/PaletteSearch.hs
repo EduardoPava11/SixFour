@@ -27,7 +27,7 @@ Reuse: 'PairTree' (HaarPalette / reconstruct / analyze / wellFormed — the loss
 move grammar), 'Preference.greedyGallery' (DPP diverse selection), 'Diversity'
 (a deterministic value metric for the stub). GHC-boot deps only.
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.PaletteSearch
   ( -- * Abstract oracle (policy + value); the NN plugs in here
     Oracle(..)

@@ -39,7 +39,7 @@ Additive: reuses "SixFour.Spec.CubeTensor", "SixFour.Spec.ProjectionOrdering",
 re-pin. GHC-boot-only (base + Data.Word). Laws are exported predicates, QuickCheck'd in
 "Properties.ProjectionQuery".
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.ProjectionQuery
   ( -- * The store and its keys
     GeneStoreSpec(..)

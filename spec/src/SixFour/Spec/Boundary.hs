@@ -37,7 +37,7 @@ inset-rect corners are NOT inside (it is genuinely rounded, not a square); the
 centre is inside; the insets clear the OS safe area; the corner radius matches the
 device.
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.Boundary
   ( -- * Inset margins (whole cells) + the derived frame bounds
     insetX, insetTop, insetBottom, cornerCells

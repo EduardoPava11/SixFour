@@ -29,7 +29,7 @@ Kept at the ADT\/smart-constructor layer (phantom tags + export discipline), NOT
 DataKinds\/LiquidHaskell, per the project's spec methodology. Additive: nothing
 imports it yet, so no shipped contract is re-pinned.
 -}
--- COMPARTMENT: PURE-SPEC-WALL | tag:DeviceTag | STRADDLER
+-- COMPARTMENT: PURE-SPEC-WALL | tag:DeviceTag
 module SixFour.Spec.ByteCarrier
   ( -- * The carrier (constructor HIDDEN on purpose)
     Carried

@@ -23,7 +23,7 @@ prose:
 
 Additive law module, no new substrate, GHC-boot.
 -}
--- COMPARTMENT: MLX-MODEL | tag:MacTag | STRADDLER
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.CarrierL
   ( zeroDetail
     -- * Laws (QuickCheck'd in @Properties.CarrierL@)

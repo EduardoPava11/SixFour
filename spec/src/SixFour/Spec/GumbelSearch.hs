@@ -19,7 +19,7 @@ value to this same key on a FIXED-order reduction; the integer key, not the floa
 This module owns the SELECTION math (pure, deterministic); it reuses 'PaletteSearch' for the
 'Seed'/'stepSeed' RNG and plugs into the existing 'Oracle'.
 -}
--- COMPARTMENT: PURE-SPEC-WALL | tag:none | STRADDLER
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.GumbelSearch
   ( -- * The Q16 cross-tier comparison key
     q16Key

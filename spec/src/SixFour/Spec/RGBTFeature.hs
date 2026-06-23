@@ -27,7 +27,7 @@ Properties that pin it:
   * 'lawFeatureGaugeConsistent'        — rotation-equivariant, so canonicalising the loop phase
     ("SixFour.Spec.CanonicalPhase") canonicalises the feature layer (the @C_n@ gauge is respected).
 -}
--- COMPARTMENT: METAL-GPU | tag:none | STRADDLER
+-- COMPARTMENT: METAL-GPU | tag:none
 module SixFour.Spec.RGBTFeature
   ( -- * The feature layer
     rgbtFeature

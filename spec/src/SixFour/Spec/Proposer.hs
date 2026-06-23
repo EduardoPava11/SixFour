@@ -27,7 +27,7 @@ GHC-boot-only. Laws are exported predicates, QuickCheck'd in 'Properties.Propose
 each delegates to a proven sub-module law, so the proposal inherits {two orthogonal
 candidates, value-max predicted winner, sum-to-one policy target, determinism}.
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.Proposer
   ( -- * The proposal
     Proposal(..)

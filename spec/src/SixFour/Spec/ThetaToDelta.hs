@@ -39,7 +39,7 @@ Laws (QuickCheck'd in @Properties.ThetaToDelta@; the gradient law is ε, the res
   * the raw map is linear in θ ('lawRawLinearInTheta');
   * the @[coverage, beauty]@ tail does not affect δ ('lawCoverageBeautyIgnored').
 -}
--- COMPARTMENT: SWIFT-COREAI | tag:CommitSide | STRADDLER
+-- COMPARTMENT: SWIFT-COREAI | tag:CommitSide
 module SixFour.Spec.ThetaToDelta
   ( -- * Constants
     deltaMaxQ16
