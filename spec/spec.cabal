@@ -91,6 +91,7 @@ library
         SixFour.Spec.Sided
         SixFour.Spec.DataParallel
         SixFour.Spec.JepaMemory
+        SixFour.Spec.HalfwayLatent
         SixFour.Spec.JepaData
         SixFour.Spec.EncoderFrozen
         SixFour.Spec.ContinuousLoop
@@ -320,6 +321,7 @@ test-suite spec-tests
         Properties.Sided
         Properties.DataParallel
         Properties.JepaMemory
+        Properties.HalfwayLatent
         Properties.JepaData
         Properties.RelationalResidual
         Properties.RelationalMemory

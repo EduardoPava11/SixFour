@@ -47,6 +47,7 @@ import qualified Properties.BoundedP6 as BoundedP6
 import qualified Properties.Sided as Sided
 import qualified Properties.DataParallel as DataParallel
 import qualified Properties.JepaMemory as JepaMemory
+import qualified Properties.HalfwayLatent as HalfwayLatent
 import qualified Properties.JepaData as JepaData
 import qualified Properties.RelationalResidual as RelationalResidual
 import qualified Properties.RelationalMemory as RelationalMemory
@@ -185,6 +186,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Sided.tests
   , DataParallel.tests
   , JepaMemory.tests
+  , HalfwayLatent.tests
   , JepaData.tests
   , RelationalResidual.tests
   , RelationalMemory.tests
