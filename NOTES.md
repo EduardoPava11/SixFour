@@ -7,6 +7,63 @@ newest first.
 
 ---
 
+## 2026-06-23: dual-encoder H-JEPA + dither/midpoint + minimal-instruction-set (branch `spec/dual-encoder-hierarchies`) — SUNSET, awaiting reconciliation
+
+> **Session theme (Daniel):** "redesign the I-JEPA — two semantic encoders of the same GIF;
+> explore the distance between L,a,b,x,y,t; 64³↔16³+data scalable through a 32³ latent; the
+> dither hierarchy on the 64³ GIF; the minimum decode-instruction set." Built spec-first,
+> additive, gated. **NOT committed to master; lives on branch `spec/dual-encoder-hierarchies`,
+> awaiting reconciliation with a parallel branch Daniel is driving.**
+
+**WHAT LANDED — 10 new `Spec.*` modules + 10 `Properties.*`, all ADDITIVE. `gate.sh` GREEN
+(1288 spec tests, exit 0, 186 modules compartment-tagged, hermetic codegen no-drift, lints +
+Zig/Python cross-language goldens). NO golden re-pinned. NO edit to any owned module.**
+
+Arc 1 — DUAL-ENCODER H-JEPA (the two encoders are ONE object):
+- `ConstructionEncoder` (Encoder A: Q16 `cPalette` + Morton `cIndex` → `buildPixels`; `identityIndex` = the A-form "no index" core, `lawIdentityIndexIsPaletteInOrder`).
+- `PerceptualEncoder` (Encoder B: `Cube → [P6] (L,a,b,x,y,t)` via `mortonToXYT`; `perceptualDistance` = `RelationalMemory.d6`).
+- `GifDualView` (KEYSTONE `lawSameObjectBothViews`: both views decode to the SAME pixels).
+- `CrossEncoderDistance` (`constructionDistortion` + per-axis `axisDistortion` = "the distance between L,a,b,x,y,t"; `lawPerAxisDistortionSumsToTotal`).
+- `CoarseIsPalette` (TYPE-LEVEL `16*16==256` via `Refl`; `coarseToPaletteStack`; `decodeAPalettesOnly`; depth-5 32³ rung `lawMidpointIsPaletteStack`).
+- `ScaleIndexedCorrespondence` (the H-JEPA hierarchy `Exact@16³/Lossy@64³/Invented@256³` on the `HJepaLevels` spine; `LatentMidpoint` as a NON-`Bounded` kind so the keystone literal stays green).
+- `DualEncoderJepa` (redesigned objective `lawCrossEncoderContextStrictlyHelps`: joint A+B context beats B alone; data-manufactured target, NO EMA).
+
+Arc 2 — HIERARCHY REDESIGN (two design studies, then build):
+- `DitherLevel` (dither = the per-pixel latent z, H-JEPA §4.6; `realizeStream`; `lawRealizationUnbiased` / `lawRealizationIsNotReversible` (only the loop MEAN recovers; per-frame bit destroyed) / `lawDitherFlickerPeaksAtHalf` / `lawContinuousReducesToDiscrete` / `lawGoldenOrderingTamesLatent`). **METAL-GPU float** (`Dither.hs` is `OKLab Double`); NOT on the Q16 floor.
+- `MidLatentCrossPrediction` (the 32³-local cross-encoder objective; `lawMidCrossEncoderStrictlyHelps` carries BOTH clauses; midpoint-local, NOT the 16³→256³ hop).
+- `MinimalInstructionSet` (the "16³+data" minimum decode instructions, BOTH forms: A = 16 palettes / no index `lawSixteenPalettesSuffice`; B = `(L,x,y,t)+data` LOSSY `lawBSkeletonIsLossy`; the ASYMMETRIC duality `lawDualMinimalProjections`: A→B exact, B→A Invented).
+
+**Findings the studies confirmed against code (corrections to the initial framing).**
+- A-form decode rule is octant-MORTON (`mortonToXYT 4 i`), NOT raster `(i mod 16, i div 16)` — raster would bit-scramble (the substrate stores Morton across `cIndex`/`coarseToPaletteStack`/`perceptualEmbed`).
+- "16 palettes, no index" is CONDITIONAL on complete-256 per-frame (`CompleteVoxelVolume`); real frames often fail it (flat regions). `decodeAPalettesOnly` is a reshape (always correct); droppability is the conditional claim. `Significance` is population, not completeness.
+- B-form `(L,x,y,t)` is LOSSY: `L→(a,b)` is ill-posed colorization; chroma is Invented/predicted, never an exact inverse.
+- Dither `(palette+p)→stream` is NOT reversible; only the T-window MEAN survives. It is a display decoder (METAL-GPU), not a floor op.
+- The 32³/128³ midpoints were ALREADY canon (`RungPivot.lawIntermediateNeverSurfaces`); this work ROUTES the cross-encoder objective THROUGH them, it does not introduce them.
+
+**Design canon (intentionally NOT in the repo, per the no-`docs/`-plan-files rule):**
+`~/.claude/projects/-Users-daniel/jepa_wf_artifacts/dual_encoder_dither_midpoint_study.md` and
+`.../minimal_decode_instruction_set_study.md` (each self-critiqued via an adversarial workflow).
+
+**RECONCILIATION (Daniel has a parallel branch to merge against this one).**
+1. **Fully ADDITIVE.** 10 NEW module files + 10 NEW test files. NO golden re-pinned. NO edit to `RelationalMemory`/`RelationalResidual`/`HJepaLevels`/`RungPivot`/`Dither`/`SpatialDither`/`STBN3D`/`JepaTarget`/`SuccessiveRefinement`/`SelfSimilarReconstruct` (all read-only delegations). The other branch's edits to those modules do NOT collide with this branch's modules.
+2. **Shared append-only files (trivial 3-way merge, keep BOTH sides' additions):** `spec/spec.cabal` (library `exposed-modules` + `spec-tests` `other-modules`), `spec/test/Spec.hs` (imports + the test-tree list), `spec/src/SixFour/Spec/Map.hs` (one categorised line per module). If the parallel branch also adds modules, both lists simply grow; resolve by keeping all entries (no semantic conflict).
+3. **EMA FORK (the one real tension).** This branch keeps the DATA-MANUFACTURED, no-EMA target (`lawDualTargetIsDataManufactured`, `lawMidTargetIsDataManufactured`, delegating `JepaTarget`). COMPATIBLE with an EMA-on-the-PREDICTOR variant. CONFLICTS only if the parallel branch replaces the manufactured TARGET band with a float EMA target (that breaks byte-exactness + reintroduces collapse). Reconciliation rule: keep EMA OFF the target band; the frozen lift stays the tokenizer/target-manufacturer.
+4. **DEFERRED follow-on (backend-port territory, not spec law):** the full typed `ContinuousConstruction` realize-to-frames (binds `SpatialDither.ditherFrameQ16`; `bluePick` is unexported — needs a widened export) + `PerceptualEncoder.perceptualEmbedMean` with the BLOCKING `[Double]` 32³-midpoint (`lawPerceptualMidpointNeverSurfaces`). Their PROVABLE CORES already landed as `DitherLevel` laws (mean-recovery = "B sees the loop mean"; reduces-to-discrete = the continuous extension of the byte-exact corner).
+5. Chroma "+data" residual stays on the DECIDED 64³ STBN3D/nearest-2 path, NOT a 32³ latent.
+
+**Verification performed.**
+- `cabal test spec-tests` → 1288 / 1288 green.
+- `bash spec/scripts/gate.sh` → exit 0 (tests + hermetic codegen no-drift + 186 modules compartment-tagged + lints + Zig + Python cross-language goldens).
+- `cabal haddock sixfour-spec` → warning-clean for every new/amended module.
+- Per-module law review during the build (one `cabal test -p <Module>` per module, all green).
+
+**Left untouched on purpose.** `Native/src/color_fixture_test.zig` (pre-existing modification from
+the byte-exact thread, another session). Stray repo-root `Generated/` + `Resources/` are a
+`spec-codegen` wrong-cwd MISFIRE (untracked, never tracked; the real tracked outputs live in
+`SixFour/Generated/`); NOT committed, safe to `rm -rf Generated Resources` from the repo root.
+
+---
+
 ## 2026-06-22: doc-staleness sweep after the I-JEPA redirect + compartment pivot + module splits (branch `model/relational-residual`)
 
 This session landed three structural changes that staled the docs, and this sweep reconciles them. (1) THE I-JEPA REDIRECT: the relational-residual -> LargeJepaHead asymmetric I-JEPA head is now the LIVE learned core (frozen reversible lift = param-free tokenizer + collapse-proof JepaTarget; trained MLX -> coreai-torch -> Core AI), landing the new live modules RelationalMemory, LargeJepaHead, JepaTarget, JepaMemory (the memory-budget tripwire), JepaData (data engine, KEYSTONE lawDataEngineRoundTrips), MaskedBandPrediction/MaskedBandTrainer, DeferredSurfacing, NeuronRedundancy, MoveSignal, TwoMoveOctave, BoundedP6, Sided, DataParallel; the look-NN is now the ABANDONED V2-deferred path, NOT the core. (2) THE COMPARTMENT PIVOT: every Spec module carries a `-- COMPARTMENT: <c> | tag:<t>` line and Spec.Map grew a BACKEND COMPARTMENTS super-category (4 phantom-tag walls ByteCarrier/Sided/BoundedP6/DataParallel), enforced by scripts/check-compartments.sh. (3) MODULE SPLITS: RelationalResidual -> RelationalResidual (Zig P6/nudge/safeNudge substrate) + RelationalMemory (MLX d6/14-int residual/metric laws); Collapse -> Collapse (float maximin baseline, Metal) + GlobalCollapseQ16 (byte-exact Q16 collapse, Zig). GATE HARDENING: spec/scripts/gate.sh is now the single gate (cabal test + hermetic codegen via spec-codegen + git diff --exit-code + check-compartments + lints + Zig cross-language goldens with -Drequire_fixtures=true + python3 trainer/jepa_data.py); ~1249 spec tests + 72 Zig test blocks green. The doc sweep re-pointed all moved-symbol Haddock cross-refs (Collapse.globalCollapseQ16 -> GlobalCollapseQ16; RelationalResidual.d6 -> RelationalMemory) and stripped every broken @docs/*.md@ link (the docs/ dir was emptied this session; canon = CLAUDE.md + Spec.Map + module doc-comments, do not recreate the deleted plan files).

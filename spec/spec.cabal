@@ -97,6 +97,16 @@ library
         SixFour.Spec.PerAxisTraining
         SixFour.Spec.SameObjectInvariance
         SixFour.Spec.SameObjectJEPA
+        SixFour.Spec.ConstructionEncoder
+        SixFour.Spec.PerceptualEncoder
+        SixFour.Spec.GifDualView
+        SixFour.Spec.CrossEncoderDistance
+        SixFour.Spec.CoarseIsPalette
+        SixFour.Spec.ScaleIndexedCorrespondence
+        SixFour.Spec.DualEncoderJepa
+        SixFour.Spec.MinimalInstructionSet
+        SixFour.Spec.DitherLevel
+        SixFour.Spec.MidLatentCrossPrediction
         SixFour.Spec.CubeTensor
         SixFour.Spec.ProjectionQuery
         SixFour.Spec.CarrierL
@@ -440,6 +450,16 @@ test-suite spec-tests
         Properties.PerAxisTraining
         Properties.SameObjectInvariance
         Properties.SameObjectJEPA
+        Properties.ConstructionEncoder
+        Properties.PerceptualEncoder
+        Properties.GifDualView
+        Properties.CrossEncoderDistance
+        Properties.CoarseIsPalette
+        Properties.ScaleIndexedCorrespondence
+        Properties.DualEncoderJepa
+        Properties.MinimalInstructionSet
+        Properties.DitherLevel
+        Properties.MidLatentCrossPrediction
         Properties.CubeTensor
         Properties.ProjectionQuery
         Properties.CarrierL

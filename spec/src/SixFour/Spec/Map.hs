@@ -421,6 +421,71 @@ reconstructs identically under either XOR projection-ordering: @decodeUnder p . 
 @Z2@ is the object; @lawDifferentEncodingsSameObject@ = same object / orthogonal projection;
 @lawEquivariance@ = swap-the-ordering == swap-the-input. Why the projection-choice is a safe
 RL action. Delegates OctreeCell octant bijection + ProjectionOrdering XOR self-inverse),
+"SixFour.Spec.ConstructionEncoder" (★ ENCODER A of the dual-encoder H-JEPA — the GIF's
+"construction instructions" (a Q16 colour @cPalette@ + a Morton-order @cIndex@ map) as a
+semantic embedding that @buildPixels@ EXECUTES to a @SameObjectInvariance.Cube@:
+@lawConstructionExecutesToPixels@ = the encoder IS the palette lookup,
+@lawBuildIsTotalOnValid@ = a valid construction builds exactly @8^d@ voxels,
+@lawBuildRespectsIndex@ = the index map carries information (the section-injectivity
+GifDualView rides). Q16 substrate twin of the float @Palette@/@Indices@. Additive),
+"SixFour.Spec.PerceptualEncoder" (★ ENCODER B of the dual-encoder H-JEPA — the GIF as a
+PERCEPTUAL point cloud over the six axes @(L,a,b,x,y,t)@: @perceptualEmbed@ maps each
+@Cube@ voxel to a @P6@ (colour from the channels, position @(x,y,t)@ from @mortonToXYT@
+de-interleave), @perceptualDistance@ = @RelationalMemory.d6@. @lawPerceptualEmbedsAllSixAxes@
+= total + injective position lift, @lawPerceptualReusesD6@ = distance is d6 and
+position-aware. Thin read-only adapter over the in-flight L/t memory. Additive),
+"SixFour.Spec.GifDualView" (★ KEYSTONE of the dual-encoder H-JEPA — one @GifObject@, two
+encoders, the commutative square proving they are the SAME object: @viewA@/@decodeA@ =
+construction (palette+index via @palettizeExact@), @viewB@/@decodeB@ = perceptual cloud.
+@lawSameObjectBothViews@ = both views decode to the SAME pixels, @lawSectionEmbedsLossless@
+= Encoder B is a lossless section (with teeth), @lawRetractionRoundTrip@ = @palettizeExact@
+is a section of @buildPixels@. Unbounded-budget (lossless) end; the budget gap is
+CrossEncoderDistance. Additive),
+"SixFour.Spec.CrossEncoderDistance" (★ the DISTANCE between the two semantics — the lossy
+fixed-budget retraction @palettizeBudget@, @constructionDistortion@ = the @d6@-sum gap
+between Encoder A's budgeted rebuild and Encoder B's faithful cloud, @axisDistortion@ = that
+gap projected per "SixFour.Spec.Dim6" axis. @lawPerAxisDistortionSumsToTotal@ = the six
+axis-distortions partition the total exactly ("the distance between L,a,b,x,y,t"),
+@lawDistortionZeroIffLossless@ = zero iff palettizable within budget,
+@lawDistortionIsPseudometric@ = a genuine metric (delegates @RelationalMemory.d6@). Additive),
+"SixFour.Spec.CoarseIsPalette" (★ the @16²=256@ bridge as a COMPILE-TIME theorem —
+@PaletteCells = 16*16@, @coarseEqPalette :: PaletteCells :~: 256@ is @Refl@ (GHC proves it);
+a coarse 16³ frame has 256 cells = a palette, so @coarseToPaletteStack@ reshapes the cube
+into 16 typed @QPalette PaletteCells@. @lawCoarseFrameSizeIsPaletteSize@ = 16 is the unique
+palette-sized side (teeth: 64,256 are not), @lawCoarseIsStackOfPalettes@ = bijective reshape,
+@lawCoarsePaletteComparesToPerFrame@ = at 16³ the construction palette EQUALS the perceptual
+colours (encoders coincide; the Analysis-rung exactness). Additive),
+"SixFour.Spec.ScaleIndexedCorrespondence" (★ the H-JEPA ANSWER — the correspondence between
+the two encoders is a HIERARCHY indexed by the scale spine: @correspondenceAt@ assigns
+@Exact@ at Analysis 16³ (delegates @CoarseIsPalette@), @Lossy@ at the 64³ Pivot (delegates
+@CrossEncoderDistance@), @Invented@ at Synthesis 256³ (delegates @SelfSimilarReconstruct@).
+@lawCorrespondenceHierarchyMatchesScaleSpine@ = the three DISTINCT kinds match the scale
+spine (delegates @HJepaLevels.lawScaleIsTheSpine@) — "there is a hierarchy here". Additive),
+"SixFour.Spec.DualEncoderJepa" (★ the REDESIGNED I-JEPA — a DUAL-ENCODER objective predicting
+a masked band of one encoder from the VISIBLE CONTEXT OF THE OTHER. @bOnlyLoss@/@jointLoss@ =
+the information floors of B-context vs joint (A,B) context. @lawCrossEncoderContextStrictlyHelps@
+= KEYSTONE: the joint predictor strictly beats B-alone when A resolves a collision (with
+redundancy teeth proving it is a real separation), @lawDualTargetIsDataManufactured@ = no EMA
+no collapse (delegates @JepaTarget@), @lawDualReusesScaleSpine@ = the cross-prediction IS the
+H-JEPA hop (delegates @HJepaLevels@), @lawNoEncoderBypassesQ16@ = both commit through
+@reenterQ16@ (delegates @EncoderFrozen@). Additive),
+"SixFour.Spec.MinimalInstructionSet" (★ the MINIMUM decode-instruction set for "16³+data" in
+BOTH encoder forms — A: 16 ordered palettes / NO index map (@lawSixteenPalettesSuffice@,
+delegates @CoarseIsPalette.decodeAPalettesOnly@ + @ConstructionEncoder.identityIndex@); B: the
+L carrier over (x,y,t) with chroma demoted to data, a LOSSY skeleton (@bSkeleton@,
+@lawBSkeletonIsLossy@ closed witness, @lawChromaIsSearchResidual@ delegates @Dim6@). The duality
+is ASYMMETRIC (@lawDualMinimalProjections@: A→B exact, B→A Invented; rides
+@DualEncoderJepa.lawCrossEncoderContextStrictlyHelps@). Additive),
+"SixFour.Spec.DitherLevel" (★ DITHER = the per-pixel continuous latent z (H-JEPA §4.6),
+realized by a MOMENT-CONSERVING DECODER (@realizeStream@ via golden ordering): unbiased loop
+mean (@lawRealizationUnbiased@) but NOT reversible at finite T (@lawRealizationIsNotReversible@,
+distinct p → same stream), flicker peaks at p=0.5 (@lawDitherFlickerPeaksAtHalf@). Float
+display side (METAL-GPU), NOT the Q16 floor. Delegates @Spec.Dither@. Additive),
+"SixFour.Spec.MidLatentCrossPrediction" (★ the MIDPOINT-LOCAL cross-encoder objective — predict
+one encoder's 32³ latent band from the other's 32³ context: @lawMidCrossEncoderStrictlyHelps@
+(joint beats B-alone, both clauses, on midpoint witnesses), @lawMidObjectiveIsMidpointLocal@
+(the organisable level, NOT the 16³→256³ hop; delegates @HJepaLevels@+@RungPivot@),
+@lawMidTargetIsDataManufactured@ (no EMA; delegates @JepaTarget@). Additive),
 "SixFour.Spec.CubeTensor" (★ the ONE canonical voxel-tensor object — Q16 OKLab over the
 (x,y,t) lattice, channel-split (L carrier + a,b search), octant-Morton: @toChannelSoA@/
 @fromChannelSoA@ is a LOSSLESS rename onto @SameObjectInvariance.Cube@

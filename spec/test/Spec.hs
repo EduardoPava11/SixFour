@@ -80,6 +80,16 @@ import qualified Properties.JepaTarget as JepaTarget
 import qualified Properties.PerAxisTraining as PerAxisTraining
 import qualified Properties.SameObjectInvariance as SameObjectInvariance
 import qualified Properties.SameObjectJEPA as SameObjectJEPA
+import qualified Properties.ConstructionEncoder as ConstructionEncoder
+import qualified Properties.PerceptualEncoder as PerceptualEncoder
+import qualified Properties.GifDualView   as GifDualView
+import qualified Properties.CrossEncoderDistance as CrossEncoderDistance
+import qualified Properties.CoarseIsPalette as CoarseIsPalette
+import qualified Properties.ScaleIndexedCorrespondence as ScaleIndexedCorrespondence
+import qualified Properties.DualEncoderJepa as DualEncoderJepa
+import qualified Properties.MinimalInstructionSet as MinimalInstructionSet
+import qualified Properties.DitherLevel   as DitherLevel
+import qualified Properties.MidLatentCrossPrediction as MidLatentCrossPrediction
 import qualified Properties.CubeTensor     as CubeTensor
 import qualified Properties.ProjectionQuery as ProjectionQuery
 import qualified Properties.CarrierL      as CarrierL
@@ -254,6 +264,16 @@ main = defaultMain $ testGroup "sixfour-spec"
   , PerAxisTraining.tests
   , SameObjectInvariance.tests
   , SameObjectJEPA.tests
+  , ConstructionEncoder.tests
+  , PerceptualEncoder.tests
+  , GifDualView.tests
+  , CrossEncoderDistance.tests
+  , CoarseIsPalette.tests
+  , ScaleIndexedCorrespondence.tests
+  , DualEncoderJepa.tests
+  , MinimalInstructionSet.tests
+  , DitherLevel.tests
+  , MidLatentCrossPrediction.tests
   , CubeTensor.tests
   , ProjectionQuery.tests
   , CarrierL.tests
