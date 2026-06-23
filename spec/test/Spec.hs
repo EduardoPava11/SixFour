@@ -47,6 +47,7 @@ import qualified Properties.Sided as Sided
 import qualified Properties.DataParallel as DataParallel
 import qualified Properties.JepaMemory as JepaMemory
 import qualified Properties.RelationalResidual as RelationalResidual
+import qualified Properties.RelationalMemory as RelationalMemory
 import qualified Properties.RemainderTail as RemainderTail
 import qualified Properties.ByteCarrier   as ByteCarrier
 import qualified Properties.DetailEntropy as DetailEntropy
@@ -218,6 +219,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , DataParallel.tests
   , JepaMemory.tests
   , RelationalResidual.tests
+  , RelationalMemory.tests
   , RemainderTail.tests
   , ByteCarrier.tests
   , DetailEntropy.tests

@@ -65,7 +65,8 @@ module SixFour.Spec.TwoMoveOctave
 import Data.List (nub)
 
 import SixFour.Spec.Dim6 (Dim6(..))
-import SixFour.Spec.RelationalResidual (P6(..), d6, nudge, safeNudge, p6Coords)
+import SixFour.Spec.RelationalResidual (P6(..), nudge, safeNudge, p6Coords)
+import SixFour.Spec.RelationalMemory (d6)
 import SixFour.Spec.SubstrateDomain (inDomain)
 import SixFour.Spec.OctreeCell (octreeDepth, levelsBetween)
 import SixFour.Spec.SelfSimilarReconstruct (levelsPerStep)
