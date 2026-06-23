@@ -32,6 +32,10 @@ test "cross-language: Haskell golden GIF reproduced byte-exactly by the Zig core
     // golden.gif is the byte-exact GIF the Haskell driver emits for a fixed burst.
     const golden = readFileAlloc(alloc, dir, "golden.gif") catch |e| {
         if (e == error.SkipZigTest) {
+            if (build_options.require_fixtures) {
+                std.debug.print("\n  [FAIL] golden.gif absent but -Drequire_fixtures=true; produce the fixtures first\n", .{});
+                return error.FixtureRequired;
+            }
             std.debug.print(
                 "\n  [skip] golden.gif not found in '{s}'; GIF golden lands in Stage 2/6\n",
                 .{dir},

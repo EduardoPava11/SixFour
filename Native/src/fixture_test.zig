@@ -45,6 +45,10 @@ test "cross-language: Python-produced S4LN blob parses byte-exactly in Zig" {
 
     const blob = readFileAlloc(alloc, dir, "look_net.s4ln") catch |e| {
         if (e == error.SkipZigTest) {
+            if (build_options.require_fixtures) {
+                std.debug.print("\n  [FAIL] look_net.s4ln absent but -Drequire_fixtures=true; produce the fixtures first\n", .{});
+                return error.FixtureRequired;
+            }
             std.debug.print(
                 "\n  [skip] fixture not found in '{s}'; run trainer/export_look_net_blob.py\n",
                 .{dir},

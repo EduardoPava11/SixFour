@@ -34,7 +34,7 @@ import SixFour.Spec.Significance      (minPopulation)
 import SixFour.Spec.SignificanceFixed (rescueQ16, cellsQ16)
 import SixFour.Spec.SpatialDither     (DitherMode(..), ditherFrameQ16)
 import SixFour.Spec.QuantFixed        (quantizeFrameQ16)
-import SixFour.Spec.Collapse
+import SixFour.Spec.GlobalCollapseQ16
   ( globalCollapseQ16, reindexFrameQ16, pooledCandidatesQ16 )
 import SixFour.Spec.PairTreeFixed
   ( HaarPaletteI(..), analyzeFixed, reconstructFixed, levelNodesFixed, treeDepthI )
