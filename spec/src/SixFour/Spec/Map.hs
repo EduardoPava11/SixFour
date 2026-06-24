@@ -132,6 +132,8 @@ learns this barycenter.)
 
 == 4. Palette structure / genome — the NN OUTPUT space (16² / 4⁴ / 2⁸)
 "SixFour.Spec.SplitTree", "SixFour.Spec.PairTree", "SixFour.Spec.PairTreeFixed",
+"SixFour.Spec.Loom" (the user-driven UNBALANCED merge-forest authoring verb — hand-folding the
+2⁸ palette one @2→1@ merge at a time to any posterization N; the lossless-split sibling of the fixed PairTree),
 "SixFour.Spec.RGBTLift" (the @2×2 ↔ RGBT@ reversible integer lifting — the spatial sibling of the
 1-D PairTreeFixed S-transform; the @(2×2)<->1@ bijection that makes the cube ladder lossless),
 "SixFour.Spec.OctreeCell" (★ octree keystone — the @2×2×2 → 1@ structured-leaf
@@ -171,7 +173,7 @@ white-balance + dynamic-range operator drives below the A/B chroma search),
 "SixFour.Spec.OctreeGenome" (★ the octant-ladder GENOME — bijective octree code
 (@genomeOf@/@paletteOf@ = octantDistill/Synthesize); law-pins the scale counts
 @octreeLeafCount = 8^d@ and @octreeNodeCount = (8^d−1)/7@ that will drive the Atlas
-head dims; makes @zero-genome == floor@ concrete (fills @ExportFamily@'s TODO law).
+head dims; makes @zero-genome == floor@ concrete.
 σ-symmetry / 256-palette mapping / cut-depth are DEFERRED design decisions that
 parameterise these formulas),
 "SixFour.Spec.SuccessiveRefinement" (★ the "surface one 16³, keep the remainder in
@@ -602,7 +604,8 @@ GIF89a Application-Extension, CRC32-checked, total Absent\/Corrupt\/VersionMisma
 == 5. The authoring STORY (Acts I–IV) — the user-facing pipeline the NN lives in
 "SixFour.Spec.StageA" (Act I, @16²@ per-frame) · "SixFour.Spec.QuartetDelta" (Act II, @4⁴@ quartet core) ·
 "SixFour.Spec.HaarRibbon" (Act III, @2⁸@ Haar abstraction) · "SixFour.Spec.Export" (Act IV, the global pack
-@{16³,64³,256³}@) · "SixFour.Spec.Upscale256" (Act IV, the residual-seeded @256³@ super-res of the export pack).
+@{16³,64³,256³}@) · "SixFour.Spec.Upscale256" (Act IV, the residual-seeded @256³@ super-res of the export pack)
+· "SixFour.Spec.AtlasCascade" (Act IV, the two-cube cascade @ExitState@ — QUAD-literal carry/reset for the @64³ → 256³@ warm start).
 
 == 6. Dither & index encoding
 "SixFour.Spec.Dither", "SixFour.Spec.SpatialDither", "SixFour.Spec.STBN3D", "SixFour.Spec.Indices",

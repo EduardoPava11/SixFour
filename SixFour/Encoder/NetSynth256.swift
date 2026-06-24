@@ -5,9 +5,10 @@ import Foundation
 ///
 /// SCAFFOLD (honest): the learned detail is produced by an on-device trainer (the `NetSynth256`
 /// weights), which is **not yet built** — a learned net needs training, not a port. Until weights
-/// ship, synthesis returns the floor EXACTLY. This is the gated-enhancement contract from
-/// `Spec.ExportFamily`: *bit-exact-equal to the floor at zero genome*. The enhancement drops in
+/// ship, synthesis returns the floor EXACTLY. This is the gated-enhancement contract:
+/// *bit-exact-equal to the floor at zero genome*. The enhancement drops in
 /// later (load weights → add genome-driven detail above the floor) without changing the export path.
+/// (Contract gated in `Spec.OctreeGenome.lawZeroGenomeIsFloor`.)
 enum NetSynth256 {
 
     /// Whether trained weights are loaded. `false` until the trainer ships them.

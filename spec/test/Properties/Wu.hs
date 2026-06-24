@@ -11,6 +11,7 @@ import SixFour.Spec.Color   (OKLab(..))
 import SixFour.Spec.StageA
 import SixFour.Spec.Palette (Palette(..))
 import SixFour.Spec.Indices (IndexTensor(..))
+import SixFour.Spec.Laws    (lawWuShapesOut)
 
 -- Use very small frames so QuickCheck is fast: H = W = 4, K = 8.
 
@@ -28,6 +29,13 @@ genFrame = do
     pure (OKLab l a b)
   pure (Frame (V.fromList xs))
 
+-- A full ship-shape frame (64×64) — lawWuShapesOut pins against Spec.Shape's kVal=256 /
+-- pixelsPerFrame=4096, so it must be exercised at the canonical shape, not the tiny one.
+genShipFrame :: Gen (Frame 64 64)
+genShipFrame = do
+  xs <- vectorOf (64 * 64) (OKLab <$> choose (0, 1) <*> choose (-0.4, 0.4) <*> choose (-0.4, 0.4))
+  pure (Frame (V.fromList xs))
+
 tests :: TestTree
 tests = testGroup "StageA / variance-cut reference"
   [ testProperty "output palette has exactly K entries" $
@@ -39,4 +47,7 @@ tests = testGroup "StageA / variance-cut reference"
         let (_, IndexTensor iv) = runStageA (varianceCutReference @H @W @K) fr
         in U.length iv == 16
            && U.all (\i -> i >= 0 && i < 8) iv
+  , testProperty "lawWuShapesOut: ship-shape Stage A output pinned (palette 256, indices 4096)" $
+      once $ forAll genShipFrame $ \fr ->
+        lawWuShapesOut (varianceCutReference @64 @64 @256) fr
   ]

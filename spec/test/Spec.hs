@@ -117,6 +117,7 @@ import qualified Properties.GridAxis     as GridAxis
 import qualified Properties.Order        as Order
 import qualified Properties.GridScript   as GridScript
 import qualified Properties.Export       as Export
+import qualified Properties.TemporalLoop as TemporalLoop
 import qualified Properties.Lattice      as Lattice
 import qualified Properties.Boundary     as Boundary
 import qualified Properties.InfluenceField as InfluenceField
@@ -263,6 +264,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Order.tests
   , GridScript.tests
   , Export.tests
+  , TemporalLoop.tests
   , Lattice.tests
   , Boundary.tests
   , InfluenceField.tests

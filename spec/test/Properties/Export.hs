@@ -14,6 +14,16 @@ genCase = do
   cells  <- vectorOf (side * side) (choose (0, 9))
   pure (factor, side, cells)
 
+-- A downsample-friendly grid: side is a multiple of factor, so the downsample laws
+-- exercise their real branch (not the divisibility guard).
+genDownsample :: Gen (Int, Int, [Int])
+genDownsample = do
+  factor <- choose (1, 4)
+  m      <- choose (1, 3)
+  let side = factor * m
+  cells <- vectorOf (side * side) (choose (0, 9))
+  pure (factor, side, cells)
+
 tests :: TestTree
 tests = testGroup "Export (64→256 index replication, 1→4×4)"
   [ testProperty "output length = (factor·side)²" $
@@ -34,4 +44,16 @@ tests = testGroup "Export (64→256 index replication, 1→4×4)"
                    , 10, 10, 20, 20
                    , 30, 30, 40, 40
                    , 30, 30, 40, 40 ]
+
+  , testProperty "downsample output length = (side/factor)²" $
+      forAll genDownsample $ \(f, s, c) -> lawDownsampleLength f s c
+
+  , testProperty "downsample invents no colour (index set ⊆ source)" $
+      forAll genDownsample $ \(f, s, c) -> lawDownsampleGamutClosed f s c
+
+  , testProperty "a constant grid downsamples to that same constant" $
+      forAll genDownsample $ \(f, s, _) -> lawDownsampleConstantBlock f s 7
+
+  , testProperty "the ×4 cube ladder is exact (previewSide·4=source, source·4=output, pack [16,64,256])" $
+      once lawCubeLadder
   ]

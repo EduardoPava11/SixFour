@@ -398,6 +398,7 @@ test-suite spec-tests
         Properties.Order
         Properties.GridScript
         Properties.Export
+        Properties.TemporalLoop
         Properties.Lattice
         Properties.Boundary
         Properties.InfluenceField

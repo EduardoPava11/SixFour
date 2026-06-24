@@ -7,6 +7,49 @@ newest first.
 
 ---
 
+## 2026-06-24: inter-frame policy/value deltas + the `detailBand` band-extractor unification + module-debt cleanup (branch `spec/encoder-grounding`)
+
+> **Session theme (Daniel):** H-JEPA depth — now that we have a loop, give it something to ponder;
+> integrate DEEPLY (shared structure, not I/O plumbing); and clean the technical debt before committing.
+
+Built spec-first, additive, gated. **922 spec tests green** (from 920), build + Haddock warning-clean, both
+byte-exact goldens (`jepa_data_golden.json`, `MaskedBandGolden.swift`) untouched, Python corpus self-check
+green. Branch is a strict descendant of master (clean fast-forward).
+
+**INTER-FRAME t→t+1 = Option 2 (policy/value deltas), DATA-MANUFACTURED.** The circular time axis is supervised
+by predicting the NEXT captured frame's own data, split into an orthogonal POLICY (index/motion) and VALUE
+(palette/recolour) channel. `Spec.ConstructionEncoder`: `policyDelta`/`valueDelta` +
+`lawInterFrameFactorsToPolicyValue` (the two channels compose in either order, neither alone reaches t+1) +
+`lawPaletteIndexGaugeInvariant` (compare in FUSED `buildPixels` space — raw palette slot-by-slot is gauge-broken).
+`Spec.JepaTarget`: `lawTemporalDeltaTargetIsDataManufactured` + `lawNoSelfProducedRolloutTarget` (a
+`RolloutTargetSource` model: the orbit-closure `L_close = ‖R⁶⁴ z₀ − z₀‖²` gradient term is FORBIDDEN — its global
+minimum is the trivial constant orbit, the BYOL/EMA collapse symmetry smuggled onto the time axis). Decided via
+research+design workflows; a PonderNet fits ONLY as adaptive Synthesis-ascent depth halted by a θ-free data
+threshold — design captured, not built.
+
+**`detailBand` — ONE canonical band selector (the deep integration).** Three parallel destructures of the 7-band
+`Detail` (`MaskedBandPrediction.bandAt`, `JepaData.detailAt`, `DetailEntropy.detailColumn`) collapsed into a single
+`OctreeCell.detailBand`/`detailToList` that all three route through, so "they read the same band" is STRUCTURAL,
+not an extensional coincidence three laws had to police. `JepaData.lawHeldTargetIsMaskedTarget` (the held label IS
+the masked target); `OctreeCell.lawDetailBandSelectsSlot`. Byte-identical (both goldens survive); the
+`EncoderGrounding` keystone now rests on the shared primitive. NOTE: the higher-altitude `cata distillAlg .
+buildCube` re-root of `octantDistill` was ATTEMPTED and REVERTED — `octantDistill`'s real contract is PARTIAL
+distillation (descend k levels of a full cube, input length ≫ 8^k), which a catamorphism-to-leaves does not model;
+the `PairedResidual` 256³→64³ consumer caught it at ship depth (the byte-identity proof had only covered
+length==8^k). The shared primitive is the right altitude the contract honestly supports.
+
+**MODULE-DEBT CLEANUP (from a 161-module grading audit).** Gate-honesty — wired previously-ungated ("lying-green")
+laws into the gate: `Spec.TemporalLoop` (new `Properties.TemporalLoop`, all 8 loop-closure/residual laws),
+`Spec.Export` (4 downsample/cube-ladder laws), `Spec.Laws` (`lawWuShapesOut` → `Properties.Wu` at ship shape
+64³/K=256, `lawSinkhornBalancedColumns` → `Properties.Sinkhorn`), `Spec.Boundary` (`lawConstantsPinned`). Map lint —
+added `AtlasCascade` + `Loom` to `Spec.Map`. **Deleted `Spec.ExportFamily`** — abandoned scaffolding (14
+`error "TODO"` stubs, never in cabal, zero importers; its temporal-S-transform / 256-synth / {16³,64³,256³} pack
+functionality already gated in `TemporalLoop` / `Upscale256` / `Export`). Repointed stale `@ExportFamily@`
+references in `OctreeGenome` (which already superseded its `lawZeroGenomeIsFloor`) + `NetSynth256.swift`. The audit's
+"not deletable" verdict on ExportFamily was overturned by direct verification.
+
+---
+
 ## 2026-06-23: retire the A/B preference-EBM → one truth, then EARN the encoder architecture by entropy theorems (branch `spec/retire-ab-one-truth`)
 
 > **Session theme (Daniel):** "delete code that is not aligned — I want one truth (the

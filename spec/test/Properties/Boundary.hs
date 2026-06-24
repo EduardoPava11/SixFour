@@ -33,4 +33,7 @@ tests = testGroup "Boundary (stepped rounded-rect Stage geometry — Boundary.sw
            .&&. (insetBottom === 10) .&&. (cornerCells === 14)
            .&&. (minC === 3) .&&. (maxC === 97)
            .&&. (minR === 16) .&&. (maxR === 208)
+
+  , testProperty "the named lawConstantsPinned predicate holds (gates the inset constants by name)" $
+      once lawConstantsPinned
   ]

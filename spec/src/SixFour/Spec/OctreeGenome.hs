@@ -8,8 +8,7 @@ and decoded by 'octantSynthesize'. This module pins the two scale COUNTS that wi
 later drive the Atlas head dimensions ('octreeNodeCount', 'octreeLeafCount') as
 proven FORMULAS — so the numbers exist as laws before any consumer reads them (the
 mitigation for the highest-fan-out re-pin) — and makes the @zero-genome == floor@
-determinism contract concrete ('lawZeroGenomeIsFloor'), filling what was
-@ExportFamily.lawZeroGenomeIsFloor = error "TODO"@.
+determinism contract concrete ('lawZeroGenomeIsFloor').
 
 DEFERRED (genuine design decisions, NOT settled here — they parameterise, they do
 not block this module): how σ-symmetry (a /colour/ reflection, 128 σ-pairs in the
@@ -95,6 +94,6 @@ lawConstantHasZeroDetail d c = d < 0 || isZeroDetail (genomeOf d (replicate (oct
 
 -- | @zero-genome == floor@: a zero-detail genome reconstructs the constant floor
 -- (every leaf = the coarse value). The determinism contract the float residual
--- must short-circuit to — concrete here, filling @ExportFamily.lawZeroGenomeIsFloor@.
+-- must short-circuit to — concrete here.
 lawZeroGenomeIsFloor :: Int -> Int -> Bool
 lawZeroGenomeIsFloor d c = d < 0 || paletteOf (zeroGenome d c) == replicate (octreeLeafCount d) c
