@@ -81,7 +81,7 @@ lawWidthsSumToDModel =
 lawEncoderWidthIsEntropyShare :: Bool
 lawEncoderWidthIsEntropyShare =
   let (wi, wp, wc) = encoderWidths (10, 100, 50)   -- palette > perceptual > index by load
-  in wp > wc && wc > wi
+  in wp > wc && wc > wi && wp - wi >= 100          -- thick margin: no near-uniform allocator passes
 
 -- | A small palette load (greyscale / low colour rank) earns a palette width BELOW the uniform
 -- @512/3@ — the entropy allocation refuses to waste channels on a rank-deficient colour set.
