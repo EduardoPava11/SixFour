@@ -95,6 +95,7 @@ organised by entropy, mutation-verified (each law falsifiable by a killer mutant
   * "SixFour.Spec.EncoderDepthAlloc"    — depth = octant rate-distortion ladder (cap @levelsBetween 64 4 = 4@)
   * "SixFour.Spec.EncoderEntropyFloor"  — the source-coding floor (learned ≥ entropy share)
   * "SixFour.Spec.EncoderCorpus"        — the corpus → loads → floor bridge (numbers respond to content)
+  * "SixFour.Spec.EncoderGrounding"      — ★ the H-JEPA GROUNDING law: the perceptual load IS the JEPA target entropy
 
 RETIRED 2026-06-23 ("one truth", branch @spec/retire-ab-one-truth@): the EARLIER MLX look-NN
 global-palette path (@Net@ / @LookNet*@ / @Loss@ / @PaletteOracle@ / @PaletteSearch@ / @LookCore@ / …)
