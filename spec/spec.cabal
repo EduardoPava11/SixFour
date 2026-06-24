@@ -42,6 +42,7 @@ library
         SixFour.Spec.EncoderEntropyFloor
         SixFour.Spec.EncoderCorpus
         SixFour.Spec.EncoderGrounding
+        SixFour.Spec.SyntheticCorpus
         SixFour.Spec.SpatialDither
         SixFour.Spec.GMM
         SixFour.Spec.Bures
@@ -302,6 +303,7 @@ test-suite spec-tests
         Properties.EncoderEntropyFloor
         Properties.EncoderCorpus
         Properties.EncoderGrounding
+        Properties.SyntheticCorpus
         Properties.GMM
         Properties.Bures
         Properties.Sinkhorn

@@ -22,6 +22,7 @@ import qualified Properties.EncoderDepthAlloc as EncoderDepthAlloc
 import qualified Properties.EncoderEntropyFloor as EncoderEntropyFloor
 import qualified Properties.EncoderCorpus as EncoderCorpus
 import qualified Properties.EncoderGrounding as EncoderGrounding
+import qualified Properties.SyntheticCorpus as SyntheticCorpus
 import qualified Properties.GMM          as GMM
 import qualified Properties.Bures        as Bures
 import qualified Properties.Sinkhorn     as Sinkhorn
@@ -167,6 +168,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , EncoderEntropyFloor.tests
   , EncoderCorpus.tests
   , EncoderGrounding.tests
+  , SyntheticCorpus.tests
   , GMM.tests
   , Bures.tests
   , Sinkhorn.tests
