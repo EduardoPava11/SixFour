@@ -61,6 +61,8 @@ module SixFour.Spec.OctreeCell
   , levelsBetween
     -- * The octant ladder (a real Haar pyramid built on 'liftOct')
   , Detail
+  , detailBand
+  , detailToList
   , octantDistill
   , octantSynthesize
     -- * Laws (QuickCheck'd in @Properties.OctreeCell@)
@@ -73,6 +75,7 @@ module SixFour.Spec.OctreeCell
   , scalarCollapseLossy
   , lawScalarLeafFailsUnlessSmooth
   , lawOctantLadderBijective
+  , lawDetailBandSelectsSlot
   ) where
 
 import SixFour.Spec.RGBTLift (liftQuad, unliftQuad)
@@ -252,6 +255,19 @@ lawLadderSelfSimilar = levelsBetween 64 16 == levelsBetween 256 64
 -- | The seven detail sub-bands of an octant (same shape as 'OctBand''s detail).
 type Detail = (Int,Int,Int,Int,Int,Int,Int)
 
+-- | The seven detail sub-bands as a list in canonical (positional) order — THE one place the
+-- band ordering is defined.
+detailToList :: Detail -> [Int]
+detailToList (b0, b1, b2, b3, b4, b5, b6) = [b0, b1, b2, b3, b4, b5, b6]
+
+-- | The @i@-th detail sub-band (positional, @0..6@; out-of-range yields 0). THE canonical band
+-- selector, living in the home of 'Detail': the JEPA target ("SixFour.Spec.MaskedBandPrediction"
+-- @bandAt@), the held label ("SixFour.Spec.JepaData" @detailAt@) and the per-band entropy
+-- ("SixFour.Spec.DetailEntropy" @detailColumn@) ALL read a band through this — so "they read the
+-- same band" is structural, not three parallel destructures that happen to agree.
+detailBand :: Detail -> Int -> Int
+detailBand d i = if i >= 0 && i < 7 then detailToList d !! i else 0
+
 -- | Group a list into consecutive 8-tuples (one per octant, Morton order).
 chunk8 :: [a] -> [[a]]
 chunk8 [] = []
@@ -297,3 +313,13 @@ lawOctantLadderBijective :: Int -> [Int] -> Bool
 lawOctantLadderBijective d xs =
   not (d >= 0 && length xs == 8 ^ d)
     || octantSynthesize (octantDistill d (take (8 ^ d) xs)) == take (8 ^ d) xs
+
+-- | 'detailToList' is the canonical positional order and 'detailBand' indexes it (out-of-range
+-- yields 0) — the shared primitive the three band-readers route through. Teeth: a permuted order
+-- or an off-by-one selector fails.
+lawDetailBandSelectsSlot :: Detail -> Int -> Bool
+lawDetailBandSelectsSlot d@(b0, b1, b2, b3, b4, b5, b6) i =
+  let j = ((i `mod` 7) + 7) `mod` 7
+  in detailToList d == [b0, b1, b2, b3, b4, b5, b6]
+     && detailBand d j == [b0, b1, b2, b3, b4, b5, b6] !! j
+     && detailBand d 7 == 0 && detailBand d (-1) == 0

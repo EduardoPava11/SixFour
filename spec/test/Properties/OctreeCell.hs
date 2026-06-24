@@ -19,6 +19,10 @@ genBand = OctBand <$> genInt
                   <*> ((,,,,,,) <$> genInt <*> genInt <*> genInt
                                 <*> genInt <*> genInt <*> genInt <*> genInt)
 
+genDetail :: Gen Detail
+genDetail = (,,,,,,) <$> genInt <*> genInt <*> genInt
+                     <*> genInt <*> genInt <*> genInt <*> genInt
+
 -- A depth in {0,1,2} with a matching flat voxel list of length 8^depth.
 genDepthXs :: Gen (Int, [Int])
 genDepthXs = do
@@ -58,6 +62,9 @@ tests = testGroup "OctreeCell (2x2x2 <-> 1 octree: structured-leaf invariant)"
 
   , testProperty "octant ladder round-trips (delegates to liftOct): synth . distill = id" $
       forAll genDepthXs (uncurry lawOctantLadderBijective)
+
+  , testProperty "detailBand is the shared canonical band selector (slot order pinned; OOR = 0)" $
+      forAll genDetail $ \d -> forAll genInt (lawDetailBandSelectsSlot d)
 
   , testProperty "cross-module: VoxelReduce 64->16 and 256->64 are each 2 octree levels" $
       once ( VR.reducedSide 2 64 == 16 && VR.reducedFrames 2 64 == 16

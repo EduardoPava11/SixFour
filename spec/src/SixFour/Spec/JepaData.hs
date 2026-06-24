@@ -29,20 +29,17 @@ module SixFour.Spec.JepaData
   , lawDataEngineRoundTrips
   , lawManufacturedTargetIsTheHeldBand
   , lawHeldTargetIsExcludedFromContext
+  , lawHeldTargetIsMaskedTarget
   ) where
 
 import SixFour.Spec.OctreeCell
-  (V8(..), OctBand(..), Detail, liftOct, unliftOct)
+  (V8(..), OctBand(..), Detail, detailBand, liftOct, unliftOct)
 import SixFour.Spec.MaskedBandPrediction
-  (MaskedBandExample, numBands, siblingsOf, mbeCoarse, mbeMasked)
+  (MaskedBandExample, numBands, siblingsOf, mbeCoarse, mbeMasked, maskedTargetBand)
 
--- | The seven detail bands as a list, in band order.
-detailList :: Detail -> [Int]
-detailList (a, b, c, e, f, g, h) = [a, b, c, e, f, g, h]
-
--- | The detail value of band @m@ (clamped to @[0,6]@).
+-- | The detail value of band @m@ (clamped to @[0,6]@) — via the shared canonical 'detailBand'.
 detailAt :: Int -> Detail -> Int
-detailAt m d = detailList d !! (m `mod` numBands)
+detailAt m d = detailBand d (m `mod` numBands)
 
 -- | MANUFACTURE a training record from an octant: lift the 8 cells to @1 coarse + 7 detail@
 -- ("SixFour.Spec.OctreeCell" @liftOct@) and mark band @m@ as the masked target. The result is a
@@ -94,3 +91,13 @@ lawHeldTargetIsExcludedFromContext cube m =
   in length (siblingsOf ex) == numBands - 1   -- 6 context bands, the masked one held out
      && mbeMasked ex == m `mod` numBands
      && mbeCoarse ex == ocCoarse (liftOct cube)
+
+-- | THE BRIDGE: the data engine's held label IS the predictor's masked target — "SixFour.Spec.JepaData"
+-- 'heldTarget' and "SixFour.Spec.MaskedBandPrediction" @maskedTargetBand@ are two names for the SAME
+-- band of the SAME 'Detail' (both route through the shared "SixFour.Spec.OctreeCell" 'detailBand'),
+-- so the manufactured label and the regression target can never disagree. Teeth: a band-order or
+-- clamp drift in either reader would break the identity.
+lawHeldTargetIsMaskedTarget :: V8 Int -> Int -> Bool
+lawHeldTargetIsMaskedTarget cube m =
+  let ex = manufactureExample cube m
+  in heldTarget ex == maskedTargetBand ex

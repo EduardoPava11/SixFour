@@ -21,4 +21,6 @@ tests = testGroup "JepaData (the I-JEPA data engine: manufacture records + the r
       forAll genV8 $ \cube -> forAll genMask $ \m -> lawManufacturedTargetIsTheHeldBand cube m
   , testProperty "NO PEEK: the masked target is excluded from the 6-band context" $
       forAll genV8 $ \cube -> forAll genMask $ \m -> lawHeldTargetIsExcludedFromContext cube m
+  , testProperty "BRIDGE: heldTarget == maskedTargetBand (same band via the shared detailBand)" $
+      forAll genV8 $ \cube -> forAll genMask $ \m -> lawHeldTargetIsMaskedTarget cube m
   ]

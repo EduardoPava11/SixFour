@@ -62,7 +62,7 @@ module SixFour.Spec.DetailEntropy
 import           Data.List       (foldl')
 import qualified Data.Map.Strict as Map
 
-import SixFour.Spec.OctreeCell (Detail)
+import SixFour.Spec.OctreeCell (Detail, detailBand)
 
 -- ---------------------------------------------------------------------------
 -- Histogram + entropy
@@ -101,11 +101,7 @@ codedBits xs = fromIntegral (length xs) * shannonBits xs
 -- | The @j@-th of the seven octant detail coefficients across a list of details
 -- (the @j@-th "band" as a coefficient column). Out-of-range @j@ yields @[]@.
 detailColumn :: Int -> [Detail] -> [Int]
-detailColumn j ds = [ pick d | d <- ds ]
-  where
-    pick (a, b, c, e, f, g, h) = case j of
-      0 -> a; 1 -> b; 2 -> c; 3 -> e; 4 -> f; 5 -> g; 6 -> h
-      _ -> 0
+detailColumn j ds = [ detailBand d j | d <- ds ]   -- the shared canonical band selector
 
 -- | All seven detail bands as coefficient columns.
 detailBands7 :: [Detail] -> [[Int]]

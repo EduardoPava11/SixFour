@@ -104,7 +104,7 @@ module SixFour.Spec.MaskedBandPrediction
 
 import SixFour.Spec.Q16      (toQ16)
 import SixFour.Spec.ByteCarrier    (mkLatent, reenterQ16, toByte)
-import SixFour.Spec.OctreeCell     (Detail, levelsBetween)
+import SixFour.Spec.OctreeCell     (Detail, detailBand, detailToList, levelsBetween)
 import SixFour.Spec.PairedResidual (floorResidual)
 
 -- ---------------------------------------------------------------------------
@@ -160,9 +160,10 @@ mbeCoarse (v, _, _) = v
 mbeMasked :: MaskedBandExample -> Int
 mbeMasked (_, _, m) = clampIndex m
 
--- | The seven detail bands as a list (canonical order).
+-- | The seven detail bands as a list (canonical order) — the shared "SixFour.Spec.OctreeCell"
+-- 'detailToList', so the JEPA target reads the SAME band order as the held label and the entropy.
 bandsList :: Detail -> [Int]
-bandsList (a, b, c, d, e, f, g) = [a, b, c, d, e, f, g]
+bandsList = detailToList
 
 -- | Reassemble a 'Detail' from a seven-element list (truncating/padding defensively).
 fromBands :: [Int] -> Detail
@@ -170,9 +171,9 @@ fromBands xs = case take numBands (xs ++ repeat 0) of
   [a, b, c, d, e, f, g] -> (a, b, c, d, e, f, g)
   _                     -> floorResidual
 
--- | Read band @i@ (clamped) of a detail.
+-- | Read band @i@ (clamped) of a detail — via the shared canonical 'detailBand'.
 bandAt :: Detail -> Int -> Int
-bandAt det i = bandsList det !! clampIndex i
+bandAt det i = detailBand det (clampIndex i)
 
 -- | Overwrite band @i@ (clamped) of a detail with a new value.
 setBand :: Detail -> Int -> Int -> Detail
