@@ -107,6 +107,9 @@ library
         SixFour.Spec.SameObjectInvariance
         SixFour.Spec.SameObjectJEPA
         SixFour.Spec.ConstructionEncoder
+        SixFour.Spec.HierarchicalDelta
+        SixFour.Spec.TemporalData
+        SixFour.Spec.DeltaSurrogate
         SixFour.Spec.PerceptualEncoder
         SixFour.Spec.GifDualView
         SixFour.Spec.CrossEncoderDistance
@@ -370,6 +373,9 @@ test-suite spec-tests
         Properties.SameObjectInvariance
         Properties.SameObjectJEPA
         Properties.ConstructionEncoder
+        Properties.HierarchicalDelta
+        Properties.TemporalData
+        Properties.DeltaSurrogate
         Properties.PerceptualEncoder
         Properties.GifDualView
         Properties.CrossEncoderDistance

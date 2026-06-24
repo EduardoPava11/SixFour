@@ -402,6 +402,29 @@ semantic embedding that @buildPixels@ EXECUTES to a @SameObjectInvariance.Cube@:
 @lawBuildIsTotalOnValid@ = a valid construction builds exactly @8^d@ voxels,
 @lawBuildRespectsIndex@ = the index map carries information (the section-injectivity
 GifDualView rides). Q16 substrate twin of the float @Palette@/@Indices@. Additive),
+"SixFour.Spec.HierarchicalDelta" (★ "abstract the H" — the inter-frame DELTA as a hierarchical
+object: ONE @HierarchicalDelta@ interface (@coarseBand@/@fineBand@ that reassemble losslessly,
+@lawHierarchyLosslessSplit@) instantiated by TWO different carriers — VALUE @ColourDelta@ (abelian
+ℤ-module, deltas ADD) and POLICY @IndexDelta@ (transport group, deltas COMPOSE; provenance-carrying
+so invertible) — plus @bandedDeltaTarget@ = the data-delta octant pyramid reusing the frozen ladder.
+@lawHierarchicalDeltaTargetIsDataManufactured@ + @lawDeltaBandsArePerBandDataProvenance@ strengthen
+@JepaTarget.lawNoSelfProducedRolloutTarget@ per-STEP→per-BAND (closes the coarse-to-fine L_close
+escape). Additive; re-pins nothing),
+"SixFour.Spec.TemporalData" (★ the TIME-AXIS data engine — manufactures @(frame t, value target,
+policy target)@ records from a captured @(t, t+1)@ pair (the temporal sibling of @JepaData@'s
+spatial corpus). KEYSTONE @lawTemporalEngineRoundTrips@ = @reconstructNext (manufacture ct ctNext)
+== ctNext@ (a lossy temporal generator FAILS it, closing the non-invertibility trap on time);
+@lawTemporalChannelsDisjoint@ = value touches only the palette, policy only the index (the two
+heads train independently); @lawTemporalBandingReconstructs@ = the multi-scale bridge to
+@HierarchicalDelta.bandedDeltaTarget@. Additive),
+"SixFour.Spec.DeltaSurrogate" (★ the differentiable training surrogates for the two delta heads +
+the proof each HARD COMMIT re-enters its byte-exact carrier. VALUE = OKLab REGRESSION
+(@ValueSurrogate@/@valueLoss@ squared metric, @lawValueLossIsRegression@); POLICY = per-voxel
+CLASSIFICATION (@PolicySurrogate@ softmax+CE, NOT an L2 over slot numbers). KEYSTONE
+@lawPolicySurrogateDecodesToTransport@ = the argmax commit equals the data-manufactured @IndexDelta@
+(the learned-continuous ↔ proven-discrete bridge, closed for policy); @lawPolicyArgmaxDeterministic@
+= lowest-index tie-break (no float commits a byte). Collapse-safety inherited from the
+data-manufactured carriers. Additive),
 "SixFour.Spec.PerceptualEncoder" (★ ENCODER B of the dual-encoder H-JEPA — the GIF as a
 PERCEPTUAL point cloud over the six axes @(L,a,b,x,y,t)@: @perceptualEmbed@ maps each
 @Cube@ voxel to a @P6@ (colour from the channels, position @(x,y,t)@ from @mortonToXYT@

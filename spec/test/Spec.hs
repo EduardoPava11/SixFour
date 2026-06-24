@@ -89,6 +89,9 @@ import qualified Properties.PerAxisTraining as PerAxisTraining
 import qualified Properties.SameObjectInvariance as SameObjectInvariance
 import qualified Properties.SameObjectJEPA as SameObjectJEPA
 import qualified Properties.ConstructionEncoder as ConstructionEncoder
+import qualified Properties.HierarchicalDelta as HierarchicalDelta
+import qualified Properties.TemporalData as TemporalData
+import qualified Properties.DeltaSurrogate as DeltaSurrogate
 import qualified Properties.PerceptualEncoder as PerceptualEncoder
 import qualified Properties.GifDualView   as GifDualView
 import qualified Properties.CrossEncoderDistance as CrossEncoderDistance
@@ -236,6 +239,9 @@ main = defaultMain $ testGroup "sixfour-spec"
   , SameObjectInvariance.tests
   , SameObjectJEPA.tests
   , ConstructionEncoder.tests
+  , HierarchicalDelta.tests
+  , TemporalData.tests
+  , DeltaSurrogate.tests
   , PerceptualEncoder.tests
   , GifDualView.tests
   , CrossEncoderDistance.tests
