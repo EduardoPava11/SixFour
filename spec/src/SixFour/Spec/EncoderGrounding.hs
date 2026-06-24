@@ -28,12 +28,22 @@ module SixFour.Spec.EncoderGrounding
   , lawPerceptualLoadIsJepaTargetEntropy
   , lawGroundingIsNonVacuous
   , lawMisalignedBandBreaksGrounding
+    -- * Encoder A (Construction) grounding — via buildPixels (the same object)
+  , mkGreyConstruction
+  , witnessConstructions
+  , constructionOctants
+  , constructionLoadBits
+  , lawConstructionLoadIsJepaTargetEntropy
+  , lawConstructionGroundingMatchesPerceptual
+  , lawConstructionGroundingNonVacuous
   ) where
 
 import SixFour.Spec.OctreeCell        (V8(..), liftOct, ocDetail)
 import SixFour.Spec.DetailEntropy     (detailColumn, codedBits)
 import SixFour.Spec.JepaData          (manufactureExample, heldTarget)
 import SixFour.Spec.EncoderModalityLoad (perceptualLoadBits)
+import SixFour.Spec.ConstructionEncoder (Construction(..), buildPixels)
+import SixFour.Spec.SameObjectInvariance (Cube(..))
 
 -- | Diverse witness octants: two high-frequency (alternating cells ⇒ all detail bands carry energy)
 -- plus one flat (range). Pure integers in the lift's domain — byte-stable across hosts.
@@ -83,3 +93,69 @@ lawMisalignedBandBreaksGrounding :: Bool
 lawMisalignedBandBreaksGrounding =
   not (and [ detailColumn ((m + 1) `mod` 7) details == jepaTargets witnessOcts m | m <- [0 .. 6] ])
   where details = detailsOf witnessOcts
+
+-- =============================================================================
+-- Encoder A (Construction) grounding — through buildPixels (the SAME object)
+-- =============================================================================
+-- Encoder A reads a DIFFERENT representation (index + palette), but its decode
+-- @buildPixels = palette[index]@ reconstructs the SAME pixels Encoder B sees
+-- ("SixFour.Spec.GifDualView" @lawSameObjectBothViews@). So A's reconstructed held detail band
+-- IS the same JEPA target B predicts — A is grounded in exactly the information it predicts too,
+-- and identically to B. This closes the A-grounding gap so the joint loss @L_band^A@ is sized
+-- by what it predicts (the two-encoder training design).
+
+-- | A depth-1 grey construction whose built L-octant is exactly @ls@ (palette = the 8 colours,
+-- identity index). @a=b=0@ — the σ-fixed grey axis; the held bands live on L.
+mkGreyConstruction :: [Int] -> Construction
+mkGreyConstruction ls = Construction 1 [ (l, 0, 0) | l <- ls ] [0 .. 7]
+
+-- | Witness constructions whose DECODED pixels match 'witnessOcts' — so A's grounding is the
+-- same identity B's is, reached through @buildPixels@ (the construction decode), not assumed.
+witnessConstructions :: [Construction]
+witnessConstructions = map mkGreyConstruction
+  [ [0, 99, 0, 99, 0, 99, 0, 99]
+  , [10, 40, 20, 60, 30, 80, 5, 50]
+  , [3, 3, 3, 3, 3, 3, 3, 3]
+  ]
+
+-- | The L-channel octant of each construction's DECODED pixels (@buildPixels@). This is what
+-- Encoder A actually reconstructs — the object both encoders see.
+constructionOctants :: [Construction] -> [V8 Int]
+constructionOctants = map (mkV8 . cubeL . buildPixels)
+  where
+    mkV8 (a:b:c:d:e:f:g:h:_) = V8 a b c d e f g h
+    mkV8 _                   = V8 0 0 0 0 0 0 0 0
+
+-- | Encoder A's per-band load: @codedBits@ of the held detail band of its DECODED pixels — the
+-- mirror of 'perceptualLoadBits', sized by exactly the band A must predict.
+constructionLoadBits :: [Construction] -> Int -> Double
+constructionLoadBits cs m = codedBits (detailColumn m (detailsOf (constructionOctants cs)))
+
+-- | KEYSTONE (A grounding): for every band, the held detail band of Encoder A's DECODED pixels
+-- (via @buildPixels@) IS the JEPA target, AND A's load equals that target's entropy. So
+-- @L_band^A@ trains A to predict exactly the information A is sized by — grounding routed through
+-- the construction decode, not assumed.
+lawConstructionLoadIsJepaTargetEntropy :: Bool
+lawConstructionLoadIsJepaTargetEntropy =
+  and [ detailColumn m details == jepaTargets octs m
+        && constructionLoadBits witnessConstructions m == codedBits (jepaTargets octs m)
+      | m <- [0 .. 6] ]
+  where octs    = constructionOctants witnessConstructions
+        details = detailsOf octs
+
+-- | A and B are grounded IDENTICALLY: A's construction load equals B's perceptual load on the
+-- same object — both encoders sized by the SAME held band (the @lawSameObjectBothViews@ consequence,
+-- the cross-encoder agreement that needs no co-evolving predictor).
+lawConstructionGroundingMatchesPerceptual :: Bool
+lawConstructionGroundingMatchesPerceptual =
+  and [ constructionLoadBits witnessConstructions m == perceptualLoadBits (detailColumn m details)
+      | m <- [0 .. 6] ]
+  where details = detailsOf (constructionOctants witnessConstructions)
+
+-- | The A-grounding is non-vacuous: the constructions' decoded pixels carry real detail (some band
+-- is non-zero with positive entropy), so the identity is not trivially true on all-zero bands.
+lawConstructionGroundingNonVacuous :: Bool
+lawConstructionGroundingNonVacuous =
+     any (\m -> any (/= 0) (detailColumn m details)) [0 .. 6]
+  && any (\m -> constructionLoadBits witnessConstructions m > 0) [0 .. 6]
+  where details = detailsOf (constructionOctants witnessConstructions)

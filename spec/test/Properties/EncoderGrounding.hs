@@ -13,4 +13,10 @@ tests = testGroup "EncoderGrounding (the perceptual load IS the JEPA target entr
       once lawGroundingIsNonVacuous
   , testProperty "TEETH: a misaligned band breaks the identity (constrains band alignment)" $
       once lawMisalignedBandBreaksGrounding
+  , testProperty "A-grounding: Encoder A's decoded held band IS the JEPA target (via buildPixels)" $
+      once lawConstructionLoadIsJepaTargetEntropy
+  , testProperty "A and B grounded identically (construction load == perceptual load, same object)" $
+      once lawConstructionGroundingMatchesPerceptual
+  , testProperty "the A-grounding is non-vacuous (decoded pixels carry real detail)" $
+      once lawConstructionGroundingNonVacuous
   ]
