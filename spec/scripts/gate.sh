@@ -70,6 +70,12 @@ fi
 # The 64³-scale realizer: synthetic bursts encode byte-exact AND the entropy vectors are
 # extractable + responsive at the real 262144-voxel capture shape (the Spec.SyntheticCorpus
 # guarantees, at scale). Realness irrelevant; this is a pipeline/spec-guarantee check.
+# The ENCLOSED synthetic-capture generator: every entropy/Lab kind emits a GIF structurally
+# indistinguishable from a real capture (GIF89a · 64×64²×256 · 20fps · comment · byte-exact round-trip).
+if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/synth_capture.py" ]; then
+  run "Synthetic capture 64³ (mimics the capture GIF across all kinds)" "( cd '$root/trainer' && python3 synth_capture.py )"
+fi
+
 if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/synth_corpus_64.py" ]; then
   run "Synthetic corpus 64³ (encode round-trip + entropy vectors responsive)" "( cd '$root/trainer' && python3 synth_corpus_64.py )"
 fi

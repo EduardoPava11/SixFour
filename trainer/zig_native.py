@@ -151,17 +151,23 @@ def palette_to_srgb8(centroids_q16: np.ndarray) -> np.ndarray:
 
 
 def gif_assemble(indices: np.ndarray, palettes_rgb: np.ndarray, side: int = SIDE,
-                 k: int = K, frame_delay_cs: int = 5) -> bytes:
-    """(F,p) uint8 indices + (F,k,3) uint8 palettes → GIF89a bytes."""
+                 k: int = K, frame_delay_cs: int = 5, comment: bytes = b"") -> bytes:
+    """(F,p) uint8 indices + (F,k,3) uint8 palettes → GIF89a bytes. Optional GIF comment
+    extension (the capture stamps "SixFour deterministic core · …"); empty ⇒ none (default)."""
     indices = np.ascontiguousarray(indices, dtype=np.uint8)
     palettes_rgb = np.ascontiguousarray(palettes_rgb, dtype=np.uint8)
     frame_count = indices.shape[0]
     bound = _LIB.s4_gif_encode_burst_bound(frame_count, side, k)
     out = (ctypes.c_uint8 * bound)()
     out_len = ctypes.c_size_t(0)
+    if comment:
+        cbuf = np.frombuffer(comment, dtype=np.uint8)
+        cptr, clen = _u8p(cbuf), len(comment)
+    else:
+        cptr, clen = None, 0
     rc = _LIB.s4_gif_assemble(
         _u8p(indices), _u8p(palettes_rgb), frame_count, side, k, frame_delay_cs,
-        None, 0, ctypes.cast(out, ctypes.POINTER(ctypes.c_uint8)), bound, ctypes.byref(out_len),
+        cptr, clen, ctypes.cast(out, ctypes.POINTER(ctypes.c_uint8)), bound, ctypes.byref(out_len),
     )
     if rc != RC_OK:
         raise RuntimeError(f"s4_gif_assemble rc={rc}")
