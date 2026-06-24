@@ -31,4 +31,8 @@ tests = testGroup "ConstructionEncoder (Encoder A: palette + index map -> pixels
   , testProperty "identity index lays the palette verbatim (the A-form 'no index map' core)" $
       forAll (choose (0, 2)) $ \d -> forAll (listOf genColour) $ \pal ->
         lawIdentityIndexIsPaletteInOrder d pal
+  , testProperty "inter-frame change factors into orthogonal policy (index) and value (palette) channels" $
+      once lawInterFrameFactorsToPolicyValue
+  , testProperty "pixels are gauge-invariant under a joint palette/index relabelling (compare in fused space)" $
+      once lawPaletteIndexGaugeInvariant
   ]

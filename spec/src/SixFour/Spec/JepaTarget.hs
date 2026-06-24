@@ -32,6 +32,18 @@ substitution removes the collapse problem. This module pins the correspondence a
   * __The target carries information BEYOND the context.__ A predictor fit to one masked
     answer misses a different one at the same context, so prediction is genuine work, not
     copying ('lawTargetCarriesInfoBeyondContext').
+  * __The TIME axis stays data-manufactured too.__ The Option-2 inter-frame targets — the
+    POLICY target (frame @t+1@'s index, "SixFour.Spec.ConstructionEncoder" @policyDelta@) and the
+    VALUE target (frame @t+1@'s recoloured pixels, @valueDelta@ → @buildPixels@) — are pure
+    functions of the NEXT CAPTURED FRAME, no @θ@. So the self-produced "predict my own rolled
+    forward latent" target (the @L_close@ family, whose global minimum is the trivial constant
+    orbit @R z == z@) is never formed, and the circular time axis inherits the same
+    collapse-impossibility as the spatial band ('lawTemporalDeltaTargetIsDataManufactured').
+  * __No self-produced rollout target, GLOBALLY.__ Quantifying over both target provenances
+    ('RolloutTargetSource'), the only admissible one is the next frame's DATA; a rolled-forward
+    self target is inadmissible precisely because the constant orbit matches it for free (its
+    global minimum). This closes the @L_close@ trap on ANY time-axis term, not just the
+    policy/value path ('lawNoSelfProducedRolloutTarget').
 
 Additive: a pure law module assembling existing teeth from "SixFour.Spec.SelfSupervisedRung",
 "SixFour.Spec.MaskedBandPrediction", "SixFour.Spec.EncoderFrozen",
@@ -40,15 +52,24 @@ laws @once@-tested in "Properties.JepaTarget".
 -}
 -- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.JepaTarget
-  ( -- * Laws (closed :: Bool; @once@-tested in @Properties.JepaTarget@)
-    lawTargetIsDataManufacturedNotEncoded
+  ( -- * The rollout-target provenance model (the global time-axis collapse guard)
+    RolloutTargetSource(..)
+  , admissibleRolloutSource
+  , constantOrbitPenalised
+    -- * Laws (closed :: Bool; @once@-tested in @Properties.JepaTarget@)
+  , lawTargetIsDataManufacturedNotEncoded
   , lawTargetFixedUnderPredictorTraining
   , lawNoTargetEncoderNoEma
   , lawCollapseIsRejected
   , lawTargetCarriesInfoBeyondContext
+  , lawTemporalDeltaTargetIsDataManufactured
+  , lawNoSelfProducedRolloutTarget
   ) where
 
 import SixFour.Spec.OctreeGenome (octreeLeafCount)
+import SixFour.Spec.SameObjectInvariance (Cube(..))
+import SixFour.Spec.ConstructionEncoder
+  ( Construction(..), buildPixels, policyDelta, valueDelta )
 import SixFour.Spec.SelfSupervisedRung
   ( Rung(..), Supervision(..), supervisionOf, hasHeldTarget
   , lawHeldLabelIsDataManufactured )
@@ -57,6 +78,33 @@ import SixFour.Spec.MaskedBandPrediction
 import SixFour.Spec.EncoderFrozen (encoderParamCount)
 import SixFour.Spec.DetailMaskedPrediction
   ( lawConstantPredictorIncursLoss, lawFittingOneTargetMissesAnother )
+
+-- ============================================================================
+-- The rollout-target provenance model (what the global guard quantifies over)
+-- ============================================================================
+
+-- | The PROVENANCE of a rollout-step prediction target on the circular time axis. The guard
+-- 'lawNoSelfProducedRolloutTarget' quantifies over exactly these two cases.
+data RolloutTargetSource
+  = NextFrameData      -- ^ frame @t+1@'s own policy\/value data ('policyDelta'\/'valueDelta') — θ-free, collapse-impossible.
+  | RolledForwardSelf  -- ^ the net's own rolled-forward latent @R^k z@ — θ-dependent, the @L_close@ self-produced target.
+  deriving (Eq, Show)
+
+-- | The ONLY admissible rollout-target source is the next frame's DATA. A self-produced (rolled
+-- forward) target is inadmissible — this is the global guard that the @L_close@ family cannot be
+-- attached to ANY time-axis term. Teeth: returning 'True' for 'RolledForwardSelf' breaks the law.
+admissibleRolloutSource :: RolloutTargetSource -> Bool
+admissibleRolloutSource NextFrameData     = True
+admissibleRolloutSource RolledForwardSelf = False
+
+-- | Is the trivial constant\/identity orbit (predict @t+1 := t@) STRICTLY PENALISED against a
+-- target of the given provenance, on a moving frame @(curr, next)@? A 'NextFrameData' target
+-- penalises it by the real motion (@curr /= next@ ⇒ 'True'); a 'RolledForwardSelf' target is
+-- matched by the constant orbit for free (@loss 0@ ⇒ 'False'), which is exactly why the constant
+-- orbit is the self-produced objective's global minimum.
+constantOrbitPenalised :: RolloutTargetSource -> Cube -> Cube -> Bool
+constantOrbitPenalised NextFrameData     (Cube l0 a0 b0) (Cube l1 a1 b1) = (l0, a0, b0) /= (l1, a1, b1)
+constantOrbitPenalised RolledForwardSelf _               _               = False
 
 -- ============================================================================
 -- Laws (closed predicates; @once@-tested in Properties.JepaTarget)
@@ -121,3 +169,45 @@ lawCollapseIsRejected =
 lawTargetCarriesInfoBeyondContext :: Bool
 lawTargetCarriesInfoBeyondContext =
   lawFittingOneTargetMissesAnother 20000 (3000, 0, 0, 0, 0, 0, 0)
+
+-- | THE TIME-AXIS COLLAPSE GUARD (Option 2 — policy\/value temporal deltas). The inter-frame
+-- POLICY target (frame @t+1@'s index map, "SixFour.Spec.ConstructionEncoder" 'policyDelta') and
+-- VALUE target (frame @t+1@'s recoloured pixels, 'valueDelta' → 'buildPixels') are PURE FUNCTIONS
+-- OF THE DATA — the next captured frame — exactly as the spatial 'maskedTargetBand' is. They take
+-- no @θ@, so the predictor cannot move them, and the self-produced "predict my own rolled-forward
+-- latent" target (the @L_close@ family, whose global minimum is the trivial constant orbit
+-- @R z == z@) is NEVER formed. This keeps the circular time axis on the data-manufactured
+-- (collapse-IMPOSSIBLE) side, not the BYOL\/EMA (collapse-prone) side — the temporal analogue of
+-- 'lawTargetFixedUnderPredictorTraining'. Teeth: the constant\/identity-orbit predictor (predict
+-- frame @t+1 := t@) STRICTLY misses a frame that actually moved (so collapse provably loses), and
+-- the policy\/value targets are exactly frame @t+1@'s OWN index\/palette (so they are @θ@-free
+-- data, not an encoder output).
+lawTemporalDeltaTargetIsDataManufactured :: Bool
+lawTemporalDeltaTargetIsDataManufactured =
+  let ct     = Construction 0 [(10,20,30)] [0]
+      ctNext = Construction 0 [(40,50,60)] [0]       -- a pure recolour: the VALUE channel moved
+      Cube l0 a0 b0 = buildPixels ct                 -- the identity\/constant-orbit prediction (t+1 := t)
+      Cube l1 a1 b1 = buildPixels ctNext             -- the data-manufactured VALUE target
+  in (l0, a0, b0) /= (l1, a1, b1)                          -- constant orbit STRICTLY misses the moved frame
+     && cPalette (valueDelta  ct ctNext) == cPalette ctNext  -- VALUE target = frame t+1's OWN palette (θ-free)
+     && cIndex   (policyDelta ct ctNext) == cIndex   ctNext  -- POLICY target = frame t+1's OWN index (θ-free)
+
+-- | GLOBAL TIME-AXIS COLLAPSE PROHIBITION. Quantifying over BOTH rollout-target provenances
+-- ('RolloutTargetSource'), the only admissible one is the next frame's DATA ('NextFrameData'), and
+-- it is admissible PRECISELY because the trivial constant\/identity orbit is strictly penalised
+-- against it, while the self-produced ('RolledForwardSelf') target — the @L_close@ family — is
+-- INADMISSIBLE because the constant orbit matches it for free (loss 0) and is therefore its global
+-- minimum. This closes the trap GLOBALLY, not only on the policy\/value path of
+-- 'lawTemporalDeltaTargetIsDataManufactured': no time-axis gradient term may take a self-produced
+-- target. Teeth: flipping 'admissibleRolloutSource' to accept 'RolledForwardSelf', or making the
+-- constant orbit penalised against it, breaks the law.
+lawNoSelfProducedRolloutTarget :: Bool
+lawNoSelfProducedRolloutTarget =
+  let ct     = Construction 0 [(10,20,30)] [0]
+      ctNext = Construction 0 [(40,50,60)] [0]               -- a moving frame (recolour)
+      curr   = buildPixels ct
+      next   = buildPixels ctNext
+  in admissibleRolloutSource NextFrameData                      -- the data target is admitted
+     && not (admissibleRolloutSource RolledForwardSelf)         -- the self-produced target is forbidden
+     && constantOrbitPenalised NextFrameData curr next          -- ...the constant orbit is strictly penalised by the data target
+     && not (constantOrbitPenalised RolledForwardSelf curr next)  -- ...but matched for free by the self target (why it collapses)

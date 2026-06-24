@@ -24,6 +24,13 @@ shipped render cube.
     palette slot changes exactly that voxel (teeth: the index map carries information; the
     encoder is injective in the index, the property the section law in
     "SixFour.Spec.GifDualView" rides).
+  * 'lawInterFrameFactorsToPolicyValue' — an inter-frame step @t → t+1@ separates into an
+    orthogonal POLICY ('policyDelta', index\/motion) and VALUE ('valueDelta', palette\/recolour)
+    channel that compose in either order to frame @t+1@, while neither alone reaches it — the
+    Option-2 temporal decomposition, two independent data-manufactured targets.
+  * 'lawPaletteIndexGaugeInvariant' — pixels are invariant under a JOINT relabelling of palette
+    and index, so frames must be compared in FUSED pixel space ('buildPixels'); comparing the
+    raw palette slot-by-slot or the raw index is ill-posed (the gauge the VALUE target quotients).
 
 Additive: reuses "SixFour.Spec.SameObjectInvariance" @Cube@ and
 "SixFour.Spec.OctreeGenome" @octreeLeafCount@. No new substrate, no golden re-pin.
@@ -41,11 +48,16 @@ module SixFour.Spec.ConstructionEncoder
     -- * The identity index (the A-form "no index map" core)
   , identityIndex
   , isIdentityIndex
+    -- * Inter-frame policy/value deltas (Option 2 temporal decomposition)
+  , policyDelta
+  , valueDelta
     -- * Laws (QuickCheck'd in @Properties.ConstructionEncoder@)
   , lawConstructionExecutesToPixels
   , lawBuildIsTotalOnValid
   , lawBuildRespectsIndex
   , lawIdentityIndexIsPaletteInOrder
+  , lawInterFrameFactorsToPolicyValue
+  , lawPaletteIndexGaugeInvariant
   ) where
 
 import SixFour.Spec.OctreeGenome        (octreeLeafCount)
@@ -98,6 +110,22 @@ identityIndex d = [0 .. octreeLeafCount d - 1]
 -- | Is this construction's index the identity permutation (so its index is droppable)?
 isIdentityIndex :: Construction -> Bool
 isIdentityIndex c = cIndex c == identityIndex (cDepth c)
+
+-- | POLICY (motion) delta of an inter-frame step: frame @t+1@'s index map carried under frame
+-- @t@'s palette. Holds the colour table FIXED (@cPalette ct@) and advances only the index
+-- (@cIndex ctNext@) — the displacement of regions with no colour change, the "the policy moved"
+-- half of @t → t+1@. Well-formed at equal depth when @cPalette ct@ covers @cIndex ctNext@ (guard
+-- the result with 'validConstruction'); the data-manufactured POLICY target is @cIndex ctNext@.
+policyDelta :: Construction -> Construction -> Construction
+policyDelta ct ctNext = ct { cIndex = cIndex ctNext }
+
+-- | VALUE (recolour) delta of an inter-frame step: frame @t+1@'s palette carried under frame
+-- @t@'s index map. Holds the index FIXED (@cIndex ct@) and advances only the colour table
+-- (@cPalette ctNext@) — global recolour \/ lighting drift with no region motion, the "the palette
+-- moved" half of @t → t+1@. Its data-manufactured target is read in FUSED pixel space
+-- ('buildPixels'), never the raw palette (see 'lawPaletteIndexGaugeInvariant').
+valueDelta :: Construction -> Construction -> Construction
+valueDelta ct ctNext = ct { cPalette = cPalette ctNext }
 
 -- ============================================================================
 -- Laws (predicates; QuickCheck'd in Properties.ConstructionEncoder)
@@ -164,3 +192,47 @@ lawIdentityIndexIsPaletteInOrder d pal0 =
      && ls == [ l | (l,_,_) <- pal ]
      && as == [ a | (_,a,_) <- pal ]
      && bs == [ b | (_,_,b) <- pal ]
+
+-- | THE OPTION-2 DECOMPOSITION: an inter-frame step @t → t+1@ separates into ORTHOGONAL channels
+-- — POLICY ('policyDelta', index\/motion) and VALUE ('valueDelta', palette\/recolour) — that
+-- compose, in EITHER order, to exactly frame @t+1@, while NEITHER channel alone reaches it. The
+-- two are disjoint record axes of 'Construction', so each can carry its own data-manufactured
+-- target without entangling the other — the structural justification for two temporal heads.
+-- Closed witness: a frame where BOTH the palette and the index move — applying only the policy
+-- delta keeps @t@'s palette (misses), applying only the value delta keeps @t@'s index (misses),
+-- and only BOTH (either order) land on frame @t+1@. Teeth: were the channels entangled, the two
+-- orders would disagree or a single channel would suffice.
+lawInterFrameFactorsToPolicyValue :: Bool
+lawInterFrameFactorsToPolicyValue =
+  let palT    = [(10,20,30), (40,50,60)]
+      palNext = [(11,21,31), (41,51,61)]              -- the VALUE channel moved (recolour)
+      ct      = Construction 0 palT    [0]
+      ctNext  = Construction 0 palNext [1]             -- the POLICY channel moved (0->1) too
+      indexThenPalette = (policyDelta ct ctNext) { cPalette = cPalette ctNext }
+      paletteThenIndex = (valueDelta  ct ctNext) { cIndex   = cIndex   ctNext }
+  in indexThenPalette == ctNext          -- policy-first then value reaches frame t+1
+     && paletteThenIndex == ctNext        -- value-first then policy reaches frame t+1 (orders agree)
+     && policyDelta ct ctNext /= ctNext   -- ...but the POLICY channel alone does NOT
+     && valueDelta  ct ctNext /= ctNext   -- ...and the VALUE channel alone does NOT
+
+-- | GAUGE INVARIANCE: a frame's pixels are invariant under a JOINT relabelling of palette and
+-- index (permute the colour slots by @σ@, remap the index by @σ⁻¹@). So two frames must be
+-- compared in FUSED pixel space ('buildPixels'); comparing the raw 'cPalette' slot-by-slot or the
+-- raw 'cIndex' is ILL-POSED, because the same frame has many @(palette, index)@ encodings. This is
+-- why the Option-2 VALUE target is the recoloured PIXELS, not the bare palette table. Closed
+-- witness: a swap of two palette slots with the matching index remap leaves 'buildPixels'
+-- identical while BOTH the raw palette and the raw index differ.
+lawPaletteIndexGaugeInvariant :: Bool
+lawPaletteIndexGaugeInvariant =
+  let pal  = [(10,20,30), (40,50,60)]
+      idx  = [0, 1, 0, 1, 0, 1, 0, 1]                  -- d=1 ⇒ 8 voxels
+      c    = Construction 1 pal idx
+      palP = [(40,50,60), (10,20,30)]                  -- σ: swap slots 0 and 1
+      idxP = map (\i -> 1 - i) idx                     -- σ⁻¹ on the index (= σ for a transposition)
+      cP   = Construction 1 palP idxP
+      Cube l0 a0 b0 = buildPixels c
+      Cube l1 a1 b1 = buildPixels cP
+  in validConstruction c && validConstruction cP
+     && (l0,a0,b0) == (l1,a1,b1)            -- SAME fused pixels (gauge-invariant)
+     && cPalette c /= cPalette cP           -- ...although the raw palette differs
+     && cIndex   c /= cIndex   cP           -- ...and the raw index differs
