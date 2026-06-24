@@ -1,13 +1,13 @@
 //! Test aggregation root for `zig build test`.
 //!
-//! Pulls in root.zig's own unit tests AND the cross-language fixture test
-//! (fixture_test.zig). It is kept SEPARATE from root.zig because build-ios.sh
-//! compiles root.zig directly with `zig build-lib` (no build system, hence no
-//! `build_options` module) — so the fixture machinery, which depends on the
-//! build-option-provided fixture path, must not live in root.zig's top level.
+//! Pulls in the module unit tests AND the cross-language fixture tests. It is
+//! kept SEPARATE from root.zig because build-ios.sh compiles root.zig directly
+//! with `zig build-lib` (no build system, hence no `build_options` module) — so
+//! the fixture machinery, which depends on the build-option-provided fixture
+//! path, must not live in root.zig's top level.
 
 test {
-    _ = @import("root.zig"); // the parser's own unit tests
+    _ = @import("root.zig"); // C-ABI surface (smoke test)
     _ = @import("kernels.zig"); // quantized-core ABI: size helpers + color kernel + stubs
     _ = @import("synth.zig"); // synthetic-burst training-data generator + end-to-end chain
     _ = @import("color_fixture_test.zig"); // cross-language color golden (skip-if-absent)
@@ -28,5 +28,4 @@ test {
     _ = @import("rgbt4d_fixture_test.zig"); // cross-language RGBT-4D lift + cube-ladder golden (Metal/Zig alignment)
     _ = @import("gif_fixture_test.zig"); // cross-language full-burst GIF golden (Stage 6)
     _ = @import("lut_fixture_test.zig"); // cross-language look transfer + LUT-extraction golden
-    _ = @import("fixture_test.zig"); // cross-language Python-fixture check
 }

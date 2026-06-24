@@ -30,9 +30,9 @@ enum PhaseField {
         case .live:
             LivePhaseField(surface: surface, clock: clock, settings: settings, onShutter: onShutter)
         case .captured, .picked:
-            // The A/B game: two orthogonal candidate GIFs; tapping one IS the pick, which
-            // re-proposes a taste-shifted pair (the infinite game). Export ends it.
-            ABCandidatePhaseField(surface: surface, clock: clock, settings: settings)
+            // A/B game RETIRED (branch spec/retire-ab-one-truth) — inert placeholder until the
+            // JEPA-based post-capture surface is built. The captured state renders the neutral field.
+            BootstrapPhaseField(surface: surface, clock: clock)
         case .exporting:
             ExportingPhaseField(surface: surface, clock: clock)
         case .done:
@@ -91,9 +91,6 @@ struct DonePhaseField: View {
     /// of the retired `ReviewPhaseField`: the .cube LUT export now lives on the Done screen,
     /// beside the GIF Share, so the only worked LUT path survives the Review deletion.
     @State private var lutShare: LUTShareItem?
-    /// Show the A/B-game log (the "log of A vs B"). Toggled by the GENES button.
-    @State private var showGenes = false
-
     /// The colours the LUT grades toward: ALL frames' palettes pooled into one cloud (a
     /// clip-wide profile), falling back to the single review palette. (Ported from Review.)
     private var lutPalette: [SIMD3<UInt8>] {
@@ -106,9 +103,6 @@ struct DonePhaseField: View {
             Color.clear
             VStack(spacing: GlobalLattice.pt(9)) {
                 CellText("EXPORTED", rows: 13, ink: .white)
-                // The A/B-game log (the "log of A vs B"): toggled by GENES, read from the persisted
-                // decision log so it survives relaunch.
-                if showGenes { GeneLogView() }
                 // The rendered GIF is the shippable artifact (the genome-faithful cube-ladder
                 // is P3). Surface it for Share when present; otherwise just offer a new shot.
                 if let url = surface.gifURL {
@@ -119,12 +113,6 @@ struct DonePhaseField: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Share the exported GIF")
                 }
-                Button { showGenes.toggle() } label: {
-                    CellActionButton(icon: .none, title: showGenes ? "HIDE LOG" : "GENES",
-                                     prominent: false, fillWidth: false)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Show the A versus B pick log")
                 // The active Look's `.cube` LUT (only when a grade is on; it is the export form
                 // of the Look axis). Ported verbatim from Review — `LUTFile.makeShareItem` + the
                 // pooled `lutPalette` + the `ActivityView` sheet, all unchanged.

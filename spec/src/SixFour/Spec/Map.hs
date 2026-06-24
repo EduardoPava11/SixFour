@@ -84,54 +84,24 @@ byte-exact; the float head re-enters the Zig Q16 floor. See the __BACKEND COMPAR
 the I-JEPA roster (@RelationalMemory@ the @d6@ metric, @JepaMemory@ the memory budget, @JepaData@ the data
 engine) and its compartment.
 
-The look-NN below is the EARLIER MLX global-palette path — abandoned 2026-06-17, __V2-deferred__
-(@Feature.globalPaletteV2 = false@), NOT the live core. It takes per-frame palettes (cat. 2), sees them
-collapsed (cat. 3), and emits a genome in the palette-tree space (cat. 4), scored by a value oracle and
-searched; every cell still emits an exact 1-byte index. Kept + golden-gated for V2:
+The ENTROPY-EARNED ENCODER CHAIN (2026-06-23) — every encoder dimension earned by a theorem,
+organised by entropy, mutation-verified (each law falsifiable by a killer mutant in @cabal repl@):
 
-  * "SixFour.Spec.Net"            — pinned NN shapes (io dims, MoR depth) → @NetContract@
-  * "SixFour.Spec.LookNet"        — the look-NN top-level
-  * "SixFour.Spec.LookNetE"       — Encoder (set → σ-equivariant context, L3)
-  * "SixFour.Spec.LookNetR"       — Recursion / core (Mixture-of-Recursions, L4)
-  * "SixFour.Spec.LookNetD"       — Decoder (state → 384-DOF σ-pair genome, L5)
-  * "SixFour.Spec.LookNetCompose" — the σ-equivariance theorem (E∘R∘D)
-  * "SixFour.Spec.LookNetEval"    — forward-pass evaluation
-  * "SixFour.Spec.LookCore", "SixFour.Spec.Layer", "SixFour.Spec.Scale", "SixFour.Spec.AxisNet" — primitives
-  * "SixFour.Spec.Loss"           — training loss (OT/reconstruction; GAN dropped)
-  * "SixFour.Spec.PaletteOracle"  — the deterministic value head (Ou-Luo beauty + entropy)
-  * "SixFour.Spec.PaletteSearch"  — MCTS over scored candidates
-  * "SixFour.Spec.Preference", "SixFour.Spec.Look", "SixFour.Spec.Loom" — preference / authoring surface
-  * "SixFour.Spec.LookCategory" — ★ north-star: named look taxonomy + on-device Bradley–Terry push-pull learning
+  * "SixFour.Spec.Q16"                  — the single float→int seam (@quantizeQ16@, round-half-even)
+  * "SixFour.Spec.SynthesisPolicyValue" — ★ the GIF synthesis as AlphaGo policy[index] + value[palette]
+  * "SixFour.Spec.HalfwayLatent"        — ★ the fuse IS the 32³ midpoint (@lawFuseIsMidpoint@: 64·512=32768)
+  * "SixFour.Spec.EncoderModalityLoad"  — the 3 modality loads on one non-negative bit axis (ridged colour rate)
+  * "SixFour.Spec.EncoderWidthAlloc"    — width = entropy share of the fixed 512 (Hamilton largest-remainder)
+  * "SixFour.Spec.EncoderDepthAlloc"    — depth = octant rate-distortion ladder (cap @levelsBetween 64 4 = 4@)
+  * "SixFour.Spec.EncoderEntropyFloor"  — the source-coding floor (learned ≥ entropy share)
+  * "SixFour.Spec.EncoderCorpus"        — the corpus → loads → floor bridge (numbers respond to content)
 
-== ★★ The Color Atlas — on-device personalization (north-star training surface)
-The first spec footprint of the north-star: the user curates a 16³ board, picks become Bradley–Terry
-comparisons, and a small per-user delta head is updated on device (proven on the physical iPhone 17 Pro
-2026-06-12; see @CLAUDE.md@ and the @SixFour/Atlas/@ purpose-headers).
-
-  * "SixFour.Spec.AtlasBoard"      — the 16³ curation board state
-  * "SixFour.Spec.AtlasState"      — the Atlas session state
-  * "SixFour.Spec.AtlasMove"       — the Move ADT (the user's curation actions)
-  * "SixFour.Spec.AtlasOracle"     — the value oracle scoring board candidates
-  * "SixFour.Spec.AtlasNetEval"    — ★ AlphaZero reframe: concrete forward for the policy/value
-    heads (golden-vector oracle, ported from atlas_net_mlx.py); see SIXFOUR-ALPHAZERO-COLLAPSE-DESIGN
-  * "SixFour.Spec.AtlasGame"       — ★ AlphaZero reframe: the unified GameMove ADT (Edit|Curate|Rung)
-    over PaletteSearch/AtlasMove/CubeLadder; Compare lifted out as reward; Q16 terminal determinism
-  * "SixFour.Spec.BoardQ16"        — ★ AlphaZero reframe: deterministic integer board-mass derivation
-    (integer binning + counts + one-rounding Q16 mass) closing the float input gap to the policy argmax
-  * "SixFour.Spec.GLRM"            — ★ AlphaZero reframe: the preference-training kill-switch (OLS over
-    [coverage,beauty,‖chroma‖²]; STOP on no signal; drop degenerate gallery pairs)
-  * "SixFour.Spec.GumbelSearch"    — ★ AlphaZero reframe: Sequential-Halving root selection + the Q16
-    cross-tier comparison key (CPU tree ≡ GPU float value decision; sub-key wobble cannot flip a move)
-  * "SixFour.Spec.Proposer"        — ★ the propose-candidates organ: compose orthogonal genome seed →
-    value-rank → Sequential-Halving into one A/B Proposal (the three pieces, finally wired)
-  * "SixFour.Spec.ValueHead"       — ★ the LEARNED BT value head: linear floor + gated tanh residual +
-    on-device training step (nn-6; finite-diff-pinned gradient; linear is the zero-residual case)
-  * "SixFour.Spec.AtlasCascade"    — the multi-stage proposal cascade
-  * "SixFour.Spec.PersonalGenome"  — ★ pivot: the per-device θ lifecycle (cold start, per-pick
-    learning, deterministic replay, KataGo-gated promotion) wrapping "SixFour.Spec.PreferenceUpdate"
-  * "SixFour.Spec.DecisionLog"     — the replay-record wire format of picks
-  * "SixFour.Spec.DeltaCodebook"   — the per-user delta-head codebook
-  * "SixFour.Spec.PreferenceUpdate" — the on-device preference-update (gradient/weight) rule
+RETIRED 2026-06-23 ("one truth", branch @spec/retire-ab-one-truth@): the EARLIER MLX look-NN
+global-palette path (@Net@ / @LookNet*@ / @Loss@ / @PaletteOracle@ / @PaletteSearch@ / @LookCore@ / …)
+AND the A/B preference Color Atlas (the AlphaZero reframe: @AtlasBoard@ / @AtlasGame@ / @AtlasNetEval@ /
+@BoardQ16@ / @GLRM@ / @GumbelSearch@ / @Proposer@ / @ValueHead@ / @PersonalGenome@ / …) were DELETED —
+the self-supervised JEPA-EBM is the only learned truth. The look-net deploy blob (Zig
+@s4_load_look_net@ + Swift @loadLookNet@ + the trainer look-NN Python) was retired with them.
 
 == 1. Numeric & colour core
 "SixFour.Spec.Shape", "SixFour.Spec.Color", "SixFour.Spec.ColorFixed", "SixFour.Spec.LinAlg",

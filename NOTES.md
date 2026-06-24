@@ -7,6 +7,70 @@ newest first.
 
 ---
 
+## 2026-06-23: retire the A/B preference-EBM → one truth, then EARN the encoder architecture by entropy theorems (branch `spec/retire-ab-one-truth`)
+
+> **Session theme (Daniel):** "delete code that is not aligned — I want one truth (the
+> self-supervised JEPA-EBM, the A/B choices retired); then the encoders must EARN their capacity
+> with proven computational theorems, organised by entropy; and ensure the work is verifiable."
+
+Built spec-first, additive (except the sanctioned A/B deletion), gated. **891 spec tests green, 148
+modules compartment-tagged, hermetic codegen no-drift.** Branch is a strict descendant of master
+(clean fast-forward). Builds on the reconciled dual-encoder base (`5e4d487`).
+
+**ONE TRUTH (`96f4436`, `ad5e49c`, `1ad9e20`):** extracted `Spec.Q16` (the single float→int seam)
+and landed the VICReg variance-hinge in `NeuronRedundancy` (`varianceFloorPenalty`, the active
+collapse floor covariance is blind to). Then **retired the A/B preference-EBM + look-net** — 47
+`Spec.*` + 8 `Codegen.*` modules deleted (AtlasGame/ValueHead/Preference/LookNet*/GumbelSearch/…),
+keeping only the self-supervised JEPA-EBM. Removed stray duplicate root `Generated/`/`Resources/`.
+
+**THE SYNTHESIS AS POLICY+VALUE (`5cb7252`):** `Spec.SynthesisPolicyValue` — the GIF synthesis IS
+AlphaGo policy+value, already typed in `ConstructionEncoder`: `cIndex` = POLICY (the index map,
+integer argmax), `cPalette` = VALUE (the Q16 palette); `buildPixels = value[policy]`. New tooth
+`lawPaletteRelationallyOrdered` (colours d6-ordered). Bound to `Upscale256.UpscaleOutput`.
+
+**FUSE == MIDPOINT (`78b368c`):** `Spec.HalfwayLatent` — `lawFuseIsMidpoint`: the ViT waist
+(`vitTokens·vitDModel = 64·512 = 32768`) IS the never-surfaced 32³ Down-rung midpoint, binding the
+architecture-map waist to the octant spine. The fuse (Encoder A ⊕ Encoder B) = the nudge target.
+
+**THE ENCODER-EARNING CHAIN — every dimension earned by a theorem, organised by entropy:**
+- `EncoderModalityLoad` (`1690789`) — the 3 modality loads on ONE non-negative bit axis. The fix:
+  the palette load is the RIDGED coding rate `½log₂(det(Σ+σ₀²I)/σ₀⁶)` (≥0 by construction), NOT the
+  raw differential entropy (which goes NEGATIVE — verified −9.559 — and would invert a softmax).
+- `EncoderWidthAlloc` (`554a921`) — width = entropy share of the fixed 512 via Hamilton
+  largest-remainder; sums to EXACTLY 512 (teeth: naive `round` ⅓-tie → 513). Earned: colourful
+  (192,128,192), greyscale (216,80,216).
+- `EncoderDepthAlloc` (`7b56621`) — depth = octant levels with positive detail, cap `levelsBetween
+  64 4 = 4` (proven, NOT "L=6 coincidence"). Teeth: a cut at L destroys `[3584,448,56,7]` dims.
+- `EncoderEntropyFloor` (`b24a5a7`) — the source-coding lower bound: learned may EXCEED the
+  entropy-share floor, never drop below (dual of `varianceFloorPenalty`). static=floor, learned=surplus.
+- `EncoderCorpus` (`f22a15e`) — the corpus → loads → floor bridge; the floor is a REAL function of
+  corpus content. The clips that size the encoder are the clips `JepaData` trains on (one lift, double duty).
+
+**VERIFIABILITY (mutation audit in `cabal repl`):** every law in the earning chain was
+mutation-tested — all 13 law/mutant pairs are FALSIFIABLE (each killer mutant flips its law to
+`False`); zero vacuous laws. "Green ≠ verified" — these laws have receipts.
+
+**CROSS-TIER RETIREMENT COMPLETED (the spec deletion propagated to every tier so the app builds):**
+the spec-only A/B + look-net deletion (`ad5e49c`) had left orphaned consumers across all tiers; this
+session finished them. (1) Look-net deploy path: Zig `s4_load_look_net` + `S4LookNetWeights` +
+`fixture_test.zig`, the C header decl, the Swift `loadLookNet` binding, the trainer look-NN Python
+(`export_look_net_blob`/`train_look_net_mlx`/`look_net_loss_mlx`/`eval_l_quality`/`check_golden`/
+`regimen`), and the `net_shape.py` drift check. (2) The A/B Color Atlas APP subsystem (Daniel's
+informed call — it was the LIVE primary post-capture surface, not a gated feature): deleted
+`SixFour/Atlas/` (11), the A/B `Palette/` + UI views (`ABCandidatePhaseField`/`AtlasBoardView`/
+`AtlasGalleryView`/`AtlasTrainingField`/`GeneLogView`), and 12 A/B golden tests; made `PhaseField`'s
+`.captured`/`.picked` route to an INERT placeholder (the post-capture UX is now empty until a
+JEPA-based surface is built), hardwired `CaptureViewModel`'s curated-palette to nil, removed
+`SixFourNative.boardMassQ16`. **iOS app: TEST BUILD SUCCEEDED; spec gate: all green.** Map.hs
+re-indexed (8 new encoder modules added, the retired look-NN + Color Atlas sections removed).
+
+**OPEN:** (a) the per-modality integer widths/depths are earned in FORM but the specific numbers await
+a measured CORPUS (no camera here); (b) **the app has NO post-capture UX** — building the JEPA-based
+post-capture surface that replaces the A/B game is the real next project; (c) residual stale prose in
+`Spec.Map` (scattered deleted-module refs in §4) is doc debt, non-blocking.
+
+---
+
 ## 2026-06-23: dual-encoder H-JEPA + dither/midpoint + minimal-instruction-set (branch `spec/dual-encoder-hierarchies`) — SUNSET, awaiting reconciliation
 
 > **Session theme (Daniel):** "redesign the I-JEPA — two semantic encoders of the same GIF;

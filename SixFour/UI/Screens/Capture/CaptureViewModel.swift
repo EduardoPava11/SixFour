@@ -697,13 +697,10 @@ final class CaptureViewModel {
         let renderer = DeterministicRenderer(dither: dither)
 
         let branching = settings.paletteBranching   // the radix = the NN genome
-        // Color Atlas (gated, default OFF): the curated global palette — the
-        // user's Compare pick with anchors substituted — rides the render-path
-        // seam so the "global palette cube" is rendered through THE USER'S
-        // palette. Flag off or no curated palette ⇒ nil ⇒ byte-identical.
-        // GS5b: the curated global palette is injected only when global is enabled for V2.
-        let curatedLeaves: [SIMD3<Int32>]? =
-            (settings.colorAtlasEnabled && Feature.globalPaletteV2) ? AtlasPaletteStore.shared.curatedLeavesQ16 : nil
+        // Color Atlas RETIRED (branch spec/retire-ab-one-truth): the curated-palette injection
+        // is gone with the A/B subsystem; the render path always uses the deterministic global
+        // palette (exactly the former flag-off path, which was byte-identical).
+        let curatedLeaves: [SIMD3<Int32>]? = nil
         let g = try await Task.detached(priority: .userInitiated) {
             try renderer.renderGlobalPalette(tiles: tiles, comment: comment, branching: branching,
                                              curatedLeavesQ16: curatedLeaves) { stage in

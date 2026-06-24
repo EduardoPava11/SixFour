@@ -53,62 +53,6 @@ enum SixFourNative {
         return body()
     }
 
-    // MARK: - Look-NN deploy blob
-
-    /// The look-NN genome, loaded from the MLX-trained deploy blob produced by
-    /// `trainer/export_look_net_blob.py`. Mirrors `S4LookNetWeights` in
-    /// `Native/include/sixfour_native.h`. The float pointers ALIAS into the
-    /// `blob` `Data` passed to `loadLookNet`, so the blob must outlive any use
-    /// of these buffers (no copy, no allocation crosses the FFI boundary).
-    /// Weights are RAW (pre-σ-mask); the forward pass applies the
-    /// σ-block-diagonal mask exactly as the Haskell spec / MLX port do.
-    struct LookNetWeights {
-        let phi: UnsafePointer<Float>       // (64, 10)
-        let w1: UnsafePointer<Float>        // (64, 64)
-        let w2: UnsafePointer<Float>        // (64, 64)
-        let haltW: UnsafePointer<Float>     // (1, 2)
-        let haltB: UnsafePointer<Float>     // (1,)
-        let heads: [UnsafePointer<Float>]   // 8 × (head_dim, 64)
-        let headDims: [Int32]               // {3,3,6,12,24,48,96,192}
-    }
-
-    /// Parse a look-NN deploy blob via the Zig `s4_load_look_net` ABI. Returns
-    /// `nil` on a malformed blob (bad magic / version / truncation). The
-    /// returned pointers alias into `blob`; keep `blob` alive while using them.
-    ///
-    /// NOTE: the underlying Zig kernel is a declared contract (header + this
-    /// seam); the real parse may land beyond the `s4_probe` spike. This Swift
-    /// surface pins the type/signature so the consumer compiles against it.
-    static func loadLookNet(_ blob: Data) -> LookNetWeights? {
-        blob.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> LookNetWeights? in
-            guard let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
-                return nil
-            }
-            var out = S4LookNetWeights()
-            let rc = s4_load_look_net(base, raw.count, &out)
-            guard rc == 0 else {
-                log.error("s4_load_look_net failed: rc=\(rc)")
-                return nil
-            }
-            let headCount = Int(S4_LOOK_NET_HEAD_COUNT)
-            let heads: [UnsafePointer<Float>] = withUnsafePointer(to: out.heads) { tuplePtr in
-                tuplePtr.withMemoryRebound(to: UnsafePointer<Float>?.self, capacity: headCount) { p in
-                    (0..<headCount).map { p[$0]! }
-                }
-            }
-            let headDims: [Int32] = withUnsafePointer(to: out.head_dims) { tuplePtr in
-                tuplePtr.withMemoryRebound(to: Int32.self, capacity: headCount) { p in
-                    Array(UnsafeBufferPointer(start: p, count: headCount))
-                }
-            }
-            return LookNetWeights(
-                phi: out.phi, w1: out.w1, w2: out.w2,
-                haltW: out.halt_w, haltB: out.halt_b,
-                heads: heads, headDims: headDims
-            )
-        }
-    }
-
     // MARK: - Deterministic quantized core (palette + dither + GIF89a)
 
     /// Parameters for the deterministic GIF burst encoder. Defaults match the
@@ -383,44 +327,6 @@ enum SixFourNative {
         }
         guard rc == S4_RC_OK else { log.error("s4_haar_level_nodes rc=\(rc)"); return nil }
         return (0 ..< count).map { SIMD3<Int32>(nodes[$0 * 3], nodes[$0 * 3 + 1], nodes[$0 * 3 + 2]) }
-    }
-
-    // MARK: - Color Atlas board (deterministic Q16 mass)
-
-    /// Deterministic Q16 board-mass channel for a list of Q16 OKLab colours
-    /// (`s4_board_mass_q16`, the owned port of `SixFour.Spec.BoardQ16.boardMassQ16`):
-    /// integer floor-div binning → integer counts → ONE round-half-up of
-    /// `count·2¹⁶/total` per bin. Returns the 16³ = 4096 Q16 channel (each ∈ [0, 65536]).
-    /// Byte-exact across Haskell/Zig/Swift — closes the float-histogram determinism hole
-    /// at the policy/value board input (replaces the non-dyadic `1/total` normalise).
-    static func boardMassQ16(colorsQ16 colors: [SIMD3<Int32>]) -> [Int32]? {
-        let n = colors.count
-        var flat = [Int32](); flat.reserveCapacity(n * 3)
-        for c in colors { flat.append(c.x); flat.append(c.y); flat.append(c.z) }
-        var mass = [Int32](repeating: 0, count: AtlasBoard16.binCount)
-        let rc = flat.withUnsafeBufferPointer { fp in
-            mass.withUnsafeMutableBufferPointer { mp in
-                s4_board_mass_q16(fp.baseAddress, Int32(n), mp.baseAddress)
-            }
-        }
-        guard rc == S4_RC_OK else { log.error("s4_board_mass_q16 rc=\(rc)"); return nil }
-        return mass
-    }
-
-    /// Q16 mass from precomputed integer per-bin counts (`s4_board_counts_to_mass_q16`,
-    /// `SixFour.Spec.BoardQ16.massQ16`): for the pixel channel whose counts come from a
-    /// per-frame slot→bin table (integer, so already order-independent). `counts.count`
-    /// is the channel length (16³ = 4096); `total` is the exact element count.
-    static func boardMassQ16(counts: [Int32], total: Int) -> [Int32]? {
-        let bins = counts.count
-        var mass = [Int32](repeating: 0, count: bins)
-        let rc = counts.withUnsafeBufferPointer { cp in
-            mass.withUnsafeMutableBufferPointer { mp in
-                s4_board_counts_to_mass_q16(cp.baseAddress, Int32(bins), Int32(total), mp.baseAddress)
-            }
-        }
-        guard rc == S4_RC_OK else { log.error("s4_board_counts_to_mass_q16 rc=\(rc)"); return nil }
-        return mass
     }
 
     // MARK: - σ-pair leaf override (the n=0 taste tint)

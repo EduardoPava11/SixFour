@@ -49,15 +49,14 @@ done
 
 # CROSS-LANGUAGE GOLDENS, fixtures REQUIRED (not skip-if-absent). The readiness proof found
 # the strongest ownership in the system (the spec FORCES the iPhone to make the byte-exact
-# GIF, and the Zig core to parse the blob) was conditionally NOT exercised: the Zig fixture
-# tests skip-if-absent, so a checkout that never produced the goldens passed green vacuously.
-# Here we PRODUCE the goldens from the spec (GIF: spec-fixtures; blob: export_look_net_blob.py,
-# pure python) then run the Native tests with -Drequire_fixtures=true so an absent or mismatched
-# golden FAILS. (Skipped if zig is not installed — the spec-side gate above still stands.)
+# GIF) was conditionally NOT exercised: the Zig fixture tests skip-if-absent, so a checkout
+# that never produced the goldens passed green vacuously.
+# Here we PRODUCE the goldens from the spec (spec-fixtures) then run the Native tests with
+# -Drequire_fixtures=true so an absent or mismatched golden FAILS. (Skipped if zig is not
+# installed — the spec-side gate above still stands.)
 if command -v zig >/dev/null 2>&1; then
-  run "Zig cross-language goldens (fixtures REQUIRED, byte-exact GIF + blob)" "
+  run "Zig cross-language goldens (fixtures REQUIRED, byte-exact GIF)" "
     cabal run -v0 spec-fixtures >/dev/null 2>&1 &&
-    ( cd '$root/trainer' && python3 export_look_net_blob.py >/dev/null 2>&1 ) &&
     ( cd '$root/Native' && zig build test -Drequire_fixtures=true )
   "
 fi

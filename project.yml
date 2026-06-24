@@ -86,7 +86,6 @@ targets:
           # The non-Swift bridges the gate has always covered.
           for pair in \
             "mlx/stages.py:trainer/generated/stages.py" \
-            "mlx/net_shape.py:trainer/generated/net_shape.py" \
             "res/stbn3d-8.bin:SixFour/Resources/stbn3d-8.bin"; do
             gen="$SCRATCH/${pair%%:*}"; dst="$SRC/${pair##*:}"
             if ! diff -q "$gen" "$dst" >/dev/null 2>&1; then
