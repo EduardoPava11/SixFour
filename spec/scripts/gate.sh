@@ -67,6 +67,13 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/jepa_data.py" ]; th
   run "JEPA data engine (Python lift == spec corpus golden)" "python3 '$root/trainer/jepa_data.py'"
 fi
 
+# The 64³-scale realizer: synthetic bursts encode byte-exact AND the entropy vectors are
+# extractable + responsive at the real 262144-voxel capture shape (the Spec.SyntheticCorpus
+# guarantees, at scale). Realness irrelevant; this is a pipeline/spec-guarantee check.
+if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/synth_corpus_64.py" ]; then
+  run "Synthetic corpus 64³ (encode round-trip + entropy vectors responsive)" "( cd '$root/trainer' && python3 synth_corpus_64.py )"
+fi
+
 echo ""
 if [ "$fail" -ne 0 ]; then
   echo "GATE: FAIL"
