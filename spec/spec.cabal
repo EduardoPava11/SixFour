@@ -40,6 +40,7 @@ library
         SixFour.Spec.EncoderWidthAlloc
         SixFour.Spec.EncoderDepthAlloc
         SixFour.Spec.EncoderEntropyFloor
+        SixFour.Spec.EncoderCorpus
         SixFour.Spec.SpatialDither
         SixFour.Spec.GMM
         SixFour.Spec.Bures
@@ -298,6 +299,7 @@ test-suite spec-tests
         Properties.EncoderWidthAlloc
         Properties.EncoderDepthAlloc
         Properties.EncoderEntropyFloor
+        Properties.EncoderCorpus
         Properties.GMM
         Properties.Bures
         Properties.Sinkhorn
