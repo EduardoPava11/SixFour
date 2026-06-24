@@ -215,6 +215,15 @@ int32_t s4_synth_burst(uint64_t seed, int32_t mode,
                        int32_t l_min_q16, int32_t l_max_q16, int32_t chroma_max_q16,
                        int32_t *out_oklab_q16);
 
+// As s4_synth_burst, with an explicit DETAIL scale (Q16). detail_q16 > 65536 adds
+// high-frequency detail above the significance floor — spans the perceptual/detail
+// entropy axis at real scale. 65536 (= S4_SYNTH_DETAIL_Q16) reproduces s4_synth_burst.
+#define S4_SYNTH_DETAIL_Q16  65536   /* the canonical (1.0) detail level */
+int32_t s4_synth_burst_detail(uint64_t seed, int32_t mode,
+                              int32_t frame_count, int32_t side,
+                              int32_t l_min_q16, int32_t l_max_q16, int32_t chroma_max_q16,
+                              int32_t detail_q16, int32_t *out_oklab_q16);
+
 // ─────────────────────────────────────────────────────────────────────────
 // Look transfer / LUT extraction (R3D .cube). The on-screen "look" and the
 // exported 3D LUT are two projections of ONE OKLab palette→palette transform

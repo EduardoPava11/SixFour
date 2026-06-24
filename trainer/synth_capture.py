@@ -29,21 +29,24 @@ CAPTURE_COMMENT = (
 
 @dataclass(frozen=True)
 class Kind:
-    """An entropy × Lab category mapped to the s4_synth_burst knobs it can span (L-range, chroma)."""
+    """An entropy × Lab category mapped to the s4_synth_burst knobs: L-range, chroma, and the
+    DETAIL scale (the perceptual/spatial-frequency axis above the significance floor)."""
     mode: int
     l_min: int
     l_max: int
     chroma: int
+    detail: int = zn.DETAIL_Q16
 
 
-# Categorise by ENTROPY (narrow→wide L range) then by L,a,b (greyscale vs chroma). The detail/index
-# axes need the synth.zig grid_octaves/flat_grain knobs (deferred) — Spec.SyntheticCorpus pins those.
+# Categorise by ENTROPY (L-range × DETAIL scale) then by L,a,b (greyscale vs chroma). The detail
+# axis now spans via s4_synth_burst_detail; a truly FLAT/degenerate clip is below the 256-palette
+# significance floor at 64³ (Spec.SyntheticCorpus pins that abstract teeth).
 KINDS = {
-    "flat-grey":   Kind(zn.SYNTH_GRAYSCALE, 28000, 33000, 0),
-    "low-grey":    Kind(zn.SYNTH_GRAYSCALE, 20000, 45000, 0),
-    "mid-grey":    Kind(zn.SYNTH_GRAYSCALE, zn.L_MIN_Q16, zn.L_MAX_Q16, 0),
+    "smooth-grey": Kind(zn.SYNTH_GRAYSCALE, zn.L_MIN_Q16, zn.L_MAX_Q16, 0, detail=zn.DETAIL_Q16),
+    "mid-grey":    Kind(zn.SYNTH_GRAYSCALE, zn.L_MIN_Q16, zn.L_MAX_Q16, 0, detail=3 * zn.DETAIL_Q16),
+    "high-detail": Kind(zn.SYNTH_GRAYSCALE, zn.L_MIN_Q16, zn.L_MAX_Q16, 0, detail=8 * zn.DETAIL_Q16),
     "high-lab":    Kind(zn.SYNTH_COLOR, zn.L_MIN_Q16, zn.L_MAX_Q16, zn.CHROMA_MAX_Q16),
-    "high-a":      Kind(zn.SYNTH_COLOR, 30000, 35000, zn.CHROMA_MAX_Q16),
+    "high-lab-detail": Kind(zn.SYNTH_COLOR, zn.L_MIN_Q16, zn.L_MAX_Q16, zn.CHROMA_MAX_Q16, detail=8 * zn.DETAIL_Q16),
 }
 
 
@@ -66,7 +69,8 @@ def synthetic_capture(seed: int, kind: str = "high-lab", out_path=None) -> Synth
     if kind not in KINDS:
         raise ValueError(f"unknown kind {kind!r}; one of {sorted(KINDS)}")
     cfg = KINDS[kind]
-    oklab = zn.synth_burst(seed, cfg.mode, CAPTURE_FRAMES, CAPTURE_SIDE, cfg.l_min, cfg.l_max, cfg.chroma)
+    oklab = zn.synth_burst(seed, cfg.mode, CAPTURE_FRAMES, CAPTURE_SIDE,
+                           cfg.l_min, cfg.l_max, cfg.chroma, cfg.detail)
     palettes_rgb = np.empty((CAPTURE_FRAMES, CAPTURE_K, 3), dtype=np.uint8)
     palettes_q16 = np.empty((CAPTURE_FRAMES, CAPTURE_K, 3), dtype=np.int32)
     indices = np.empty((CAPTURE_FRAMES, CAPTURE_SIDE * CAPTURE_SIDE), dtype=np.uint8)

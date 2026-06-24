@@ -41,6 +41,7 @@ RC_OK = 0
 L_MIN_Q16 = 5243       # ≈0.08
 L_MAX_Q16 = 60293      # ≈0.92
 CHROMA_MAX_Q16 = 18350  # ≈0.28
+DETAIL_Q16 = 65536      # 1.0 — canonical detail scale (synth.zig DETAIL_Q16); >1 adds high-freq detail
 
 _NATIVE = Path(__file__).resolve().parent.parent / "Native"
 _DYLIB = _NATIVE / "zig-out" / "lib" / "libsixfour_native.dylib"
@@ -64,6 +65,10 @@ def _load() -> ctypes.CDLL:
     lib.s4_synth_burst.restype = c_i32
     lib.s4_synth_burst.argtypes = [
         ctypes.c_uint64, c_i32, c_i32, c_i32, c_i32, c_i32, c_i32, c_i32p,
+    ]
+    lib.s4_synth_burst_detail.restype = c_i32
+    lib.s4_synth_burst_detail.argtypes = [
+        ctypes.c_uint64, c_i32, c_i32, c_i32, c_i32, c_i32, c_i32, c_i32, c_i32p,
     ]
 
     lib.s4_quantize_frame.restype = c_i32
@@ -110,15 +115,16 @@ def _u8p(a: np.ndarray):
 # ── thin kernel wrappers ───────────────────────────────────────────────────────
 def synth_burst(seed: int, mode: int, frame_count: int = FRAME_COUNT, side: int = SIDE,
                 l_min_q16: int = L_MIN_Q16, l_max_q16: int = L_MAX_Q16,
-                chroma_max_q16: int = CHROMA_MAX_Q16) -> np.ndarray:
+                chroma_max_q16: int = CHROMA_MAX_Q16, detail_q16: int = DETAIL_Q16) -> np.ndarray:
     """(frame_count, side*side, 3) int32 OKLab Q16 burst, deterministic in seed.
     L anchors span [l_min_q16, l_max_q16] (the grey dynamic range); a,b are signed
-    deviations within ±chroma_max_q16."""
+    deviations within ±chroma_max_q16. `detail_q16` (>65536) adds high-frequency detail
+    above the significance floor — spans the perceptual/detail axis; 65536 == canonical."""
     out = np.empty((frame_count, side * side, 3), dtype=np.int32)
-    rc = _LIB.s4_synth_burst(ctypes.c_uint64(seed), mode, frame_count, side,
-                             l_min_q16, l_max_q16, chroma_max_q16, _i32p(out))
+    rc = _LIB.s4_synth_burst_detail(ctypes.c_uint64(seed), mode, frame_count, side,
+                                    l_min_q16, l_max_q16, chroma_max_q16, detail_q16, _i32p(out))
     if rc != RC_OK:
-        raise RuntimeError(f"s4_synth_burst rc={rc}")
+        raise RuntimeError(f"s4_synth_burst_detail rc={rc}")
     return out
 
 

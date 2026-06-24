@@ -40,6 +40,11 @@ pub const L_MIN: i32 = 5243; // ≈0.08
 pub const L_MAX: i32 = 60293; // ≈0.92
 pub const CHROMA: i32 = 18350; // ≈0.28 → a,b ∈ [-0.28, 0.28]
 
+// Grain scale (Q16): multiplies the significance-floor grain to span the DETAIL / spatial-
+// frequency axis (the perceptual conditional load) independently of the L range. 65536 (1.0) is
+// the canonical level (the original behaviour); > 65536 adds high-frequency detail.
+pub const DETAIL_Q16: i32 = 65536;
+
 // ── deterministic PRNG ───────────────────────────────────────────────────────
 inline fn splitmix64(state: *u64) u64 {
     state.* +%= 0x9E3779B97F4A7C15;
@@ -127,7 +132,7 @@ inline fn clampOklab(channel: usize, v: i64) i32 {
 /// per-frame palettes, seamless loop). Grain scales with the L range so even a
 /// narrow range yields ≥K distinct levels (significance). Deterministic in `seed`.
 /// Validates @0 ≤ l_min < l_max ≤ 65536@ and @0 ≤ chroma_max ≤ 32768@.
-pub export fn s4_synth_burst(
+fn synthBurstImpl(
     seed: u64,
     mode: i32,
     frame_count: i32,
@@ -135,6 +140,7 @@ pub export fn s4_synth_burst(
     l_min_q16: i32,
     l_max_q16: i32,
     chroma_max_q16: i32,
+    detail_q16: i32,
     out_oklab_q16: [*c]i32,
 ) i32 {
     if (out_oklab_q16 == null) return RC_NULL_PTR;
@@ -142,15 +148,17 @@ pub export fn s4_synth_burst(
     if (mode != SYNTH_COLOR and mode != SYNTH_GRAYSCALE) return RC_BAD_SHAPE;
     if (l_min_q16 < 0 or l_max_q16 <= l_min_q16 or l_max_q16 > Q16) return RC_BAD_SHAPE;
     if (chroma_max_q16 < 0 or chroma_max_q16 > @divTrunc(Q16, 2)) return RC_BAD_SHAPE;
+    if (detail_q16 < 0) return RC_BAD_SHAPE;
     const grayscale = (mode == SYNTH_GRAYSCALE);
 
     const l_min: i64 = l_min_q16;
     const l_max: i64 = l_max_q16;
     const chroma: i64 = chroma_max_q16;
-    // Range-proportional grain (≥1): narrow ranges still get enough micro-variation
-    // to yield ≥K distinct quantisable L-levels. ≈ range/128 (matches the old fixed
-    // GRAIN=393 at the default ~55050 span).
-    const grain: i64 = @max(@as(i64, 1), @divTrunc(l_max - l_min, 128));
+    // Significance-floor grain (≥1, ≈range/128) guarantees ≥K distinct quantisable L-levels;
+    // detail_q16 scales it UP to add high-frequency detail (the perceptual/detail axis). The
+    // floor is never breached, so significance holds at every detail level.
+    const sig_grain: i64 = @max(@as(i64, 1), @divTrunc(l_max - l_min, 128));
+    const grain: i64 = @max(sig_grain, @divTrunc(sig_grain * @as(i64, detail_q16), Q16));
 
     const fc: usize = @intCast(frame_count);
     const sd: usize = @intCast(side);
@@ -212,6 +220,38 @@ pub export fn s4_synth_burst(
         }
     }
     return RC_OK;
+}
+
+/// Public ABI (UNCHANGED): the canonical synth burst at the default detail level (1.0).
+pub export fn s4_synth_burst(
+    seed: u64,
+    mode: i32,
+    frame_count: i32,
+    side: i32,
+    l_min_q16: i32,
+    l_max_q16: i32,
+    chroma_max_q16: i32,
+    out_oklab_q16: [*c]i32,
+) i32 {
+    return synthBurstImpl(seed, mode, frame_count, side, l_min_q16, l_max_q16, chroma_max_q16, DETAIL_Q16, out_oklab_q16);
+}
+
+/// Public ABI: synth burst with an explicit DETAIL scale (Q16). @detail_q16 > 65536@ adds
+/// high-frequency detail ABOVE the significance floor — spans the perceptual/detail entropy axis
+/// at real scale without disturbing the ≥K-distinct guarantee. @65536@ == 's4_synth_burst'.
+/// Same seed + params ⇒ same bytes.
+pub export fn s4_synth_burst_detail(
+    seed: u64,
+    mode: i32,
+    frame_count: i32,
+    side: i32,
+    l_min_q16: i32,
+    l_max_q16: i32,
+    chroma_max_q16: i32,
+    detail_q16: i32,
+    out_oklab_q16: [*c]i32,
+) i32 {
+    return synthBurstImpl(seed, mode, frame_count, side, l_min_q16, l_max_q16, chroma_max_q16, detail_q16, out_oklab_q16);
 }
 
 // ── unit tests ────────────────────────────────────────────────────────────────
@@ -444,4 +484,42 @@ test "s4_synth_burst rejects an invalid dynamic range" {
     try std.testing.expectEqual(RC_BAD_SHAPE, s4_synth_burst(1, SYNTH_COLOR, 1, 2, 0, 70000, 0, &out));
     // chroma_max out of range
     try std.testing.expectEqual(RC_BAD_SHAPE, s4_synth_burst(1, SYNTH_COLOR, 1, 2, 0, 65536, 40000, &out));
+    // negative detail scale
+    try std.testing.expectEqual(RC_BAD_SHAPE, s4_synth_burst_detail(1, SYNTH_COLOR, 1, 2, 0, 65536, 0, -1, &out));
+}
+
+test "s4_synth_burst_detail spans the detail axis (more detail ⇒ more high-frequency energy)" {
+    const side = 64;
+    const p = side * side;
+    const alloc = std.testing.allocator;
+    const lo = try alloc.alloc(i32, p * 3);
+    defer alloc.free(lo);
+    const hi = try alloc.alloc(i32, p * 3);
+    defer alloc.free(hi);
+    // Same seed + same L range; ONLY detail differs.
+    try std.testing.expectEqual(RC_OK, s4_synth_burst_detail(555, SYNTH_GRAYSCALE, 1, side, L_MIN, L_MAX, 0, DETAIL_Q16, lo.ptr));
+    try std.testing.expectEqual(RC_OK, s4_synth_burst_detail(555, SYNTH_GRAYSCALE, 1, side, L_MIN, L_MAX, 0, 8 * DETAIL_Q16, hi.ptr));
+
+    // High-frequency energy = Σ |L(x+1,y) − L(x,y)| (horizontal adjacent differences).
+    var elo: i64 = 0;
+    var ehi: i64 = 0;
+    var y: usize = 0;
+    while (y < side) : (y += 1) {
+        var x: usize = 0;
+        while (x + 1 < side) : (x += 1) {
+            const px0 = (y * side + x) * 3;
+            const px1 = (y * side + x + 1) * 3;
+            const dlo = @as(i64, lo[px1]) - @as(i64, lo[px0]);
+            const dhi = @as(i64, hi[px1]) - @as(i64, hi[px0]);
+            elo += if (dlo < 0) -dlo else dlo;
+            ehi += if (dhi < 0) -dhi else dhi;
+        }
+    }
+    try std.testing.expect(ehi > elo);
+
+    // detail == DETAIL_Q16 is byte-identical to the canonical (unchanged-ABI) s4_synth_burst.
+    const canon = try alloc.alloc(i32, p * 3);
+    defer alloc.free(canon);
+    try std.testing.expectEqual(RC_OK, s4_synth_burst(555, SYNTH_GRAYSCALE, 1, side, L_MIN, L_MAX, 0, canon.ptr));
+    try std.testing.expectEqualSlices(i32, lo, canon);
 }
