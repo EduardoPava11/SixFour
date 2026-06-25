@@ -7,6 +7,75 @@ newest first.
 
 ---
 
+## 2026-06-25: the H-JEPA trainer — from spec contracts to a running, observable trainer (branch `spec/hierarchical-delta` → master)
+
+> **Session theme (Daniel):** "how close are we to running a trainer?" → build it. Then: make a CLI,
+> show me it's actually training, show me the input GIF + the 16³/64³/256³ spine, and build the super-res.
+
+The design was H-JEPA but lived almost entirely in the Haskell spec (contracts + laws, no weights).
+This session REALIZED it: a 15-module hand-written MLX/numpy trainer in `trainer/mlx/`, each module a
+byte-exact twin of its `Spec.*`, plus 3 spec-emitted goldens making the spec the authority for the
+data **and** the trainer. 14 commits, fast-forward merged to master.
+
+**Tech debt removed first.** Deleted 8 dead retired-direction trainers (Atlas/Bradley-Terry + look-net,
+all broken at import); none on the gate/CI path so the gate stayed green.
+
+**The trainer, built in layers (each a byte-exact spec twin, gated by `trainer/mlx/gate_trainer.py`):**
+- **v1 floor** — `q16` (the single float→byte Q16 crossing), `encoder_frozen` (the **zero-param** feature
+  map — `encoderParamCount==0`), `theta_b` (the 63-param masked-band predictor + the 77-param position
+  head), `jepa_loss` (exact gradient), `masked_band_trainer` (reproduces `goldenTrainedBand` 3000
+  byte-exact; batch-divergence guard), `autograd_check` (MLX autodiff == the analytic gradient, Δ=0).
+- **v1.5 corpus** — `jepa_synth_octants`: real 64³ synth captures → octant masked-band records via the
+  gated reversible lift. Empirical finding: generalization is **smoothness-proportional** (held-out loss
+  89.2% of floor on smooth scenes, 99.6% on noise — the I-JEPA signature).
+- **v2 wide head + collapse guard** — `vicreg` (the two-term coding-rate floor; constant collapse is
+  invisible to the covariance term, caught by the std-hinge), `large_head` (the 18.9M-param ViT + the
+  integer-d6 ALiBi bias; its **depth-1 limit reduces to `theta_b` byte-exact** — the controlled-deviation
+  keystone), `per_scale` (per-scale conditioning + the 16³-identity carve-out).
+- **v3 spec-forced goldens** — `Codegen.JepaHead` → `jepa_head_golden.json` (the θ_B trajectory +
+  single-active-term forward witnesses, byte-exact across tiers by construction) and `Codegen.TemporalData`
+  → `temporal_data_golden.json` (the `(t,t+1)` value/policy delta engine; `lawTemporalEngineRoundTrips`).
+- **The composite objective, complete** — `L = L_band^A + L_band^B + latentCodingFloor + L_cross + L_mid`
+  (`jepa_loss` + `vicreg` + `dual_loss`), and the two delta heads (`delta_surrogate`: VALUE = OKLab
+  regression, POLICY = per-voxel classification; keystone `lawPolicySurrogateDecodesToTransport`
+  demonstrated against the temporal golden).
+- **The end-to-end loop** — `train_loop.py`: ONE optimizer descends the composite loss over the corpus on
+  the real 18.9M ViT, organized around the **float32-train / float64-commit seam** (no committed byte ever
+  enters the gradient). `--smoke` proves 4 properties: descent (with an lr=0 control), no-collapse
+  (positive control), byte-commit preserved, determinism. Built + adversarially verified by a workflow.
+
+**The encoder is FROZEN, not trained** (`EncoderFrozen.lawNoPreTrainPhase`). It manufactures the
+collapse-proof target; the only learned object is the predictor. Its two jobs map to the rungs
+(`RungPivot`): DOWN = Held (masked-band fit on real data = the training), UP = Invented (super-res,
+consistency-gated).
+
+**Sanity tests on a geometric object** — `test_centered_cube` (a 64³ cube compresses losslessly to the
+16³ coarse with ZERO detail; 4³ block → one coarse pixel) and `test_cube_learning` (the floor nails the
+flat 99.5%; θ_B learns the 0.5% surface, held-out cut to 13% of floor). The division of labour between
+compression (the reversible lift) and prediction (the learned head), made quantitative.
+
+**The CLI** — `trainer/mlx/cli.py` + `scripts/s4train` (stdlib argparse, zero new deps; each subcommand
+forwards to the owning module): `gate / train / floor / corpus / cube / cube-learn / goldens / regen /
+autograd / superres / report`.
+
+**Observability** — `train_viz.py` + `s4train report`: a self-contained `index.html` (base64-embedded so
+the input GIF animates in a browser) with (A) loss charts (`L_composite` + `L_band`-alone + a flat lr=0
+control = optimizer-driven proof), (B) the input GIF + montage, (C) the **16³ · 64³ · 256³** scale spine.
+
+**The up-rung super-res** — `superres.py`, the twin of `Spec.DetailPredictor` reused per
+`lawDownIsHeldUpIsInvented`: `f_θ : coarse → detail` (21 params), trained on the down-rung, reused on the
+up-rung to invent 256³ detail. HONEST measured finding: the coarse-only head invents the **conditional-mean**
+detail (a modest structured high-freq pattern, NOT rich texture — energy 0 → 1.19e9 on a capture,
+re-downsamples to the EXACT 64³; stays at floor on the cube). Rich invented texture is the larger
+sibling-aware ViT's job. The report's 256³ panel shows floor vs invented vs the diff, labeled honestly.
+
+**Doc-debt cleared** — rewrote `verify-doc-claims.sh` lean (it gated the deleted `docs/STATUS.md` + ~17
+stale checks → now 19 CURRENT facts, exits 0 so `s4 all`'s `doc` verb is unbroken); rewrote `TRAINING.md`
+as the real runbook; fixed README/SETUP/spec docstrings/find-stubs.sh (removed 8 dead `docs/*.md` links +
+the look-net framing). `spec/scripts/gate.sh` green throughout.
+
+---
+
 ## 2026-06-24: inter-frame policy/value deltas + the `detailBand` band-extractor unification + module-debt cleanup (branch `spec/encoder-grounding`)
 
 > **Session theme (Daniel):** H-JEPA depth — now that we have a loop, give it something to ponder;
