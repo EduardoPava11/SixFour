@@ -34,6 +34,7 @@ MODULES = [
     ("delta_surrogate.py", True),
     ("dual_loss.py", True),
     ("test_centered_cube.py", True),
+    ("test_cube_learning.py", True),
     # MLX autodiff cross-check (optional)
     ("autograd_check.py", False),
 ]
