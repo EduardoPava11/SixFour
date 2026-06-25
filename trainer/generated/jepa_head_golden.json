@@ -1,0 +1,27 @@
+{
+  "_doc": "I-JEPA head golden (SixFour.Codegen.JepaHead): theta_B training-trajectory",
+  "_doc2": "endpoints + single-active-term forward witnesses of the 77-param position head.",
+  "numBands": 7,
+  "featureCountB": 9,
+  "paramCountB": 63,
+  "positionFeatureCount": 11,
+  "paramCountBPos": 77,
+  "trainer": {
+    "coarse": 20000,
+    "detail": [3000,0,0,0,0,0,0],
+    "mask": 0,
+    "steps": 2000,
+    "goldenFloorBand": 0,
+    "goldenTrainedBand": 3000
+  },
+  "posForward": [
+    {"label":"floor-band0","index":0,"weight":0.0,"coarse":20000,"detail":[3000,0,0,0,0,0,0],"mask":0,"x":32768,"y":0,"predicted":0},
+    {"label":"bias-band0","index":0,"weight":1.0,"coarse":20000,"detail":[3000,0,0,0,0,0,0],"mask":0,"x":32768,"y":0,"predicted":65536},
+    {"label":"coarse-band0","index":1,"weight":1.0,"coarse":20000,"detail":[3000,0,0,0,0,0,0],"mask":0,"x":0,"y":0,"predicted":20000},
+    {"label":"sibling-band0","index":3,"weight":1.0,"coarse":20000,"detail":[0,5000,0,0,0,0,0],"mask":0,"x":0,"y":0,"predicted":5000},
+    {"label":"posx-band0","index":9,"weight":1.0,"coarse":20000,"detail":[0,0,0,0,0,0,0],"mask":0,"x":12345,"y":0,"predicted":12345},
+    {"label":"posy-band0","index":10,"weight":1.0,"coarse":20000,"detail":[0,0,0,0,0,0,0],"mask":0,"x":0,"y":6789,"predicted":6789},
+    {"label":"bias-band3","index":33,"weight":1.0,"coarse":20000,"detail":[0,0,0,4000,0,0,0],"mask":3,"x":32768,"y":0,"predicted":65536},
+    {"label":"bias-band6","index":66,"weight":1.0,"coarse":20000,"detail":[0,0,0,0,0,0,7000],"mask":6,"x":0,"y":32768,"predicted":65536}
+  ]
+}
