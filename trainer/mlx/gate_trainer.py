@@ -28,8 +28,9 @@ MODULES = [
     ("vicreg.py", True),
     ("per_scale.py", True),
     ("large_head.py", True),
-    # v3 spec-emitted head golden (the spec is the authority for the trainer)
+    # v3 spec-emitted goldens (the spec is the authority for the trainer)
     ("jepa_head_golden.py", True),
+    ("temporal_data.py", True),
     # MLX autodiff cross-check (optional)
     ("autograd_check.py", False),
 ]

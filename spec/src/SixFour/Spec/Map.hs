@@ -677,7 +677,8 @@ GIF89a Application-Extension, CRC32-checked, total Absent\/Corrupt\/VersionMisma
 @SixFour.Codegen.Swift@, @.Shapes@, @.Golden@, @.Collapse@, @.RGBT4D@, @.PairTree@, @.QuartetDelta@, @.Genome@,
 @.GenomeFixed@, @.PaletteValue@, @.MLX@, @.CoreML@, @.Burn@, @.MaskedBand@ (the byte-exact theta_B forward),
 @.JepaData@ (the I-JEPA data-engine emitter), @.JepaHead@ (the theta_B training-trajectory
-endpoints + 77-param position-head forward golden; @trainer/mlx/@ gate-forced).
+endpoints + 77-param position-head forward golden; @trainer/mlx/@ gate-forced), @.TemporalData@
+(the inter-frame @(t,t+1)@ value/policy delta golden; @reconstructNext==ctNext@ true labels).
 
 == 10. Look transfer / LUT extraction (R3D .cube)
 The on-screen "look" and the exported 3D LUT are two projections of ONE OKLab palette→palette

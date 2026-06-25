@@ -178,6 +178,7 @@ library
         SixFour.Codegen.Shapes
         SixFour.Codegen.JepaData
         SixFour.Codegen.JepaHead
+        SixFour.Codegen.TemporalData
         SixFour.Codegen.Collapse
         SixFour.Codegen.RGBT4D
         SixFour.Codegen.VoxelReduce

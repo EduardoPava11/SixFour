@@ -42,6 +42,7 @@ import SixFour.Codegen.Swift
 import SixFour.Codegen.Shapes (emitStagesPy)
 import SixFour.Codegen.JepaData (emitJepaDataGolden)
 import SixFour.Codegen.JepaHead (emitJepaHeadGolden)
+import SixFour.Codegen.TemporalData (emitTemporalDataGolden)
 import SixFour.Codegen.Collapse (emitCollapseGolden)
 import SixFour.Codegen.RGBT4D (emitRGBT4DGolden)
 import SixFour.Codegen.VoxelReduce (emitVoxelReduceGolden)
@@ -97,6 +98,7 @@ main = do
   writeUtf8 (mlxOutDir     </> "stages.py")            emitStagesPy
   writeUtf8 (mlxOutDir     </> "jepa_data_golden.json") emitJepaDataGolden
   writeUtf8 (mlxOutDir     </> "jepa_head_golden.json") emitJepaHeadGolden
+  writeUtf8 (mlxOutDir     </> "temporal_data_golden.json") emitTemporalDataGolden
 
   -- Drop a Python __init__.py so `from generated import …` works.
   writeUtf8 (mlxOutDir </> "__init__.py") T.empty
