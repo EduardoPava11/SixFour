@@ -7,6 +7,10 @@ and (anchor, negative) are random pixel pairs from the same frames.
 
 The resulting metric file is a tiny JSON dropped into the gene library.
 """
+# DEPRECATED (retired direction): PairTree now uses plain Euclidean
+# okLabDistanceSquared; the learned [4,2,1] PSD metric is gone. Retained because
+# test_color_canonical.py reads this file BY PATH and asserts on its contents, and
+# MetricOrgan.swift is a dormant seam. Do not wire into the gate.
 from __future__ import annotations
 
 import argparse

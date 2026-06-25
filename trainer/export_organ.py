@@ -5,6 +5,9 @@ matching index.json snippet. Only the `metric` slot ships today (see
 SixFour/Organs/Organ.swift); add a new slot here only when its trainer and the
 Swift loader land in the same change.
 """
+# DEPRECATED 2026-06-24: pre-look-NN gene-library AirDrop wrapper; no importer, not
+# on any gate path. Retained for reference per SETUP.md. The .metric slot it
+# documents is still the live shipped organ (Organ.swift / MetricOrgan.swift).
 from __future__ import annotations
 
 import argparse
