@@ -425,6 +425,35 @@ CLASSIFICATION (@PolicySurrogate@ softmax+CE, NOT an L2 over slot numbers). KEYS
 (the learned-continuous ↔ proven-discrete bridge, closed for policy); @lawPolicyArgmaxDeterministic@
 = lowest-index tie-break (no float commits a byte). Collapse-safety inherited from the
 data-manufactured carriers. Additive),
+"SixFour.Spec.NudgeContamination" (★ the collapse-safety QUARANTINE for a USER nudge — a taste
+steer enters ONLY the invented detail (the latent tail) and CANNOT move the self-supervised energy,
+which lives in the gated coarse/DC band. @applyTaste@ re-feeds the cube's ORIGINAL coarse (structural
+type quarantine); @lawUserNudgeIsTasteOffEnergy@ = @redownsample (applyTaste …) == redownsample cube@
++ gate still passes (the priority-1 law the L,a,b nudge design language rests on);
+@lawLeakyCoarseNudgeDriftsEnergy@ = teeth (a coarse-pan DOES drift, gate rejects);
+@lawTasteNudgesShareGateNullSpace@ = taste == invented detail, one null space. Composes
+@RedownsampleGate@. Additive),
+"SixFour.Spec.DeltaGesture" (★ binds a UI drag to the two delta carriers so the ALGEBRA is the
+hand-feel: @stackColourDrags@ ADDS (@lawColourDragAdds@/@lawColourDragCommutes@, abelian ℤ-module,
+the elastic SwatchVector) vs @chainIndexDrags@ COMPOSES (@lawIndexDragComposes@/@lawIndexDragOrderMatters@,
+non-abelian transport, the directional TransportRibbon with no stack verb). Composes @HierarchicalDelta@. Additive),
+"SixFour.Spec.TriScaleBench" (★ the tri-scale comparison contract — a 16³ change is comparable to a
+256³ change ONLY at the coarse band. @twoRungLift@ = one octant operator twice;
+@lawSixteenComparableAtCoarseOnly@ = re-downsampling the 256³ recovers the 16³ seed + 64³ capture
+exactly, tail-blind; @lawTailHasNoCoarseFootprint@ = two tails ⇒ same coarse, different 256³ (so the
+comparison is well-posed at coarse, a category error at fine). Composes @RedownsampleGate@/@NudgeContamination@. Additive),
+"SixFour.Spec.GestureAxis" (★ the keystone ARROW: a screen swipe ↦ a Dim6 search axis + signed step,
+COMMITTED through the domain guard. @gestureSafeNudge@ = @DetentNudge.stepDelta@ routed through
+@RelationalResidual.safeNudge@ axis-by-axis (the compose no module did); @lawGestureRoutesThroughGuard@ +
+@lawGestureRefusesAtEdge@ (refuses at @a=B@) = can't bypass the @RC_OUT_OF_RANGE@ guard;
+@lawGestureTargetsSearchAxes@ = moves only @{a,b}@, carrier @{L,t}@ fixed; @lawGestureColourHasPositionTwin@ =
+@phi6@ pairs @a↔x,b↔y@. SWIFT-COREAI/DisplaySide. Additive),
+"SixFour.Spec.ScaleSurface" (★ the grid EXCEPTION for the Tri-Scale Bench — the @256³@ super-res
+surface renders into the SAME on-screen footprint as the @64³@, decoupling DISPLAY footprint (cells)
+from CONTENT resolution (pixels). @rungDisplayCells@ uniform (= @previewCells@); @lawSuperResShareFootprintWith64@
+= @256³@ == @MovableLayout.Field64@'s footprint ("256×256 same size as 64×64"); @lawFootprintIndependentOfResolution@
+= the exception as a theorem; @lawSuperResIsDensityNotSize@ = 4× density not size. Re-pins NOTHING (the
+ColorIdentity alphabet + move-golden untouched). SWIFT-COREAI/DisplaySide. Additive),
 "SixFour.Spec.PerceptualEncoder" (★ ENCODER B of the dual-encoder H-JEPA — the GIF as a
 PERCEPTUAL point cloud over the six axes @(L,a,b,x,y,t)@: @perceptualEmbed@ maps each
 @Cube@ voxel to a @P6@ (colour from the channels, position @(x,y,t)@ from @mortonToXYT@

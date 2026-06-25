@@ -92,6 +92,11 @@ import qualified Properties.ConstructionEncoder as ConstructionEncoder
 import qualified Properties.HierarchicalDelta as HierarchicalDelta
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
+import qualified Properties.NudgeContamination as NudgeContamination
+import qualified Properties.DeltaGesture as DeltaGesture
+import qualified Properties.TriScaleBench as TriScaleBench
+import qualified Properties.GestureAxis as GestureAxis
+import qualified Properties.ScaleSurface as ScaleSurface
 import qualified Properties.PerceptualEncoder as PerceptualEncoder
 import qualified Properties.GifDualView   as GifDualView
 import qualified Properties.CrossEncoderDistance as CrossEncoderDistance
@@ -242,6 +247,11 @@ main = defaultMain $ testGroup "sixfour-spec"
   , HierarchicalDelta.tests
   , TemporalData.tests
   , DeltaSurrogate.tests
+  , NudgeContamination.tests
+  , DeltaGesture.tests
+  , TriScaleBench.tests
+  , GestureAxis.tests
+  , ScaleSurface.tests
   , PerceptualEncoder.tests
   , GifDualView.tests
   , CrossEncoderDistance.tests

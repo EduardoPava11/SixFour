@@ -110,6 +110,11 @@ library
         SixFour.Spec.HierarchicalDelta
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
+        SixFour.Spec.NudgeContamination
+        SixFour.Spec.DeltaGesture
+        SixFour.Spec.TriScaleBench
+        SixFour.Spec.GestureAxis
+        SixFour.Spec.ScaleSurface
         SixFour.Spec.PerceptualEncoder
         SixFour.Spec.GifDualView
         SixFour.Spec.CrossEncoderDistance
@@ -376,6 +381,11 @@ test-suite spec-tests
         Properties.HierarchicalDelta
         Properties.TemporalData
         Properties.DeltaSurrogate
+        Properties.NudgeContamination
+        Properties.DeltaGesture
+        Properties.TriScaleBench
+        Properties.GestureAxis
+        Properties.ScaleSurface
         Properties.PerceptualEncoder
         Properties.GifDualView
         Properties.CrossEncoderDistance
