@@ -20,6 +20,7 @@ Commands:
     goldens      verify the trainer reproduces the spec-emitted goldens byte-exact
     regen        regenerate the spec goldens (cabal run spec-codegen)
     autograd     MLX autodiff == the analytic gradient cross-check
+    report       training-observability bundle (loss/VICReg charts + input GIF + 16/64/256 spine)
 
 Every command exits 0 on success and nonzero on failure, so it composes in scripts and CI.
 """
@@ -98,6 +99,16 @@ def cmd_autograd(a) -> int:
     return _run("autograd_check.py")
 
 
+def cmd_report(a) -> int:
+    fwd = []
+    if a.smoke:
+        fwd.append("--smoke")
+    fwd += ["--seed", str(a.seed)]
+    if a.steps is not None:
+        fwd += ["--steps", str(a.steps)]
+    return _run("train_viz.py", *fwd)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="s4train",
@@ -136,6 +147,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("goldens", help="verify the trainer reproduces the spec goldens byte-exact").set_defaults(fn=cmd_goldens)
     sub.add_parser("regen", help="regenerate the spec goldens (cabal run spec-codegen)").set_defaults(fn=cmd_regen)
     sub.add_parser("autograd", help="MLX autodiff == analytic gradient cross-check").set_defaults(fn=cmd_autograd)
+
+    r = sub.add_parser("report", help="training-observability bundle (charts + input GIF + scale spine)")
+    r.add_argument("--smoke", action="store_true", help="ONE real run + ONE lr=0 control, ~ a few seconds")
+    r.add_argument("--seed", type=int, default=7, help="determinism seed (default 7, the smoke capture)")
+    r.add_argument("--steps", type=int, default=None, help="override the step count")
+    r.set_defaults(fn=cmd_report)
     return p
 
 
