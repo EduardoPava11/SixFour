@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# scripts/s4train — front door to the SixFour H-JEPA trainer CLI (trainer/mlx/cli.py).
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec python3 "$ROOT/trainer/mlx/cli.py" "$@"

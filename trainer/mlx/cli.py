@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""s4train — the SixFour H-JEPA trainer CLI.
+
+A single stdlib-argparse front door over the trainer modules. It owns no training logic: each
+subcommand forwards to the module that already implements it (so the CLI can never drift from the
+gated behavior). Zero third-party deps — `argparse` is stdlib, consistent with the trainer staying
+on stdlib + numpy + mlx.
+
+    python3 trainer/mlx/cli.py <command> [flags]      # from the repo root
+    python3 cli.py <command> [flags]                  # from trainer/mlx/
+    ./scripts/s4train <command> [flags]               # shell shim
+
+Commands:
+    gate         run the full trainer gate (every module self-test; the CI-style check)
+    train        the end-to-end MLX optimizer loop over the corpus
+    floor        the byte-exact theta_B floor trainer (+ --export the deploy blob)
+    corpus       train on real synth-capture octants; smoothness-proportional generalization
+    cube         octree compression: a 64^3 cube -> 16^3 coarse, zero detail (+ --gif)
+    cube-learn   compression vs prediction: floor nails the flat 99.5%, theta_B learns the surface
+    goldens      verify the trainer reproduces the spec-emitted goldens byte-exact
+    regen        regenerate the spec goldens (cabal run spec-codegen)
+    autograd     MLX autodiff == the analytic gradient cross-check
+
+Every command exits 0 on success and nonzero on failure, so it composes in scripts and CI.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+TRAINER = os.path.dirname(HERE)                 # trainer/
+SPEC = os.path.abspath(os.path.join(HERE, "..", "..", "spec"))
+PY = sys.executable
+
+
+def _run(script: str, *args: str, cwd: str = HERE) -> int:
+    """Run a trainer module as a subprocess; return its exit code."""
+    return subprocess.run([PY, os.path.join(cwd, script), *args], cwd=cwd).returncode
+
+
+def _all(*codes: int) -> int:
+    """0 iff every step succeeded."""
+    return 0 if all(c == 0 for c in codes) else 1
+
+
+# --- command handlers (each forwards to the module that owns the behavior) ---
+
+def cmd_gate(a) -> int:
+    return _run("gate_trainer.py")
+
+
+def cmd_train(a) -> int:
+    fwd = []
+    if a.smoke:
+        fwd.append("--smoke")
+    fwd += ["--seed", str(a.seed), "--lr", str(a.lr)]
+    if a.steps is not None:
+        fwd += ["--steps", str(a.steps)]
+    return _run("train_loop.py", *fwd)
+
+
+def cmd_floor(a) -> int:
+    return _run("masked_band_trainer.py", *(["--export"] if a.export else []))
+
+
+def cmd_corpus(a) -> int:
+    return _run("jepa_synth_octants.py")
+
+
+def cmd_cube(a) -> int:
+    return _run("test_centered_cube.py", *(["--gif"] if a.gif else []))
+
+
+def cmd_cube_learn(a) -> int:
+    return _run("test_cube_learning.py")
+
+
+def cmd_goldens(a) -> int:
+    # the head + temporal goldens live next to the loaders; the data golden loader is one dir up.
+    return _all(
+        _run("jepa_head_golden.py"),
+        _run("temporal_data.py"),
+        _run("jepa_data.py", cwd=TRAINER),
+    )
+
+
+def cmd_regen(a) -> int:
+    if not os.path.isdir(SPEC):
+        print(f"spec dir not found: {SPEC}", file=sys.stderr)
+        return 1
+    return subprocess.run(["cabal", "run", "spec-codegen"], cwd=SPEC).returncode
+
+
+def cmd_autograd(a) -> int:
+    return _run("autograd_check.py")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="s4train",
+        description="SixFour H-JEPA trainer CLI.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="examples:\n"
+               "  s4train gate                 # run every module self-test\n"
+               "  s4train train --smoke        # quick end-to-end loop (~9s)\n"
+               "  s4train train --steps 200 --seed 3\n"
+               "  s4train floor --export       # train theta_B + write the deploy blob\n"
+               "  s4train cube --gif           # compression demo + GIFs\n"
+               "  s4train goldens              # spec goldens reproduce byte-exact?\n",
+    )
+    sub = p.add_subparsers(dest="command", metavar="<command>")
+
+    sub.add_parser("gate", help="run the full trainer gate (every module self-test)").set_defaults(fn=cmd_gate)
+
+    t = sub.add_parser("train", help="the end-to-end MLX optimizer loop over the corpus")
+    t.add_argument("--smoke", action="store_true", help="quick mode: 8 octants, 30 steps, ~9s")
+    t.add_argument("--seed", type=int, default=0, help="determinism seed (default 0)")
+    t.add_argument("--steps", type=int, default=None, help="override the step count")
+    t.add_argument("--lr", type=float, default=8e-3, help="learning rate (default 8e-3)")
+    t.set_defaults(fn=cmd_train)
+
+    f = sub.add_parser("floor", help="the byte-exact theta_B floor trainer")
+    f.add_argument("--export", action="store_true", help="write the trained 63-float deploy blob")
+    f.set_defaults(fn=cmd_floor)
+
+    sub.add_parser("corpus", help="train on real synth-capture octants (generalization)").set_defaults(fn=cmd_corpus)
+
+    c = sub.add_parser("cube", help="octree compression sanity test (centered cube)")
+    c.add_argument("--gif", action="store_true", help="also write input + coarse GIFs + montage")
+    c.set_defaults(fn=cmd_cube)
+
+    sub.add_parser("cube-learn", help="compression vs prediction division of labour").set_defaults(fn=cmd_cube_learn)
+    sub.add_parser("goldens", help="verify the trainer reproduces the spec goldens byte-exact").set_defaults(fn=cmd_goldens)
+    sub.add_parser("regen", help="regenerate the spec goldens (cabal run spec-codegen)").set_defaults(fn=cmd_regen)
+    sub.add_parser("autograd", help="MLX autodiff == analytic gradient cross-check").set_defaults(fn=cmd_autograd)
+    return p
+
+
+def main(argv=None) -> int:
+    p = build_parser()
+    a = p.parse_args(argv)
+    if not getattr(a, "command", None):
+        p.print_help()
+        return 0
+    return a.fn(a)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -8,6 +8,22 @@ spec**: the spec emits goldens (`trainer/generated/*.json`) that the trainer mus
 > The retired look-net L-NN regimen (`regimen.py`, `train_look_net_mlx.py`,
 > `out/look_net_trained.s4ln`) is gone. This is its replacement.
 
+## The CLI
+
+`s4train` (`trainer/mlx/cli.py`, stdlib argparse, zero deps) is the front door:
+
+```bash
+./scripts/s4train --help        # all commands
+./scripts/s4train gate          # run every module self-test
+./scripts/s4train train --smoke # the end-to-end loop (~9s)
+./scripts/s4train floor --export      # train theta_B + write the deploy blob
+./scripts/s4train cube --gif          # octree compression demo + GIFs
+./scripts/s4train goldens             # do the spec goldens reproduce byte-exact?
+```
+
+Each subcommand forwards to the module that owns the behavior, so the CLI never drifts from the
+gated code. Everything below can also be run directly.
+
 ## Run the gate
 
 ```bash
