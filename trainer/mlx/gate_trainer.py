@@ -31,6 +31,7 @@ MODULES = [
     # v3 spec-emitted goldens (the spec is the authority for the trainer)
     ("jepa_head_golden.py", True),
     ("temporal_data.py", True),
+    ("delta_surrogate.py", True),
     # MLX autodiff cross-check (optional)
     ("autograd_check.py", False),
 ]
