@@ -63,6 +63,7 @@ import numpy as np                                            # noqa: E402
 
 import jepa_synth_octants as JSO                              # noqa: E402  (l_volume)
 import test_centered_cube as TCC                              # noqa: E402  (compress_to_16)
+import superres as SR                                         # noqa: E402  (the up-rung DetailPredictor)
 from synth_capture import synthetic_capture                   # noqa: E402
 
 # matplotlib is a SOFT dep (CLAUDE.md Tier-1 trainer dep, importable today, but NOT in the
@@ -280,46 +281,57 @@ def render_input_and_spine(seed: int, kind: str, out_dir, smoke: bool):
     c16, _details = TCC.compress_to_16(vol64)                 # (16,16,16) Q16, REAL coarse
     u8_16 = q16_to_u8(c16)
 
-    # 256^3 FLOOR = NN upsample of the 64^3 == octree synthesize with ZERO invented detail
-    # (zero-genome==floor). np.repeat x4 per axis is IDENTICAL-by-construction to the zero-detail
-    # synthesize (unlift_oct(c,[0]*7) replicates c into its 2x2x2 block) but sub-second. There is
-    # NO trained super-res head in Python (no reconstruct256/Upscale256/NetSynth256), so this is
-    # the honest ceiling today. It is LABELLED as the floor everywhere it is shown.
-    # For the spine strip we only need frames at the 256 grid; build the full-res frames we render.
-    # (Build a few representative frames to keep --smoke fast; the upsample is exact for all.)
-    spine_frames = [0, 16, 32, 48] if smoke else list(range(0, 64, 8))
+    # 256^3, two ways, via the SAME octree up-rung operator (superres.upscale_256):
+    #   FLOOR    = theta=0 -> zero invented detail (the honest upsample we showed before).
+    #   INVENTED = the DetailPredictor f_theta TRAINED on this volume's down-rung octants, REUSED on
+    #              the up-rung to invent detail (lawDownIsHeldUpIsInvented). Both re-downsample to the
+    #              exact 64^3 (consistency is structural). HONEST: f_theta is the 21-param COARSE-ONLY
+    #              predictor, so it invents the conditional-mean detail (a modest structured high-freq
+    #              pattern), NOT rich texture -- that is the larger sibling-aware head's job. The diff
+    #              panel is what makes the (real but small) invented detail visible.
+    c_pairs, d_pairs = SR.octant_pairs(vol64)
+    theta_d = SR.train_detail(c_pairs, d_pairs)
+    floor256 = SR.upscale_256(vol64, np.zeros(SR.PARAM_COUNT_D))   # (256,256,256) zero-detail
+    inv256 = SR.upscale_256(vol64, theta_d)                        # (256,256,256) invented
+    arts["invented_energy"] = SR.invented_detail_energy(vol64, theta_d)
+    arts["floor_energy"] = SR.invented_detail_energy(vol64, np.zeros(SR.PARAM_COUNT_D))
+    # consistency: distilling the invented 256 twice recovers the 64 EXACTLY
+    _c1, _ = TCC.distill(inv256); _c2, _ = TCC.distill(_c1)
+    arts["consistent_256"] = bool(np.array_equal(_c2, vol64))
 
-    # Render the 16/64/256 as a side-by-side spine strip PNG (one representative frame, upscaled
-    # so all three are the SAME on-screen size — the honest comparison is "same field of view").
-    rep = spine_frames[0]
-    f16 = u8_16[rep // 4]                                     # the coarse frame nearest rep
-    f64 = u8_64[rep]
-    # 256 floor frame = NN-upsample of the 64 frame x4 (exact zero-detail synthesize equivalent).
-    f256 = f64.repeat(4, 0).repeat(4, 1)
-    # upscale each to ~256px tall for the strip
-    img16 = Image.fromarray(f16, "L").resize((256, 256), Image.NEAREST)
-    img64 = Image.fromarray(f64, "L").resize((256, 256), Image.NEAREST)
-    img256 = Image.fromarray(f256, "L").resize((256, 256), Image.NEAREST)
-
+    rep = 0
+    rep256 = rep * 4                                          # frame rep in 64 -> ~rep*4 in 256
+    lo, hi = float(vol64.min()), float(vol64.max())
+    def _shared_u8(a):                                        # shared range so floor/invented compare fairly
+        return np.clip((a.astype(np.float64) - lo) / (hi - lo + 1e-9) * 255, 0, 255).astype(np.uint8)
+    diff = np.abs(inv256[rep256].astype(np.float64) - floor256[rep256].astype(np.float64))
+    dmax = max(1.0, diff.max())
+    panels = [
+        ("16³ coarse", Image.fromarray(u8_16[rep // 4], "L").resize((256, 256), Image.NEAREST)),
+        ("64³ capture", Image.fromarray(u8_64[rep], "L").resize((256, 256), Image.NEAREST)),
+        ("256³ floor", Image.fromarray(_shared_u8(floor256[rep256]), "L")),
+        ("256³ invented", Image.fromarray(_shared_u8(inv256[rep256]), "L")),
+        ("invented detail (×diff)", Image.fromarray((diff / dmax * 255).astype(np.uint8), "L")),
+    ]
     gap = 24
-    strip = Image.new("L", (256 * 3 + gap * 2, 256), 40)
-    strip.paste(img16, (0, 0))
-    strip.paste(img64, (256 + gap, 0))
-    strip.paste(img256, (256 * 2 + gap * 2, 0))
+    strip = Image.new("L", (256 * len(panels) + gap * (len(panels) - 1), 256), 40)
+    for i, (_lbl, img) in enumerate(panels):
+        strip.paste(img, (i * (256 + gap), 0))
     spine_path = os.path.join(out_dir, "scale_spine.png")
     strip.save(spine_path)
     arts["scale_spine"] = spine_path
 
-    # Also save each level as its own animated GIF so the owner can scrub all 16/64 frames.
+    # Animated GIFs per level (16/64 + the two 256s so the owner can scrub the invented vs the floor).
     g16 = os.path.join(out_dir, "scale_16.gif")
     g64 = os.path.join(out_dir, "scale_64.gif")
     g256 = os.path.join(out_dir, "scale_256_floor.gif")
+    g256i = os.path.join(out_dir, "scale_256_invented.gif")
     _save_gif_u8(u8_16, g16, scale=16)
     _save_gif_u8(u8_64, g64, scale=4)
-    # 256 floor: NN-upsample every frame x4 (exact), then save (scale=1, already 256px).
-    u8_256_floor = u8_64.repeat(4, 1).repeat(4, 2)            # (64,256,256) zero-detail floor
-    _save_gif_u8(u8_256_floor, g256, scale=1)
-    arts.update(scale_16_gif=g16, scale_64_gif=g64, scale_256_gif=g256)
+    # subsample the 256 frames (every 4th) so the GIFs stay light; shared range floor vs invented.
+    _save_gif_u8(np.stack([_shared_u8(floor256[f]) for f in range(0, 256, 4)]), g256, scale=1)
+    _save_gif_u8(np.stack([_shared_u8(inv256[f]) for f in range(0, 256, 4)]), g256i, scale=1)
+    arts.update(scale_16_gif=g16, scale_64_gif=g64, scale_256_gif=g256, scale_256_inv_gif=g256i)
 
     # A 64^3 frame montage so the whole trained volume is visible at a glance.
     mont = _montage_u8(u8_64, scale=2)
@@ -344,6 +356,7 @@ def write_html(m, chart_paths, spine, out_dir):
 
     gif_uri = _data_uri(spine["input_gif"], "image/gif")
     g256_uri = _data_uri(spine["scale_256_gif"], "image/gif")
+    g256i_uri = _data_uri(spine["scale_256_inv_gif"], "image/gif")
     g64_uri = _data_uri(spine["scale_64_gif"], "image/gif")
     g16_uri = _data_uri(spine["scale_16_gif"], "image/gif")
     spine_uri = _data_uri(spine["scale_spine"], "image/png")
@@ -364,7 +377,18 @@ def write_html(m, chart_paths, spine, out_dir):
 corpus {len(m['specs'])} capture(s) → {m['n_oct']} octant records (using {m['n_used']}).
 Wall (2 runs): {m['wall']:.1f}s. Charts: {'matplotlib PNG' if chart_paths else 'dep-free inline SVG'}.</p>
 
-<h2>(A) Training proof</h2>
+<div style="background:#f3f6fb;border:1px solid #d7e0ee;border-radius:8px;padding:12px 16px;margin:14px 0">
+<b>What is being trained?</b> The <b>encoder is FROZEN (0 params)</b> — it is the reversible octree
+lift + a fixed feature map, and it <i>manufactures</i> the collapse-proof target. It is never trained;
+there is no encoder pre-training phase. The <b>only learned object is the predictor</b>, with two jobs:
+<ul style="margin:6px 0">
+<li><b>Down-rung (Held / KNOWN UNKNOWN):</b> fill a <i>masked</i> detail band that exists in the capture
+— supervised by <b>real data</b>. <b>This is the training</b> (section A).</li>
+<li><b>Up-rung (Invented / UNKNOWN UNKNOWN):</b> invent 256³ detail not in the capture — no label, so it
+is gated by <b>re-downsample consistency</b>, reusing the same operator (section C).</li>
+</ul></div>
+
+<h2>(A) The training — down-rung masked-band fit (real data)</h2>
 <p>Property badges (reusing the gated demos): descent {badge(m['descent_ok'])}
 &nbsp; no-collapse {badge(m['nocollapse_ok'])}</p>
 <ul>
@@ -382,18 +406,30 @@ Wall (2 runs): {m['wall']:.1f}s. Charts: {'matplotlib PNG' if chart_paths else '
 <p>The 64³ L-volume the corpus octants are lifted from (all frames):</p>
 <img src="{mont_uri}" style="max-width:680px;border:1px solid #ccc"/>
 
-<h2>(C) The scale spine — 16³ · 64³ · 256³ (floor)</h2>
-<p>Same field of view, NEAREST upscaled to equal on-screen size:</p>
-<img src="{spine_uri}" style="max-width:900px;border:1px solid #ccc"/>
+<h2>(C) The scale spine — 16³ · 64³ · 256³, up-rung super-res</h2>
+<p>Same field of view, equal on-screen size. The 256³ is shown two ways via the SAME octree up-rung
+operator: the <b>floor</b> (zero invented detail) and the <b>invented</b> (the DetailPredictor
+<code>f_θ</code> trained on this volume's down-rung, reused on the up-rung):</p>
+<img src="{spine_uri}" style="max-width:100%;border:1px solid #ccc"/>
 <p style="font-size:13px;color:#555">left → right: <b>16³</b> octree coarse (REAL, byte-exact) ·
-<b>64³</b> the REAL capture L-volume (Q16 range {spine['q16_range'][0]}..{spine['q16_range'][1]}) ·
-<b>256³ floor</b> — <b>no invented detail yet; this is what the head will learn to add</b>
-(nearest-neighbour upsample = octree synthesize with ZERO detail; there is no trained super-res head wired in Python).</p>
-<p>Animated, each level:</p>
-<div style="display:flex;gap:16px;align-items:flex-start">
+<b>64³</b> the REAL capture (Q16 {spine['q16_range'][0]}..{spine['q16_range'][1]}) ·
+<b>256³ floor</b> (zero detail) · <b>256³ invented</b> (f_θ adds detail) ·
+<b>the invented detail</b> (|invented − floor|, contrast-stretched so the modest signal is visible).</p>
+<ul style="font-size:13px">
+<li>invented-detail energy: floor <b>{spine['floor_energy']:.0f}</b> → trained <b>{spine['invented_energy']:.0f}</b>
+({'<b>INVENTS detail</b>' if spine['invented_energy'] > spine['floor_energy'] else 'stays at floor'})</li>
+<li>re-downsample consistency (the invented 256³ distills back to the EXACT 64³): {badge(spine['consistent_256'])} — structural, by the reversible lift</li>
+</ul>
+<p style="font-size:13px;color:#a00"><b>Honest:</b> f_θ here is the 21-param <b>coarse-only</b> DetailPredictor, so it
+invents the <i>conditional-mean</i> detail — a modest structured high-frequency pattern, NOT rich texture.
+Rich invented texture is the job of the larger sibling-aware head (the 18.9M ViT + the policy/value heads).
+This panel proves the up-rung <i>mechanism</i> (invent + stay consistent), not a finished super-res.</p>
+<p>Animated — floor vs invented (scrub to compare):</p>
+<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
   <div><div>16³ coarse</div><img src="{g16_uri}" style="width:160px;image-rendering:pixelated;border:1px solid #ccc"/></div>
-  <div><div>64³ (trained volume)</div><img src="{g64_uri}" style="width:160px;image-rendering:pixelated;border:1px solid #ccc"/></div>
-  <div><div>256³ <b>floor</b> (zero invented detail)</div><img src="{g256_uri}" style="width:160px;image-rendering:pixelated;border:1px solid #ccc"/></div>
+  <div><div>64³ capture</div><img src="{g64_uri}" style="width:160px;image-rendering:pixelated;border:1px solid #ccc"/></div>
+  <div><div>256³ <b>floor</b></div><img src="{g256_uri}" style="width:160px;image-rendering:pixelated;border:1px solid #ccc"/></div>
+  <div><div>256³ <b>invented</b></div><img src="{g256i_uri}" style="width:160px;image-rendering:pixelated;border:1px solid #ccc"/></div>
 </div>
 </body>"""
     path = os.path.join(out_dir, "index.html")
@@ -430,7 +466,8 @@ def main(argv=None) -> int:
     print("\n[B]+[C] rendering input GIF + 16/64/256 scale spine (same seed/kind the run trains on)...")
     spine = render_input_and_spine(seed, kind, OUT_DIR, args.smoke)
     print(f"    input.gif {spine['input_gif_bytes']:,} B | 64^3 Q16 range {spine['q16_range']}")
-    print(f"    256^3 = honest FLOOR (zero invented detail; no super-res head in Python)")
+    print(f"    256^3 up-rung: floor energy {spine['floor_energy']:.0f} -> invented {spine['invented_energy']:.0f} "
+          f"(coarse-only DetailPredictor; consistency={spine['consistent_256']})")
 
     html = write_html(m, chart_paths, spine, OUT_DIR)
     print(f"\nwrote report: {html}")

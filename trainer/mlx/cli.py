@@ -99,6 +99,10 @@ def cmd_autograd(a) -> int:
     return _run("autograd_check.py")
 
 
+def cmd_superres(a) -> int:
+    return _run("superres.py")
+
+
 def cmd_report(a) -> int:
     fwd = []
     if a.smoke:
@@ -147,6 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("goldens", help="verify the trainer reproduces the spec goldens byte-exact").set_defaults(fn=cmd_goldens)
     sub.add_parser("regen", help="regenerate the spec goldens (cabal run spec-codegen)").set_defaults(fn=cmd_regen)
     sub.add_parser("autograd", help="MLX autodiff == analytic gradient cross-check").set_defaults(fn=cmd_autograd)
+    sub.add_parser("superres", help="up-rung super-res: invent 256³ detail (floor vs trained energy + consistency)").set_defaults(fn=cmd_superres)
 
     r = sub.add_parser("report", help="training-observability bundle (charts + input GIF + scale spine)")
     r.add_argument("--smoke", action="store_true", help="ONE real run + ONE lr=0 control, ~ a few seconds")
