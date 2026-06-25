@@ -22,13 +22,14 @@ else
   SCOPE=(
     Native/src                      # SIMT: Zig integer core
     SixFour/Metal                   # SIMT: Metal kernels
-    SixFour/Atlas                   # MPS:  on-device A/B trainer
-    SixFour/CoreAI                  # pivot: L inference seam
+    SixFour/CoreAI                  # pivot: L inference seam (orphaned audit record)
     SixFour/GeneLibrary             # gene-RAG (flat JSON -> SIMT vector RAG)
     SixFour/RGBT4D                  # cube-ladder Swift orchestration
-    trainer/coreai_export           # pivot: L deploy bridge
-    spec/src/SixFour/Spec/ExportFamily.hs   # 256^3 super-res (hollow)
+    trainer/coreai_export           # pivot: L deploy bridge (orphaned)
+    trainer/mlx                     # the H-JEPA trainer
   )
+  # Dropped 2026-06-25: SixFour/Atlas (retired A/B trainer) and
+  # spec/src/SixFour/Spec/ExportFamily.hs (abandoned scaffolding) — both deleted.
 fi
 
 # Markers that signal unfinished / provisional work, by language idiom.

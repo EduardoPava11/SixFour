@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # scripts/verify-doc-claims.sh
-# Gates the load-bearing facts in docs/STATUS.md. Run before trusting a status claim.
+# Gates the load-bearing facts of the project canon (CLAUDE.md + SixFour.Spec.Map).
 # Asserts CURRENT truth (must pass today). Dependency-free: grep/test/find only.
+#
+# Historical note: this script formerly gated docs/STATUS.md, which was deleted (the canon
+# is now CLAUDE.md + the Haskell spec + module doc-comments; do not recreate docs/STATUS.md).
+# It was also stale against the look-net retirement and the H-JEPA rebuild; this is the lean
+# rewrite that checks only facts that are true today.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,26 +27,18 @@ check() {
 
 # --- META-GUARD: every source file a grep-based check reads MUST exist ---
 # A grep against a MISSING file silently FAILs (false-fail) or, under `! grep`, silently
-# PASSes (false-green) — so a deleted/renamed path can masquerade as a doc-claim result
-# (this is exactly how the GIFReviewView.swift checks rotted). This pre-flight makes a
-# missing grep target a distinct, loud GATE BUG, not a fake pass/fail. (Design doc D2.)
-# Existence/absence checks (`test ! -e`, `test -z "$(find …)"`, `stat`) are NOT listed
-# here — for those a missing path is the point, not a bug.
+# PASSes (false-green) — so a deleted/renamed path can masquerade as a doc-claim result.
+# This pre-flight makes a missing grep target a distinct, loud GATE BUG, not a fake pass/fail.
+# (Existence/absence checks via `test`/`find` are NOT listed — for those a missing path is the point.)
 GREP_TARGETS=(
+  SixFour/Settings/Feature.swift
   SixFour/UI/Screens/Capture/CaptureViewModel.swift
-  SixFour/Encoder/DeterministicRenderer.swift
-  SixFour/Native/SixFourNative.swift
   SixFour/Settings/AppSettings.swift
-  SixFour/UI/Surface/ReviewPhaseField.swift
   Native/src/kernels.zig
-  Native/src/fixture_test.zig
   Native/include/sixfour_native.h
-  trainer/generated/look_net_mlx.py
-  trainer/train_look_net_mlx.py
-  spec/src/SixFour/Spec/Quad4.hs
   spec/src/SixFour/Spec/PairTree.hs
+  spec/test/Spec.hs
   SixFour/UI/MovableColorWidget.swift
-  SixFour/Generated/MoveContract.swift
 )
 for f in "${GREP_TARGETS[@]}"; do
   if [ ! -e "$f" ]; then
@@ -50,133 +47,59 @@ for f in "${GREP_TARGETS[@]}"; do
   fi
 done
 
-# --- ANCHOR 1: global collapse (GIFB) is KEPT + COMPILED, but V2-DEFERRED (MVP1 is per-frame) ---
-# The code is present (not deleted) so these presence checks stay green; MVP1 reaches it only when
-# Feature.globalPaletteV2 is on — see docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md.
-check "renderDeterministicGlobal exists (V2-gated global path kept)" \
-  grep -q 'renderDeterministicGlobal' SixFour/UI/Screens/Capture/CaptureViewModel.swift
-check "DeterministicRenderer.renderGlobalPalette exists (V2-gated)" \
-  grep -q 'func renderGlobalPalette' SixFour/Encoder/DeterministicRenderer.swift
-check "renderGlobalPalette calls SixFourNative.globalCollapse (Zig s4_global_collapse)" \
-  grep -q 'SixFourNative.globalCollapse' SixFour/Encoder/DeterministicRenderer.swift
-check "globalCollapse wraps the Zig s4_global_collapse symbol" \
-  grep -q 's4_global_collapse' SixFour/Native/SixFourNative.swift
-# --- ANCHOR 1b: the V2-deferral invariant — MVP1 ships global OFF and the live router is gated ---
+# --- PALETTE: MVP1 is per-frame; the global (GIFB) path is kept + compiled but V2-deferred ---
 check "MVP1 ships global OFF (Feature.globalPaletteV2 = false)" \
   grep -q 'static let globalPaletteV2 = false' SixFour/Settings/Feature.swift
 check "the live capture router is gated by Feature.globalPaletteV2 (per-frame only in MVP1)" \
   grep -q 'Feature.globalPaletteV2 ? settings.paletteScope : .perFrame' SixFour/UI/Screens/Capture/CaptureViewModel.swift
 
-# --- ANCHOR 2: loadLookNet has ZERO production callers (NN spine unwired) ---
-check "loadLookNet has zero production callers (only its own definition references it)" \
-  test "$(grep -rn 'loadLookNet' SixFour/ --include='*.swift' | grep -v 'func loadLookNet' | grep -v '///' | wc -l | tr -d ' ')" -eq 0
-check "no on-device NN forward-pass symbol exists" \
+# --- THE LEARNED OBJECT: theta_B ships HAND-WRITTEN, golden-gated, no Core AI ---
+# CLAUDE.md: the only learned object is the 63-param theta_B; its on-device forward pass is a
+# hand-written Swift port verified bit-exact against the spec golden.
+check "theta_B forward ships hand-written (MaskedBandForward.swift)" \
+  test -f SixFour/Native/MaskedBandForward.swift
+check "theta_B forward is golden-gated (MaskedBandGolden.swift)" \
+  test -f SixFour/Generated/MaskedBandGolden.swift
+check "no on-device NN forward-pass symbol leaked (theta_B is the only learned object)" \
   test -z "$(grep -rn 'look_net_forward\|lookNetForward\|forward_l' SixFour/ Native/ --include='*.swift' --include='*.zig' --include='*.h' 2>/dev/null)"
+check "the retired look-net loader has zero production callers" \
+  test "$(grep -rn 'loadLookNet' SixFour/ --include='*.swift' | grep -v 'func loadLookNet' | grep -v '///' | wc -l | tr -d ' ')" -eq 0
+check "no learned-weight .blob is bundled in the app target (synthetic-only, hand-written forward)" \
+  test -z "$(find SixFour -iname '*.blob' 2>/dev/null)"
 
-# --- ANCHOR 3: training-data dirs empty/absent (synthetic-only) ---
-check "trainer/data/captured_frames has no committed files" \
+# --- H-JEPA TRAINER: the spec is the authority for the trainer (spec-emitted goldens) ---
+check "the H-JEPA trainer gate exists (trainer/mlx/gate_trainer.py)" \
+  test -f trainer/mlx/gate_trainer.py
+check "the spec emits the I-JEPA head golden (jepa_head_golden.json)" \
+  test -f trainer/generated/jepa_head_golden.json
+check "the spec emits the temporal (t,t+1) data golden (temporal_data_golden.json)" \
+  test -f trainer/generated/temporal_data_golden.json
+check "training-data dir captured_frames is empty/absent (synthetic corpus only)" \
   test -z "$(ls -A trainer/data/captured_frames 2>/dev/null)"
-check "trainer/data/reference_gifs has no committed files" \
+check "training-data dir reference_gifs is empty/absent (synthetic corpus only)" \
   test -z "$(ls -A trainer/data/reference_gifs 2>/dev/null)"
 
-# --- ANCHOR 4: decoder output dim is 384, not 768 ---
-check "DECODER_OUT_DIM == 384 in generated MLX module" \
-  grep -qE 'DECODER_OUT_DIM[[:space:]]*=[[:space:]]*384' trainer/generated/look_net_mlx.py
-
-# --- ANCHOR 4b: NN not shipped (trainer is grayscale-L-only; no weight blob bundled) ---
-check "trainer is grayscale-L-only nucleus" \
-  grep -q 'grayscale' trainer/train_look_net_mlx.py
-check "no look-net weight .blob is bundled in the app target" \
-  test -z "$(find SixFour -iname '*.blob' 2>/dev/null)"
-check "Zig blob loader verified by fixture test" \
-  grep -q 's4_load_look_net' Native/src/fixture_test.zig
-
-# --- BUILT: deterministic core implementations are real, not stubs ---
+# --- NATIVE CORE: real impls, header/export parity, deterministic default ---
 check "s4_gif_encode_burst is a real impl (folds and returns s4_gif_assemble)" \
   grep -q 'return s4_gif_assemble' Native/src/kernels.zig
-check "Native header declares all 33 distinct s4_* symbols (30 shipped + 3 tooling)" \
-  test "$(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u | wc -l | tr -d ' ')" -eq 33
 check "header s4_* symbol set == Zig export set (no undeclared exports)" \
   bash -c "diff <(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u) <(grep -hoE 'export fn (s4_[a-z_0-9]+)' Native/src/*.zig | sed 's/export fn //' | sort -u) >/dev/null"
-
-# --- BUILT: zero deps, deterministic default ---
 check "useDeterministicCore defaults to true" \
   grep -qE 'useDeterministicCore\) as\? Bool \?\? true' SixFour/Settings/AppSettings.swift
-check "no live SwiftUI .glassEffect calls (HUD de-glassed)" \
-  test "$(grep -rn '\.glassEffect' SixFour/ --include='*.swift' | grep -v '///' | wc -l | tr -d ' ')" -eq 0
 
-# --- BUILT: explorer surfaces shipped; stale components gone ---
-# NOTE: the former GIFReviewView.swift review screen was replaced by the one-surface
-# ReviewPhaseField (Surface/). The stale "PaletteGridView wired into review" claim is
-# reconciled separately (design doc D3); here we assert the LIVE review surface exists.
-check "live review surface (ReviewPhaseField) is present" \
-  test -f SixFour/UI/Surface/ReviewPhaseField.swift
-check "GridLayout shipped" \
-  test -f SixFour/Palette/GridLayout.swift
-check "PaletteCloudView shipped" \
-  test -f SixFour/UI/Components/PaletteCloudView.swift
-check "StatsFooterView deleted (not a live component)" \
-  test ! -e SixFour/UI/Components/StatsFooterView.swift
-check "GlobalPaletteCollapse.swift removed (collapse is the Zig kernel)" \
-  test ! -e SixFour/Palette/GlobalPaletteCollapse.swift
-check "PaletteStripView absent from current source" \
-  test -z "$(find SixFour -name 'PaletteStripView*' 2>/dev/null)"
-check "PaletteSphereView absent from current source" \
-  test -z "$(grep -rln 'PaletteSphereView' SixFour/ --include='*.swift')"
-check "review renderer docstring has no stale 'globe' reference" \
-  bash -c "! grep -qi 'globe' SixFour/UI/Surface/ReviewPhaseField.swift"
-
-# --- DESIGN-ONLY: REVEAL modules not on disk ---
-check "ColorBleed.hs not yet on disk (reveal axis dormant)" \
-  test ! -e spec/src/SixFour/Spec/ColorBleed.hs
-check "ChromaAllocation.hs not yet on disk" \
-  test ! -e spec/src/SixFour/Spec/ChromaAllocation.hs
-check "Obfuscation keystone landed" \
-  test -e spec/src/SixFour/Spec/Obfuscation.hs
-
-# --- DESIGN-ONLY: spec'd but unconsumed ---
-check "PaletteSearch spec exists (no iOS consumer)" \
-  test -f spec/src/SixFour/Spec/PaletteSearch.hs
-check "quad4Analyze exists in spec (skeleton-design 'TO ADD' is stale)" \
-  grep -q 'quad4Analyze' spec/src/SixFour/Spec/Quad4.hs
-check "AppSettings has the three versioned representation/grid-axis keys" \
-  bash -c "grep -q 'sixfour.paletteRepresentation.v1' SixFour/Settings/AppSettings.swift && grep -q 'sixfour.gridAxisX.v1' SixFour/Settings/AppSettings.swift && grep -q 'sixfour.gridAxisY.v1' SixFour/Settings/AppSettings.swift"
-
-# --- BUILT: movable ColorWidgets (Field64/Palette16/DiversityRing share ONE layout) ---
+# --- INVARIANTS that must NOT regress ---
+check "PairTree uses Euclidean okLabDistanceSquared ([4,2,1] learned-metric weighting gone)" \
+  grep -q 'okLabDistanceSquared' spec/src/SixFour/Spec/PairTree.hs
 check "Spec.MovableLayout is the source of truth (move operator + laws)" \
   test -f spec/src/SixFour/Spec/MovableLayout.hs
 check "Properties.MovableLayout registered in the spec test suite" \
   grep -q 'MovableLayout.tests' spec/test/Spec.hs
-check "the move operator mirror reuses GridLayoutContract.isDisjoint (no reinvented AABB)" \
-  grep -q 'GridLayoutContract.isDisjoint' SixFour/Generated/MoveContract.swift
 check "MovableColorWidget calls the generated MoveContract.move" \
   grep -q 'MoveContract.move' SixFour/UI/MovableColorWidget.swift
-check "the .movable gesture modifier exists (long-press lift → drag → snap)" \
-  grep -q 'func movable' SixFour/UI/MovableColorWidget.swift
-check "AppSettings has the three versioned ColorWidget position keys" \
-  bash -c "grep -q 'sixfour.field64Position.v1' SixFour/Settings/AppSettings.swift && grep -q 'sixfour.palette16Position.v1' SixFour/Settings/AppSettings.swift && grep -q 'sixfour.diversityRingPosition.v1' SixFour/Settings/AppSettings.swift"
-
-# --- INVARIANTS that must NOT regress ---
-check "PairTree uses Euclidean okLabDistanceSquared ([4,2,1] weighting gone)" \
-  grep -q 'okLabDistanceSquared' spec/src/SixFour/Spec/PairTree.hs
-
-# --- COLOR ATLAS (2026-06-12): north-star spec footprint + proven MPSGraph trainer ---
-check "Color Atlas canonical design doc exists" \
-  test -f docs/COLOR-ATLAS.md
-check "on-device training research report exists" \
-  test -f docs/ON-DEVICE-TRAINING.md
-check "Atlas spec footprint exists (board module registered)" \
-  grep -q 'SixFour.Spec.AtlasBoard' spec/spec.cabal
-check "MPSGraph on-device trainer exists and is simulator-gated" \
-  grep -q 'targetEnvironment(simulator)' SixFour/Atlas/AtlasTrainer.swift
-check "Atlas UI is gated by the versioned colorAtlas flag (default off)" \
-  grep -q 'sixfour.colorAtlas.v1' SixFour/Settings/AppSettings.swift
-check "federation cohort findings exist (fed_sim)" \
-  test -f trainer/fed_sim_results.md
 
 echo "----------------------------------------"
 if [ "$FAILS" -ne 0 ]; then
-  echo "$FAILS load-bearing fact(s) FAILED — docs/STATUS.md may be stale."
+  echo "$FAILS load-bearing fact(s) FAILED — a canon claim (CLAUDE.md / Spec.Map) may be stale."
   exit 1
 fi
 echo "All load-bearing facts verified."

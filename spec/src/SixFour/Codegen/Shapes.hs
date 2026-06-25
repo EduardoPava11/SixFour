@@ -3,16 +3,14 @@ Module      : SixFour.Codegen.Shapes
 Description : Emit Python shape + significance constants to @trainer/generated/@.
 
 The dimensional / statistical contract the Mac-side trainer imports. Pure NumPy
-constants and runtime assertions — NOT an @mlx.nn@ model (the trainable look-NN
-model is emitted by "SixFour.Codegen.CoreML", and a native @mlx.nn@ emitter is
-planned to reclaim the @Codegen.MLX@ name once the MLX training path is built).
+constants and runtime assertions — NOT a trainable model. The H-JEPA trainer lives
+hand-written in @trainer/mlx/@ and is gated by the spec-emitted goldens
+("SixFour.Codegen.JepaHead" / "SixFour.Codegen.TemporalData"); this module only
+emits the dimensional constants it shares.
 
-Produces two files:
-
-  * @stages.py@    — shape constants and an @assert_surjective(I)@
-    runtime check the trainer can call on every batch.
-  * @net_shape.py@ — NN slot dimensions used by the trainer.
-    Currently only the @METRIC@ slot exists (the only one with a trainer).
+Produces @stages.py@ — shape constants and an @assert_surjective(I)@ runtime check
+the trainer can call on every batch. (@emitNetShape@ below is a dormant helper, not
+wired into the codegen driver.)
 -}
 module SixFour.Codegen.Shapes
   ( emitStagesPy

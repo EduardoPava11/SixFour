@@ -1,75 +1,79 @@
-# SixFour nucleus L-NN — training regimen (MacBook M1)
+# SixFour H-JEPA trainer — runbook
 
-We do **not** train for production on the dev machine. This is the reproducible
-**regimen**: `git pull`, then one command builds the classified synthetic corpus,
-runs the gates, trains the L-NN nucleus, and exports the deploy blob. Synthetic-only
-(no captured data); deterministic from seeds, so a run reproduces byte-for-byte on
-any Apple-Silicon Mac.
+The Mac-side trainer for the only learned object, the hierarchical-JEPA head that rides above
+the proven byte-exact `theta_B` floor. Everything lives in `trainer/mlx/`, each module a
+byte-exact twin of a `spec/SixFour/Spec/*` module, and the whole thing is **forced to match the
+spec**: the spec emits goldens (`trainer/generated/*.json`) that the trainer must reproduce.
 
-## What the L-NN nucleus is
+> The retired look-net L-NN regimen (`regimen.py`, `train_look_net_mlx.py`,
+> `out/look_net_trained.s4ln`) is gone. This is its replacement.
 
-Input: any 64³ **colour** per-frame-palette GIF. Output: the highest-quality global
-**grayscale** 64³ GIF (one shared 256-grey palette). It's the achromatic (σ-invariant)
-core; A/B chroma nets build around it later. Architecture: σ-equivariant MoR encoder →
-PonderNet-halting recursive core → **depth-8 256-distinct-L head** (the σ-pair is for
-chroma; L uses full resolution), trained as a soft-OT GAN. Beats the 256-level
-Wasserstein-barycenter baseline on held-out captures.
-
-> **DIRECTION NOTE (2026-06-20 — supersedes the "global grayscale palette" framing above):**
-> L is being reframed from a grayscale-palette nucleus to a **white-balance +
-> dynamic-range BALANCE network** — a learned **spatio-temporal LUT** that applies
-> the reversible `(2×2)×(2×2)↔1` collapse/lift over the 64³ LAB cube. It is **NOT a
-> global colour palette** (the global-output line above is the debt being retired).
-> Training becomes **self-supervised on random colours** (learn the operator, no
-> labels). Game role (homeostasis): A/B picks DESTABILIZE colours; L RE-BALANCES
-> (white point + dynamic range). Canon home = `CLAUDE.md`; design search in progress.
-
-## Prerequisites (M1)
-
-- **Zig 0.16** (`brew install zig`) — builds the native core `libsixfour_native.dylib`.
-- **uv** (`brew install uv`) — Python env from the pinned `uv.lock` (MLX trainer).
-- *(optional)* **GHC 9.2.8 + cabal** via ghcup — only to *regenerate* the committed
-  resources (`srgb_linear_lut.bin`, `axisnet_golden.json`, golden vectors). Running the
-  regimen does **not** need Haskell; the committed resources suffice.
-
-## Run it
+## Run the gate
 
 ```bash
-# 1. Build the native core (synth + GIF codec + blob loader) → host dylib for ctypes.
-cd Native && zig build && zig build test      # tests should be 22 pass / 1 skip
-cd ..
-
-# 2. Python env (pinned).
-cd trainer && uv sync
-
-# 3. The regimen.
-uv run python regimen.py --smoke               # fast structure check (~1 min)
-uv run python regimen.py                        # full run (M1, ~minutes)
+cd trainer/mlx
+python3 gate_trainer.py        # the byte-exact core + v2 head + spec-golden loaders + cube tests
 ```
 
-## What the regimen does (and gates)
+All modules self-test; the runner reports one PASS/FAIL. MLX is optional — the byte-exact core
+gates without it (only the ViT demo and the autodiff cross-check need `mlx`). Dependencies are
+in `trainer/.venv` (MLX, numpy; torch/coremltools only for the dormant CoreML fallback).
 
-1. **PRE-TRAIN gates** (`gates.run_pretrain_gates`) — over every `SynthClass`:
-   `determinism` (seed→bytes), `significance` (256/256 slots/frame), `roundtrip`
-   (decode∘encode == identity), `token-contract` (16384×10, Σw=1, Σ=0). Abort if any fail.
-2. **TRAIN** (`train_look_net_mlx.train`) — ε-annealed soft-OT GAN + halting on the
-   **stratified classified corpus** (`synth_classes.CLASSES`, equal captures per class).
-3. **QUALITY gate** (`gates.gate_beats_baseline`) — the L-NN must beat the 256-level
-   barycenter on held-out captures of **every class** (≥75%) — variance-hardened, not averaged.
-4. **EXPORT** → `out/look_net_trained.s4ln` (loads via the Zig `s4_load_look_net`).
-   The run is **ACCEPTED** only if the quality gate passes.
+## The composite objective
 
-## Classification (`synth_classes.py`)
+```
+L = L_band^A + L_band^B   (jepa_loss        — masked-band I-JEPA regression)
+  + latentCodingFloor     (vicreg           — VICReg collapse guard on the pre-surface latent)
+  + L_cross + L_mid        (dual_loss        — cross-encoder information floors, surfaced + 32^3)
+```
 
-The corpus is stratified across named regions of the input envelope so training and
-gating cover the whole space (not just easy captures):
-`wide_color`, `wide_gray`, `mid_color`, `narrow`, `lowkey`, `highkey`, `highchroma`
-— each a (L-dynamic-range × chroma × key) preset. Add a class = add a `SynthClass`.
+Every target is **data-manufactured** (from the corpus), θ-free, no EMA — collapse is
+structurally impossible. The committed byte always re-enters Q16 via `q16.quantize_q16` (Python
+float64 round); MLX float32 is used only for the latent ViT and the gradient, never to decide a byte.
 
-## Regenerating committed resources (optional, needs Haskell)
+## Module roster (`trainer/mlx/`)
+
+| Module | Spec twin | Role |
+|---|---|---|
+| `q16` | `Q16` / `ByteCarrier` | the single float→byte crossing |
+| `encoder_frozen` | `EncoderFrozen` | the zero-param feature map (`encoderParamCount == 0`) |
+| `theta_b` | `MaskedBandPrediction` | the 63-param predictor + 77-param position head |
+| `jepa_loss` | `MaskedBandPrediction` | masked-band loss + exact gradient |
+| `masked_band_trainer` | `MaskedBandTrainer` | reproduces `goldenTrainedBand` (3000) byte-exact |
+| `autograd_check` | — | MLX autodiff == the analytic gradient |
+| `jepa_synth_octants` | `JepaData` / `SyntheticCorpus` | real 64³ synth captures → octant corpus |
+| `vicreg` | `NeuronRedundancy` | the two-term collapse guard |
+| `large_head` | `LargeJepaHead` | the 18.9M-param ViT + d6-ALiBi bias; depth-1 == `theta_b` |
+| `per_scale` | `PerScaleWeights` | per-scale conditioning + the 16³-identity carve-out |
+| `jepa_head_golden` | `Codegen.JepaHead` | forces the head trainer to the spec golden |
+| `temporal_data` | `Codegen.TemporalData` | the `(t, t+1)` value/policy delta engine |
+| `delta_surrogate` | `DeltaSurrogate` | the value (regression) + policy (classification) heads |
+| `dual_loss` | `DualEncoderJepa` / `MidLatentCrossPrediction` | `L_cross` + `L_mid` |
+| `train_loop` | — | the end-to-end MLX optimizer over the corpus |
+
+## Standalone runs (not in the fast gate)
 
 ```bash
-cd spec && cabal run spec-fixtures   # → Native/src/{gamma_lut,srgb_linear_lut}.bin
-cabal run spec-codegen               # → trainer/generated/*, axisnet_golden.json
-cabal test                           # 320 spec + 10 gen tests (the spec gate)
+python3 train_loop.py --smoke          # end-to-end: descent + no-collapse + byte-commit + determinism
+python3 jepa_synth_octants.py          # corpus training; generalization is smoothness-proportional
+python3 test_centered_cube.py --gif    # octree compression: a 64³ cube → 16³ coarse, zero detail
+python3 test_cube_learning.py          # the floor nails the flat 99.5%; theta_B learns the surface
 ```
+
+## Regenerate the spec goldens
+
+The trainer's goldens are spec-emitted. After any change to the head/data/temporal spec:
+
+```bash
+cd ../../spec
+cabal build && cabal test && cabal run spec-codegen   # re-emits trainer/generated/*.json
+```
+
+The Python loaders (`jepa_head_golden.py`, `temporal_data.py`, `jepa_data.py`) then reproduce them
+byte-exact, so a one-byte drift between the spec and the trainer is a gate failure.
+
+## Deploy
+
+The trained 63-param `theta_B` blob ships as a **hand-written Swift forward pass**
+(`SixFour/Native/MaskedBandForward.swift`), verified bit-exact against the spec golden
+(`SixFour/Generated/MaskedBandGolden.swift`). No Core AI, no CoreML black box — see `CLAUDE.md`.

@@ -17,27 +17,28 @@ open SixFour.xcodeproj          # then in Xcode: select your device, Run (⌘R)
 ```
 
 The first launch will prompt for camera permission. On accept, the shutter button captures
-exactly 64 frames at 20 fps and renders a 64×64 global-palette GIF saved to the app's
+exactly 64 frames at 20 fps and renders a 64×64 per-frame-palette GIF saved to the app's
 Documents directory. Use the share button to AirDrop the GIF out.
 
 ## Mac trainer
 
-The current path is the **L-NN nucleus regimen** — one command builds the classified synthetic
-corpus, runs the gates, trains, and exports the deploy blob (synthetic-only; no Haskell needed).
-See `trainer/TRAINING.md` for the authoritative runbook.
+The Mac-side trainer is the **H-JEPA trainer** in `trainer/mlx/`, a hand-written MLX/numpy
+realization gated byte-exact against the Haskell spec. See `trainer/TRAINING.md` for the runbook.
 
 ```bash
-cd ~/SixFour/trainer
-uv run python regimen.py --smoke    # fast structure check (~1 min)
-uv run python regimen.py            # full run (Apple Silicon / M1, ~minutes)
+cd ~/SixFour/trainer/mlx
+python3 gate_trainer.py            # the full trainer gate (byte-exact core + head + spec goldens)
+python3 train_loop.py --smoke      # the end-to-end MLX optimizer (Apple Silicon / M1)
 ```
 
-The blob exporter is `export_look_net_blob.py` (byte-exact, parsed on-device by
-`s4_load_look_net`). The older `train_metric.py` / `export_organ.py` "gene library" scripts are
-the pre-look-NN-trainer path and are retained only for reference.
+Dependencies live in `trainer/.venv` (MLX + numpy; torch/coremltools only for the dormant CoreML
+fallback). The retired look-net regimen (`regimen.py`, `train_look_net_mlx.py`,
+`export_look_net_blob.py`) is gone; `train_metric.py` / `export_organ.py` are dormant pre-look-NN
+scripts retained for reference only.
 
 ## Layout
 
 - `SixFour/` — the iOS app sources, picked up by xcodegen via `project.yml`
-- `trainer/` — Mac-side MLX training scripts, ignored by the iOS build
-- `~/.claude/plans/quizzical-sleeping-pebble.md` — the approved architecture plan
+- `trainer/mlx/` — the Mac-side H-JEPA trainer (MLX/numpy), ignored by the iOS build
+- `spec/` — the Haskell spec: the source of truth, gated by `cabal test`, emits the contracts
+- `CLAUDE.md` — the project contract / canon (tier rules, train+deploy spine)

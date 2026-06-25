@@ -53,7 +53,7 @@ but **deferred to V2** behind `Feature.globalPaletteV2 = false` (unreachable in 
 | `Native/` | — Zig core | **Yes** | The default render engine: integer-exact `s4_*` C-ABI kernels (the deterministic GIF pipeline). |
 | `SixFour/` | 2 — iOS 26 app | **Yes (core product)** | Hand-written Swift + Metal, zero third-party deps. Capture, cell-grid UI, the renderer driving the Zig core, GIF export, swipe-to-LOOK + `.cube` LUT, the on-device Color Atlas trainer. |
 | `SixFourTests/` | 2 | — | Swift unit tests (ports verified against Haskell golden vectors). |
-| `trainer/` | 1 — Python trainer | No (Mac-side) | MLX base-net trainer; consumes generated Python contracts. `torch`/`coremltools` only for the dormant CoreML/ANE fallback. |
+| `trainer/mlx/` | 1 — Python trainer | No (Mac-side) | The hand-written H-JEPA trainer, gated byte-exact against spec-emitted goldens. `torch`/`coremltools` only for the dormant CoreML fallback. |
 | `studio/` | — Rust analysis | No (Mac-side) | Analysis/baseline-research workspace (`analysis-core`, `look-nn-baseline` pure-Rust forward net, ES baseline, Bures covariance oracle). Not a runtime tier. |
 | `scripts/` | — | — | Gate runner (`s4.sh`), codegen/build/lint/doc gates. |
 
@@ -114,12 +114,13 @@ dependencies** (Apple frameworks + `simd` only):
 
 Every port is verified bit-for-bit against the Haskell golden vectors.
 
-### 4. Trainer — base-net training (`trainer/`, Tier 1, not shipped)
-**MLX on the M1** is the primary base-net trainer. `torch` + `coremltools` exist
-only for the dormant CoreML/ANE distillation fallback. It consumes the generated
-Python contracts (`generated/stages.py`, `generated/net_shape.py`). Today the
-trainer is **grayscale-L-only**, and there is no committed training data
-(`trainer/data/` is absent / gitignored).
+### 4. Trainer — the H-JEPA trainer (`trainer/mlx/`, Tier 1, not shipped)
+**MLX/numpy on the M1**, hand-written, each module a byte-exact twin of a `spec/SixFour/Spec/*`
+module and gated by spec-emitted goldens (`trainer/generated/*.json`). The composite objective
+(masked-band I-JEPA + VICReg collapse guard + cross-encoder floors), both delta heads, the
+18.9M-param ViT, and an end-to-end optimizer loop are realized; `torch` + `coremltools` exist
+only for the dormant CoreML fallback. Run `python3 trainer/mlx/gate_trainer.py`; see
+[`trainer/TRAINING.md`](trainer/TRAINING.md). Training data is synthetic-only (`trainer/data/` absent).
 
 ### Train → verify → deploy spine
 - **Train (base net):** MLX on the M1.
@@ -163,20 +164,20 @@ and regenerate.
 
 ### Trainer (Python)
 ```bash
-cd trainer
-uv sync
-python train_metric.py     # reads generated/stages.py + net_shape.py
+cd trainer/mlx
+python3 gate_trainer.py    # the H-JEPA trainer gate (byte-exact core + head + spec goldens)
+python3 train_loop.py --smoke   # the end-to-end MLX optimizer over the corpus
 ```
 
 ### Full gate
 ```bash
 scripts/s4.sh all          # codegen → doc → verify → native → lint → gen → build
-scripts/s4.sh doc          # verify docs/STATUS.md claims (grep/test/find only)
+scripts/s4.sh doc          # verify CLAUDE.md / Spec.Map load-bearing facts (grep/test/find only)
 ```
 
 `s4 all` runs the verbs in the order recorded in `scripts/gate-order.txt`. The
 `doc` gate (`verify-doc-claims.sh`) is wired in right after `codegen`, so the
-canonical `docs/STATUS.md` facts are re-asserted on every full **local** run.
+canonical facts (CLAUDE.md + `SixFour.Spec.Map`) are re-asserted on every full **local** run.
 CI (`.github/workflows/`) runs the checkout-safe gates — the spec-codegen drift
 check + Haskell tests, and the GRID lint — on every push/PR. The `doc`, `native`,
 and `build` gates stay **local-only**: `doc` and `native` assert local
@@ -185,8 +186,9 @@ generated/trained artifacts (e.g. the gitignored `trainer/out/` fixtures), and
 
 ## Status
 
-`docs/STATUS.md` is the **single canonical status ledger** (gated by
-`scripts/verify-doc-claims.sh`). Current state:
+The canon is **`CLAUDE.md`** (the contract) + **`SixFour.Spec.Map`** (the spec index) + the
+Haskell module doc-comments; `scripts/verify-doc-claims.sh` gates their load-bearing facts.
+(`docs/STATUS.md` was deleted; do not recreate it.) Current state:
 
 - **Spec suite: ~1249 Haskell tests pass** (`cabal test`).
 - The **deterministic Zig render core is built and is the default path**
@@ -208,11 +210,12 @@ generated/trained artifacts (e.g. the gitignored `trainer/out/` fixtures), and
 - The decoder genome is **384-DOF** (3 × 128 σ-pair generators, `SIGMA_PAIR_DOF`);
   it reconstructs into the **768-real** flat leaf space (256 × 3). The 384
   emitted and the 768 leaf space are not the same thing.
-- **On-device per-user training is proven on hardware** (Color Atlas:
-  `SixFour/Atlas/AtlasTrainer.swift`, MPSGraph SGD, Bradley–Terry value net
-  ≈29,249 params, ≈12.4 ms/step, loss trajectory bit-identical Mac ↔ iPhone).
-- **Missing:** a full-colour trained NN with an on-device forward pass. The Mac
-  trainer is grayscale-L-only and there is no committed training data.
+- **The Mac trainer is the H-JEPA trainer** (`trainer/mlx/`, hand-written MLX/numpy): the only
+  learned object is the 63-param `theta_B` masked-band predictor, which ships as a hand-written
+  Swift forward pass (`MaskedBandForward.swift`, golden-gated). The composite objective
+  (masked-band + VICReg + cross-encoder), both delta heads, the 18.9M-param ViT, and an
+  end-to-end optimizer loop are realized and gated, each a byte-exact twin of its Haskell spec.
+  Training data is synthetic-only (`trainer/data/` absent).
 - **North-star** is on-device personalized look-learning. A first spec footprint
   exists (`Spec.Atlas*` + `Spec.LookCategory`, 74 properties green). Open spec
   gaps: the look-category taxonomy and golden-gating of the on-device
@@ -231,23 +234,19 @@ farthest-first / Lloyd-Max) (`farthestPointCollapse` in `Spec.Collapse` /
 `globalCollapseQ16` in `Spec.GlobalCollapseQ16`), gamut-closed and golden-pinned. `Spec.Bures` now supplies
 only a Gaussian-*summary* backbone — `buresDistanceSq` as a fidelity term and
 `buresBarycenterCov` as a covariance fixed point that the Rust analysis oracle
-cross-checks — i.e. a moment-matched spread prior, **not** the collapse. See
-[`docs/SIXFOUR-BURES-DISCRETE-CORRECTION.md`](docs/SIXFOUR-BURES-DISCRETE-CORRECTION.md).
+cross-checks — i.e. a moment-matched spread prior, **not** the collapse.
 
 ## Where to read next
 
+The `docs/` tree was deleted; the canon now lives in-repo:
+
 | Document | What it covers |
 |---|---|
-| [`docs/STATUS.md`](docs/STATUS.md) | **Canonical status ledger** — built / design-only / missing, open debt. Start here for current state. |
-| [`docs/SIXFOUR-VISION.md`](docs/SIXFOUR-VISION.md) | Project narrative: "one cube, projected honestly." |
-| [`CLAUDE.md`](CLAUDE.md) | The dependency + train/deploy contract (three tiers, zero-dep rule). |
-| [`spec/src/SixFour/Spec/Map.hs`](spec/src/SixFour/Spec/Map.hs) | Spec index — start here to browse the Haskell source of truth. |
-| [`docs/SIXFOUR-BURES-DISCRETE-CORRECTION.md`](docs/SIXFOUR-BURES-DISCRETE-CORRECTION.md) | ADR-014: why the discrete substrate is maximin, not a Gaussian Bures barycenter. |
-| [`docs/COLOR-ATLAS.md`](docs/COLOR-ATLAS.md) | On-device personalization / north-star design (Color Atlas). |
-| [`docs/ON-DEVICE-TRAINING.md`](docs/ON-DEVICE-TRAINING.md) | On-device training research (MPSGraph, verified + cited). |
-| [`docs/SIXFOUR-WIDGETS.md`](docs/SIXFOUR-WIDGETS.md) | Consolidated widget authority (16² SEE / 4⁴ CONTROL / 2⁸ LEARN). |
-| [`docs/L-NN-MASTER-DESIGN.md`](docs/L-NN-MASTER-DESIGN.md) | Look-NN master design. |
-| [`docs/archive/SIXFOUR-ARCHITECTURE-MAP.md`](docs/archive/SIXFOUR-ARCHITECTURE-MAP.md) | Archived prior orientation map (historical only — superseded by `STATUS.md`). |
+| [`CLAUDE.md`](CLAUDE.md) | The canon: dependency + train/deploy contract (three tiers, zero-dep rule), the H-JEPA direction. **Start here.** |
+| [`spec/src/SixFour/Spec/Map.hs`](spec/src/SixFour/Spec/Map.hs) | Spec index — browse the Haskell source of truth (NN design is the ★ core category). |
+| [`trainer/TRAINING.md`](trainer/TRAINING.md) | The H-JEPA trainer runbook (`trainer/mlx/`): how to run the gate and the end-to-end loop. |
+| [`spec/README.md`](spec/README.md) | How the spec is built, what `spec-codegen` emits, and how the trainer is gated against it. |
+| [`NOTES.md`](NOTES.md) | Chronological session log (history, not current status). |
 
 ## License
 

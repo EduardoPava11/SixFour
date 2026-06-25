@@ -1,15 +1,13 @@
 {- |
-spec-codegen driver. Writes 11 files + 1 binary resource:
+spec-codegen driver. Writes 28 Swift/golden files + the Python trainer contracts + 1 binary resource:
 
-  * @SixFour/Generated/{StageContract,NetContract,STBN3DContract,SignificanceContract}.swift@
-  * @SixFour/Generated/CollapseGolden.swift@ — byte-exact Q16 global-collapse golden
-  * @SixFour/Generated/PairTreeGolden.swift@ — tolerance gate for the Haar palette tree
-  * @SixFour/Generated/PaletteValueGolden.swift@ — tolerance gate for the search value head
+  * @SixFour/Generated/*.swift@ — the Swift contracts and byte-exact goldens the hand-written
+    Swift/Metal port is verified against (StageContract, NetContract, STBN3DContract,
+    SignificanceContract, CollapseGolden, PairTreeGolden, PaletteValueGolden, MaskedBandGolden, …).
   * @SixFour/Resources/stbn3d-8.bin@ — 8³ STBN3D scalar mask
-  * @trainer/generated/{stages,net_shape}.py@ — NumPy shape/significance constants
-  * @trainer/generated/look_net_mlx.py@ — the PRIMARY (M1) mlx.nn trainer model
-  * @trainer/generated/look_net_golden.json@ — hex-float forward golden vectors (bit-exact gate)
-  * @trainer/generated/{look_net_torch,build_mlpackage}.py@ — dormant CoreML/ANE fallback
+  * @trainer/generated/stages.py@ — NumPy shape/significance constants the trainer imports
+  * @trainer/generated/{jepa_data,jepa_head,temporal_data}_golden.json@ — the H-JEPA data-engine,
+    head-trajectory, and inter-frame @(t,t+1)@ goldens the @trainer/mlx/@ loaders reproduce byte-exact
   * @studio/look-nn-baseline/src/generated/contract.rs@ — Rust @burn@ contract + golden vectors
 
 Defaults to writing relative to the cabal CWD (@~/SixFour/spec@), so
