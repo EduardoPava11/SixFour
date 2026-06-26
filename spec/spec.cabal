@@ -109,6 +109,7 @@ library
         SixFour.Spec.ConstructionEncoder
         SixFour.Spec.HierarchicalDelta
         SixFour.Spec.RootLatticeDetail
+        SixFour.Spec.GaugeAction
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
         SixFour.Spec.NudgeContamination
@@ -208,6 +209,8 @@ library
       , ConstraintKinds
       , FlexibleContexts
       , FlexibleInstances
+      , MultiParamTypeClasses
+      , FunctionalDependencies
       , RankNTypes
       , DeriveGeneric
       , DerivingStrategies
@@ -383,6 +386,7 @@ test-suite spec-tests
         Properties.ConstructionEncoder
         Properties.HierarchicalDelta
         Properties.RootLatticeDetail
+        Properties.GaugeAction
         Properties.TemporalData
         Properties.DeltaSurrogate
         Properties.NudgeContamination

@@ -91,6 +91,7 @@ import qualified Properties.SameObjectJEPA as SameObjectJEPA
 import qualified Properties.ConstructionEncoder as ConstructionEncoder
 import qualified Properties.HierarchicalDelta as HierarchicalDelta
 import qualified Properties.RootLatticeDetail as RootLatticeDetail
+import qualified Properties.GaugeAction as GaugeAction
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
 import qualified Properties.NudgeContamination as NudgeContamination
@@ -247,6 +248,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , ConstructionEncoder.tests
   , HierarchicalDelta.tests
   , RootLatticeDetail.tests
+  , GaugeAction.tests
   , TemporalData.tests
   , DeltaSurrogate.tests
   , NudgeContamination.tests

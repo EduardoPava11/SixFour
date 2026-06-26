@@ -419,6 +419,12 @@ vanishing-zeroth-moment). @lawBandCountEqualsRank@ makes the band count @b-1@ a 
 branching (b=8 octant → 7 = rank A_7 via @lawOctantIsA7@), @lawRootCoordsRoundTrip@ = A_{b-1} is the
 free ℤ-module on the simple roots, @lawDetailKernelIsConstants@ = detail captures exactly the
 mean-free part. Gates the IDEALIZED LINEAR Haar skeleton, not the floored kernel. Additive),
+"SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
+OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
+colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with
+@lawObservableIsOrbitInvariant@. INVARIANT THEORY, not Galois: @lawPaletteGaugeIsNonAbelian@ pins
+@S_K@ ≠ the cyclic Frobenius @Gal(F_256/F_2)=ℤ/8@. Subsumes @lawPaletteIndexGaugeInvariant@,
+@lawReorderingPreservesObject@, @lawPhi6Involution@. Additive),
 "SixFour.Spec.TemporalData" (★ the TIME-AXIS data engine — manufactures @(frame t, value target,
 policy target)@ records from a captured @(t, t+1)@ pair (the temporal sibling of @JepaData@'s
 spatial corpus). KEYSTONE @lawTemporalEngineRoundTrips@ = @reconstructNext (manufacture ct ctNext)
