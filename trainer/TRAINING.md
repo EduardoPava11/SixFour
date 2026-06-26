@@ -88,6 +88,35 @@ cabal build && cabal test && cabal run spec-codegen   # re-emits trainer/generat
 The Python loaders (`jepa_head_golden.py`, `temporal_data.py`, `jepa_data.py`) then reproduce them
 byte-exact, so a one-byte drift between the spec and the trainer is a gate failure.
 
+## Long runs (hours/days): checkpoint, resume, streaming corpus
+
+`cli.py train --smoke` and the default `train` run the 4-property DEMO (two runs + the
+determinism check). For an actual multi-day training run, use `--long` (a single resumable
+run that checkpoints to disk and streams fresh data). It is also entered implicitly by
+`--save-every` or `--resume`.
+
+```bash
+# start a long run: save every 2000 steps, regenerate fresh data every 5000 steps
+python3 cli.py train --long --steps 500000 --octants 96 \
+    --save-every 2000 --resample-every 5000 --out out/run1
+
+# resume after a crash / stop / reboot — continues from the checkpoint's step
+python3 cli.py train --long --steps 500000 --octants 96 \
+    --save-every 2000 --resample-every 5000 --out out/run1 \
+    --resume out/run1/head.safetensors
+```
+
+What it writes to `--out` (default `trainer/out/run`, git-ignored):
+- `head.safetensors` — the full 18.9M-param ViT head, saved ATOMICALLY (temp + `os.replace`)
+  every `--save-every` steps and again on exit (normal end, Ctrl-C, or crash), so no work is lost.
+- `head.safetensors.meta.json` — the resume cursor (`step`, `seed`, `lr`, `epoch`).
+- `loss.jsonl` — a flushed per-step loss log, so progress survives an SSH disconnect.
+
+`--resample-every N` is the key flag for a multi-day run: it regenerates the corpus from FRESH
+synthetic seeds every N steps, so more wall-clock means more DISTINCT captures rather than
+memorizing one fixed 24-octant set. SGD is stateless, so head weights + the meta step fully
+determine a bit-faithful resume.
+
 ## Deploy
 
 The trained 63-param `theta_B` blob ships as a **hand-written Swift forward pass**

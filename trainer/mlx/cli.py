@@ -68,6 +68,18 @@ def cmd_train(a) -> int:
         fwd += ["--w-value", str(a.w_value)]
     if a.w_policy is not None:
         fwd += ["--w-policy", str(a.w_policy)]
+    if a.long:
+        fwd.append("--long")
+    if a.save_every:
+        fwd += ["--save-every", str(a.save_every)]
+    if a.resample_every:
+        fwd += ["--resample-every", str(a.resample_every)]
+    if a.out is not None:
+        fwd += ["--out", a.out]
+    if a.resume is not None:
+        fwd += ["--resume", a.resume]
+    if a.kinds is not None:
+        fwd += ["--kinds", a.kinds]
     return _run("train_loop.py", *fwd)
 
 
@@ -162,6 +174,16 @@ def build_parser() -> argparse.ArgumentParser:
                    help="weight on the GIF89a palette VALUE head (0=inert/bit-identical; >0 trains it)")
     t.add_argument("--w-policy", dest="w_policy", type=float, default=None,
                    help="weight on the GIF89a discrete INDEX head (straight-through; 0=inert; >0 trains it)")
+    t.add_argument("--long", action="store_true",
+                   help="persistent hours/days run: resumable, checkpoints to disk, streams fresh data")
+    t.add_argument("--save-every", dest="save_every", type=int, default=0,
+                   help="checkpoint every N steps (long mode; default 2000)")
+    t.add_argument("--resample-every", dest="resample_every", type=int, default=0,
+                   help="regenerate the corpus from fresh seeds every N steps (long mode; 0=fixed)")
+    t.add_argument("--out", type=str, default=None, help="checkpoint/log dir (default trainer/out/run)")
+    t.add_argument("--resume", type=str, default=None, help="resume from a checkpoint .safetensors")
+    t.add_argument("--kinds", type=str, default=None,
+                   help="comma list of capture kinds to stream (default high-lab,high-detail,smooth-grey)")
     t.set_defaults(fn=cmd_train)
 
     f = sub.add_parser("floor", help="the byte-exact theta_B floor trainer")
