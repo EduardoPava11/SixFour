@@ -7,6 +7,58 @@ newest first.
 
 ---
 
+## 2026-06-25 (later): MPS↔MLX, GIF89a full-scope heads, the spec repair, and the algebraic-number-theory generalization
+
+> **Session theme (Daniel):** train on the Mac, generalize the GIF89a as index + per-frame palette,
+> repair the spec the *training* exposed, then re-read the whole H-JEPA through **discrete geometry +
+> algebraic number theory**. "this is good, continue."
+
+**1. MPS↔MLX + iOS 27 (advisory).** Established (web-verified) that iOS 27 / WWDC 2026 splits on-device AI
+into Foundation Models / **Core AI (BYO-model INFERENCE)** / **MLX (training)**. MPS↔MLX weight VALUES
+port losslessly (plain SGD, no optimizer state); a golden-preserving *continued-training* round-trip is
+inadmissible (fp32 non-assoc across backends). Decision: **train on the Mac (MLX)**.
+
+**2. The trainer grew toward full GIF89a scope.** `train_loop.py` gained a head-registry composite loss
+and three heads under ONE optimizer, each constructed-last so `w=0` is **bit-identical** (additivity gated):
+the value-band readout (existing) + a palette VALUE head + a discrete INDEX head (straight-through,
+fused `palette[index]` reconstruction, **margin-guarded byte-exact commit**). Plus `--octants` (strided,
+all captures) + `--mask` (per-band specialist; needs lr=1e-3, 8e-3 NaNs) + `train_sweep.py` (per-encoded-band
+× kind held-out matrix: bands 0/1/3/4 learnable on smooth scenes, 2/5/6 floor-or-worse) + `frame_palette.py`
+(real per-frame chroma LCT quantizer on actual `synth_capture` colours, k=32 recon halved). Memorize→generalize
+transition confirmed (24-octant L_band 4e-5 = overfit → 256-octant 3.9e-4 = real fitting).
+
+**3. The spec repair — the trainer caught what the green gate missed.** The MLX training exposed laws that
+were *vacuous-green* or *mislabeled* while the spec gate stayed green. Branch `spec/gif89a-repair` (5baab7a),
+GIF89a-anchored: the static per-pixel index is discrete **CONTENT**, NOT a policy (policy/value belongs only
+to the inter-frame delta); `lawPolicyCEGradientMovesTowardTarget` (tests the straight-through *backward* path,
+not decode-at-optimum); `lawPolicyArgmaxMarginOrFallback` (index-commit determinism); `lawReconstructionGaugeInvariant`
+(fused palette[index], the relabel-gauge guard); GIF-FIDELITY notes quarantining SixFour-added OKLab/Q16/ordering.
+LESSON: spec + trainer are two independent oracles; the trainer exercises the gradient/commit paths the laws
+only asserted in prose.
+
+**4. The algebraic-number-theory + discrete-geometry generalization (9 typeclasses, 1039 tests).** Re-read the
+whole H-JEPA as a **Reversible Refinement System over a deliberately-NON-FIELD ring ℤ[1/2]** (byte-exactness
+forbids dividing by non-units → module theory, not linear algebra over a field). Seven modules, each
+multi-instance and carrying a FALSIFIABLE boundary law (the anti-`index=policy` discipline):
+`RootLatticeDetail` ("1 coarse + 7 detail" = the root lattice A₇, densest dim-7 packing; band count = rank A_{b-1});
+`GaugeAction` (S₂₅₆ palette gauge + ℤ/2 involutions as orbit-invariant actions — invariant theory, NOT Galois);
+`ScaleFiltration` (the 2⁴/2⁶/2⁸ spine as an octree-ball **ultrametric**, proven distinct from d6's ℓ¹);
+`RingReduction` (reenterQ16 as a retraction onto the grid — a quantizer, NOT a ring hom);
+`MetricLattice` (d6 = ℓ^p with p a knob: cross-polytope vs hypercube);
+`RefinementSystem` (**the capstone** spine triad `CommutativeRing → RModule → ReversibleLift`, proven over ℤ AND
+ℤ[i] Gaussian integers, dyadic b=8 AND non-dyadic b=3); `TransportGroup` (IndexDelta = non-abelian transport,
+composes by CHAINING not addition). Rejected as forced jargon: GF(256)/Galois/Frobenius, "d6 is 2-adic",
+"Q16 = ℤ₂". All merged to master (5baab7a → 1b814dc), `cabal test` 1039 green.
+
+**Evidence:** `cd spec && cabal test` → 1039 pass. Trainer: `python3 trainer/mlx/cli.py train --smoke
+--w-value 0.1 --w-policy 0.1` → all four properties (descent / no-collapse / byte-commit / determinism);
+`cli.py sweep`; `cli.py quantize --selftest`. Branches `spec/gif89a-repair`, `spec/ant-generalization`,
+`spec/ant-metric-lattice` all fast-forward-merged to master; trainer work on `remove-ab-export` merged here.
+HONEST scope: the 9 typeclasses are standalone abstractions (they prove the structure generalizes) — wiring
+them to the concrete call sites (`ColourDelta` as an `RModule` instance, etc.) is a noted follow-up.
+
+---
+
 ## 2026-06-25: the H-JEPA trainer — from spec contracts to a running, observable trainer (branch `spec/hierarchical-delta` → master)
 
 > **Session theme (Daniel):** "how close are we to running a trainer?" → build it. Then: make a CLI,
