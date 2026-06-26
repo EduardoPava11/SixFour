@@ -95,16 +95,23 @@ determinism check). For an actual multi-day training run, use `--long` (a single
 run that checkpoints to disk and streams fresh data). It is also entered implicitly by
 `--save-every` or `--resume`.
 
+All `cli.py` commands run from `trainer/mlx/`:
+
 ```bash
-# start a long run: save every 2000 steps, regenerate fresh data every 5000 steps
+cd trainer/mlx
+
+# start a long run: save every 2000 steps, regenerate fresh data every 5000 steps.
+# Omitting --out uses the git-ignored default trainer/out/run.
 python3 cli.py train --long --steps 500000 --octants 96 \
-    --save-every 2000 --resample-every 5000 --out out/run1
+    --save-every 2000 --resample-every 5000 --out ../out/run1
 
 # resume after a crash / stop / reboot — continues from the checkpoint's step
 python3 cli.py train --long --steps 500000 --octants 96 \
-    --save-every 2000 --resample-every 5000 --out out/run1 \
-    --resume out/run1/head.safetensors
+    --save-every 2000 --resample-every 5000 --out ../out/run1 \
+    --resume ../out/run1/head.safetensors
 ```
+
+(`--out` is relative to `trainer/mlx`, so `../out/run1` lands in the git-ignored `trainer/out/`.)
 
 What it writes to `--out` (default `trainer/out/run`, git-ignored):
 - `head.safetensors` — the full 18.9M-param ViT head, saved ATOMICALLY (temp + `os.replace`)
