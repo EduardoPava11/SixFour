@@ -36,6 +36,14 @@ genTransport = choose (0, 6) >>= \n -> vectorOf n (choose (0, 7))
 genIdx :: Gen [Int]
 genIdx = choose (0, 8) >>= \n -> vectorOf n (choose (0, 7))
 
+-- A masked-band example (coarse, 7-band detail, masked index) for the learned-head floor law.
+genDetail :: Gen (Int, Int, Int, Int, Int, Int, Int)
+genDetail = (,,,,,,) <$> s <*> s <*> s <*> s <*> s <*> s <*> s
+  where s = choose (-50, 50)
+
+genMaskedExample :: Gen (Int, (Int, Int, Int, Int, Int, Int, Int), Int)
+genMaskedExample = (,,) <$> choose (-50, 50) <*> genDetail <*> choose (0, 6)
+
 tests :: TestTree
 tests = testGroup "RefinementCarriers (the capstone classes GOVERN the production carriers)"
   [ testGroup "ColourDelta as RModule ℤ (the VALUE ℤ-module = the real recolour ops)"
@@ -66,5 +74,9 @@ tests = testGroup "RefinementCarriers (the capstone classes GOVERN the productio
       [ testProperty "a slot transport's action is realized by the induced positional IndexDelta" $
           forAll genTransport $ \sigma -> forAll genIdx $ \idx ->
             lawIndexDeltaRealizesTransport sigma idx
+      ]
+  , testGroup "θ_B learned head (governed at the floor seam, NOT an algebraic instance)"
+      [ testProperty "zeroParams head emits the ring zero (floor) for every input" $
+          forAll genMaskedExample lawLearnedHeadFloorIsRingZero
       ]
   ]

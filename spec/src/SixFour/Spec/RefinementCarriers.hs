@@ -25,12 +25,14 @@ module SixFour.Spec.RefinementCarriers
   , lawOctLeafOverridesDefault
     -- * The POLICY carrier bridged to the transport group (induced, not identical)
   , lawIndexDeltaRealizesTransport
+    -- * The LEARNED head (θ_B): NOT an algebraic instance, governed only at the floor seam
+  , lawLearnedHeadFloorIsRingZero
   ) where
 
 import Data.List (dropWhileEnd)
 
 import SixFour.Spec.RefinementSystem
-  ( RModule(..), ReversibleLift(..), liftVec )
+  ( RModule(..), ReversibleLift(..), liftVec, rzero )
 import SixFour.Spec.HierarchicalDelta
   ( ColourDelta(..), applyValueDelta, applyDelta, deltaBetween )
 import SixFour.Spec.ConstructionEncoder
@@ -39,6 +41,8 @@ import SixFour.Spec.OctreeCell
   ( V8(..), OctBand(..), liftOct, unliftOct )
 import SixFour.Spec.TransportGroup
   ( Transport, tapply )
+import SixFour.Spec.MaskedBandPrediction
+  ( MaskedBandExample, predictMaskedBand, zeroParamsB )
 
 -- ============================================================================
 -- The VALUE carrier: ColourDelta as a real RModule ℤ (instance in HierarchicalDelta)
@@ -143,3 +147,23 @@ lawIndexDeltaRealizesTransport :: Transport -> [Int] -> Bool
 lawIndexDeltaRealizesTransport sigma idx =
   let moved = tapply sigma idx
   in applyDelta (deltaBetween idx moved) idx == moved
+
+-- ============================================================================
+-- The LEARNED head θ_B: governed at the floor seam, NOT an algebraic instance
+-- ============================================================================
+
+-- | The honest boundary on @θ_B@ ("SixFour.Spec.MaskedBandPrediction" 'predictMaskedBand'). Unlike
+-- the three carriers above, the learned masked-band head is NOT wired as an 'RModule' or
+-- 'ReversibleLift' instance — and that is correct, not a gap: it is a LEARNED, LOSSY, NON-reversible
+-- float map (@θ · φ@ then the @reenterQ16@ quantizer), so it has no additive or bijective structure
+-- to instantiate. Forcing it into an algebraic class would be the kind of mismatched abstraction the
+-- generalization explicitly rejects. The abstraction governs @θ_B@ at exactly ONE seam: the FLOOR.
+-- At its identity parameters @zeroParamsB@, the head emits the ring zero ('rzero' of
+-- "SixFour.Spec.RefinementSystem" @CommutativeRing ℤ@ = the Q16\/byte floor) for EVERY input — the
+-- learned surplus is measured ABOVE the same algebraic floor the reversible substrate is built over.
+-- (The float→device crossing it commits through is a quantizer with the non-additive character
+-- "SixFour.Spec.RingReduction" pins; @θ_B@ rides ON the abstraction, it is not one of its objects.)
+-- Teeth: a head whose zero state drifted off the floor (a bias, a non-floor sentinel) would fail.
+lawLearnedHeadFloorIsRingZero :: MaskedBandExample -> Bool
+lawLearnedHeadFloorIsRingZero ex =
+  fromIntegral (predictMaskedBand zeroParamsB ex) == (rzero :: Integer)
