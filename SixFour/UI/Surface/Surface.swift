@@ -43,23 +43,9 @@ final class Surface {
     /// Empty until review. A flat buffer keeps the value type cheap to carry.
     var indexCube: [UInt8] = []
 
-    /// The 64 ORIGINAL per-frame OKLab pixels in Q16 (each `pixelsPerFrame·3` Int32), retained
-    /// at capture so the A/B game can RE-QUANTIZE every frame against a candidate genome's
-    /// displaced palette (P3 — genome shapes the BYTES: A and B become genuinely different
-    /// index cubes via `s4_dither_frame`, not just two recolours of one shared cube). Empty
-    /// until a capture commits, or when the raw tiles aren't retained (then A/B fall back to
-    /// recolouring the shared `indexCube`).
-    var framePixelsQ16: [[Int32]] = []
-
     /// The committed GIF file on disk — the Review Share source. Set by `commit(_:)` from
     /// the engine's `CaptureOutput.gifURL`; `nil` until a GIFA is rendered.
     var gifURL: URL?
-
-    /// The CHOSEN A/B look's per-frame palettes (64 × 256 sRGB8), set when the user picks A or
-    /// B. The EXPORT re-encodes the (complete, brand-passing) base `indexCube` through THESE, so
-    /// the shipped GIF reflects the chosen genome's colours — not the base auto-render. Empty
-    /// until a pick; reset on retake (`.live`).
-    var chosenLookPalettes: [[SIMD3<UInt8>]] = []
 
     /// The LIVE camera tile as 64×64 indexed cells (row-major `y·64 + x`) + its paired
     /// sRGB palette — the live hero paints the REAL camera through these (the cube law:
@@ -91,7 +77,6 @@ final class Surface {
     /// `abStep` (`ABSurfaceMachine.swift`) and is the only writer of `phase`.
     func step(_ event: ABEvent) {
         phase = abStep(phase, event)
-        if phase == .live { chosenLookPalettes = [] }   // retake drops the last chosen look
     }
 
     // MARK: κ-fed cursor advance (Z₆₄)
