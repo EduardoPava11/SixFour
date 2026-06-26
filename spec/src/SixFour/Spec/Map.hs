@@ -438,6 +438,12 @@ RING REDUCTION between a fine "big" grid (MLX float twin) and the coarse Q16 dev
 coupling. HONEST BOUNDARY @lawReduceIsNotAdditive@: @reduce@ is a QUANTIZER, not a ring hom (0.5+0.5
 rounds to 1 ≠ 0). Subsumes @lawByteOnlyFromQ16@/@lawReentryIsFloor@/@lawTerminalQuantizationIdempotent@.
 Additive),
+"SixFour.Spec.MetricLattice" (★ d6 generalized to an ℓ^p lattice norm with the exponent @p@ a KNOB:
+@p = 1@ = the model's taxicab d6 (unit ball = CROSS-POLYTOPE, @2d+1@ points), @p = ∞@ = Chebyshev
+(unit ball = HYPERCUBE, @3^d@ points). Metric axioms hold for both (@lawTriangle@/@lawNormFaithful@…);
+@lawUnitBallsDiffer@ proves the knob is real (geometries differ at @d ≥ 2@); @lawLInfBoundedByL1@ the
+norm inequality. @p = 2@ (Euclidean → dual-lattice/sphere-packing) is a documented un-gated extension.
+Re-homes the d6 metric laws. Additive),
 "SixFour.Spec.TemporalData" (★ the TIME-AXIS data engine — manufactures @(frame t, value target,
 policy target)@ records from a captured @(t, t+1)@ pair (the temporal sibling of @JepaData@'s
 spatial corpus). KEYSTONE @lawTemporalEngineRoundTrips@ = @reconstructNext (manufacture ct ctNext)
