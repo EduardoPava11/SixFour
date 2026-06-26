@@ -17,6 +17,7 @@ bijection); the shipped averaging @sLift@ is another. The class law is the BIJEC
 (@unlift ∘ lift = id@), the structural content; per-element R-linearity of the floored shipped lift
 is NOT claimed (see RootLatticeDetail).
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.RefinementSystem
   ( -- * The base ring R (deliberately NOT a field)
     CommutativeRing(..)
@@ -37,7 +38,7 @@ module SixFour.Spec.RefinementSystem
   , lawModuleAddInverse, lawModuleSmulOne, lawModuleSmulMul
   , lawModuleSmulDistribModule, lawModuleSmulDistribRing
     -- * Lift laws
-  , lawLiftRoundTrips, lawFromToVec, lawLiftDetailCount
+  , lawLiftRoundTrips, lawFromToVec, lawLiftDetailCount, lawLiftFRoundTrips
   ) where
 
 -- | A commutative ring with unit — and DELIBERATELY no multiplicative inverse (not a field). The
@@ -94,6 +95,18 @@ class ReversibleLift f where
   liftBranching :: f -> Int      -- ^ b (the carrier's fixed size)
   toVec         :: f -> [Integer]
   fromVec       :: [Integer] -> f
+  -- | The carrier's OWN reversible split into @(coarse, b-1 detail)@. DEFAULT = the module-level
+  -- prefix-difference 'liftVec' over 'toVec', so a carrier with no special structure (e.g. 'Dyad8',
+  -- 'Tern3') inherits the generic scheme for free. A carrier with a DIFFERENT exact integer
+  -- bijection — the averaging octant S-transform @OctreeCell.liftOct@ — OVERRIDES this method, which
+  -- is what makes the 'ReversibleLift' abstraction GOVERN that real lift rather than merely run a
+  -- parallel scheme beside it.
+  liftF   :: f -> (Integer, [Integer])
+  liftF   = liftVec . toVec
+  -- | The exact inverse of 'liftF' (DEFAULT = 'fromVec' over 'unliftVec'). An overriding instance
+  -- must keep @unliftF . liftF = id@ ('lawLiftFRoundTrips').
+  unliftF :: (Integer, [Integer]) -> f
+  unliftF = fromVec . unliftVec
 
 -- | The prefix-difference lifting scheme: @coarse = x0@, @detail_i = x_{i+1} − x_i@ (the @b-1@
 -- consecutive differences). Reversible over @ℤ@ with no division.
@@ -188,3 +201,10 @@ lawLiftDetailCount x =
   let b  = liftBranching x
       xs = take b (toVec x ++ repeat 0)        -- pad/truncate to exactly b
   in length (snd (liftVec xs)) == b - 1
+
+-- | The carrier's OWN lift is a BIJECTION: @unliftF . liftF = id@. Holds for the default
+-- prefix-difference scheme AND for any instance that overrides 'liftF'/'unliftF' with a different
+-- exact bijection (e.g. the averaging octant S-transform). This is the law that lets the
+-- abstraction govern a real, non-generic lift: the overriding instance owes exactly this.
+lawLiftFRoundTrips :: (ReversibleLift f, Eq f) => f -> Bool
+lawLiftFRoundTrips x = unliftF (liftF x) == x

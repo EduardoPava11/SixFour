@@ -9,6 +9,7 @@ spec fails if the policy channel is ever modeled as additive. Re-homes the @Inde
 (@lawIndexDeltaIdentity@/@lawIndexDeltaActionHomomorphism@/@lawIndexDeltaInverse@/
 @lawIndexCompositionIsNotAddition@) under one structure.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.TransportGroup
   ( -- * Transports (permutations of the slot set)
     Transport

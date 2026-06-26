@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 {- |
 Module      : SixFour.Spec.HierarchicalDelta
 Description : "Abstract the H" — the inter-frame DELTA as a hierarchical object: ONE 'HierarchicalDelta' interface (a global coarse band + a local fine residual that compose back losslessly) instantiated by TWO structurally different carriers — the VALUE delta ('ColourDelta', an abelian ℤ-module) and the POLICY delta ('IndexDelta', a transport group) — plus the spatial data-delta pyramid that reuses the frozen octant ladder unchanged.
@@ -82,6 +84,8 @@ import SixFour.Spec.OctreeCell
   ( Detail, octantDistill, octantSynthesize )
 import SixFour.Spec.JepaTarget
   ( RolloutTargetSource(..), admissibleRolloutSource )
+import SixFour.Spec.RefinementSystem
+  ( CommutativeRing, RModule(..) )
 
 -- ============================================================================
 -- The abstracted H: one hierarchy interface over any Monoid delta carrier
@@ -179,6 +183,20 @@ instance HierarchicalDelta ColourDelta where
   coarseBand = coarseColour
   -- fine = whole minus coarse; abelian cancellation makes the split lossless for ANY coarse.
   fineBand d = d <> invColourDelta (coarseColour d)
+
+-- | The VALUE delta IS a free ℤ-module ("SixFour.Spec.RefinementSystem" @RModule ℤ@): the abstract
+-- module operations are not a parallel re-implementation but literally the existing concrete ops —
+-- @mzero@ = @mempty@, @madd@ = @<>@ (elementwise Q16 add), @mneg@ = 'invColourDelta', @smul@ =
+-- 'scaleColourDelta'. This wires the capstone abstraction to the real carrier so the module laws
+-- (witnessed in "SixFour.Spec.RefinementCarriers") GOVERN this call site. HONEST BOUNDARY: the
+-- additive-inverse law holds only modulo the ragged representation's trailing-zero normalization
+-- (@madd x (mneg x)@ is a list of zeros, equal to @mzero = []@ as a delta but not under the derived
+-- @Eq@) — see @RefinementCarriers.lawColourModuleInverseModuloCanon@.
+instance RModule Integer ColourDelta where
+  mzero  = mempty
+  madd   = (<>)
+  mneg   = invColourDelta
+  smul k = scaleColourDelta (fromInteger k)
 
 -- ============================================================================
 -- The POLICY delta carrier: IndexDelta — a transport group (deltas COMPOSE)

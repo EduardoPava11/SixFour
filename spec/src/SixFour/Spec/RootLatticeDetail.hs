@@ -14,6 +14,7 @@ homomorphism (additivity fails under flooring). This module gates the IDEALIZED 
 skeleton — the lattice structure that makes the band count a theorem — not the floored kernel's
 arithmetic. The two agree on the structure (which bands exist), not on per-element additivity.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.RootLatticeDetail
   ( -- * The split exact sequence  0 → A_{b-1} → ℤ^b → ℤ → 0
     sumFunctional

@@ -451,6 +451,13 @@ the SAME laws hold over @R=ℤ[i]@ (Gaussian integers — the chroma knob) and a
 proving GENERALIZATION not rename. NO @recip@ (field axiom absent by design — byte-exactness forbids
 dividing by non-units). @lawModuleSmul*@ (free-module = ColourDelta abstracted), @lawLiftRoundTrips@
 (the bijection), @lawLiftDetailCount@ = b-1 = rank A_{b-1} (ties RootLatticeDetail). Additive),
+"SixFour.Spec.RefinementCarriers" (★ WIRES the capstone spine to the PRODUCTION carriers so the
+abstraction GOVERNS, not parallels: @ColourDelta@ is a real @RModule ℤ@ (instance in HierarchicalDelta;
+4 module laws strict, additive-inverse modulo trailing-zero @canonColourDelta@) and
+@lawColourModuleActsAsRecolour@ ties @madd@/@smul@ to the @applyValueDelta@ call site; the octant
+@OctLeaf8@ is a real @ReversibleLift@ whose @liftF@ IS @OctreeCell.liftOct@ (@lawOctLeafLiftIsLiftOct@),
+OVERRIDING the generic prefix-difference default (@lawOctLeafOverridesDefault@). Uses the new
+@ReversibleLift@ @liftF@/@unliftF@ methods. Additive),
 "SixFour.Spec.TransportGroup" (★ the POLICY channel's algebra — @IndexDelta@ as a NON-ABELIAN
 transport group acting on the index set, the counterpart to the VALUE channel's abelian @ColourDelta@
 ℤ-module. @tcomp@ chains, @tinv@ reverses, @tbetween@ data-manufactures; @lawTransportActionHomomorphism@
