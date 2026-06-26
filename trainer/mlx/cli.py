@@ -66,6 +66,8 @@ def cmd_train(a) -> int:
         fwd += ["--mask", str(a.mask)]
     if a.w_value is not None:
         fwd += ["--w-value", str(a.w_value)]
+    if a.w_policy is not None:
+        fwd += ["--w-policy", str(a.w_policy)]
     return _run("train_loop.py", *fwd)
 
 
@@ -151,6 +153,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="train a per-band specialist on this encoded band (0..6); default cycles all 7")
     t.add_argument("--w-value", dest="w_value", type=float, default=None,
                    help="weight on the GIF89a palette VALUE head (0=inert/bit-identical; >0 trains it)")
+    t.add_argument("--w-policy", dest="w_policy", type=float, default=None,
+                   help="weight on the GIF89a discrete INDEX head (straight-through; 0=inert; >0 trains it)")
     t.set_defaults(fn=cmd_train)
 
     f = sub.add_parser("floor", help="the byte-exact theta_B floor trainer")
