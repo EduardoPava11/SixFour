@@ -27,10 +27,28 @@ shipped render cube.
   * 'lawInterFrameFactorsToPolicyValue' — an inter-frame step @t → t+1@ separates into an
     orthogonal POLICY ('policyDelta', index\/motion) and VALUE ('valueDelta', palette\/recolour)
     channel that compose in either order to frame @t+1@, while neither alone reaches it — the
-    Option-2 temporal decomposition, two independent data-manufactured targets.
+    Option-2 temporal decomposition, two independent data-manufactured targets. Here "motion" is
+    the IndexDelta BETWEEN frames; a single frame's index is content, not policy. Per-frame is
+    TWO CONTENT heads (discrete 'cIndex' + continuous 'cPalette'); policy\/value live on the
+    temporal delta.
   * 'lawPaletteIndexGaugeInvariant' — pixels are invariant under a JOINT relabelling of palette
     and index, so frames must be compared in FUSED pixel space ('buildPixels'); comparing the
     raw palette slot-by-slot or the raw index is ill-posed (the gauge the VALUE target quotients).
+
+== GIF89a FIDELITY
+
+Separate the GIF-NATIVE invariants from the SixFour-ADDED working-space constraints:
+
+  * GIF-NATIVE: a colour table has @≤ 256@ entries (@2^(n+1)@ for @n+1@ bits); entries are
+    8-bit sRGB triples; the table order is GAUGE-FREE (permute the slots + remap the indices
+    and the rendered pixels are byte-identical — 'lawPaletteIndexGaugeInvariant'); the index
+    plane is a LOSSLESS DISCRETE codebook map (the per-frame @cIndex@ is content, not an MDP
+    action); @minCodeSize = max(2, ceil(log2 N))@.
+  * SixFour-ADDED: the palette colours are carried in OKLab Q16 (the integer working space,
+    NOT a GIF storable form); the relational total order on the table
+    ("SixFour.Spec.SynthesisPolicyValue" @lawPaletteRelationallyOrdered@) ADDS information the
+    gauge-free GIF table does not have. The OKLab → sRGB8 export boundary
+    ("SixFour.Spec.ColorFixed") is where the GIF-native 8-bit table is produced.
 
 Additive: reuses "SixFour.Spec.SameObjectInvariance" @Cube@ and
 "SixFour.Spec.OctreeGenome" @octreeLeafCount@. No new substrate, no golden re-pin.
@@ -115,7 +133,11 @@ isIdentityIndex c = cIndex c == identityIndex (cDepth c)
 -- @t@'s palette. Holds the colour table FIXED (@cPalette ct@) and advances only the index
 -- (@cIndex ctNext@) — the displacement of regions with no colour change, the "the policy moved"
 -- half of @t → t+1@. Well-formed at equal depth when @cPalette ct@ covers @cIndex ctNext@ (guard
--- the result with 'validConstruction'); the data-manufactured POLICY target is @cIndex ctNext@.
+-- the result with 'validConstruction'). NOTE: 'policyDelta' merely builds frame @t+1@'s index
+-- FIELD carried under frame @t@'s palette; the actual POLICY\/ACTION is the inter-frame
+-- IndexDelta TRANSPORT (@HierarchicalDelta.indexDeltaOf ct ctNext@ = the per-voxel
+-- @(oldSlot,newSlot)@ displacement), NOT the static index map. The per-frame index alone is
+-- discrete CONTENT (a lossless VQ-style codebook map), carrying no action.
 policyDelta :: Construction -> Construction -> Construction
 policyDelta ct ctNext = ct { cIndex = cIndex ctNext }
 
@@ -195,7 +217,10 @@ lawIdentityIndexIsPaletteInOrder d pal0 =
 
 -- | THE OPTION-2 DECOMPOSITION: an inter-frame step @t → t+1@ separates into ORTHOGONAL channels
 -- — POLICY ('policyDelta', index\/motion) and VALUE ('valueDelta', palette\/recolour) — that
--- compose, in EITHER order, to exactly frame @t+1@, while NEITHER channel alone reaches it. The
+-- compose, in EITHER order, to exactly frame @t+1@, while NEITHER channel alone reaches it.
+-- Here POLICY = the IndexDelta BETWEEN frames (motion); a single frame's index is CONTENT, not
+-- policy. Per-frame, the GIF is TWO CONTENT heads (discrete 'cIndex' + continuous 'cPalette');
+-- policy\/value live on the temporal delta, NOT within a frame. The
 -- two are disjoint record axes of 'Construction', so each can carry its own data-manufactured
 -- target without entangling the other — the structural justification for two temporal heads.
 -- Closed witness: a frame where BOTH the palette and the index move — applying only the policy

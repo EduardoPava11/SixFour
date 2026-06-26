@@ -1,11 +1,18 @@
 {- |
 Module      : SixFour.Spec.SynthesisPolicyValue
-Description : The GIF synthesis as an AlphaGo-style POLICY + VALUE factorization — POLICY = the index map (WHERE = which of K=256 palette slots, a categorical integer argmax), VALUE = the per-frame palette (WHAT-COLOUR, a Q16 colour table). @pixels = value[policy] = palette[index]@. Binds the byte-exact reconstruction to the per-frame ≤K budget on ONE object ("SixFour.Spec.Upscale256" @UpscaleOutput@), and pins the colours "finding a home in relation to each other" (the d6-restricted entry ordering).
+Description : The GIF synthesis factored into TWO CONTENT heads — a DISCRETE index-code (@cIndex@/@outCube@, a lossless VQ-style codebook map) and a CONTINUOUS colour table (@cPalette@/@outPalettes@). @pixels = palette[index]@ is the GIF GATHER. The AlphaGo policy/value vocabulary is used here ONLY as an analogy for the two generative heads; true POLICY/ACTION (motion) and VALUE-to-go live on the INTER-FRAME axis ("SixFour.Spec.HierarchicalDelta" IndexDelta/ColourDelta), not within a single frame. Binds the byte-exact reconstruction to the per-frame ≤K budget on ONE object ("SixFour.Spec.Upscale256" @UpscaleOutput@), and pins the colours "finding a home in relation to each other" (the d6-restricted entry ordering).
 
-This is NOT new math. The factorization already exists, typed, in "SixFour.Spec.ConstructionEncoder"
-(@cIndex@ = the policy, @cPalette@ = the value, @buildPixels = palette[index]@) and the per-frame
-≤K=256 budget already holds green over "SixFour.Spec.Upscale256" (@upscaleWithinBudget@). This module
-is the HONEST middle:
+A GIF frame factors into TWO CONTENT heads — a DISCRETE index-code (@cIndex@\/@outCube@, a
+lossless VQ-style codebook map) and a CONTINUOUS colour table (@cPalette@\/@outPalettes@).
+@pixels = palette[index]@ is the GIF GATHER. The AlphaGo policy\/value vocabulary is used here
+ONLY as an analogy for the two generative heads; true POLICY\/ACTION (motion) and VALUE-to-go
+live on the INTER-FRAME axis ("SixFour.Spec.HierarchicalDelta" @IndexDelta@\/@ColourDelta@), not
+within a single frame.
+
+This is NOT new math. The two-head factorization already exists, typed, in
+"SixFour.Spec.ConstructionEncoder" (@cIndex@ = the discrete content code, @cPalette@ = the colour,
+@buildPixels = palette[index]@) and the per-frame ≤K=256 budget already holds green over
+"SixFour.Spec.Upscale256" (@upscaleWithinBudget@). This module is the HONEST middle:
 
   * the BRIDGE — @ConstructionEncoder.Construction@ is flat over the @8^d@ lattice (no t-axis), so the
     per-frame budget that lives over @Upscale256@ is uncomputable on it. We bind directly to
@@ -13,7 +20,35 @@ is the HONEST middle:
     carries the t-axis, so composition (@value[policy]@) and the per-frame budget hold on the SAME object.
   * the ONE genuinely-new tooth — 'lawPaletteRelationallyOrdered': the palette ENTRIES are ordered by
     'colourL1' (the @(L,a,b)@ restriction of the @d6@ metric) so adjacent indices are perceptually close
-    (the owner's "find them a home in relation to each other"). A random permutation FAILS it.
+    (the owner's "find them a home in relation to each other"). A random permutation FAILS it. This is
+    a SixFour-ADDED constraint, NOT part of GIF89a — see the GIF89a FIDELITY note below.
+
+== GIF89a FIDELITY
+
+Separate the GIF-NATIVE invariants from the SixFour-ADDED working-space constraints:
+
+  * GIF-NATIVE: a colour table has @≤ 256@ entries (@2^(n+1)@); entries are 8-bit sRGB triples; the
+    table order is GAUGE-FREE (permute the slots + remap every index and the RENDERED pixels are
+    byte-identical — 'lawReconstructionGaugeInvariant'); the index plane is a LOSSLESS DISCRETE
+    codebook map; @minCodeSize = max(2, ceil(log2 N))@.
+  * SixFour-ADDED: the OKLab Q16 colour working space (NOT a GIF storable form), and the relational
+    total order on the table ('lawPaletteRelationallyOrdered'). Because GIF's Local Color Table is
+    gauge-free, a relational ordering ADDS information and must NOT be read as a GIF identity. The
+    OKLab Q16 → sRGB8 export boundary ("SixFour.Spec.ColorFixed") is where the GIF-native table is
+    produced.
+
+== Architecture scope
+
+The two CONTENT heads live at LABELLED rungs ('lawHeadsLiveAtLabeledRungs'):
+
+  * the index-CODE head's analysis\/capture rung is @64³ = 8^6@ (@d=6@), so
+    @committedIndexBytes == 262144@;
+  * the colour-LOOKUP head's identity rung is @16³@ (@coarseIdentitySide = 16@), where
+    @16² = 256 = kPaletteSlots@ means a frame IS a palette.
+
+The next-scale inventor (@256³@) is honestly scoped as a DOWNSTREAM DETERMINISTIC ENDGAME
+("SixFour.Spec.Upscale256") — a pure recompute consuming the @64³@ policy+value, NOT the same
+learned trunk. Do not read this module as full-scope learned coverage of the @256³@ act.
 
 This VALUE is GENERATIVE COLOUR (the palette the GIF is built from), NOT the deleted Bradley-Terry
 preference value ("SixFour.Spec.ValueHead" is retired). The committed POLICY is an integer argmax (no
@@ -31,6 +66,8 @@ module SixFour.Spec.SynthesisPolicyValue
     -- * The policy / value views of a synthesis (Upscale256)
   , policyOf
   , valueOf
+  , codeOf
+  , lookupOf
   , reconstructFrame
   , policyInRange
   , synthesisWellFormed
@@ -45,13 +82,15 @@ module SixFour.Spec.SynthesisPolicyValue
   , lawValueIsPerFrameBudget
   , lawPaletteRelationallyOrdered
   , lawSixteenCubedIsIdentity
+  , lawReconstructionGaugeInvariant
+  , lawHeadsLiveAtLabeledRungs
   ) where
 
 import Data.List (minimumBy, delete)
 import Data.Ord  (comparing)
 import qualified Data.Vector as V
 
-import SixFour.Spec.Upscale256        (UpscaleOutput(..), PxQ16)
+import SixFour.Spec.Upscale256        (UpscaleOutput(..), PxQ16, lawK0PaletteExact)
 import SixFour.Spec.SuperResPalette   (upscaleWithinBudget)
 import qualified SixFour.Spec.CoarseIsPalette     as CIP
 import qualified SixFour.Spec.ConstructionEncoder as CE
@@ -84,13 +123,23 @@ coarseIdentitySide = 16
 -- The policy / value views (over Upscale256.UpscaleOutput = the per-t (value, policy) pair)
 -- =============================================================================
 
--- | The POLICY: per-frame index planes (which palette slot each voxel points at).
+-- | The DISCRETE CONTENT head: per-frame index planes (the gauge-free codebook map each voxel
+-- points at). (Named 'policyOf' for the AlphaGo analogy; the honest alias is 'codeOf'.)
 policyOf :: UpscaleOutput -> [V.Vector Int]
 policyOf = outCube
 
--- | The VALUE: per-frame palettes (the actual Q16 colours).
+-- | The CONTINUOUS CONTENT head: per-frame colour tables. (Named 'valueOf' for the AlphaGo
+-- analogy; the honest alias is 'lookupOf'.)
 valueOf :: UpscaleOutput -> [[PxQ16]]
 valueOf = outPalettes
+
+-- | Honest alias of 'policyOf': the DISCRETE index-CODE head (no MDP policy at the per-frame level).
+codeOf :: UpscaleOutput -> [V.Vector Int]
+codeOf = policyOf
+
+-- | Honest alias of 'valueOf': the CONTINUOUS colour-LOOKUP table head.
+lookupOf :: UpscaleOutput -> [[PxQ16]]
+lookupOf = valueOf
 
 -- | The composition @value[policy]@ for one frame: look each policy index up in the value table.
 reconstructFrame :: [PxQ16] -> V.Vector Int -> [PxQ16]
@@ -169,7 +218,10 @@ lawValueIsPerFrameBudget =
 -- | THE NEW TOOTH — the colours "find a home in relation to each other": ordering a scrambled
 -- palette by 'relationallyOrder' re-homes it (non-trivial), is idempotent (an already-homed
 -- palette stays), and lowers the adjacent perceptual cost. Teeth: a random permutation is NOT
--- relationally ordered.
+-- relationally ordered. NOTE: this is a SixFour-ADDED constraint, NOT part of GIF89a; GIF's Local
+-- Color Table is GAUGE-FREE, so a relational ordering ADDS information and must not be read as a
+-- GIF identity. The OKLab Q16 → sRGB8 export boundary ("SixFour.Spec.ColorFixed") is where the
+-- GIF-native (gauge-free, 8-bit sRGB) table is actually produced.
 lawPaletteRelationallyOrdered :: Bool
 lawPaletteRelationallyOrdered =
   let scrambled = [(0,0,0),(30,0,0),(10,0,0),(20,0,0)] :: [PxQ16]
@@ -187,6 +239,40 @@ lawSixteenCubedIsIdentity =
      coarseIdentitySide * coarseIdentitySide == kPaletteSlots
   && CIP.lawCoarseFrameSizeIsPaletteSize
   && CE.identityIndex 4 == [0 .. 4095]   -- 8^4 = 4096 voxels; position v reads slot v
+
+-- | GAUGE INVARIANCE on the TRAINING surface ('reconstructFrame', the @value[policy]@ MLX reads):
+-- permuting the palette table by @σ@ and remapping every index by @σ⁻¹@ leaves the FUSED rendered
+-- pixels byte-identical, while BOTH the raw palette AND the raw index differ. So reconstruction\/
+-- agreement must be measured on fused @palette[index]@ pixels, never slot-by-slot or on the raw
+-- index — the gauge the VICReg variance-floor is blind to. Closed witness: a 3-slot palette with
+-- slots 0↔2 swapped + the matching index remap. Companion to
+-- "SixFour.Spec.ConstructionEncoder" @lawPaletteIndexGaugeInvariant@ on the synthesis surface.
+-- Teeth: a slot-by-slot or raw-index agreement metric FAILS here (both raw forms differ) while the
+-- fused pixels are identical.
+lawReconstructionGaugeInvariant :: Bool
+lawReconstructionGaugeInvariant =
+  let pal  = [(0,0,0),(100,0,0),(50,0,0)] :: [PxQ16]
+      idx  = V.fromList [0,1,2,1,0]
+      sigma s = case s of { 0 -> 2; 2 -> 0; x -> x }   -- σ = σ⁻¹: transposition (0 2)
+      palP = [(50,0,0),(100,0,0),(0,0,0)] :: [PxQ16]    -- pal permuted by σ
+      idxP = V.map sigma idx                            -- index remapped by σ⁻¹
+  in reconstructFrame pal idx == reconstructFrame palP idxP   -- SAME fused pixels (gauge-invariant)
+     && pal /= palP                                            -- ...although the raw palette differs
+     && V.toList idx /= V.toList idxP                          -- ...and the raw index differs
+
+-- | The two CONTENT heads live at LABELLED rungs (honest architecture scope): (a) the analysis\/
+-- capture rung is @64³ = 8^6@, so @committedIndexBytes == 8^6 == 262144@; (b) the identity rung is
+-- @16³@ with @coarseIdentitySide² == kPaletteSlots == 256@ (a @16³@ frame IS a palette); (c)
+-- "SixFour.Spec.Upscale256"'s @256³@ act is a SEPARATE DETERMINISTIC endgame consuming the @64³@
+-- policy+value — a pure recompute carrying ZERO learned trunk params, witnessed by delegating its
+-- determinism fact @lawK0PaletteExact@ (@k=0@ reproduces @P_t@ byte-identically). Teeth: the
+-- arithmetic conjuncts FAIL if a rung is mislabelled; the recompute conjunct FAILS if the @256³@
+-- endgame were not byte-deterministic.
+lawHeadsLiveAtLabeledRungs :: Bool
+lawHeadsLiveAtLabeledRungs =
+     8 ^ (6 :: Int) == committedIndexBytes && committedIndexBytes == 262144
+  && coarseIdentitySide * coarseIdentitySide == kPaletteSlots && kPaletteSlots == 256
+  && lawK0PaletteExact [(0,0,0),(100,0,0)] [(50,0,0),(150,0,0)] [0,1]
 
 -- =============================================================================
 -- Witnesses (closed, with teeth — the established ConstructionEncoder style)

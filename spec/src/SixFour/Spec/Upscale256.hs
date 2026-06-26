@@ -32,6 +32,16 @@ The spec keeps the cube geometry PARAMETRIC (frames T, side S, palette size P)
 so the properties run on tiny cubes; the app instantiates T = S = 64, P = 256.
 The golden pin uses a deterministic FNV-1a 64 checksum ('outputChecksum') —
 the spec-side stand-in for the SHA-256 the device asserts.
+
+== Architecture scope
+
+This @256³@ act is the DOWNSTREAM DETERMINISTIC ENDGAME of the synthesis: it CONSUMES the @64³@
+policy+value heads of "SixFour.Spec.SynthesisPolicyValue" (which live at the @64³@ analysis rung
+and the @16³@ identity rung) and RECOMPUTES the @256³@ output by exact integer blend\/quantize. It
+carries ZERO learned trunk params — @k=0@ reproduces @P_t@ byte-identically ('lawK0PaletteExact').
+So the next-scale inventor is NOT the same learned trunk as the policy\/value heads; it is a pure
+deterministic recompute scoped here, witnessed by
+"SixFour.Spec.SynthesisPolicyValue" @lawHeadsLiveAtLabeledRungs@.
 -}
 -- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.Upscale256

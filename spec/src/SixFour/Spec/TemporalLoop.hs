@@ -213,10 +213,14 @@ lawTemporalLiftMatchesHaar x y =
       HaarPaletteI rt lv = analyzeFixed [x, y]
   in rt == p && lv == [[d]]
 
--- | 'temporalCos' and 'temporalResidual' are pure integer functions ⇒ identical
--- cross-device. Tautological in pure Haskell by design; pinned as a regression guard that
--- no float\/IO can be smuggled into the shipped temporal path. The real guarantee is the
--- integer-only construction.
+-- | 'temporalCos' and 'temporalResidual' stay integer\/byte-exact ⇒ identical cross-device.
+-- A regression guard that no float can be smuggled into the shipped temporal path, with
+-- SUBSTANTIVE (non-reflexive) teeth: (a) @abs (temporalCos t) <= cosScaleQ16@ — every modulation
+-- is an IN-RANGE Q16 table read (FAILS if 'temporalCos' returned an unscaled\/float value or an
+-- out-of-table index), and (b) @haarJoinTime (haarSplitTime xs) == xs@ — the residual projection
+-- is integer BYTE-RECOVERABLE (FAILS for a lossy residual). @x == x@ proved nothing; this
+-- exercises the value range and the inverse.
 lawTemporalDeterministic :: Int -> [OKLabI] -> Bool
 lawTemporalDeterministic t xs =
-  temporalCos t == temporalCos t && temporalResidual xs == temporalResidual xs
+     abs (temporalCos t) <= cosScaleQ16
+  && haarJoinTime (haarSplitTime xs) == xs

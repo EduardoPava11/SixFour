@@ -17,4 +17,8 @@ tests = testGroup "SynthesisPolicyValue (the GIF synthesis as policy[index] + va
       once lawPaletteRelationallyOrdered
   , testProperty "at 16³ the policy is identity and the value IS the frame (16²=256)" $
       once lawSixteenCubedIsIdentity
+  , testProperty "reconstruction agreement is gauge-invariant in FUSED palette[index] space (raw forms differ)" $
+      once lawReconstructionGaugeInvariant
+  , testProperty "the two content heads live at labelled rungs (8^6=262144; 16²=256; 256³ = separate deterministic endgame)" $
+      once lawHeadsLiveAtLabeledRungs
   ]

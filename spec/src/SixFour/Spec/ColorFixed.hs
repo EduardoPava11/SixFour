@@ -22,6 +22,11 @@ no libm: trivially identical in Haskell 'Int' (64-bit) and Zig 'i64'.
 Constants below are the Ottosson M1/M2 matrices rounded to Q16; the SAME integer
 literals are hard-coded in @Native/src/kernels.zig@. Do not "simplify" either copy
 independently.
+
+== GIF89a boundary
+'linearToOklabQ16' produces the SixFour WORKING space (OKLab Q16); OKLab is NOT a GIF-storable
+form. The emit path ('oklabToSrgb8Q16') round-trips back to the GIF-native sRGB-interpreted 8-bit
+table — the gauge-free @≤ 256@-entry Local Color Table the GIF actually carries.
 -}
 -- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.ColorFixed

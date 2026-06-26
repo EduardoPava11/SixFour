@@ -39,5 +39,9 @@ tests = testGroup "DeltaSurrogate (differentiable training surrogates; hard comm
       , testProperty "cross-entropy strictly prefers the target slot (a genuine classification objective)" $
           forAll (choose (0, 10)) $ \k -> forAll (choose (0, 30)) $ \t -> forAll (choose (0, 30)) $ \w ->
             lawPolicyCrossEntropyPrefersTarget k t w
+      , testProperty "BACKWARD: CE gradient step lowers loss + argmax reaches the data slot (train-time)" $
+          once lawPolicyCEGradientMovesTowardTarget
+      , testProperty "COMMIT: margin-guarded commit falls back to the data slot at a float near-tie" $
+          once lawPolicyArgmaxMarginOrFallback
       ]
   ]

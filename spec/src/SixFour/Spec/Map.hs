@@ -88,7 +88,7 @@ The ENTROPY-EARNED ENCODER CHAIN (2026-06-23) — every encoder dimension earned
 organised by entropy, mutation-verified (each law falsifiable by a killer mutant in @cabal repl@):
 
   * "SixFour.Spec.Q16"                  — the single float→int seam (@quantizeQ16@, round-half-even)
-  * "SixFour.Spec.SynthesisPolicyValue" — ★ the GIF synthesis as AlphaGo policy[index] + value[palette]
+  * "SixFour.Spec.SynthesisPolicyValue" — ★ the GIF synthesis as TWO CONTENT heads: discrete index-code + continuous palette (AlphaGo policy/value analogy ONLY; true policy/value is INTER-FRAME). Fused-space gauge law (@lawReconstructionGaugeInvariant@); rungs labelled, @256³@ = separate deterministic endgame (@lawHeadsLiveAtLabeledRungs@); OKLab + relational order = SixFour-ADDED, GIF table is gauge-free sRGB @≤256@
   * "SixFour.Spec.HalfwayLatent"        — ★ the fuse IS the 32³ midpoint (@lawFuseIsMidpoint@: 64·512=32768)
   * "SixFour.Spec.EncoderModalityLoad"  — the 3 modality loads on one non-negative bit axis (ridged colour rate)
   * "SixFour.Spec.EncoderWidthAlloc"    — width = entropy share of the fixed 512 (Hamilton largest-remainder)
@@ -401,7 +401,9 @@ semantic embedding that @buildPixels@ EXECUTES to a @SameObjectInvariance.Cube@:
 @lawConstructionExecutesToPixels@ = the encoder IS the palette lookup,
 @lawBuildIsTotalOnValid@ = a valid construction builds exactly @8^d@ voxels,
 @lawBuildRespectsIndex@ = the index map carries information (the section-injectivity
-GifDualView rides). Q16 substrate twin of the float @Palette@/@Indices@. Additive),
+GifDualView rides). @cIndex@ = discrete CONTENT code (a lossless VQ-style codebook map),
+@cPalette@ = colour; policy/value are RESERVED for the inter-frame delta, NOT a single frame.
+Q16 substrate twin of the float @Palette@/@Indices@. Additive),
 "SixFour.Spec.HierarchicalDelta" (★ "abstract the H" — the inter-frame DELTA as a hierarchical
 object: ONE @HierarchicalDelta@ interface (@coarseBand@/@fineBand@ that reassemble losslessly,
 @lawHierarchyLosslessSplit@) instantiated by TWO different carriers — VALUE @ColourDelta@ (abelian
@@ -423,7 +425,11 @@ the proof each HARD COMMIT re-enters its byte-exact carrier. VALUE = OKLab REGRE
 CLASSIFICATION (@PolicySurrogate@ softmax+CE, NOT an L2 over slot numbers). KEYSTONE
 @lawPolicySurrogateDecodesToTransport@ = the argmax commit equals the data-manufactured @IndexDelta@
 (the learned-continuous ↔ proven-discrete bridge, closed for policy); @lawPolicyArgmaxDeterministic@
-= lowest-index tie-break (no float commits a byte). Collapse-safety inherited from the
+= lowest-index tie-break (no float commits a byte). @lawPolicyCEGradientMovesTowardTarget@ = the
+TRAIN-TIME BACKWARD path (@policyGradStep@: one CE step strictly lowers loss + the argmax converges
+to the byte-exact data slot); @lawPolicyArgmaxMarginOrFallback@ = the LOGIT-MARGIN commit
+(@commitWithMargin@/@policyMarginEps@: at a sub-eps float near-tie, fall back to the data slot rather
+than a device-dependent argmax). Collapse-safety inherited from the
 data-manufactured carriers. Additive),
 "SixFour.Spec.NudgeContamination" (★ the collapse-safety QUARANTINE for a USER nudge — a taste
 steer enters ONLY the invented detail (the latent tail) and CANNOT move the self-supervised energy,
@@ -656,7 +662,7 @@ GIF89a Application-Extension, CRC32-checked, total Absent\/Corrupt\/VersionMisma
 == 5. The authoring STORY (Acts I–IV) — the user-facing pipeline the NN lives in
 "SixFour.Spec.StageA" (Act I, @16²@ per-frame) · "SixFour.Spec.QuartetDelta" (Act II, @4⁴@ quartet core) ·
 "SixFour.Spec.HaarRibbon" (Act III, @2⁸@ Haar abstraction) · "SixFour.Spec.Export" (Act IV, the global pack
-@{16³,64³,256³}@) · "SixFour.Spec.Upscale256" (Act IV, the residual-seeded @256³@ super-res of the export pack)
+@{16³,64³,256³}@) · "SixFour.Spec.Upscale256" (Act IV, the residual-seeded @256³@ super-res of the export pack — a SEPARATE DETERMINISTIC ENDGAME consuming the @64³@ policy+value, zero learned trunk params; rungs labelled in @SynthesisPolicyValue.lawHeadsLiveAtLabeledRungs@)
 · "SixFour.Spec.AtlasCascade" (Act IV, the two-cube cascade @ExitState@ — QUAD-literal carry/reset for the @64³ → 256³@ warm start).
 
 == 6. Dither & index encoding
