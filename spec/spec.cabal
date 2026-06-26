@@ -115,6 +115,7 @@ library
         SixFour.Spec.MetricLattice
         SixFour.Spec.RefinementSystem
         SixFour.Spec.RefinementCarriers
+        SixFour.Spec.GaussianChroma
         SixFour.Spec.TransportGroup
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
@@ -398,6 +399,7 @@ test-suite spec-tests
         Properties.MetricLattice
         Properties.RefinementSystem
         Properties.RefinementCarriers
+        Properties.GaussianChroma
         Properties.TransportGroup
         Properties.TemporalData
         Properties.DeltaSurrogate

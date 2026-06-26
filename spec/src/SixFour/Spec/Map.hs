@@ -458,6 +458,13 @@ abstraction GOVERNS, not parallels: @ColourDelta@ is a real @RModule ℤ@ (insta
 @OctLeaf8@ is a real @ReversibleLift@ whose @liftF@ IS @OctreeCell.liftOct@ (@lawOctLeafLiftIsLiftOct@),
 OVERRIDING the generic prefix-difference default (@lawOctLeafOverridesDefault@). Uses the new
 @ReversibleLift@ @liftF@/@unliftF@ methods. Additive),
+"SixFour.Spec.GaussianChroma" (★ the @ℤ[i]@ CHROMA KNOB the capstone unlocked, carried toward the
+trainer: pack the two OKLab chroma axes @(a,b)@ into ONE Gaussian integer @a+b·i@ (L stays real) ⇒
+@GColourDelta@ is a second fixed-shape @RModule ℤ@ (every module law strict, incl. additive inverse —
+unlike ragged @ColourDelta@). FAITHFUL re-encoding (@lawChromaAddAgreesWithRealPairs@) that UNLOCKS a
+hue-rotation operator two scalar channels lack: complex multiply rotates\/scales the chroma plane,
+the unit @i@ = an exact 90° quarter-turn (@lawChromaUnitIsQuarterTurn@), norm-preserving
+(@lawChromaUnitRotationPreservesNorm@), order 4 (@lawChromaQuarterTurnOrderFour@). Additive),
 "SixFour.Spec.TransportGroup" (★ the POLICY channel's algebra — @IndexDelta@ as a NON-ABELIAN
 transport group acting on the index set, the counterpart to the VALUE channel's abelian @ColourDelta@
 ℤ-module. @tcomp@ chains, @tinv@ reverses, @tbetween@ data-manufactures; @lawTransportActionHomomorphism@
