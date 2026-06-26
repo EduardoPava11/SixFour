@@ -103,6 +103,9 @@ PAL_CH = 3  # OKLab triples (a,b are 0 until the per-frame chroma loader lands)
 # into the N_PAL palette slots (the GIF index map). TAU = straight-through softmax temperature.
 N_VOX = N_PAL
 TAU = 0.5
+# Cross-device logit-margin floor for the index commit (mirrors spec policyMarginEps): below this
+# top1-top2 gap, float argmax is not cross-device deterministic, so commit the data slot instead.
+MARGIN_EPS = 1e-4
 
 
 # ===========================================================================
@@ -181,6 +184,25 @@ def straight_through_onehot(logits, tau):
     hard = mx.argmax(logits, axis=-1)
     y_hard = mx.eye(logits.shape[-1])[hard]          # one-hot over the last (slot) axis
     return y_hard + (y_soft - mx.stop_gradient(y_soft))
+
+
+# ===========================================================================
+# STEP 2 byte-exact GIF index COMMIT (spec lawPolicyArgmaxMarginOrFallback). Done in float64 off
+# the GPU. Per voxel: emit the argmax slot ONLY when (top1 - top2) > MARGIN_EPS; below the margin
+# the float argmax is NOT cross-device deterministic, so commit the data-manufactured (byte-exact)
+# fallback slot instead. This gives the discrete index the same cross-device guarantee the value
+# head gets from Q16 rounding -- an MLX float never decides the committed slot at a near-tie.
+# ===========================================================================
+def commit_index(logits_np, fallback):
+    out = []
+    for v in range(logits_np.shape[0]):
+        row = logits_np[v]
+        order = np.argsort(row)[::-1]
+        if (row[order[0]] - row[order[1]]) > MARGIN_EPS:
+            out.append(int(order[0]))
+        else:
+            out.append(int(fallback[v]))
+    return out
 
 
 # ===========================================================================
@@ -368,12 +390,21 @@ def demo_byte_commit(head, tokens_b, masks, example0, d6):
     _latent, raws, _palette, idx_logits = head(tokens_b[0], d6)
     mx.eval(raws, idx_logits)
     m = masks[0]
-    # STEP 2: the GIF index commit is a DISCRETE argmax (integer slot per voxel), genuinely
-    # byte-exact like the band commit. The cross-device near-tie guard is the spec's
-    # lawPolicyArgmaxMarginOrFallback (emit the byte only when top1-top2 > eps, else data slot).
-    committed_index = [int(j) for j in np.array(mx.argmax(idx_logits.reshape(N_VOX, N_PAL), axis=-1))]
-    print(f"    committed GIF index raster (octant 0, {N_VOX} voxels) = {committed_index}  "
-          f"(discrete integer slots in [0,{N_PAL}))")
+    # STEP 2: the GIF index commit is margin-guarded (spec lawPolicyArgmaxMarginOrFallback). The
+    # data-manufactured fallback is the identity slot (palette_target[v] == cube[v], byte-exact).
+    fallback = list(range(N_VOX))
+    logits_np = np.array(idx_logits.reshape(N_VOX, N_PAL)).astype(np.float64)
+    committed_index = commit_index(logits_np, fallback)
+    print(f"    committed GIF index raster (octant 0) = {committed_index}  "
+          f"(margin-guarded, discrete slots in [0,{N_PAL}))")
+    # Force a sub-eps near-tie on voxel 0: naive argmax flips on 5e-7 of float noise; the guard
+    # falls back to the byte-exact data slot -- the cross-device determinism the spec law pins.
+    tie = logits_np.copy(); tie[0] = 0.0; tie[0, 0] = 5.0; tie[0, 1] = 5.0 + 5e-7
+    naive_tie = int(np.argmax(tie[0]))                       # 1 (the 5e-7-larger slot)
+    guarded_tie = commit_index(tie, fallback)[0]             # fallback[0] = 0 (data slot)
+    tie_ok = (naive_tie == 1) and (guarded_tie == fallback[0])
+    print(f"    near-tie [5.0, 5.0+5e-7] on voxel 0: naive argmax={naive_tie} (float-noise decides) "
+          f"vs margin-guard={guarded_tie} (data slot) -> {'FALLBACK FIRES' if tie_ok else 'GUARD FAILED'}")
     # ==== BYTE-COMMIT BOUNDARY: below here is Python float64 -> integer, never MLX ====
     raw_f64 = float(np.array(raws[m]).astype(np.float64))   # numpy: float64 extraction
     committed = quantize_q16(raw_f64)                        # q16.py:28-34, round-half-even
@@ -389,8 +420,8 @@ def demo_byte_commit(head, tokens_b, masks, example0, d6):
     floor_ok = (floor_band == quantize_q16(floor_raw))
     print(f"    floor cross-check: theta_b.predict_masked_band(zero, ex0) = {floor_band} "
           f"== quantize_q16(raw={floor_raw}) -> {floor_ok}  (same single float->byte crossing)")
-    ok = isinstance(committed, int) and floor_ok
-    print(f"    -> {'BYTE-COMMIT PRESERVED (Python float64 round; MLX never decides the byte)' if ok else 'BYTE-COMMIT FAILED'}")
+    ok = isinstance(committed, int) and floor_ok and tie_ok
+    print(f"    -> {'BYTE-COMMIT PRESERVED (band Q16 round + index margin-guard; MLX never decides a byte)' if ok else 'BYTE-COMMIT FAILED'}")
     return ok
 
 
