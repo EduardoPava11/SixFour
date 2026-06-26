@@ -412,6 +412,13 @@ so invertible) — plus @bandedDeltaTarget@ = the data-delta octant pyramid reus
 @lawHierarchicalDeltaTargetIsDataManufactured@ + @lawDeltaBandsArePerBandDataProvenance@ strengthen
 @JepaTarget.lawNoSelfProducedRolloutTarget@ per-STEP→per-BAND (closes the coarse-to-fine L_close
 escape). Additive; re-pins nothing),
+"SixFour.Spec.RootLatticeDetail" (★ ALGEBRA of the band count — the "1 coarse + (b-1) detail"
+structure IS the split exact sequence @0 → A_{b-1} → ℤ^b → ℤ → 0@: coarse = the rank-1 sum
+functional Σ, detail = its kernel @A_{b-1}@ (the densest-packing root lattice, mean-free /
+vanishing-zeroth-moment). @lawBandCountEqualsRank@ makes the band count @b-1@ a THEOREM for ANY
+branching (b=8 octant → 7 = rank A_7 via @lawOctantIsA7@), @lawRootCoordsRoundTrip@ = A_{b-1} is the
+free ℤ-module on the simple roots, @lawDetailKernelIsConstants@ = detail captures exactly the
+mean-free part. Gates the IDEALIZED LINEAR Haar skeleton, not the floored kernel. Additive),
 "SixFour.Spec.TemporalData" (★ the TIME-AXIS data engine — manufactures @(frame t, value target,
 policy target)@ records from a captured @(t, t+1)@ pair (the temporal sibling of @JepaData@'s
 spatial corpus). KEYSTONE @lawTemporalEngineRoundTrips@ = @reconstructNext (manufacture ct ctNext)

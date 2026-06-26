@@ -108,6 +108,7 @@ library
         SixFour.Spec.SameObjectJEPA
         SixFour.Spec.ConstructionEncoder
         SixFour.Spec.HierarchicalDelta
+        SixFour.Spec.RootLatticeDetail
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
         SixFour.Spec.NudgeContamination
@@ -381,6 +382,7 @@ test-suite spec-tests
         Properties.SameObjectJEPA
         Properties.ConstructionEncoder
         Properties.HierarchicalDelta
+        Properties.RootLatticeDetail
         Properties.TemporalData
         Properties.DeltaSurrogate
         Properties.NudgeContamination
