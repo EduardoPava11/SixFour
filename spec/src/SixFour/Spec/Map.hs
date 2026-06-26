@@ -425,6 +425,12 @@ colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\
 @lawObservableIsOrbitInvariant@. INVARIANT THEORY, not Galois: @lawPaletteGaugeIsNonAbelian@ pins
 @S_K@ ≠ the cyclic Frobenius @Gal(F_256/F_2)=ℤ/8@. Subsumes @lawPaletteIndexGaugeInvariant@,
 @lawReorderingPreservesObject@, @lawPhi6Involution@. Additive),
+"SixFour.Spec.ScaleFiltration" (★ the 16→64→256 = 2⁴→2⁶→2⁸ spine as a descending sublattice chain
++ octree-ball ULTRAMETRIC — the model's ONLY non-archimedean metric. The s-adic @valuation@ =
+octant-path divergence depth; @lawValuationUltrametric@ = the STRONG triangle, @lawUltrametricIsIsosceles@
+= the isosceles theorem, @lawL1NotUltrametric@ proves d6/ℓ¹ (archimedean) is genuinely DIFFERENT
+(closes the "d6 is 2-adic" overclaim). @lawDescendingChainIndex@ = refine by b = sⁿ (= 8 octant).
+Finite-depth (no completion claim). Additive),
 "SixFour.Spec.TemporalData" (★ the TIME-AXIS data engine — manufactures @(frame t, value target,
 policy target)@ records from a captured @(t, t+1)@ pair (the temporal sibling of @JepaData@'s
 spatial corpus). KEYSTONE @lawTemporalEngineRoundTrips@ = @reconstructNext (manufacture ct ctNext)

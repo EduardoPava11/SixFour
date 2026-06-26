@@ -110,6 +110,7 @@ library
         SixFour.Spec.HierarchicalDelta
         SixFour.Spec.RootLatticeDetail
         SixFour.Spec.GaugeAction
+        SixFour.Spec.ScaleFiltration
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
         SixFour.Spec.NudgeContamination
@@ -387,6 +388,7 @@ test-suite spec-tests
         Properties.HierarchicalDelta
         Properties.RootLatticeDetail
         Properties.GaugeAction
+        Properties.ScaleFiltration
         Properties.TemporalData
         Properties.DeltaSurrogate
         Properties.NudgeContamination
