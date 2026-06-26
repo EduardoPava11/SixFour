@@ -113,6 +113,7 @@ library
         SixFour.Spec.ScaleFiltration
         SixFour.Spec.RingReduction
         SixFour.Spec.MetricLattice
+        SixFour.Spec.RefinementSystem
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
         SixFour.Spec.NudgeContamination
@@ -393,6 +394,7 @@ test-suite spec-tests
         Properties.ScaleFiltration
         Properties.RingReduction
         Properties.MetricLattice
+        Properties.RefinementSystem
         Properties.TemporalData
         Properties.DeltaSurrogate
         Properties.NudgeContamination

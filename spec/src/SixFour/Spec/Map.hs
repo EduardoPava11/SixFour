@@ -444,6 +444,13 @@ Additive),
 @lawUnitBallsDiffer@ proves the knob is real (geometries differ at @d ≥ 2@); @lawLInfBoundedByL1@ the
 norm inequality. @p = 2@ (Euclidean → dual-lattice/sphere-packing) is a documented un-gated extension.
 Re-homes the d6 metric laws. Additive),
+"SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
+@CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
+base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
+the SAME laws hold over @R=ℤ[i]@ (Gaussian integers — the chroma knob) and a non-dyadic @b=3@ lift,
+proving GENERALIZATION not rename. NO @recip@ (field axiom absent by design — byte-exactness forbids
+dividing by non-units). @lawModuleSmul*@ (free-module = ColourDelta abstracted), @lawLiftRoundTrips@
+(the bijection), @lawLiftDetailCount@ = b-1 = rank A_{b-1} (ties RootLatticeDetail). Additive),
 "SixFour.Spec.TemporalData" (★ the TIME-AXIS data engine — manufactures @(frame t, value target,
 policy target)@ records from a captured @(t, t+1)@ pair (the temporal sibling of @JepaData@'s
 spatial corpus). KEYSTONE @lawTemporalEngineRoundTrips@ = @reconstructNext (manufacture ct ctNext)

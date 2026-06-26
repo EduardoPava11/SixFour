@@ -95,6 +95,7 @@ import qualified Properties.GaugeAction as GaugeAction
 import qualified Properties.ScaleFiltration as ScaleFiltration
 import qualified Properties.RingReduction as RingReduction
 import qualified Properties.MetricLattice as MetricLattice
+import qualified Properties.RefinementSystem as RefinementSystem
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
 import qualified Properties.NudgeContamination as NudgeContamination
@@ -255,6 +256,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , ScaleFiltration.tests
   , RingReduction.tests
   , MetricLattice.tests
+  , RefinementSystem.tests
   , TemporalData.tests
   , DeltaSurrogate.tests
   , NudgeContamination.tests
