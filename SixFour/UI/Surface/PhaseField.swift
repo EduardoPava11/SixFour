@@ -30,9 +30,9 @@ enum PhaseField {
         case .live:
             LivePhaseField(surface: surface, clock: clock, settings: settings, onShutter: onShutter)
         case .captured, .picked:
-            // A/B game RETIRED (branch spec/retire-ab-one-truth) — inert placeholder until the
-            // JEPA-based post-capture surface is built. The captured state renders the neutral field.
-            BootstrapPhaseField(surface: surface, clock: clock)
+            // Post-capture REVIEW bench (A/B game retired): the captured 64³ beside its 16³
+            // octree coarse, both on the Z₆₄ cursor, with EXPORT / RETAKE controls.
+            CapturedReviewPhaseField(surface: surface, clock: clock)
         case .exporting:
             ExportingPhaseField(surface: surface, clock: clock)
         case .done:

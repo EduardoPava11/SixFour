@@ -210,5 +210,8 @@ struct SurfaceView: View {
             for f in frames { cube.append(contentsOf: f) }
             surface.indexCube = cube
         }
+        // Build the 16³ octree-coarse substrate once, post-capture, for the review bench's
+        // coarse tile (byte-exact VoxelReduce of the committed 64³ cube).
+        surface.buildCoarseSubstrate()
     }
 }

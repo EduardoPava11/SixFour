@@ -43,6 +43,12 @@ final class Surface {
     /// Empty until review. A flat buffer keeps the value type cheap to carry.
     var indexCube: [UInt8] = []
 
+    /// The 16³ octree-coarse substrate — the byte-exact `VoxelReduce` reduction of the
+    /// committed 64³ `indexCube`, in Q16 OKLab (`[frame'][position']`, 16 frames × 256
+    /// positions). Built at `commit` by `buildCoarseSubstrate()`, read by `gifCell16` for the
+    /// review bench's coarse tile. Empty until a capture commits; cleared on retake.
+    var coarseSubstrate: [[VoxelReduce.Px]] = []
+
     /// The committed GIF file on disk — the Review Share source. Set by `commit(_:)` from
     /// the engine's `CaptureOutput.gifURL`; `nil` until a GIFA is rendered.
     var gifURL: URL?
@@ -77,6 +83,7 @@ final class Surface {
     /// `abStep` (`ABSurfaceMachine.swift`) and is the only writer of `phase`.
     func step(_ event: ABEvent) {
         phase = abStep(phase, event)
+        if phase == .live { coarseSubstrate = [] }   // retake drops the reviewed coarse cube
     }
 
     // MARK: κ-fed cursor advance (Z₆₄)
@@ -129,6 +136,55 @@ extension Surface {
         }
         guard i >= 0, i < palette.count else { return nil }
         return palette[i]
+    }
+
+    // MARK: - 16³ octree coarse (the review bench's coarse tile)
+
+    /// One cell of the 16³ octree-coarse tile at coarse-frame `t16` (0..<16). The substrate is
+    /// the byte-exact `VoxelReduce` reduction of the committed 64³ cube — the same coarse tier
+    /// the model reads — mapped back to sRGB8 through the canonical Q16 OKLab gamma path.
+    /// Returns `nil` until `buildCoarseSubstrate()` has run on a committed cube.
+    func gifCell16(_ x: Int, _ y: Int, _ t16: Int) -> SIMD3<UInt8>? {
+        let side = cubeSide / 4                  // 64 → 16 (2 spatial levels)
+        guard t16 >= 0, t16 < coarseSubstrate.count else { return nil }
+        guard x >= 0, x < side, y >= 0, y < side else { return nil }
+        let frame = coarseSubstrate[t16]
+        let p = y * side + x
+        guard p >= 0, p < frame.count else { return nil }
+        let lab = frame[p]
+        return SurfaceColor.oklabQ16ToSrgb8(SIMD3<Int32>(Int32(lab.0), Int32(lab.1), Int32(lab.2)))
+    }
+
+    /// Build (and cache) the 16³ coarse substrate from the committed 64³ cube. Each frame's
+    /// indexed sRGB8 is mapped to OKLab Q16 through the owned Zig kernel (`srgb8ToOklab`, the
+    /// one canonical forward), then `VoxelReduce.reduce` collapses 64³ → 16³ byte-exact. Called
+    /// once at `commit`; the result feeds `gifCell16`. Clears to empty if no cube is committed.
+    func buildCoarseSubstrate() {
+        coarseSubstrate = []
+        let side = cubeSide                       // 64
+        let ppf = SixFourShape.pixelsPerFrame     // 4096
+        guard !indexCube.isEmpty, !palettesPerFrame.isEmpty else { return }
+        let frames = indexCube.count / ppf
+        guard frames > 0, palettesPerFrame.count >= frames else { return }
+
+        var cube = [[VoxelReduce.Px]]()
+        cube.reserveCapacity(frames)
+        for t in 0..<frames {
+            let pal = palettesPerFrame[t]
+            var rgb = [UInt8](); rgb.reserveCapacity(ppf * 3)
+            for p in 0..<ppf {
+                let idx = Int(indexCube[t * ppf + p])
+                let c = idx < pal.count ? pal[idx] : SIMD3<UInt8>(0, 0, 0)
+                rgb.append(c.x); rgb.append(c.y); rgb.append(c.z)
+            }
+            guard let q16 = SixFourNative.srgb8ToOklab(rgb: rgb, k: ppf) else { return }
+            var frame = [VoxelReduce.Px](); frame.reserveCapacity(ppf)
+            for p in 0..<ppf {
+                frame.append((Int(q16[p * 3]), Int(q16[p * 3 + 1]), Int(q16[p * 3 + 2])))
+            }
+            cube.append(frame)
+        }
+        coarseSubstrate = VoxelReduce.reduce(2, side, cube).substrate
     }
 }
 
