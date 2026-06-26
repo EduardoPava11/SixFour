@@ -32,6 +32,7 @@ MODULES = [
     ("jepa_head_golden.py", True),
     ("temporal_data.py", True),
     ("delta_surrogate.py", True),
+    ("gaussian_chroma.py", True),
     ("dual_loss.py", True),
     ("test_centered_cube.py", True),
     ("test_cube_learning.py", True),
