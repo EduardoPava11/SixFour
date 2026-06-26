@@ -451,6 +451,12 @@ the SAME laws hold over @R=ℤ[i]@ (Gaussian integers — the chroma knob) and a
 proving GENERALIZATION not rename. NO @recip@ (field axiom absent by design — byte-exactness forbids
 dividing by non-units). @lawModuleSmul*@ (free-module = ColourDelta abstracted), @lawLiftRoundTrips@
 (the bijection), @lawLiftDetailCount@ = b-1 = rank A_{b-1} (ties RootLatticeDetail). Additive),
+"SixFour.Spec.TransportGroup" (★ the POLICY channel's algebra — @IndexDelta@ as a NON-ABELIAN
+transport group acting on the index set, the counterpart to the VALUE channel's abelian @ColourDelta@
+ℤ-module. @tcomp@ chains, @tinv@ reverses, @tbetween@ data-manufactures; @lawTransportActionHomomorphism@
++ @lawTransportInverse@ + @lawTransportNonAbelian@; KEY @lawCompositionIsChainingNotAddition@ proves
+policy deltas compose by CHAINING not addition ([2,0,1] ≠ [2,4,0]) — the law that forbids ever
+modeling the policy channel as additive. Completes the ANT generalization. Additive),
 "SixFour.Spec.TemporalData" (★ the TIME-AXIS data engine — manufactures @(frame t, value target,
 policy target)@ records from a captured @(t, t+1)@ pair (the temporal sibling of @JepaData@'s
 spatial corpus). KEYSTONE @lawTemporalEngineRoundTrips@ = @reconstructNext (manufacture ct ctNext)
