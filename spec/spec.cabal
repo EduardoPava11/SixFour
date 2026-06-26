@@ -111,6 +111,7 @@ library
         SixFour.Spec.RootLatticeDetail
         SixFour.Spec.GaugeAction
         SixFour.Spec.ScaleFiltration
+        SixFour.Spec.RingReduction
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
         SixFour.Spec.NudgeContamination
@@ -389,6 +390,7 @@ test-suite spec-tests
         Properties.RootLatticeDetail
         Properties.GaugeAction
         Properties.ScaleFiltration
+        Properties.RingReduction
         Properties.TemporalData
         Properties.DeltaSurrogate
         Properties.NudgeContamination

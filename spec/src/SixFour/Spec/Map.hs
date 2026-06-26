@@ -431,6 +431,13 @@ octant-path divergence depth; @lawValuationUltrametric@ = the STRONG triangle, @
 = the isosceles theorem, @lawL1NotUltrametric@ proves d6/ℓ¹ (archimedean) is genuinely DIFFERENT
 (closes the "d6 is 2-adic" overclaim). @lawDescendingChainIndex@ = refine by b = sⁿ (= 8 octant).
 Finite-depth (no completion claim). Additive),
+"SixFour.Spec.RingReduction" (★ @reenterQ16@ generalized — the single float→device crossing as a
+RING REDUCTION between a fine "big" grid (MLX float twin) and the coarse Q16 device grid: @embed@
+(section) + @reduce@ (round half-to-even). @lawReduceEmbedId@ = retraction (grid fixpoints),
+@lawReduceIdempotent@ = terminal quantization, @lawReduceBatchedIsElementwise@ = no cross-band
+coupling. HONEST BOUNDARY @lawReduceIsNotAdditive@: @reduce@ is a QUANTIZER, not a ring hom (0.5+0.5
+rounds to 1 ≠ 0). Subsumes @lawByteOnlyFromQ16@/@lawReentryIsFloor@/@lawTerminalQuantizationIdempotent@.
+Additive),
 "SixFour.Spec.TemporalData" (★ the TIME-AXIS data engine — manufactures @(frame t, value target,
 policy target)@ records from a captured @(t, t+1)@ pair (the temporal sibling of @JepaData@'s
 spatial corpus). KEYSTONE @lawTemporalEngineRoundTrips@ = @reconstructNext (manufacture ct ctNext)
