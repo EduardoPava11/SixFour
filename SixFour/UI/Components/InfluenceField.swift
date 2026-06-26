@@ -105,9 +105,9 @@ struct InfluenceField: View {
         switch surface.phase {
         case .live:
             return (surface.previewTile, surface.previewPalette)
-        // The A/B phases (`.captured`/`.picked`) SUPPRESS the full-screen ground: the two
-        // candidate GIFs in `ABCandidatePhaseField` are the sole content, so the ground must
-        // NOT radiate the captured scene behind them (it would overlap the candidate tiles).
+        // The post-capture phases (`.captured`/`.picked`) SUPPRESS the full-screen ground:
+        // they are inert placeholders pending the new review surface, so the ground must NOT
+        // radiate the captured scene behind them (it would overlap the forthcoming review tiles).
         default:
             return ([], [])
         }

@@ -4,12 +4,12 @@ import SwiftUI
 /// cell-field CONFIGURATION, not a screen: `field(for:_:)` routes each `ABPhase` to its
 /// per-phase renderer, all drawing onto the ONE surface.
 ///
-/// Under the A/B genome shift the lifecycle collapses to **capture → A/B → export**, so
-/// only five renderers are routed: `BootstrapPhaseField` / `UnauthorizedPhaseField` /
-/// `LivePhaseField` / the new `ABCandidatePhaseField` (the `.captured` + `.picked` A/B
-/// game) / `ErrorPhaseField`, plus minimal exporting/done fields. The cut renderers
-/// (Settings / Capturing / Browsing / Rendering / Review) are no longer routed but left in
-/// place. A phase change re-draws cells on the ONE surface — no view swap.
+/// The lifecycle is **capture → export → done**. The post-capture A/B game was retired, so
+/// the `.captured` + `.picked` phases now route to the inert `BootstrapPhaseField` placeholder
+/// pending the new review surface. Routed renderers: `BootstrapPhaseField` /
+/// `UnauthorizedPhaseField` / `LivePhaseField` / `ErrorPhaseField`, plus minimal exporting/done
+/// fields. The cut renderers (Settings / Capturing / Browsing / Rendering / Review) are no
+/// longer routed but left in place. A phase change re-draws cells on the ONE surface — no view swap.
 enum PhaseField {
 
     /// Route a phase to its field renderer. `clock` carries the 20 fps heartbeat so the
@@ -30,9 +30,9 @@ enum PhaseField {
         case .live:
             LivePhaseField(surface: surface, clock: clock, settings: settings, onShutter: onShutter)
         case .captured, .picked:
-            // A/B game RETIRED (branch spec/retire-ab-one-truth) — inert placeholder until the
-            // JEPA-based post-capture surface is built. The captured state renders the neutral field.
-            BootstrapPhaseField(surface: surface, clock: clock)
+            // Post-capture REVIEW bench (A/B game retired): the captured 64³ beside its 16³
+            // octree coarse, both on the Z₆₄ cursor, with EXPORT / RETAKE controls.
+            CapturedReviewPhaseField(surface: surface, clock: clock)
         case .exporting:
             ExportingPhaseField(surface: surface, clock: clock)
         case .done:
@@ -43,9 +43,9 @@ enum PhaseField {
     }
 }
 
-/// Π·exporting — the minimal cell field shown while the cube-ladder export family
-/// {16³, 64³, 256³} is being produced (entered only from `.picked`). A flat status word on
-/// the persistent ground; the real `ABExportFamily` wiring is a follow-on.
+/// Π·exporting — the minimal cell field shown for the brief transition out of `.picked`.
+/// The committed base GIF is already on disk (`surface.gifURL`, set at `commit`), so this
+/// phase just advances to `.done`. A flat status word on the persistent ground.
 struct ExportingPhaseField: View {
     let surface: Surface
     let clock: SurfaceClock
@@ -61,18 +61,9 @@ struct ExportingPhaseField: View {
         .task { await export() }
     }
 
-    /// Re-encode the CHOSEN A/B look (the base cube through the chosen per-frame palettes) OFF
-    /// the κ clock, point `gifURL` at it so Done ships the chosen look (not the base auto-render),
-    /// then fire `.exportDone` → `.done`. Falls back to the existing `gifURL` if the chosen
-    /// encode declines (empty pick / incomplete volume). The genome-carrying {16³,256³} ladder
-    /// (ABExportFamily) is the follow-on.
+    /// The committed base GIF already lives at `surface.gifURL` (set at `commit`), so this
+    /// phase carries no encode work: fire `.exportDone` → `.done` and let Done ship the GIF.
     private func export() async {
-        let cube = surface.indexCube
-        let pals = surface.chosenLookPalettes
-        let url = await Task.detached(priority: .userInitiated) {
-            ABExport.encodeChosenLook(indexCube: cube, palettes: pals)
-        }.value
-        if let url { surface.gifURL = url }
         surface.step(.exportDone)
     }
 }

@@ -19,10 +19,4 @@ enum Feature {
     /// preview tools, and the Color Atlas curation + curated-leaves injection (GS5). A stale
     /// persisted `paletteScope == .global` is sanitised to per-frame while this is off (SAN).
     static let globalPaletteV2 = false
-
-    /// The per-frame orthogonal A/B candidate picker (Pillar B). Surfaces the two
-    /// `GenomePair.sampleOrthogonalPair` candidate looks in Review; tapping one records a Compare.
-    /// OFF in MVP1 (the surfacing is new and runs only on device); flip on to test the A/B flow.
-    /// See `docs/SIXFOUR-PER-FRAME-GENOME-AB-MIGRATION-WORKFLOW.md` Pillar B / Phase 3.
-    static let abCandidatePicker = true
 }

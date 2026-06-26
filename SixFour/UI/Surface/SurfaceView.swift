@@ -210,11 +210,8 @@ struct SurfaceView: View {
             for f in frames { cube.append(contentsOf: f) }
             surface.indexCube = cube
         }
-        // Retain the ORIGINAL per-frame OKLab pixels (Q16) so the A/B game can re-quantize each
-        // frame against a candidate genome's palette (P3 — genome shapes the bytes). The raw
-        // tiles live on the engine's CaptureBundle; absent ⇒ A/B fall back to recolouring.
-        if let tiles = engine.currentBundle?.tiles {
-            surface.framePixelsQ16 = tiles.map { SixFourNative.oklabToQ16($0.pixels) }
-        }
+        // Build the 16³ octree-coarse substrate once, post-capture, for the review bench's
+        // coarse tile (byte-exact VoxelReduce of the committed 64³ cube).
+        surface.buildCoarseSubstrate()
     }
 }

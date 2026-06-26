@@ -86,6 +86,7 @@ from vicreg import VIC_GAMMA, VIC_EPS
 
 # jepa_synth_octants imported LAST (after mlx is cached) -- see the import-order note above.
 from jepa_synth_octants import build_corpus
+from jepa_data import unlift_oct  # byte-exact octant reconstruction -> the palette VALUE target
 
 # Composite-loss weight on the VICReg collapse guard. Small so the masked-band objective
 # dominates while the latent is kept full-variance (scout lossTerms: lambda in 1e-2..1e-1).
@@ -94,6 +95,17 @@ LAMBDA_VIC = 5e-2
 # O(neurons^2) cheap; the MLX hinge uses the same slice).
 VIC_NEURON_SLICE = 16
 _SIDE = round(N_TOKENS ** (1 / 3))  # 4 -> the 4x4x4 octant token lattice
+# STEP 1 GIF89a VALUE head: per-octant palette size = the 8 voxels of the octant cube
+# (the smallest data-tied "local color table"; L-channel for now, a,b pending the chroma loader).
+N_PAL = 8
+PAL_CH = 3  # OKLab triples (a,b are 0 until the per-frame chroma loader lands)
+# STEP 2 GIF89a discrete CONTENT head: each of the octant's N_VOX voxels is assigned an index
+# into the N_PAL palette slots (the GIF index map). TAU = straight-through softmax temperature.
+N_VOX = N_PAL
+TAU = 0.5
+# Cross-device logit-margin floor for the index commit (mirrors spec policyMarginEps): below this
+# top1-top2 gap, float argmax is not cross-device deterministic, so commit the data slot instead.
+MARGIN_EPS = 1e-4
 
 
 # ===========================================================================
@@ -107,13 +119,23 @@ class JepaHead(nn.Module):
         self.inproj = nn.Linear(POSITION_FEATURE_COUNT, D_MODEL)  # 11 -> 512 (places tokens)
         self.vit = vit                                            # the 18.9M-param ViT
         self.readout = nn.Linear(D_MODEL, NUM_BANDS)              # pooled latent -> 7 band raws
+        # STEP 1 GIF89a VALUE head. Constructed LAST on purpose: inproj/vit/readout consume the
+        # SAME init RNG as the value-only trainer, so at w_value=0 the band trajectory is
+        # BIT-IDENTICAL (additivity proof). Emits an N_PAL-entry OKLab palette from the pooled
+        # latent -- the learned analogue of a GIF89a Local Color Table.
+        self.palette = nn.Linear(D_MODEL, N_PAL * PAL_CH)         # pooled latent -> 8x3 palette
+        # STEP 2 discrete CONTENT head. Constructed LAST so at w_policy=0 the trajectory is
+        # bit-identical. Per-voxel logits over the N_PAL palette slots -> the GIF index map.
+        self.idx = nn.Linear(D_MODEL, N_VOX * N_PAL)             # pooled latent -> 8 voxels x 8 slots
 
     def __call__(self, tokens, d6):
         x = self.inproj(tokens)            # (64, 512)
         latent = self.vit(x, d6)           # (64, 512) PRE-surface latent (VICReg taps THIS)
         pooled = mx.mean(latent, axis=0)   # (512,)
         raws = self.readout(pooled)        # (7,) raw band readouts (float32, pre-commit)
-        return latent, raws
+        palette = self.palette(pooled)     # (N_PAL*PAL_CH,) raw OKLab palette (float32, pre-commit)
+        idx_logits = self.idx(pooled)      # (N_VOX*N_PAL,) per-voxel slot logits (pre-argmax)
+        return latent, raws, palette, idx_logits
 
 
 # ===========================================================================
@@ -132,6 +154,55 @@ def example_tokens(ex) -> mx.array:
         xb, yb = i % _SIDE, (i // _SIDE) % _SIDE
         rows[i] = np.asarray(features_b_pos(v, sibs, (xb * step, yb * step)), dtype=np.float32)
     return mx.array(rows)
+
+
+# ===========================================================================
+# STEP 1 palette target: each octant's byte-exact reconstructed cube as an OKLab palette.
+# unlift_oct(coarse, detail) is the data-engine inverse (round-trip asserted in the corpus),
+# so the target is DATA-MANUFACTURED, not free-floating. L-channel only (a,b=0) until the
+# per-frame chroma loader lands. Normalized through to_q16, the SAME scaling the band targets use.
+# ===========================================================================
+def palette_target(ex) -> list:
+    coarse = mbe_coarse(ex)
+    detail = list(ex[1])                       # the full 7-band detail (ex = (coarse, detail, mask[, xy]))
+    cube = unlift_oct(coarse, detail)          # 8 byte-exact Q16 L values
+    out = []
+    for L in cube:
+        out += [to_q16(L), 0.0, 0.0]           # (L, a=0, b=0) per entry -> N_PAL*PAL_CH floats
+    return out
+
+
+# ===========================================================================
+# STEP 2 straight-through one-hot (Jang 2016, arXiv:1611.01144): FORWARD = hard one-hot(argmax)
+# so the committed assignment is genuinely DISCRETE (a byte-exact slot); BACKWARD copies the soft
+# softmax(logits/tau) Jacobian via y = y_hard + (y_soft - stop_gradient(y_soft)). This is the
+# train-time gradient path the spec's lawPolicyCEGradientMovesTowardTarget now guards; the hard
+# argmax COMMIT determinism is lawPolicyArgmaxMarginOrFallback (near-tie -> data-slot fallback).
+# ===========================================================================
+def straight_through_onehot(logits, tau):
+    y_soft = mx.softmax(logits / tau, axis=-1)
+    hard = mx.argmax(logits, axis=-1)
+    y_hard = mx.eye(logits.shape[-1])[hard]          # one-hot over the last (slot) axis
+    return y_hard + (y_soft - mx.stop_gradient(y_soft))
+
+
+# ===========================================================================
+# STEP 2 byte-exact GIF index COMMIT (spec lawPolicyArgmaxMarginOrFallback). Done in float64 off
+# the GPU. Per voxel: emit the argmax slot ONLY when (top1 - top2) > MARGIN_EPS; below the margin
+# the float argmax is NOT cross-device deterministic, so commit the data-manufactured (byte-exact)
+# fallback slot instead. This gives the discrete index the same cross-device guarantee the value
+# head gets from Q16 rounding -- an MLX float never decides the committed slot at a near-tie.
+# ===========================================================================
+def commit_index(logits_np, fallback):
+    out = []
+    for v in range(logits_np.shape[0]):
+        row = logits_np[v]
+        order = np.argsort(row)[::-1]
+        if (row[order[0]] - row[order[1]]) > MARGIN_EPS:
+            out.append(int(order[0]))
+        else:
+            out.append(int(fallback[v]))
+    return out
 
 
 # ===========================================================================
@@ -160,7 +231,7 @@ def vicreg_python_read(latent: mx.array):
 # One run. Deterministic given `seed`. Full-batch (no minibatch RNG) so the trajectory is
 # smooth and bit-reproducible. Returns the per-step composite trajectory + the trained head.
 # ===========================================================================
-def run(seed: int, examples, d6, steps: int, lr: float, verbose: bool):
+def run(seed: int, examples, d6, steps: int, lr: float, w_value: float, w_policy: float, verbose: bool):
     # DETERMINISM SEED: pin mlx (controls the ViT + head float32 init) BEFORE building the
     # net so the whole float32 trajectory is reproducible. numpy is pinned too (token build).
     mx.random.seed(seed)
@@ -185,82 +256,118 @@ def run(seed: int, examples, d6, steps: int, lr: float, verbose: bool):
     head.readout.bias = head.readout.bias + 0.4
     mx.eval(head.parameters())
 
-    # Precompute the full deterministic batch: tokens, masks, normalized targets.
+    # Precompute the full deterministic batch: tokens, masks, normalized targets, palette targets.
     tokens_b = mx.stack([example_tokens(ex) for ex in examples], axis=0)   # (B, 64, 11)
     masks = [mbe_masked(ex) for ex in examples]
     targets = mx.array([to_q16(masked_target_band(ex)) for ex in examples], dtype=mx.float32)
-    mx.eval(tokens_b, targets)
+    pal_targets = mx.array([palette_target(ex) for ex in examples], dtype=mx.float32)  # (B, 24)
+    mx.eval(tokens_b, targets, pal_targets)
 
-    def _band_and_vic(h):
-        """Return (mean L_band, mean L_vic) as two MLX scalars.
-        L_band = 0.5*(raws[mask] - to_q16(target))^2 -- RAW float vs to_q16(target), NO commit
-                 in the gradient (the MLX twin of jepa_loss.masked_band_loss, jepa_loss.py:28-32).
-        L_vic  = the MLX variance-floor hinge on the PRE-surface latent (active collapse guard)."""
-        band_terms, vic_terms = [], []
+    def _heads(h):
+        """Return (mean L_band, L_vic, L_pal, L_idx) MLX scalars -- the head registry.
+        L_band = 0.5*(raws[mask] - to_q16(target))^2 (value/L-detail readout).
+        L_vic  = the MLX variance-floor hinge on the PRE-surface latent (active collapse guard).
+        L_pal  = 0.5*mean((palette - to_q16(cube))^2) -- the GIF89a VALUE head (direct anchor).
+        L_idx  = 0.5*mean((palette[index] - cube)^2) -- STEP 2 fused buildPixels reconstruction
+                 (per spec lawReconstructionGaugeInvariant: compare in FUSED palette[index] space,
+                 NOT slot-by-slot, so the palette<->index relabel gauge cannot be exploited)."""
+        band_terms, vic_terms, pal_terms, idx_terms = [], [], [], []
         for i in range(tokens_b.shape[0]):
-            latent, raws = h(tokens_b[i], d6)
+            latent, raws, palette, idx_logits = h(tokens_b[i], d6)
             d = raws[masks[i]] - targets[i]
             band_terms.append(0.5 * d * d)
             vic_terms.append(mlx_variance_floor(latent))
-        return mx.mean(mx.stack(band_terms)), mx.mean(mx.stack(vic_terms))
+            pal = palette.reshape(N_PAL, PAL_CH)                       # (slots, ch)
+            pd = pal.reshape(-1) - pal_targets[i]
+            pal_terms.append(0.5 * mx.mean(pd * pd))
+            assign = straight_through_onehot(idx_logits.reshape(N_VOX, N_PAL), TAU)  # (vox, slots)
+            recon = assign @ pal                                      # (vox, ch) = buildPixels
+            tgt = pal_targets[i].reshape(N_VOX, PAL_CH)               # the cube colours per voxel
+            rd = recon - tgt
+            idx_terms.append(0.5 * mx.mean(rd * rd))
+        return (mx.mean(mx.stack(band_terms)), mx.mean(mx.stack(vic_terms)),
+                mx.mean(mx.stack(pal_terms)), mx.mean(mx.stack(idx_terms)))
 
     def composite(h):
-        """L_composite = mean_i L_band_i + LAMBDA_VIC * mean_i L_vic_i (the ONE MLX scalar the
-        single optimizer descends)."""
-        band, vic = _band_and_vic(h)
-        return band + LAMBDA_VIC * vic
+        """L = L_band + LAMBDA_VIC*L_vic + w_value*L_pal + w_policy*L_idx (the ONE MLX scalar the
+        single optimizer descends over ALL heads). w_value=w_policy=0 -> palette + index heads
+        inert and the band trajectory is bit-identical to the value-only trainer (additivity)."""
+        band, vic, pal, idx = _heads(h)
+        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx
 
     opt = optim.SGD(learning_rate=lr)
     loss_and_grad = nn.value_and_grad(head, composite)
 
     if verbose:
         leaves = len(tree_flatten(head.trainable_parameters()))
-        print(f"  [seed={seed}] ViT {pcount/1e6:.1f}M params + inproj/readout "
+        print(f"  [seed={seed}] ViT {pcount/1e6:.1f}M params + inproj/readout/palette/idx "
               f"({leaves} trainable leaves); full-batch {len(examples)} octants; "
-              f"SGD lr={lr}, steps={steps}")
+              f"SGD lr={lr}, steps={steps}, w_value={w_value}, w_policy={w_policy}")
 
-    trajectory, band_traj = [], []
+    trajectory, band_traj, pal_traj, idx_traj = [], [], [], []
     for step in range(steps):
         loss, grads = loss_and_grad(head)
         opt.update(head, grads)
         mx.eval(head.parameters(), loss)
         lval = float(loss)                          # a tolerance-bearing float, never a byte
         trajectory.append(lval)
-        # Record L_band SEPARATELY from the composite so a verifier can confirm the OBJECTIVE
-        # term itself descends -- the descent is NOT merely the collapse guard relaxing to its
-        # floor (the hinge hits 0 early while L_band keeps falling).
-        band_s, vic_s = _band_and_vic(head)
-        mx.eval(band_s, vic_s)
+        # Record EACH head's objective separately so a verifier can confirm each descends
+        # (not merely the collapse guard relaxing to its floor).
+        band_s, vic_s, pal_s, idx_s = _heads(head)
+        mx.eval(band_s, vic_s, pal_s, idx_s)
         band_traj.append(float(band_s))
+        pal_traj.append(float(pal_s))
+        idx_traj.append(float(idx_s))
         if verbose:
-            latent0, _ = head(tokens_b[0], d6)
+            latent0, _, _, _ = head(tokens_b[0], d6)
             mx.eval(latent0)
             py_hinge, py_cov, _ = vicreg_python_read(latent0)
             print(f"    step {step:2d}  L_composite={lval:.8f}  L_band={float(band_s):.8f}  "
-                  f"L_vic={float(vic_s):.6f}   VICReg(live latent) hinge={py_hinge:.4f} cov={py_cov:.4f}")
+                  f"L_pal={float(pal_s):.8f}  L_idx={float(idx_s):.8f}  L_vic={float(vic_s):.6f}   "
+                  f"VICReg hinge={py_hinge:.4f} cov={py_cov:.4f}")
 
-    return trajectory, band_traj, head, tokens_b, masks
+    return trajectory, band_traj, pal_traj, idx_traj, head, tokens_b, masks
 
 
 # ===========================================================================
 # Property demonstrations (each prints REAL output).
 # ===========================================================================
-def demo_descent(traj, band_traj):
+def demo_descent(traj, band_traj, pal_traj, idx_traj, w_value, w_policy):
     print("\n[1] DESCENT -- composite loss decreases over steps")
     drop = traj[0] - traj[-1]
     band_drop = band_traj[0] - band_traj[-1]
+    pal_drop = pal_traj[0] - pal_traj[-1]
+    idx_drop = idx_traj[0] - idx_traj[-1]
     print(f"    L_composite  {traj[0]:.8f} -> {traj[-1]:.8f}   drop={drop:.8f}   "
           f"({'DESCENDS' if drop > 0 else 'DID NOT DESCEND'})")
     # The OBJECTIVE term alone must also descend -- refutes 'the curve is only the VICReg
     # hinge relaxing to its floor' (the hinge zeroes by ~step 10; L_band keeps falling).
     print(f"    L_band(only)  {band_traj[0]:.8f} -> {band_traj[-1]:.8f}   drop={band_drop:.8f}   "
           f"({'OBJECTIVE DESCENDS independently of the guard' if band_drop > 0 else 'OBJECTIVE DID NOT DESCEND'})")
-    return (drop > 0) and (band_drop > 0)
+    # The GIF89a VALUE head (palette) is a SECOND objective on the shared trunk; when active it
+    # must descend too -- proving one optimizer trains BOTH heads (multi-head full-scope step).
+    pal_ok = True
+    if w_value > 0:
+        pal_ok = pal_drop > 0
+        print(f"    L_pal (value) {pal_traj[0]:.8f} -> {pal_traj[-1]:.8f}   drop={pal_drop:.8f}   "
+              f"({'PALETTE HEAD DESCENDS on the shared trunk' if pal_ok else 'PALETTE DID NOT DESCEND'})")
+    else:
+        print(f"    L_pal (value) inert (w_value=0): palette head present but off the gradient "
+              f"-> band trajectory is bit-identical to the value-only trainer")
+    # STEP 2: the discrete INDEX head reconstructs buildPixels=palette[index] in FUSED space.
+    idx_ok = True
+    if w_policy > 0:
+        idx_ok = idx_drop > 0
+        print(f"    L_idx (policy){idx_traj[0]:.8f} -> {idx_traj[-1]:.8f}   drop={idx_drop:.8f}   "
+              f"({'INDEX HEAD DESCENDS (straight-through, fused palette[index])' if idx_ok else 'INDEX DID NOT DESCEND'})")
+    else:
+        print(f"    L_idx (policy)inert (w_policy=0): index head present but off the gradient")
+    return (drop > 0) and (band_drop > 0) and pal_ok and idx_ok
 
 
 def demo_no_collapse(head, tokens_b, d6):
     print("\n[2] NO COLLAPSE -- VICReg on the PRE-surface latent (read BEFORE any Q16 commit)")
-    latent, _ = head(tokens_b[0], d6)
+    latent, _, _, _ = head(tokens_b[0], d6)
     mx.eval(latent)
     live_hinge, live_cov, live_floor = vicreg_python_read(latent)
     # INDUCED-COLLAPSE CONTROL: a constant latent slice trips the std-hinge while
@@ -280,9 +387,24 @@ def demo_no_collapse(head, tokens_b, d6):
 def demo_byte_commit(head, tokens_b, masks, example0, d6):
     print("\n[3] BYTE-COMMIT PRESERVED -- a committed band is a float64-rounded INTEGER, "
           "never a raw MLX float")
-    _latent, raws = head(tokens_b[0], d6)
-    mx.eval(raws)
+    _latent, raws, _palette, idx_logits = head(tokens_b[0], d6)
+    mx.eval(raws, idx_logits)
     m = masks[0]
+    # STEP 2: the GIF index commit is margin-guarded (spec lawPolicyArgmaxMarginOrFallback). The
+    # data-manufactured fallback is the identity slot (palette_target[v] == cube[v], byte-exact).
+    fallback = list(range(N_VOX))
+    logits_np = np.array(idx_logits.reshape(N_VOX, N_PAL)).astype(np.float64)
+    committed_index = commit_index(logits_np, fallback)
+    print(f"    committed GIF index raster (octant 0) = {committed_index}  "
+          f"(margin-guarded, discrete slots in [0,{N_PAL}))")
+    # Force a sub-eps near-tie on voxel 0: naive argmax flips on 5e-7 of float noise; the guard
+    # falls back to the byte-exact data slot -- the cross-device determinism the spec law pins.
+    tie = logits_np.copy(); tie[0] = 0.0; tie[0, 0] = 5.0; tie[0, 1] = 5.0 + 5e-7
+    naive_tie = int(np.argmax(tie[0]))                       # 1 (the 5e-7-larger slot)
+    guarded_tie = commit_index(tie, fallback)[0]             # fallback[0] = 0 (data slot)
+    tie_ok = (naive_tie == 1) and (guarded_tie == fallback[0])
+    print(f"    near-tie [5.0, 5.0+5e-7] on voxel 0: naive argmax={naive_tie} (float-noise decides) "
+          f"vs margin-guard={guarded_tie} (data slot) -> {'FALLBACK FIRES' if tie_ok else 'GUARD FAILED'}")
     # ==== BYTE-COMMIT BOUNDARY: below here is Python float64 -> integer, never MLX ====
     raw_f64 = float(np.array(raws[m]).astype(np.float64))   # numpy: float64 extraction
     committed = quantize_q16(raw_f64)                        # q16.py:28-34, round-half-even
@@ -298,15 +420,15 @@ def demo_byte_commit(head, tokens_b, masks, example0, d6):
     floor_ok = (floor_band == quantize_q16(floor_raw))
     print(f"    floor cross-check: theta_b.predict_masked_band(zero, ex0) = {floor_band} "
           f"== quantize_q16(raw={floor_raw}) -> {floor_ok}  (same single float->byte crossing)")
-    ok = isinstance(committed, int) and floor_ok
-    print(f"    -> {'BYTE-COMMIT PRESERVED (Python float64 round; MLX never decides the byte)' if ok else 'BYTE-COMMIT FAILED'}")
+    ok = isinstance(committed, int) and floor_ok and tie_ok
+    print(f"    -> {'BYTE-COMMIT PRESERVED (band Q16 round + index margin-guard; MLX never decides a byte)' if ok else 'BYTE-COMMIT FAILED'}")
     return ok
 
 
-def demo_determinism(seed, examples, d6, steps, lr):
+def demo_determinism(seed, examples, d6, steps, lr, w_value, w_policy):
     print("\n[4] DETERMINISM -- same seed -> bit-identical loss trajectory (two runs)")
-    traj_a, _, _, _, _ = run(seed, examples, d6, steps, lr, verbose=False)
-    traj_b, _, _, _, _ = run(seed, examples, d6, steps, lr, verbose=False)
+    traj_a, *_ = run(seed, examples, d6, steps, lr, w_value, w_policy, verbose=False)
+    traj_b, *_ = run(seed, examples, d6, steps, lr, w_value, w_policy, verbose=False)
     agree = (len(traj_a) == len(traj_b)) and all(a == b for a, b in zip(traj_a, traj_b))
     worst = max(abs(a - b) for a, b in zip(traj_a, traj_b)) if traj_a else 0.0
     print(f"    run A first/last = {traj_a[0]:.8f} / {traj_a[-1]:.8f}")
@@ -328,6 +450,21 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--steps", type=int, default=None)
     ap.add_argument("--lr", type=float, default=8e-3)
+    ap.add_argument("--octants", type=int, default=None,
+                    help="FULL mode: number of octants to train on, deterministically STRIDED "
+                         "across all captures so every kind + mask is seen (default 24; the "
+                         "corpus builds 1536). full-batch stays deterministic.")
+    ap.add_argument("--mask", type=int, default=None,
+                    help="train a per-band SPECIALIST: override every octant's masked band to "
+                         "this index (0..6), so the head learns to predict that ONE encoded "
+                         "parameter from the other six. Default cycles all 7 bands.")
+    ap.add_argument("--w-value", dest="w_value", type=float, default=0.1,
+                    help="weight on the GIF89a palette VALUE head (Step 1). 0 = palette inert, "
+                         "band trajectory bit-identical to the value-only trainer; >0 = the "
+                         "palette head trains on the shared trunk under the one optimizer.")
+    ap.add_argument("--w-policy", dest="w_policy", type=float, default=0.1,
+                    help="weight on the GIF89a discrete INDEX head (Step 2, straight-through, "
+                         "fused palette[index] reconstruction). 0 = index head inert.")
     args = ap.parse_args()
 
     # --- DATA-MANUFACTURED corpus (targets lifted byte-exact, round-trip asserted) ---
@@ -339,27 +476,42 @@ def main():
     else:
         specs, fs, ss = [(7, "high-lab"), (11, "high-detail"), (23, "smooth-grey")], 8, 8
         examples, n_oct = build_corpus(specs, frame_step=fs, space_step=ss)
-        examples = examples[:24]
+        n_use = args.octants if args.octants is not None else 24
+        if n_use < n_oct:
+            # Deterministic stride across the FULL corpus: examples[:N] would take only the
+            # first capture (build_corpus concatenates captures), so it would train on
+            # high-lab alone. Striding spans all 3 kinds and keeps the mask cycle.
+            stride = max(1, n_oct // n_use)
+            examples = examples[::stride][:n_use]
         steps = args.steps if args.steps is not None else 60
+
+    if args.mask is not None:
+        if not (0 <= args.mask < NUM_BANDS):
+            ap.error(f"--mask must be in 0..{NUM_BANDS - 1}")
+        # per-band specialist: every octant now supervises the SAME encoded band.
+        examples = [(c, d, args.mask) for (c, d, _m) in examples]
 
     d6 = mx.array(octant_lattice_d6(N_TOKENS), dtype=mx.float32)  # integer L1 ALiBi lattice
     mx.eval(d6)
 
     print(f"=== SixFour H-JEPA end-to-end MLX training loop "
           f"({'SMOKE' if args.smoke else 'FULL'}, seed={args.seed}, steps={steps}) ===")
-    print(f"corpus: {len(specs)} captures -> {n_oct} octant records (using {len(examples)} this run); "
-          f"targets DATA-MANUFACTURED (no EMA, no self-produced rollout)")
+    band_note = f"band {args.mask} SPECIALIST" if args.mask is not None else "all 7 bands cycled"
+    print(f"corpus: {len(specs)} captures -> {n_oct} octant records (using {len(examples)} this run, "
+          f"{band_note}); targets DATA-MANUFACTURED (no EMA, no self-produced rollout)")
     print("BYTE-COMMIT BOUNDARY at q16.quantize_q16: float32-train above, float64-commit below.")
-    print(f"composite = L_band (masked-band MSE) + {LAMBDA_VIC} * L_vic (VICReg std-hinge), "
-          f"one SGD optimizer over ViT + readout\n")
+    print(f"composite = L_band + {LAMBDA_VIC} * L_vic + {args.w_value} * L_pal (palette VALUE) "
+          f"+ {args.w_policy} * L_idx (index CONTENT, straight-through), ONE SGD optimizer over "
+          f"ViT + readout + palette + idx\n")
 
     print("--- PROPERTY (1) training trajectory (run A) ---")
-    traj, band_traj, head, tokens_b, masks = run(args.seed, examples, d6, steps, args.lr, verbose=True)
+    traj, band_traj, pal_traj, idx_traj, head, tokens_b, masks = run(
+        args.seed, examples, d6, steps, args.lr, args.w_value, args.w_policy, verbose=True)
 
-    ok1 = demo_descent(traj, band_traj)
+    ok1 = demo_descent(traj, band_traj, pal_traj, idx_traj, args.w_value, args.w_policy)
     ok2 = demo_no_collapse(head, tokens_b, d6)
     ok3 = demo_byte_commit(head, tokens_b, masks, examples[0], d6)
-    ok4 = demo_determinism(args.seed, examples, d6, steps, args.lr)
+    ok4 = demo_determinism(args.seed, examples, d6, steps, args.lr, args.w_value, args.w_policy)
 
     print("\n=== SUMMARY ===")
     print(f"  (1) DESCENT     : {'PASS' if ok1 else 'FAIL'}")

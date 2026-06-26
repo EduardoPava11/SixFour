@@ -60,7 +60,19 @@ def cmd_train(a) -> int:
     fwd += ["--seed", str(a.seed), "--lr", str(a.lr)]
     if a.steps is not None:
         fwd += ["--steps", str(a.steps)]
+    if a.octants is not None:
+        fwd += ["--octants", str(a.octants)]
+    if a.mask is not None:
+        fwd += ["--mask", str(a.mask)]
+    if a.w_value is not None:
+        fwd += ["--w-value", str(a.w_value)]
+    if a.w_policy is not None:
+        fwd += ["--w-policy", str(a.w_policy)]
     return _run("train_loop.py", *fwd)
+
+
+def cmd_sweep(a) -> int:
+    return _run("train_sweep.py")
 
 
 def cmd_floor(a) -> int:
@@ -99,6 +111,13 @@ def cmd_autograd(a) -> int:
     return _run("autograd_check.py")
 
 
+def cmd_quantize(a) -> int:
+    fwd = ["--seed", str(a.seed), "--kind", a.kind, "--frame", str(a.frame), "--k", str(a.k)]
+    if a.selftest:
+        fwd.append("--selftest")
+    return _run("frame_palette.py", *fwd)
+
+
 def cmd_superres(a) -> int:
     return _run("superres.py")
 
@@ -135,6 +154,14 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--seed", type=int, default=0, help="determinism seed (default 0)")
     t.add_argument("--steps", type=int, default=None, help="override the step count")
     t.add_argument("--lr", type=float, default=8e-3, help="learning rate (default 8e-3)")
+    t.add_argument("--octants", type=int, default=None,
+                   help="FULL: octants to train on, strided across all captures (default 24; corpus has 1536)")
+    t.add_argument("--mask", type=int, default=None,
+                   help="train a per-band specialist on this encoded band (0..6); default cycles all 7")
+    t.add_argument("--w-value", dest="w_value", type=float, default=None,
+                   help="weight on the GIF89a palette VALUE head (0=inert/bit-identical; >0 trains it)")
+    t.add_argument("--w-policy", dest="w_policy", type=float, default=None,
+                   help="weight on the GIF89a discrete INDEX head (straight-through; 0=inert; >0 trains it)")
     t.set_defaults(fn=cmd_train)
 
     f = sub.add_parser("floor", help="the byte-exact theta_B floor trainer")
@@ -142,6 +169,15 @@ def build_parser() -> argparse.ArgumentParser:
     f.set_defaults(fn=cmd_floor)
 
     sub.add_parser("corpus", help="train on real synth-capture octants (generalization)").set_defaults(fn=cmd_corpus)
+    sub.add_parser("sweep", help="one specialist run per encoded band x scene kind (3x7 matrix)").set_defaults(fn=cmd_sweep)
+
+    q = sub.add_parser("quantize", help="frame-level GIF89a palette + index learned on REAL chroma")
+    q.add_argument("--seed", type=int, default=7)
+    q.add_argument("--kind", type=str, default="high-lab")
+    q.add_argument("--frame", type=int, default=0)
+    q.add_argument("--k", type=int, default=32, help="learned palette size (real GIF K=256)")
+    q.add_argument("--selftest", action="store_true", help="run the descent/raster/determinism self-test")
+    q.set_defaults(fn=cmd_quantize)
 
     c = sub.add_parser("cube", help="octree compression sanity test (centered cube)")
     c.add_argument("--gif", action="store_true", help="also write input + coarse GIFs + montage")
