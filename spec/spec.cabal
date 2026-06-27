@@ -212,6 +212,7 @@ library
         SixFour.Codegen.QuartetDelta
         SixFour.Codegen.GenomeFixed
         SixFour.Codegen.GridAxis
+        SixFour.Codegen.ModelIO
     build-depends:
         base       >=4.16 && <5
       , vector     >=0.13 && <0.14
