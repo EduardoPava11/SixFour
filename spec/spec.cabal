@@ -120,6 +120,7 @@ library
         SixFour.Spec.DualCube
         SixFour.Spec.ChannelProduct
         SixFour.Spec.HeldOutTarget
+        SixFour.Spec.MatrixTarget
         SixFour.Spec.TransportGroup
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
@@ -408,6 +409,7 @@ test-suite spec-tests
         Properties.DualCube
         Properties.ChannelProduct
         Properties.HeldOutTarget
+        Properties.MatrixTarget
         Properties.TransportGroup
         Properties.TemporalData
         Properties.DeltaSurrogate

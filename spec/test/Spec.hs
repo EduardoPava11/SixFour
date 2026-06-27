@@ -102,6 +102,7 @@ import qualified Properties.AnchorDiagnostic as AnchorDiagnostic
 import qualified Properties.DualCube as DualCube
 import qualified Properties.ChannelProduct as ChannelProduct
 import qualified Properties.HeldOutTarget as HeldOutTarget
+import qualified Properties.MatrixTarget as MatrixTarget
 import qualified Properties.TransportGroup as TransportGroup
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
@@ -270,6 +271,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , DualCube.tests
   , ChannelProduct.tests
   , HeldOutTarget.tests
+  , MatrixTarget.tests
   , TransportGroup.tests
   , TemporalData.tests
   , DeltaSurrogate.tests

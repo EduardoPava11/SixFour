@@ -478,6 +478,13 @@ set with NO mask, yet @lawScaleTargetNotAFunctionOfInput@/@lawTimeTargetNotAFunc
 input, different target exists) + @law*IdentityIncursLoss@ (copy/floor predictor loses) make it
 collapse-proof. KEYSTONE @lawHeldOutReplacesMasking@; @lawTargetIsWholeNotMaskedPair@ (all 7 bands, not
 1 masked). Reuses frozen @liftOct@. The two held axes = the two RungPivot rungs. Additive),
+"SixFour.Spec.MatrixTarget" (★ the HOLISTIC target object: the whole 9-channel ChannelProduct matrix
+at the held scale/frame, predicted in one shot. RANK-1 HONEST (@lawMatrixTargetIsRank1@ /
+@lawGeneratorIsSixNotNine@: the matrix is rank 1, real DOF = the 6-D P6 generator, holism = value×content
+COUPLING not extra DOF). KEYSTONE @lawMatrixLossSeesOffDiagonal@: a prediction differing only in chroma
+is invisible to the L-row loss (@lRowLoss@=0) but visible to the full @matrixSqLoss@ (>0), so fitting the
+whole matrix forces learning the chroma the L-anchor floored. @lawTargetIsFullMatrixNotMaskedPair@.
+Builds on ChannelProduct + HeldOutTarget. Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
