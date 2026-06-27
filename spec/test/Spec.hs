@@ -100,6 +100,7 @@ import qualified Properties.RefinementCarriers as RefinementCarriers
 import qualified Properties.GaussianChroma as GaussianChroma
 import qualified Properties.AnchorDiagnostic as AnchorDiagnostic
 import qualified Properties.DualCube as DualCube
+import qualified Properties.ChannelProduct as ChannelProduct
 import qualified Properties.TransportGroup as TransportGroup
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
@@ -266,6 +267,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , GaussianChroma.tests
   , AnchorDiagnostic.tests
   , DualCube.tests
+  , ChannelProduct.tests
   , TransportGroup.tests
   , TemporalData.tests
   , DeltaSurrogate.tests

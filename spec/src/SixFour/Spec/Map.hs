@@ -461,6 +461,16 @@ a ℤ⁶ symmetry ⇒ @lawNoPrivilegedCarrier@: L (colour balance) and t (space 
 anchoring on L is ARBITRARY not canonical. Replaces the asymmetric @{L,t}@-carrier/@{a,b,x,y}@-search
 story (CarrierL/RelationalMemory) with a SYMMETRIC dual-cube carrier. @lawBalanceRealSearchGaussian@ =
 the two lenses (ℓ¹ lattice on the real axis, ℤ[i] norm on the Gaussian plane). Additive),
+"SixFour.Spec.ChannelProduct" (★ ABSTRACT AGAIN: all NINE colour×space comparisons as FREE channels
+(@L:t,L:x,L:y,a:x,a:y,a:t,b:x,b:y,b:t@) = the complete 3×3 bilinear matrix @M[c][s]=colour(c)·space(s)@,
+which is GIF89a (separable @value×content@ = RANK 1, @lawComparisonIsSeparable@) AND transformer
+attention (outer product @q⊗k@, @lawComparisonIsOuterProduct@) AND generalizes @DualCube@ (whose φ6
+diagonal = the φ6-FIXED cells, @lawDiagonalIsPhi6Fixed@). Two lenses per block: balance @L:t@ = @ℤ@
+lattice product (geometry); search block @{a,b}×{x,y}@ = the @ℤ[i]@ Gaussian product @(a+bi)(x+yi)@
+(@lawSearchBlockIsGaussianProduct@, number theory). KEYSTONE @lawAllChannelsSeeWhatLAnchorMisses@: two
+points differing only in chroma are IDENTICAL to the L-anchored single row but DISTINCT under the full
+nine — the provable expressiveness gap behind band-at-floor. PonderNet+transformer = adaptive-depth
+attention over this matrix; H-JEPA target rides on it. Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
