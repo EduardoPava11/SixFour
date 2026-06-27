@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 
 # ---------------------------------------------------------------------------
@@ -254,6 +255,59 @@ def _composite_terms(h, tokens_b, masks, targets, pal_targets, d6):
 
 
 # ===========================================================================
+# BATCHED forward: identical math to the per-sequence ViT, but with a leading batch axis so all B
+# octants go through the GPU in ONE dispatch instead of B (measured ~4.3x; the looped path leaves
+# the GPU idle on per-octant dispatch -- see capabilities.py). Reuses the SAME module weights, so
+# it is numerically faithful (float reorder only); 'train_persistent' self-verifies this before
+# training. FLOAT-TRAIN SIDE ONLY -- the byte-commit path (quantize_q16) is untouched.
+# ===========================================================================
+def _batched_attn(attn, x, d6):                 # x: (B, N, d)
+    B, N, _ = x.shape
+    qkv = attn.qkv(x).reshape(B, N, 3, attn.h, attn.dh)
+    q = qkv[:, :, 0].transpose(0, 2, 1, 3)      # (B, h, N, dh)
+    k = qkv[:, :, 1].transpose(0, 2, 1, 3)
+    v = qkv[:, :, 2].transpose(0, 2, 1, 3)
+    logits = (q @ k.transpose(0, 1, 3, 2)) / math.sqrt(attn.dh)          # (B, h, N, N)
+    bias = attn.beta.reshape(1, attn.h, 1, 1) - attn.s.reshape(1, attn.h, 1, 1) * d6
+    w = mx.softmax(logits + bias, axis=-1)
+    o = (w @ v).transpose(0, 2, 1, 3).reshape(B, N, attn.h * attn.dh)
+    return attn.out(o)
+
+
+def _batched_block(block, x, d6):
+    x = x + _batched_attn(block.attn, block.n1(x), d6)
+    return x + block.mlp(block.n2(x))
+
+
+def batched_head(head, tokens_b, d6):           # tokens_b: (B, N, 11)
+    x = head.inproj(tokens_b)                   # (B, N, 512)  -- nn.Linear handles leading dims
+    for b in head.vit.blocks:
+        x = _batched_block(b, x, d6)
+    pooled = mx.mean(x, axis=1)                 # (B, 512)
+    return x, head.readout(pooled), head.palette(pooled), head.idx(pooled)
+
+
+def _composite_terms_batched(h, tokens_b, mask_idx, targets, pal_targets, d6):
+    """The vectorized twin of '_composite_terms' -- band, vic, pal, idx over the whole batch in one
+    forward. Each term is the SAME computation as the looped version (verified < 1e-3)."""
+    latent, raws, palette, idx_logits = batched_head(h, tokens_b, d6)
+    B = raws.shape[0]
+    sel = mx.take_along_axis(raws, mask_idx.reshape(B, 1), axis=1).reshape(B)
+    band = mx.mean(0.5 * (sel - targets) ** 2)
+    # vic: per-octant sum-of-hinge over the token axis, then mean over octants (matches the loop).
+    var = mx.var(latent[:, :, :VIC_NEURON_SLICE], axis=1)                # (B, slice)
+    vic = mx.mean(mx.sum(mx.maximum(0.0, VIC_GAMMA - mx.sqrt(var + VIC_EPS)), axis=-1))
+    pd = palette - pal_targets
+    palL = mx.mean(0.5 * mx.mean(pd * pd, axis=1))
+    pal = palette.reshape(B, N_PAL, PAL_CH)
+    assign = straight_through_onehot(idx_logits.reshape(B, N_VOX, N_PAL), TAU)
+    recon = assign @ pal                                                 # (B, vox, ch)
+    tgt = pal_targets.reshape(B, N_VOX, PAL_CH)
+    idxL = mx.mean(0.5 * mx.mean((recon - tgt) ** 2, axis=(1, 2)))
+    return band, vic, palL, idxL
+
+
+# ===========================================================================
 # One run. Deterministic given `seed`. Full-batch (no minibatch RNG) so the trajectory is
 # smooth and bit-reproducible. Returns the per-step composite trajectory + the trained head.
 # ===========================================================================
@@ -361,6 +415,30 @@ def _make_grad(head, batch, d6, w_value, w_policy):
     return nn.value_and_grad(head, composite)
 
 
+def _make_grad_batched(head, batch, d6, w_value, w_policy):
+    """value_and_grad over the BATCHED composite (one GPU dispatch, ~4.3x). Same loss as _make_grad."""
+    tokens_b, masks, targets, pal_targets = batch
+    mask_idx = mx.array(masks, dtype=mx.int32)
+
+    def composite(h):
+        band, vic, pal, idx = _composite_terms_batched(h, tokens_b, mask_idx, targets, pal_targets, d6)
+        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx
+
+    return nn.value_and_grad(head, composite)
+
+
+def _verify_batched_faithful(head, batch, d6):
+    """Max abs difference between the batched and looped composite terms on a small slice. Must be
+    tiny (float reorder) or the batched path is a different model -- the run refuses to train."""
+    tokens_b, masks, targets, pal_targets = batch
+    k = min(16, tokens_b.shape[0])
+    tb, ms, tg, pl = tokens_b[:k], masks[:k], targets[:k], pal_targets[:k]
+    looped = _composite_terms(head, tb, ms, tg, pl, d6)
+    batched = _composite_terms_batched(head, tb, mx.array(ms, dtype=mx.int32), tg, pl, d6)
+    mx.eval(*looped, *batched)
+    return max(abs(float(a) - float(b)) for a, b in zip(looped, batched))
+
+
 def _save_ckpt(head, ckpt_path, step, seed, lr, loss, epoch):
     """ATOMIC checkpoint: write head weights (.safetensors) + a meta sidecar to temp files,
     then os.replace into place, so a crash mid-write never corrupts the resumable checkpoint.
@@ -432,9 +510,21 @@ def train_persistent(args) -> int:
     opt = optim.SGD(learning_rate=lr)
     epoch = (start_step // resample_every) if resample_every else 0
     examples, n_oct = _corpus_for_epoch(args, epoch, kinds)
-    grad_fn = _make_grad(head, _build_batch(examples, d6), d6, w_value, w_policy)
+    batch0 = _build_batch(examples, d6)
 
-    print(f"=== SixFour H-JEPA PERSISTENT training ({pcount/1e6:.1f}M-param ViT) ===")
+    # Default to the BATCHED forward (~4.3x); self-verify it matches the looped path before training.
+    use_batched = not args.no_batch
+    make_grad = _make_grad_batched if use_batched else _make_grad
+    if use_batched:
+        diff = _verify_batched_faithful(head, batch0, d6)
+        print(f"[faithful] batched vs looped composite: max|Δ|={diff:.2e}  "
+              f"({'OK -- same model, ~4.3x faster' if diff < 1e-3 else 'DIVERGENT'})")
+        if diff >= 1e-3:
+            raise RuntimeError("batched forward diverges from looped; refusing to train (use --no-batch)")
+    grad_fn = make_grad(head, batch0, d6, w_value, w_policy)
+
+    print(f"=== SixFour H-JEPA PERSISTENT training ({pcount/1e6:.1f}M-param ViT, "
+          f"{'BATCHED' if use_batched else 'LOOPED'} forward) ===")
     print(f"out={out_dir}  steps={start_step}..{total_steps}  save_every={save_every}  "
           f"resample_every={resample_every or 'off'}  kinds={kinds}")
     print(f"corpus epoch {epoch}: {len(examples)} octants from {len(kinds)} fresh captures "
@@ -448,7 +538,7 @@ def train_persistent(args) -> int:
             if resample_every and step > start_step and step % resample_every == 0:
                 epoch += 1
                 examples, n_oct = _corpus_for_epoch(args, epoch, kinds)
-                grad_fn = _make_grad(head, _build_batch(examples, d6), d6, w_value, w_policy)
+                grad_fn = make_grad(head, _build_batch(examples, d6), d6, w_value, w_policy)
                 print(f"  [resample] epoch {epoch}: {len(examples)} fresh octants")
             loss, grads = grad_fn(head)
             opt.update(head, grads)
@@ -623,6 +713,8 @@ def main():
                     help="resume from a checkpoint .safetensors (continues from its meta step).")
     ap.add_argument("--kinds", type=str, default=None,
                     help="comma list of capture kinds to stream (default high-lab,high-detail,smooth-grey).")
+    ap.add_argument("--no-batch", dest="no_batch", action="store_true",
+                    help="use the slow per-octant LOOPED forward (default is the ~4.3x batched forward).")
     args = ap.parse_args()
 
     # DISPATCH: persistent long-run trainer vs the 4-property demo. Long mode is entered

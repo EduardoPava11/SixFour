@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import time
 
@@ -27,35 +26,9 @@ import mlx.core as mx
 import mlx.nn as nn
 
 
-# ---------------------------------------------------------------------------
-# The BATCHED forward: identical math to large_head's per-sequence ViT, but with a leading batch
-# axis so all B octants go through the GPU in one dispatch. Reuses the trained module weights.
-# ---------------------------------------------------------------------------
-def _batched_attn(attn, x, d6):                 # x: (B, N, d)
-    B, N, _ = x.shape
-    qkv = attn.qkv(x).reshape(B, N, 3, attn.h, attn.dh)
-    q = qkv[:, :, 0].transpose(0, 2, 1, 3)      # (B, h, N, dh)
-    k = qkv[:, :, 1].transpose(0, 2, 1, 3)
-    v = qkv[:, :, 2].transpose(0, 2, 1, 3)
-    logits = (q @ k.transpose(0, 1, 3, 2)) / math.sqrt(attn.dh)          # (B, h, N, N)
-    bias = attn.beta.reshape(1, attn.h, 1, 1) - attn.s.reshape(1, attn.h, 1, 1) * d6
-    w = mx.softmax(logits + bias, axis=-1)
-    o = (w @ v).transpose(0, 2, 1, 3).reshape(B, N, attn.h * attn.dh)
-    return attn.out(o)
-
-
-def _batched_block(block, x, d6):
-    x = x + _batched_attn(block.attn, block.n1(x), d6)
-    return x + block.mlp(block.n2(x))
-
-
-def batched_head(head, tokens_b, d6):           # tokens_b: (B, N, 11)
-    x = head.inproj(tokens_b)                   # (B, N, 512)  -- nn.Linear handles leading dims
-    for b in head.vit.blocks:
-        x = _batched_block(b, x, d6)
-    latent = x                                  # (B, N, 512)
-    pooled = mx.mean(latent, axis=1)            # (B, 512)
-    return latent, head.readout(pooled), head.palette(pooled), head.idx(pooled)
+# The BATCHED forward + faithful batched composite now live in train_loop (the single source of
+# truth, used by the persistent trainer). Benchmark against those exact functions.
+batched_head = T.batched_head
 
 
 def verify_faithful(head, tokens_b, d6):
@@ -73,23 +46,10 @@ def verify_faithful(head, tokens_b, d6):
 
 
 def _batched_loss(head, tokens_b, mask_idx, targets, pal_targets, d6):
-    """A representative composite over the batch (band + palette + softmax-index + variance), fully
-    vectorized -- same heads/cost as the real loss, for honest backward timing."""
-    latent, raws, palette, idx_logits = batched_head(head, tokens_b, d6)
-    B = raws.shape[0]
-    sel = mx.take_along_axis(raws, mask_idx.reshape(B, 1), axis=1).reshape(B)
-    band = mx.mean(0.5 * (sel - targets) ** 2)
-    pd = palette - pal_targets
-    palL = mx.mean(0.5 * mx.mean(pd * pd, axis=1))
-    pal = palette.reshape(B, T.N_PAL, T.PAL_CH)
-    assign = mx.softmax(idx_logits.reshape(B, T.N_VOX, T.N_PAL), axis=-1)
-    recon = assign @ pal
-    tgt = pal_targets.reshape(B, T.N_VOX, T.PAL_CH)
-    idxL = mx.mean(0.5 * mx.mean((recon - tgt) ** 2, axis=(1, 2)))
-    # variance floor (collapse guard): batched proxy on a 16-neuron slice, std over the token axis
-    std = mx.sqrt(mx.var(latent[:, :, :16], axis=1) + 1e-4)
-    vic = mx.mean(mx.maximum(0.0, 1.0 - std))
-    return band + 0.05 * vic + 0.1 * palL + 0.1 * idxL
+    """The FAITHFUL batched composite (the same one the trainer uses), so the benchmarked backward
+    is the real training cost, not a proxy."""
+    band, vic, pal, idx = T._composite_terms_batched(head, tokens_b, mask_idx, targets, pal_targets, d6)
+    return band + T.LAMBDA_VIC * vic + 0.1 * pal + 0.1 * idx
 
 
 def _timeit(fn, n, warm=2):

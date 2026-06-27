@@ -80,6 +80,8 @@ def cmd_train(a) -> int:
         fwd += ["--resume", a.resume]
     if a.kinds is not None:
         fwd += ["--kinds", a.kinds]
+    if a.no_batch:
+        fwd.append("--no-batch")
     return _run("train_loop.py", *fwd)
 
 
@@ -184,6 +186,8 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--resume", type=str, default=None, help="resume from a checkpoint .safetensors")
     t.add_argument("--kinds", type=str, default=None,
                    help="comma list of capture kinds to stream (default high-lab,high-detail,smooth-grey)")
+    t.add_argument("--no-batch", dest="no_batch", action="store_true",
+                   help="use the slow per-octant looped forward (default is the ~4.3x batched forward)")
     t.set_defaults(fn=cmd_train)
 
     f = sub.add_parser("floor", help="the byte-exact theta_B floor trainer")

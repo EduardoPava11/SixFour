@@ -124,6 +124,13 @@ synthetic seeds every N steps, so more wall-clock means more DISTINCT captures r
 memorizing one fixed 24-octant set. SGD is stateless, so head weights + the meta step fully
 determine a bit-faithful resume.
 
+**The long run uses a BATCHED forward by default (~4.3x).** All B octants go through the GPU in one
+dispatch instead of a per-octant Python loop (which left the GPU idle, ~145 octants/s vs ~610
+batched). The run self-verifies the batched forward matches the looped one (`[faithful] max|Δ|`)
+before training and refuses to start if they diverge. Pass `--no-batch` to force the old looped
+path (only useful for the demo's bit-exact additivity proofs). To scope your machine's throughput
+and the wall-clock for a target step count: `python3 capabilities.py` (or `--quick`).
+
 ## Deploy
 
 The trained 63-param `theta_B` blob ships as a **hand-written Swift forward pass**
