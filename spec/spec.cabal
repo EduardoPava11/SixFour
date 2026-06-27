@@ -55,6 +55,7 @@ library
         SixFour.Spec.PairTreeFixed
         SixFour.Spec.RGBTLift
         SixFour.Spec.OctreeCell
+        SixFour.Spec.NudgeRankTheorem
         SixFour.Spec.LadderIdentity
         SixFour.Spec.LargeJepaHead
         SixFour.Spec.PerScaleWeights
@@ -345,6 +346,7 @@ test-suite spec-tests
         Properties.PairTreeFixed
         Properties.RGBTLift
         Properties.OctreeCell
+        Properties.NudgeRankTheorem
         Properties.LadderIdentity
         Properties.LargeJepaHead
         Properties.PerScaleWeights

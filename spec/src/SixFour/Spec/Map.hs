@@ -485,6 +485,22 @@ COUPLING not extra DOF). KEYSTONE @lawMatrixLossSeesOffDiagonal@: a prediction d
 is invisible to the L-row loss (@lRowLoss@=0) but visible to the full @matrixSqLoss@ (>0), so fitting the
 whole matrix forces learning the chroma the L-anchor floored. @lawTargetIsFullMatrixNotMaskedPair@.
 Builds on ChannelProduct + HeldOutTarget. Additive),
+"SixFour.Spec.NudgeRankTheorem" (★ THREE hypotheses as theorems. RANK: per voxel @M=colorVec⊗spaceVec@
+is rank ≤1 (@lawSingleVoxelRank1@, all 2×2 minors 0 = the 6-DOF generator) but the CELL-aggregate
+@A=Σ colour⊗space=C·Sᵀ@ reaches rank 3 (@lawCellAggregateReachesRank3@, 3 φ6-diagonal voxels give I,
+det 1) ⇒ the 9-pair nudge is honest at the CELL not the VOXEL (@lawNineIndependentAtCellNotVoxel@), so
+the held-out @MatrixTarget@ loss must be the full-rank aggregate (@lawHeldOutLossIsCellAggregateNotPerVoxel@,
+a mispaired-chroma swap is invisible per-voxel but @aggSqLoss=4>0@). COLLAPSE: @liftOct@ = two spatial
+@liftQuad@ + one temporal @sLift@ (@lawOctantAxesAreSpaceTime@), the octant axes ARE @(x,y,t)@ and the
+@Int@ payload is one OKLab channel (@lawColourIsTheLiftedValue@, three independent passes); 64³→16³ folds
+space-time /4 while colour rides lossless (@lawTwoLevelsCollapseSpaceTimeNotColour@); BOTH levels mix both
+axes (@lawBothLevelsAreMixedSpaceTime@ REFUTES one-spatial-one-temporal) and the value/collapsed split is a
+φ6 GAUGE (@lawValueSplitIsPhi6Gauge@ REFUTES intrinsic colour, reuses DualCube). RESIDUAL: down (16³→64³)
+and up (64³→256³) residuals are the SAME @[[Detail]]@ + SAME @octantLift@ (@lawResidualTypeScaleInvariant@)
+both ∈ A₇=ker Σ (@lawResidualIsA7AtEveryLevel@), so the down band is a legit conditioning SEED richer than
+the zero floor (@lawDownResidualConditionsUpInvention@) — but NOT the answer (@lawDownResidualIsNotUpGroundTruth@
+REFUTES copy-as-ground-truth via @lawBeyondCaptureInvented@'s non-injectivity). Reuses ChannelProduct/
+MatrixTarget/OctreeCell/RGBTLift/DualCube/SelfSimilarReconstruct/RootLatticeDetail; emits no golden. Additive),
 "SixFour.Spec.PonderBudget" (★ THE USER NUDGE: a PAINTABLE per-octant detail-budget field over an
 empty 256³; the user paints sections to refine and the BRUSH is the 3-D octant TWICENESS @[2×2×2 ↔ 1]@
 twice — one stroke = a two-level subtree (@twicenessSpan = 8^levelsPerStep = 64@ finest octants, the

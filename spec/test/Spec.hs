@@ -103,6 +103,7 @@ import qualified Properties.DualCube as DualCube
 import qualified Properties.ChannelProduct as ChannelProduct
 import qualified Properties.HeldOutTarget as HeldOutTarget
 import qualified Properties.MatrixTarget as MatrixTarget
+import qualified Properties.NudgeRankTheorem as NudgeRankTheorem
 import qualified Properties.PonderBudget as PonderBudget
 import qualified Properties.TransportGroup as TransportGroup
 import qualified Properties.TemporalData as TemporalData
@@ -273,6 +274,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , ChannelProduct.tests
   , HeldOutTarget.tests
   , MatrixTarget.tests
+  , NudgeRankTheorem.tests
   , PonderBudget.tests
   , TransportGroup.tests
   , TemporalData.tests
