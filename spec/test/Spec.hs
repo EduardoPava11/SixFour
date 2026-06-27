@@ -106,6 +106,7 @@ import qualified Properties.MatrixTarget as MatrixTarget
 import qualified Properties.NudgeRankTheorem as NudgeRankTheorem
 import qualified Properties.PonderBudget as PonderBudget
 import qualified Properties.CellNudge as CellNudge
+import qualified Properties.PonderHaltDistribution as PonderHaltDistribution
 import qualified Properties.TransportGroup as TransportGroup
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
@@ -278,6 +279,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , NudgeRankTheorem.tests
   , PonderBudget.tests
   , CellNudge.tests
+  , PonderHaltDistribution.tests
   , TransportGroup.tests
   , TemporalData.tests
   , DeltaSurrogate.tests

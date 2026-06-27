@@ -516,6 +516,12 @@ cell-aggregate is rank 3 (@lawNineHonestAtCell@ via NudgeRankTheorem) while the 
 ChannelProduct pairs), @lawLossIsCellAggregate@ (MatrixTarget must score the aggregate, not per-voxel),
 @lawGaugeExplicit@ (which 9 is a φ6 gauge toggle). Brush unchanged: one 16³ cell governs a 4096-leaf 256³
 subtree (@lawCellGovernsSuperResSubtree@ = twicenessSpan², two rungs 16→64→256). Additive),
+"SixFour.Spec.PonderHaltDistribution" (★ the STRONG PonderNet: a proper geometric HALTING DISTRIBUTION
+over refinement steps (Σ p_halt = 1, @lawHaltIsProperDistribution@), the EXPECTED matrix-loss objective
+@Σ p_n L_n@ (@lawExpectedLossIsConvex@), a truncated-geometric prior (@lawGeometricPriorSumsToOne@) the run
+is KL-regularized toward (@lawKLZeroAtSelf@). NUDGE TIE: lowering the halt probabilities (more painted
+CellNudge budget) raises the expected steps = more refinement (@lawLowerHaltRefinesMore@), so the paint and
+the halting are one mechanism. Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
