@@ -154,6 +154,28 @@ W_DETAIL = 0.0  # weight on the centered detail objective (opt-in via --w-detail
 
 
 # ===========================================================================
+# The two palette objective TERMS as pure functions, so the trained loss AND the behavioral test
+# (test_learnability_behavior.py) exercise the IDENTICAL code path. Both take (B, N_PAL, PAL_CH).
+# The learnability theorem (Spec.LearnabilityTheorem.lawValueHeadIdentifiesComplement) predicts:
+#   cell_term  = ||palᵀS - tgtᵀS||²  is the rank-3 cross-moment objective -> SUFFICIENT STATISTIC for
+#                the 9-DOF span(S) projection, PROVABLY BLIND to the 15-DOF complement.
+#   value_term = ||pal - tgt||²       sees ALL 24 DOF -> identifies the complement cell_term misses.
+# A checkerboard-parity palette perturbation (orthogonal to span(S)) leaves cell_term EXACTLY 0 while
+# value_term sees it -- the falsifiable prediction the behavioral test asserts on this real code.
+# ===========================================================================
+def cell_term(pal, tgt):
+    """Spec.MatrixTarget.cellLoss on the cross-covariance A = palᵀ·SPACE_MX (rank-3, mean-included)."""
+    a_pred = mx.matmul(pal.transpose(0, 2, 1), SPACE_MX)
+    a_tgt = mx.matmul(tgt.transpose(0, 2, 1), SPACE_MX)
+    return mx.mean(0.5 * mx.mean((a_pred - a_tgt) ** 2, axis=(1, 2)))
+
+
+def value_term(pal, tgt):
+    """The full-palette (24-DOF) reconstruction loss -- the value head's sufficient statistic."""
+    return mx.mean(0.5 * mx.mean((pal - tgt) ** 2, axis=(1, 2)))
+
+
+# ===========================================================================
 # GAP 1 + GAP 2 head: input projection (11->512) + ViT + latent->band readout (512->7).
 # trainable_parameters() = inproj + ViT + readout: ONE set the single optimizer descends.
 # The encoder stays ZERO-param (encoder_frozen.ENCODER_PARAM_COUNT == 0); these are HEADs.
@@ -364,17 +386,14 @@ def _composite_terms_batched(h, tokens_b, mask_idx, targets, pal_targets, d6):
     # vic: per-octant sum-of-hinge over the token axis, then mean over octants (matches the loop).
     var = mx.var(latent[:, :, :VIC_NEURON_SLICE], axis=1)                # (B, slice)
     vic = mx.mean(mx.sum(mx.maximum(0.0, VIC_GAMMA - mx.sqrt(var + VIC_EPS)), axis=-1))
-    pd = palette - pal_targets
-    palL = mx.mean(0.5 * mx.mean(pd * pd, axis=1))
     pal = palette.reshape(B, N_PAL, PAL_CH)
+    tgt = pal_targets.reshape(B, N_VOX, PAL_CH)
+    palL = value_term(pal, tgt)                                          # the full-palette (24-DOF) value loss
     assign = straight_through_onehot(idx_logits.reshape(B, N_VOX, N_PAL), TAU)
     recon = assign @ pal                                                 # (B, vox, ch)
-    tgt = pal_targets.reshape(B, N_VOX, PAL_CH)
     idxL = mx.mean(0.5 * mx.mean((recon - tgt) ** 2, axis=(1, 2)))
     # STEP 3 cell-aggregate loss (Spec.MatrixTarget.cellLoss), batched: A[b] = pal[b]ᵀ · space.
-    a_pred = mx.matmul(pal.transpose(0, 2, 1), SPACE_MX)                 # (B, ch, 3)
-    a_tgt = mx.matmul(tgt.transpose(0, 2, 1), SPACE_MX)                  # (B, ch, 3)
-    cellL = mx.mean(0.5 * mx.mean((a_pred - a_tgt) ** 2, axis=(1, 2)))
+    cellL = cell_term(pal, tgt)                                          # the rank-3 cross-moment objective
     # STEP 5 DETAIL (centered aggregate): within-octant detail only (flat octant -> 0).
     dp = mx.matmul(pal.transpose(0, 2, 1), SPACE_CENTERED_MX) - mx.matmul(tgt.transpose(0, 2, 1), SPACE_CENTERED_MX)
     detL = mx.mean(0.5 * mx.mean(dp ** 2, axis=(1, 2)))

@@ -36,6 +36,7 @@ MODULES = [
     ("test_motion_floor.py", True),   # TimeRung prerequisite: corpus has inter-frame motion (MotionFloorCorpus)
     ("temporal_rung.py", True),        # TimeRung: a learned model beats PERSISTENCE on held-out (learns motion)
     ("test_detail_reachable.py", True),  # ScaleRung detail is LEARNABLE (oracle beats flat-mean floor; masking ok)
+    ("test_learnability_behavior.py", True),  # the REAL trainer behaves as the theorem predicts (blind/sees/descent)
     ("delta_surrogate.py", True),
     ("gaussian_chroma.py", True),
     ("dual_loss.py", True),
