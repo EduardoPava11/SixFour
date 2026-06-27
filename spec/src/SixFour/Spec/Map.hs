@@ -707,6 +707,19 @@ the two-point witness left open: @lawFractionalWeightStillUnique@ (0<w<1 still u
 closed form, non-degenerate slope), capstone @lawConvergenceThresholdIsExactlyZero@, bridge
 @lawParadigmGuardIsExactlyConvergenceThreshold@ (the guard == @convergesAt@ weight-by-weight). Reuses
 @Convergence.composite@/@checkerboard@/@valueLoss@ + @ParadigmSoundness.paradigmSound@. Emits no golden. Additive),
+"SixFour.Spec.GlobalUniqueness" (★ the AUDIT CLOSE on OVERCLAIM-CONVERGENCE-1: the docstring claimed a UNIQUE
+global minimum but @Convergence@/@ValueWeightThreshold@ examine only the ONE cell-blind checkerboard direction.
+Global uniqueness over all 24 DOF is STRICT convexity of @composite w@ for @w>0@, which the @≤@-chord laws
+(convexity only) never give. Proves it directly: the Jensen gap splits exactly @jensenGapCell + w·jensenGapValue@
+(@lawJensenGapDecomposesByRank@); the full-rank value gap @= ½λ(1−λ)‖p−q‖² > 0@ for distinct @p,q@
+(@lawValueGapStrictPositiveFullRank@) while the rank-deficient cell gap is FLAT along @cb@
+(@lawCheckerboardDirectionCellBlind@). Hence STRICT @<@ for arbitrary distinct @p,q@ at @w=1@
+(@lawStrictGapArbitraryDistinctAtUnitWeight@), uniqueness genuinely needs @w>0@ even in the cell-blind direction
+(@lawStrictConvexityNeedsValueWeightInBlindDirection@: @w=0@ ties, @w>0@ strict), strict in EVERY direction not
+one witness (@lawStrictlyConvexEveryDirectionAtPositiveWeight@), capstone the target is the UNIQUE global min iff
+@w>0@ (@lawTargetUniqueGlobalMinIffValueWeighted@; degeneracy @p==q@ excluded by @lawDegenerateDirectionGivesEquality@).
+Strict-vs-non-strict convexity is a real distinction the chord laws never make — NOT a rename of @ValueWeightThreshold@
+(that swept the WEIGHT axis on one fixed direction; this sweeps the DIRECTION axis). Reuses @Convergence.composite@/@cellLoss@/@valueLoss@/@checkerboard@. Emits no golden. Additive),
 "SixFour.Spec.NudgeContamination" (★ the collapse-safety QUARANTINE for a USER nudge — a taste
 steer enters ONLY the invented detail (the latent tail) and CANNOT move the self-supervised energy,
 which lives in the gated coarse/DC band. @applyTaste@ re-feeds the cube's ORIGINAL coarse (structural

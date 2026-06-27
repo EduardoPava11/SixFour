@@ -145,6 +145,7 @@ library
         SixFour.Spec.ChromaUnitGauge
         SixFour.Spec.ParadigmSoundness
         SixFour.Spec.ValueWeightThreshold
+        SixFour.Spec.GlobalUniqueness
         SixFour.Spec.NudgeContamination
         SixFour.Spec.DeltaGesture
         SixFour.Spec.TriScaleBench
@@ -457,6 +458,7 @@ test-suite spec-tests
         Properties.ChromaUnitGauge
         Properties.ParadigmSoundness
         Properties.ValueWeightThreshold
+        Properties.GlobalUniqueness
         Properties.NudgeContamination
         Properties.DeltaGesture
         Properties.TriScaleBench

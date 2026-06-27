@@ -127,6 +127,7 @@ import qualified Properties.LatticeRankComputed as LatticeRankComputed
 import qualified Properties.ChromaUnitGauge as ChromaUnitGauge
 import qualified Properties.ParadigmSoundness as ParadigmSoundness
 import qualified Properties.ValueWeightThreshold as ValueWeightThreshold
+import qualified Properties.GlobalUniqueness as GlobalUniqueness
 import qualified Properties.NudgeContamination as NudgeContamination
 import qualified Properties.DeltaGesture as DeltaGesture
 import qualified Properties.TriScaleBench as TriScaleBench
@@ -317,6 +318,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , ChromaUnitGauge.tests
   , ParadigmSoundness.tests
   , ValueWeightThreshold.tests
+  , GlobalUniqueness.tests
   , NudgeContamination.tests
   , DeltaGesture.tests
   , TriScaleBench.tests
