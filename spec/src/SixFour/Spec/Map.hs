@@ -587,6 +587,15 @@ unlike ragged @ColourDelta@). FAITHFUL re-encoding (@lawChromaAddAgreesWithRealP
 hue-rotation operator two scalar channels lack: complex multiply rotates\/scales the chroma plane,
 the unit @i@ = an exact 90° quarter-turn (@lawChromaUnitIsQuarterTurn@), norm-preserving
 (@lawChromaUnitRotationPreservesNorm@), order 4 (@lawChromaQuarterTurnOrderFour@). Additive),
+"SixFour.Spec.ChromaUnitGauge" (★ the ℤ[i]-UNITS-ARE-LOAD-BEARING bridge: the Gaussian unit group
+@ℤ[i]*={1,i,−1,−i}@ acts on the chroma plane EXACTLY as the model's bit-exact quarter-turn gauge
+@ChromaRotation.rotateQuarter@ — the operation @DetentNudge.stepDelta@ actually consumes. NOT a rename of
+"rotate 90°" but a proven identity between two independently-defined maps: @lawGaussianUnitActsAsQuarterTurn@
+(@rmul (units!!q)@ == @rotateQuarter q@ on every chroma point), @lawUnitGroupIsoQuarterTurn@ (ℤ[i]* multiply
+↔ index add mod 4 ↔ quarter-turn composition, so @ℤ[i]*≅C4@), @lawCanonicalQuarterIsUnitOrbit@ (the model's
+@canonicalQuarter@ dedup IS the unit-group orbit). Teeth @lawNonUnitIsNotAQuarterTurn@: a non-unit @1+i@
+scales the norm, so only the norm-1 unit group lands on a quarter-turn. Makes the @ℤ[i]@ units load-bearing
+via a REAL typed consumer (the analogue of BlindComplementIsA7's @mkMeanFreeChecked@). Emits no golden. Additive),
 "SixFour.Spec.TransportGroup" (★ the POLICY channel's algebra — @IndexDelta@ as a NON-ABELIAN
 transport group acting on the index set, the counterpart to the VALUE channel's abelian @ColourDelta@
 ℤ-module. @tcomp@ chains, @tinv@ reverses, @tbetween@ data-manufactures; @lawTransportActionHomomorphism@
@@ -657,6 +666,27 @@ checkerboard @cb(v)=(−1)^popcount(v)@ that @cellLoss@ cannot see (Convergence 
 (LearnabilityTheorem), making the lattice load-bearing in identifiability/convergence. @lawCheckerboardIsMeanFree@,
 @lawBlindDirectionIsLatticeVector@, @lawNonLatticeDirectionRefused@, capstone @lawCellBlindComplementIsA7@.
 Emits no golden. Additive),
+"SixFour.Spec.BlindComplementGeometry" (★ the PRECISE geometry behind BlindComplementIsA7, the honest
+audit refinement: the cell-blind complement @S^⊥@ (5-dim/channel, 15 across OKLab) and the lattice @A_7@
+(7/channel, 21) are DISTINCT — neither contains the other — so "the 15-DOF blind complement IS @A_7@" is
+too strong. @lawCheckerboardInBlindAndA7@ (the sound CORE: cb ∈ S^⊥∩A_7), @lawBlindDirectionOutsideA7@
+(S^⊥⊄A_7: the origin bump @e_0@ is BLIND to @cellLoss@ yet Σ=1, refused by @mkMeanFreeChecked@ — the very
+vector BlindComplementIsA7 calls "not the blind complement"), @lawA7DirectionSeenByCell@ (A_7⊄S^⊥: @x−y@ is
+a legal residual the cell loss SEES), @lawBlindAndA7DimsDiffer@ (exact @rankQ@: 15≠21, overlap 12). Capstone
+@lawBlindMeetsA7InMeanFreeBlind@: the @A_7@ algebra is load-bearing on the mean-free blind OVERLAP
+@S^⊥∩A_7@ (12-DOF, where cb lives), not the whole blind complement. Reuses @Convergence.cellLoss@ +
+@RootLatticeDetail.inA@. Emits no golden. Additive),
+"SixFour.Spec.LatticeRankComputed" (★ the AUDIT that de-vacuifies the rank claim the whole
+convergence\/identifiability story rests on: "SixFour.Spec.Convergence" @lawConvergenceGovernedByLatticeRank@
+asserts @spaceRank == 3@ but @spaceRank@ is a HARDCODED literal @3@ (Convergence.hs:200), so the conjunct is
+literally @3 == 3@. This module @computeRank@s @Convergence.spaceLattice@ AS DATA by exact rational Gaussian
+elimination: @lawSpaceLatticeRankIsThree@ (measured, not asserted), @lawComputedRankMatchesConvergenceLiteral@
+(the literal was correct — now proven), @lawDegenerateLatticeRankIsTwo@ (the TEETH a constant @=3@ cannot
+pass: drop-t and collinear-t lattices compute @2@), @lawCheckerboardInLeftNullSpace@ (@Sᵀ·cb=[0,0,0]@ by
+exact integers — the membership Convergence only asserts in prose), @lawInSpanPerturbationSeen@
+(@Sᵀ·colX=[4,2,2]≠0@ ⇒ the test discriminates). Capstone @lawRankClaimIsComputedNotAsserted@. Elementary
+linear algebra kept elementary (NOT Euclidean-domain\/Galois dress). Imports only @Convergence@. Emits no
+golden. Additive),
 "SixFour.Spec.ParadigmSoundness" (★★ THE MASTER THEOREM: the one browsable capstone conjoining ALL NINE
 necessary teachings of the self-supervised paradigm — SIGNAL (AnchorDiagnostic d6/ℤ[i]) ∧ EXPRESSIVITY
 (AboveFloorMargin/A7) ∧ IDENTIFIABILITY (LearnabilityTheorem) ∧ CONVERGENCE (Convergence, the GENERAL
@@ -667,6 +697,16 @@ trunk scoped out) ∧ GENERALIZATION (Generalization: held follows train, no dis
 @lawParadigmIsSound@ TRUE at w_value=1, @lawParadigmNeedsValueHead@ proves it FALSE at w_value=0 (load-bearing
 side condition). Each conjunct DELEGATES to a green teaching, so a regression in ANY teaching breaks here.
 Emits no golden. Additive),
+"SixFour.Spec.ValueWeightThreshold" (★ the AUDIT CLOSE on the convergence side condition: proves the
+@w_value > 0@ threshold @paradigmSound@ guards on, and that @Convergence.lawCompositeUniqueMinIffValueWeighted@
+witnesses only at the two points 0 and 1, is EXACT over the WHOLE weight domain. The cell-blind checkerboard
+shift makes the shifted-vs-target gap linear in the weight (@shiftedGap w = 4·w@, slope = the full-rank
+@valueLoss = 4@), so the target is the unique global min IFF @w > 0@ for EVERY weight. Closes the two regimes
+the two-point witness left open: @lawFractionalWeightStillUnique@ (0<w<1 still unique), @lawNegativeWeightBreaksGlobalMin@
+(w<0 is fatal — target not even the min, stronger than the w=0 tie). @lawShiftedGapIsLinearInWeight@ (exact
+closed form, non-degenerate slope), capstone @lawConvergenceThresholdIsExactlyZero@, bridge
+@lawParadigmGuardIsExactlyConvergenceThreshold@ (the guard == @convergesAt@ weight-by-weight). Reuses
+@Convergence.composite@/@checkerboard@/@valueLoss@ + @ParadigmSoundness.paradigmSound@. Emits no golden. Additive),
 "SixFour.Spec.NudgeContamination" (★ the collapse-safety QUARANTINE for a USER nudge — a taste
 steer enters ONLY the invented detail (the latent tail) and CANNOT move the self-supervised energy,
 which lives in the gated coarse/DC band. @applyTaste@ re-feeds the cube's ORIGINAL coarse (structural

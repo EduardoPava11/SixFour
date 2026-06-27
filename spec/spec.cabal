@@ -140,7 +140,11 @@ library
         SixFour.Spec.HeadConvergence
         SixFour.Spec.Generalization
         SixFour.Spec.BlindComplementIsA7
+        SixFour.Spec.BlindComplementGeometry
+        SixFour.Spec.LatticeRankComputed
+        SixFour.Spec.ChromaUnitGauge
         SixFour.Spec.ParadigmSoundness
+        SixFour.Spec.ValueWeightThreshold
         SixFour.Spec.NudgeContamination
         SixFour.Spec.DeltaGesture
         SixFour.Spec.TriScaleBench
@@ -448,7 +452,11 @@ test-suite spec-tests
         Properties.HeadConvergence
         Properties.Generalization
         Properties.BlindComplementIsA7
+        Properties.BlindComplementGeometry
+        Properties.LatticeRankComputed
+        Properties.ChromaUnitGauge
         Properties.ParadigmSoundness
+        Properties.ValueWeightThreshold
         Properties.NudgeContamination
         Properties.DeltaGesture
         Properties.TriScaleBench

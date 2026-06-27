@@ -122,7 +122,11 @@ import qualified Properties.Convergence as Convergence
 import qualified Properties.HeadConvergence as HeadConvergence
 import qualified Properties.Generalization as Generalization
 import qualified Properties.BlindComplementIsA7 as BlindComplementIsA7
+import qualified Properties.BlindComplementGeometry as BlindComplementGeometry
+import qualified Properties.LatticeRankComputed as LatticeRankComputed
+import qualified Properties.ChromaUnitGauge as ChromaUnitGauge
 import qualified Properties.ParadigmSoundness as ParadigmSoundness
+import qualified Properties.ValueWeightThreshold as ValueWeightThreshold
 import qualified Properties.NudgeContamination as NudgeContamination
 import qualified Properties.DeltaGesture as DeltaGesture
 import qualified Properties.TriScaleBench as TriScaleBench
@@ -308,7 +312,11 @@ main = defaultMain $ testGroup "sixfour-spec"
   , HeadConvergence.tests
   , Generalization.tests
   , BlindComplementIsA7.tests
+  , BlindComplementGeometry.tests
+  , LatticeRankComputed.tests
+  , ChromaUnitGauge.tests
   , ParadigmSoundness.tests
+  , ValueWeightThreshold.tests
   , NudgeContamination.tests
   , DeltaGesture.tests
   , TriScaleBench.tests
