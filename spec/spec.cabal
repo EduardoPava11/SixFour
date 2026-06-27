@@ -116,6 +116,7 @@ library
         SixFour.Spec.RefinementSystem
         SixFour.Spec.RefinementCarriers
         SixFour.Spec.GaussianChroma
+        SixFour.Spec.AnchorDiagnostic
         SixFour.Spec.TransportGroup
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
@@ -400,6 +401,7 @@ test-suite spec-tests
         Properties.RefinementSystem
         Properties.RefinementCarriers
         Properties.GaussianChroma
+        Properties.AnchorDiagnostic
         Properties.TransportGroup
         Properties.TemporalData
         Properties.DeltaSurrogate

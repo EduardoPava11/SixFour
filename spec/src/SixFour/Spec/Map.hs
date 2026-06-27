@@ -444,6 +444,15 @@ Additive),
 @lawUnitBallsDiffer@ proves the knob is real (geometries differ at @d ≥ 2@); @lawLInfBoundedByL1@ the
 norm inequality. @p = 2@ (Euclidean → dual-lattice/sphere-packing) is a documented un-gated extension.
 Re-homes the d6 metric laws. Additive),
+"SixFour.Spec.AnchorDiagnostic" (★ experiment #1 of the L-anchor model review, made a THEOREM: ONE
+@ChannelDetail@ interface @channelEnergy@ with TWO lenses as instances — L scored by DISCRETE GEOMETRY
+(@MetricLattice@ @d6@\/@ℓ¹@ lattice norm) and chroma by ALGEBRAIC NUMBER THEORY (@GaussianChroma@
+@ℤ[i]@ field norm). @0@ energy = at the root-lattice floor (nothing to learn). KEYSTONE
+@lawIsoLuminantSignalIsInChromaRingNotL@: a constant-L\/varying-chroma octant has its whole signal in
+the chroma ring while L is at floor, so an L-only target (@palette_target@ a=b=0) is provably BLIND to
+it = the structural reason the masked-band head can sit at the zero floor. Contrast laws pin the other
+regimes (@lawLumaRampSignalIsInL@ where L-anchoring is right, @lawFlatSceneFloorsAllChannels@ where the
+data engine is the culprit). Reuses frozen @liftOct@; emits no golden. Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;

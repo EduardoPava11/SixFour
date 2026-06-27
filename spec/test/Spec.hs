@@ -98,6 +98,7 @@ import qualified Properties.MetricLattice as MetricLattice
 import qualified Properties.RefinementSystem as RefinementSystem
 import qualified Properties.RefinementCarriers as RefinementCarriers
 import qualified Properties.GaussianChroma as GaussianChroma
+import qualified Properties.AnchorDiagnostic as AnchorDiagnostic
 import qualified Properties.TransportGroup as TransportGroup
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
@@ -262,6 +263,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , RefinementSystem.tests
   , RefinementCarriers.tests
   , GaussianChroma.tests
+  , AnchorDiagnostic.tests
   , TransportGroup.tests
   , TemporalData.tests
   , DeltaSurrogate.tests
