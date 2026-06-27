@@ -119,6 +119,7 @@ library
         SixFour.Spec.AnchorDiagnostic
         SixFour.Spec.DualCube
         SixFour.Spec.ChannelProduct
+        SixFour.Spec.HeldOutTarget
         SixFour.Spec.TransportGroup
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
@@ -406,6 +407,7 @@ test-suite spec-tests
         Properties.AnchorDiagnostic
         Properties.DualCube
         Properties.ChannelProduct
+        Properties.HeldOutTarget
         Properties.TransportGroup
         Properties.TemporalData
         Properties.DeltaSurrogate

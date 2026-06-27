@@ -471,6 +471,13 @@ lattice product (geometry); search block @{a,b}×{x,y}@ = the @ℤ[i]@ Gaussian 
 points differing only in chroma are IDENTICAL to the L-anchored single row but DISTINCT under the full
 nine — the provable expressiveness gap behind band-at-floor. PonderNet+transformer = adaptive-depth
 attention over this matrix; H-JEPA target rides on it. Additive),
+"SixFour.Spec.HeldOutTarget" (★ THE CRUX of the holistic full-matrix H-JEPA: the JEPA target is HELD
+OUT from the input across SCALE (coarse in, the 7 octree-orthogonal DETAIL bands held) and TIME
+(frame t in, frame t+1 held), the structural REPLACEMENT for per-pair masking. Predict the WHOLE held
+set with NO mask, yet @lawScaleTargetNotAFunctionOfInput@/@lawTimeTargetNotAFunctionOfInput@ (same
+input, different target exists) + @law*IdentityIncursLoss@ (copy/floor predictor loses) make it
+collapse-proof. KEYSTONE @lawHeldOutReplacesMasking@; @lawTargetIsWholeNotMaskedPair@ (all 7 bands, not
+1 masked). Reuses frozen @liftOct@. The two held axes = the two RungPivot rungs. Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
