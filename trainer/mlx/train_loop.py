@@ -135,6 +135,22 @@ DEFAULT_WEIGHT_DECAY = 1e-4
 # NudgeRankTheorem H2). Float for the gradient path; the colour input it weights re-enters Q16.
 _SPACE_NP = np.asarray(octant_space_matrix(2), dtype=np.float32)  # (N_VOX, 3)
 SPACE_MX = mx.array(_SPACE_NP)
+# STEP 5 DETAIL objective: the spec cell aggregate uses UNCENTERED space (coords {0,1}), so a flat
+# (mean-only) octant still scores a large aggregate -- the cell loss is dominated by the octant MEAN
+# and a model can win it WITHOUT learning within-octant detail (measured: the cell margin is +99% but
+# the per-voxel/centered-detail margin is NEGATIVE -- the model learns the mean field, not the detail
+# the ScaleRung exists to invent). The CENTERED space (mean-free columns) makes the aggregate see ONLY
+# the within-octant detail: a flat octant -> 0. Adding W_DETAIL * this term FORCES the head to learn
+# detail, not just the mean. Centered space is still rank-3 in the off-mean subspace (the A_7 content).
+_SPACE_CENTERED_NP = _SPACE_NP - _SPACE_NP.mean(axis=0, keepdims=True)
+SPACE_CENTERED_MX = mx.array(_SPACE_CENTERED_NP)
+# DEFAULT 0.0: the centered detail term is computed every eval as an OBSERVABILITY diagnostic (the
+# honest within-octant-detail margin the mean-dominated cell loss hides), but it contributes ZERO
+# gradient by default, so the proven cell-objective training behaviour is UNCHANGED. It is opt-in via
+# --w-detail for the ScaleRung experiment; the default flips to >0 only once detail learning is PROVEN
+# (held detail margin crosses positive on a stable run). Until then: surface the gap, don't silently
+# change training on an unproven fix.
+W_DETAIL = 0.0  # weight on the centered detail objective (opt-in via --w-detail; diagnostic by default)
 
 
 # ===========================================================================
@@ -277,7 +293,7 @@ def vicreg_python_read(latent: mx.array):
 # L_pal, L_idx) MLX scalars for one full batch. (Body lifted verbatim from run()'s _heads.)
 # ===========================================================================
 def _composite_terms(h, tokens_b, masks, targets, pal_targets, d6):
-    band_terms, vic_terms, pal_terms, idx_terms, cell_terms = [], [], [], [], []
+    band_terms, vic_terms, pal_terms, idx_terms, cell_terms, det_terms = [], [], [], [], [], []
     for i in range(tokens_b.shape[0]):
         latent, raws, palette, idx_logits = h(tokens_b[i], d6)
         d = raws[masks[i]] - targets[i]
@@ -297,9 +313,12 @@ def _composite_terms(h, tokens_b, masks, targets, pal_targets, d6):
         a_tgt = tgt.T @ SPACE_MX                                  # (ch, 3) cell aggregate (target)
         cd = a_pred - a_tgt
         cell_terms.append(0.5 * mx.mean(cd * cd))
+        # STEP 5 DETAIL: the CENTERED aggregate (mean-free space) sees ONLY within-octant detail.
+        dp = pal.T @ SPACE_CENTERED_MX - tgt.T @ SPACE_CENTERED_MX
+        det_terms.append(0.5 * mx.mean(dp * dp))
     return (mx.mean(mx.stack(band_terms)), mx.mean(mx.stack(vic_terms)),
             mx.mean(mx.stack(pal_terms)), mx.mean(mx.stack(idx_terms)),
-            mx.mean(mx.stack(cell_terms)))
+            mx.mean(mx.stack(cell_terms)), mx.mean(mx.stack(det_terms)))
 
 
 # ===========================================================================
@@ -356,7 +375,10 @@ def _composite_terms_batched(h, tokens_b, mask_idx, targets, pal_targets, d6):
     a_pred = mx.matmul(pal.transpose(0, 2, 1), SPACE_MX)                 # (B, ch, 3)
     a_tgt = mx.matmul(tgt.transpose(0, 2, 1), SPACE_MX)                  # (B, ch, 3)
     cellL = mx.mean(0.5 * mx.mean((a_pred - a_tgt) ** 2, axis=(1, 2)))
-    return band, vic, palL, idxL, cellL
+    # STEP 5 DETAIL (centered aggregate): within-octant detail only (flat octant -> 0).
+    dp = mx.matmul(pal.transpose(0, 2, 1), SPACE_CENTERED_MX) - mx.matmul(tgt.transpose(0, 2, 1), SPACE_CENTERED_MX)
+    detL = mx.mean(0.5 * mx.mean(dp ** 2, axis=(1, 2)))
+    return band, vic, palL, idxL, cellL, detL
 
 
 # ===========================================================================
@@ -404,8 +426,8 @@ def run(seed: int, examples, d6, steps: int, lr: float, w_value: float, w_policy
         """L = L_band + LAMBDA_VIC*L_vic + w_value*L_pal + w_policy*L_idx + W_CELL*L_cell (the ONE MLX
         scalar the single optimizer descends over ALL heads). L_cell (Spec.MatrixTarget.cellLoss) is
         the primary held-out objective; the per-band L_band is demoted to a diagnostic."""
-        band, vic, pal, idx, cell = _heads(h)
-        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell
+        band, vic, pal, idx, cell, det = _heads(h)
+        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell + W_DETAIL * det
 
     opt = optim.SGD(learning_rate=lr)
     loss_and_grad = nn.value_and_grad(head, composite)
@@ -425,8 +447,8 @@ def run(seed: int, examples, d6, steps: int, lr: float, w_value: float, w_policy
         trajectory.append(lval)
         # Record EACH head's objective separately so a verifier can confirm each descends
         # (not merely the collapse guard relaxing to its floor).
-        band_s, vic_s, pal_s, idx_s, cell_s = _heads(head)
-        mx.eval(band_s, vic_s, pal_s, idx_s, cell_s)
+        band_s, vic_s, pal_s, idx_s, cell_s, det_s = _heads(head)
+        mx.eval(band_s, vic_s, pal_s, idx_s, cell_s, det_s)
         band_traj.append(float(band_s))
         pal_traj.append(float(pal_s))
         idx_traj.append(float(idx_s))
@@ -461,8 +483,8 @@ def _make_grad(head, batch, d6, w_value, w_policy):
     tokens_b, masks, targets, pal_targets = batch
 
     def composite(h):
-        band, vic, pal, idx, cell = _composite_terms(h, tokens_b, masks, targets, pal_targets, d6)
-        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell
+        band, vic, pal, idx, cell, det = _composite_terms(h, tokens_b, masks, targets, pal_targets, d6)
+        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell + W_DETAIL * det
 
     return nn.value_and_grad(head, composite)
 
@@ -473,8 +495,8 @@ def _make_grad_batched(head, batch, d6, w_value, w_policy):
     mask_idx = mx.array(masks, dtype=mx.int32)
 
     def composite(h):
-        band, vic, pal, idx, cell = _composite_terms_batched(h, tokens_b, mask_idx, targets, pal_targets, d6)
-        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell
+        band, vic, pal, idx, cell, det = _composite_terms_batched(h, tokens_b, mask_idx, targets, pal_targets, d6)
+        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell + W_DETAIL * det
 
     return nn.value_and_grad(head, composite)
 
@@ -544,11 +566,11 @@ def _held_eval(head, held, d6, w_value, w_policy):
     """Held-out losses via the BATCHED forward, NO gradient -- the same loss terms training
     descends, scored on data the optimizer never saw."""
     h_tb, h_midx, h_tg, h_pl = held
-    band, vic, pal, idx, cell = _composite_terms_batched(head, h_tb, h_midx, h_tg, h_pl, d6)
-    comp = band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell
-    mx.eval(band, vic, pal, idx, cell, comp)
+    band, vic, pal, idx, cell, det = _composite_terms_batched(head, h_tb, h_midx, h_tg, h_pl, d6)
+    comp = band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell + W_DETAIL * det
+    mx.eval(band, vic, pal, idx, cell, det, comp)
     return {"band": float(band), "vic": float(vic), "pal": float(pal),
-            "idx": float(idx), "cell": float(cell), "composite": float(comp)}
+            "idx": float(idx), "cell": float(cell), "detail": float(det), "composite": float(comp)}
 
 
 def _floor_baseline(held):
@@ -563,9 +585,14 @@ def _floor_baseline(held):
     tgt = h_pl.reshape(B, N_VOX, PAL_CH)
     a_tgt = mx.matmul(tgt.transpose(0, 2, 1), SPACE_MX)                  # (B, ch, 3)
     cell_floor = float(mx.mean(0.5 * mx.mean(a_tgt ** 2, axis=(1, 2))))
+    # The DETAIL floor: the centered aggregate at pred=0 = a FLAT (mean-only) prediction. Beating
+    # this proves within-octant detail is learned, not just the octant mean (the cell loss' blind spot).
+    d_tgt = mx.matmul(tgt.transpose(0, 2, 1), SPACE_CENTERED_MX)
+    detail_floor = float(mx.mean(0.5 * mx.mean(d_tgt ** 2, axis=(1, 2))))
     return {"band": 0.5 * float(mx.mean(h_tg ** 2)),
             "value": 0.5 * float(mx.mean(h_pl ** 2)),
-            "cell": cell_floor}
+            "cell": cell_floor,
+            "detail": detail_floor}
 
 
 def _fmt_dur(s):
@@ -603,7 +630,12 @@ def dashboard_verdict(held, floor):
         primary, pfloor = held["cell"], cf
     else:
         primary, pfloor = held["pal"], vf
-    # COLLAPSE guard FIRST (a collapsed head can score a misleading margin).
+    # DIVERGED guard FIRST: a NaN/inf primary (lr/weight too hot) must NOT silently read "AT FLOOR"
+    # -- nan>floor*1.02 and nan>0.5*max_vic are both False, so without this the dashboard lies green
+    # while the model is gone. math.isnan/isinf catch the blow-up the run protocol calls the NaN trap.
+    if not math.isfinite(primary) or not math.isfinite(held.get("vic", 0.0)):
+        return "DIVERGED (NaN/inf -- lr or loss weight too hot)", value_margin, band_margin, collapsed, max_vic
+    # COLLAPSE guard (a collapsed head can score a misleading margin).
     if collapsed:
         verdict = "COLLAPSE (variance floor tripped)"
     elif primary < pfloor * 0.98:
@@ -623,13 +655,16 @@ def _dashboard(step, total, held, floor, train_loss, sps, batch, t_elapsed):
     bf = floor["band"]
     vf = floor["value"]
     cf = floor.get("cell", 0.0)
+    df = floor.get("detail", 0.0)
     verdict, value_margin, band_margin, collapsed, max_vic = dashboard_verdict(held, floor)
     cell_margin = (cf - held.get("cell", 0.0)) / cf * 100 if cf > 0 else 0.0
+    detail_margin = (df - held.get("detail", 0.0)) / df * 100 if df > 0 else 0.0
     eta = _fmt_dur((total - step) / sps) if sps > 0 else "?"
     tl = "   --" if train_loss != train_loss else f"{train_loss:.6f}"   # nan-safe
     lines = [
         f"=== EVAL @ step {step}/{total} :: {verdict} ===",
         f"  cell   held {held.get('cell', 0.0):.6f}  vs floor {cf:.6f}   margin {cell_margin:+.1f}%   (>0 = beating zero-prediction; THE VERDICT METRIC -- Spec.MatrixTarget.cellLoss, rank-3)",
+        f"  detail held {held.get('detail', 0.0):.6f}  vs floor {df:.6f}   margin {detail_margin:+.1f}%   (CENTERED: within-octant DETAIL, flat-mean blind spot -- the honest ScaleRung signal)",
         f"  value  held {held['pal']:.6f}  vs floor {vf:.6f}   margin {value_margin:+.1f}%   (reconstruction diagnostic)",
         f"  band   held {held['band']:.6f}  vs floor {bf:.6f}   margin {band_margin:+.1f}%   (diagnostic ONLY -- rank-1 blind, see NudgeRankTheorem)",
         f"  index  held {held['idx']:.6f}   train L {tl}",
@@ -898,7 +933,7 @@ def demo_determinism(seed, examples, d6, steps, lr, w_value, w_policy):
 
 
 def main():
-    global W_CELL  # --w-cell overrides the module-constant the composite closures read
+    global W_CELL, W_DETAIL  # --w-cell / --w-detail override the module constants the composite reads
     ap = argparse.ArgumentParser(description="End-to-end MLX H-JEPA training loop.")
     ap.add_argument("--smoke", action="store_true",
                     help="fast mode: 8 octants, 30 steps (< ~10s); shows all four properties.")
@@ -929,6 +964,9 @@ def main():
     ap.add_argument("--w-policy", dest="w_policy", type=float, default=0.1,
                     help="weight on the GIF89a discrete INDEX head (Step 2, straight-through, "
                          "fused palette[index] reconstruction). 0 = index head inert.")
+    ap.add_argument("--w-detail", dest="w_detail", type=float, default=W_DETAIL,
+                    help="weight on the centered DETAIL objective (within-octant structure the "
+                         "mean-dominated cell loss misses; the honest ScaleRung signal).")
     ap.add_argument("--w-cell", dest="w_cell", type=float, default=W_CELL,
                     help="weight on the cell-aggregate objective (Step 3, Spec.MatrixTarget.cellLoss, "
                          "the primary held-out loss the dashboard judges on). Default 1.0.")
@@ -960,6 +998,7 @@ def main():
 
     # The cell-aggregate weight is a module constant the composite closures read; honor --w-cell.
     W_CELL = args.w_cell
+    W_DETAIL = args.w_detail
 
     # DISPATCH: persistent long-run trainer vs the 4-property demo. Long mode is entered
     # explicitly (--long) or implicitly whenever the user asks to save or resume.

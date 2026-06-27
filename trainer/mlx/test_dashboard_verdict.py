@@ -68,6 +68,21 @@ def main() -> int:
     else:
         print(f"[ ok ] value-floor not beaten ({fl_v:+.1f}%) reads {fl_verdict!r}, not LEARNING")
 
+    # (4) DIVERGED guard: a NaN primary (lr/weight too hot) must NOT silently read AT FLOOR/ok.
+    # nan>floor*1.02 and nan>collapse-threshold are both False, so without the isfinite guard the
+    # dashboard would lie green while the model has blown up (the reproduced w_detail=20 NaN trap).
+    nan_verdict, _, _, _, _ = dashboard_verdict(_held(pal=float("nan"), band=float("nan")), floor)
+    if not nan_verdict.startswith("DIVERGED"):
+        print(f"[FAIL] a NaN primary must read DIVERGED, got {nan_verdict!r}"); fails += 1
+    else:
+        print(f"[ ok ] NaN primary reads {nan_verdict!r} (does not silently pass as AT FLOOR)")
+    # ...and a NaN in the VICReg term alone also diverges (collapse read would be misleading).
+    nan_vic, _, _, _, _ = dashboard_verdict(_held(pal=0.003171, band=0.000486, vic=float("nan")), floor)
+    if not nan_vic.startswith("DIVERGED"):
+        print(f"[FAIL] a NaN vic must read DIVERGED, got {nan_vic!r}"); fails += 1
+    else:
+        print(f"[ ok ] NaN vic reads {nan_vic!r}")
+
     print("=== dashboard verdict: all green ===" if fails == 0 else f"=== dashboard verdict: {fails} FAILED ===")
     return 1 if fails else 0
 
