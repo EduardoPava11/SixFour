@@ -32,6 +32,7 @@ MODULES = [
     # v3 spec-emitted goldens (the spec is the authority for the trainer)
     ("jepa_head_golden.py", True),
     ("temporal_data.py", True),
+    ("test_motion_floor.py", True),   # TimeRung prerequisite: corpus has inter-frame motion (MotionFloorCorpus)
     ("delta_surrogate.py", True),
     ("gaussian_chroma.py", True),
     ("dual_loss.py", True),
