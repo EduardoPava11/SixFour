@@ -18,6 +18,10 @@ module SixFour.Spec.MatrixTarget
   , lawGeneratorIsSixNotNine
   , lawTargetIsFullMatrixNotMaskedPair
   , lawMatrixLossSeesOffDiagonal
+    -- * The honest training loss (the cell-aggregate, per NudgeRankTheorem)
+  , cellLoss
+  , lawCellLossZeroAtMatch
+  , lawCellLossIsAggregateNotPerVoxel
   ) where
 
 import SixFour.Spec.DualCube       (P6(..))
@@ -25,6 +29,8 @@ import SixFour.Spec.XYTLabDuality  (Chroma(L))
 import SixFour.Spec.ChannelProduct
   ( compareMatrix, comparePair, colorVec, spaceVec
   , lawComparisonIsSeparable, lawComparisonIsOuterProduct )
+import SixFour.Spec.NudgeRankTheorem
+  ( cellAggregate, aggSqLoss, lawHeldOutLossIsCellAggregateNotPerVoxel )
 
 -- | The held target: the full 9-channel comparison matrix of the held object.
 targetMatrix :: P6 -> [[Integer]]
@@ -70,3 +76,21 @@ lawMatrixLossSeesOffDiagonal =
   let tgtP  = P6 5 1 2 3 4 6
       predP = P6 5 9 8 3 4 6      -- same L, x, y, t; chroma a, b differ
   in lRowLoss predP tgtP == 0 && matrixSqLoss predP tgtP > 0
+
+-- | THE HONEST TRAINING LOSS the model and trainer descend: squared error on the cell-AGGREGATE
+-- comparison matrix @A = Σ_voxels colour ⊗ space@ ("SixFour.Spec.NudgeRankTheorem"), NOT a per-voxel
+-- sum. A cell is a list of its voxels' 6D points. This is the loss "SixFour.Spec.CellNudge"'s 9-channel
+-- surface is honest against, because the aggregate is rank 3 (nine independent entries) where a single
+-- voxel is rank 1.
+cellLoss :: [P6] -> [P6] -> Integer
+cellLoss predCell tgtCell = aggSqLoss (cellAggregate predCell) (cellAggregate tgtCell)
+
+-- | The cell loss is zero exactly at the target: predicting the cell's own voxels costs nothing.
+lawCellLossZeroAtMatch :: [P6] -> Bool
+lawCellLossZeroAtMatch cell = cellLoss cell cell == 0
+
+-- | The cell loss penalizes a chroma-by-space mispairing that a per-voxel view is blind to: every
+-- predicted voxel can be a valid rank-1 matrix (so per-voxel loss sees nothing) while the aggregate
+-- errs. Delegates the "SixFour.Spec.NudgeRankTheorem" proof — this is why the loss MUST be the aggregate.
+lawCellLossIsAggregateNotPerVoxel :: Bool
+lawCellLossIsAggregateNotPerVoxel = lawHeldOutLossIsCellAggregateNotPerVoxel

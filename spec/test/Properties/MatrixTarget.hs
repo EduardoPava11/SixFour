@@ -22,4 +22,8 @@ tests = testGroup "MatrixTarget (the holistic full-matrix target, rank-1 honest)
       forAll genP6 lawTargetIsFullMatrixNotMaskedPair
   , testProperty "KEYSTONE: matrix loss sees the chroma the L-row loss is blind to"
       lawMatrixLossSeesOffDiagonal
+  , testProperty "cell-aggregate loss is zero at the target" $
+      forAll (choose (0, 5) >>= \n -> vectorOf n genP6) lawCellLossZeroAtMatch
+  , testProperty "the training loss is the cell-aggregate, not per-voxel"
+      lawCellLossIsAggregateNotPerVoxel
   ]
