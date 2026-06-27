@@ -12,13 +12,11 @@ genList = do
   vectorOf n (choose (-1000, 1000))
 
 tests :: TestTree
-tests = testGroup "Recursion (the boot-only Fix/cata/ana/hylo/meta foundation)"
+tests = testGroup "Recursion (the boot-only Fix/cata/ana/hylo foundation)"
   [ testGroup "the combinators behave (pinned against a sample ListF functor)"
       [ testProperty "hylo fuses cata . ana (the fusion theorem)" $
           forAll genList lawHyloFusesCataAna
       , testProperty "ana then cata round-trips a list (cata toList . ana fromList == id)" $
           forAll genList lawCataAnaRoundTrip
-      , testProperty "meta = fold-then-unfold: length n then descending [n..1]" $
-          forAll genList lawMetaFoldThenUnfold
       ]
   ]

@@ -2,24 +2,25 @@
 
 {- |
 Module      : SixFour.Spec.Recursion
-Description : The boot-only recursion-scheme home — @Fix@/@cata@/@ana@/@hylo@/@meta@ — so the fixpoint vocabulary is declared ONCE and the multiresolution lift can be NAMED (a capture catamorphism, a reconstruct anamorphism, the codec a metamorphism) instead of re-deriving @Fix@ privately in every module.
+Description : The boot-only recursion-scheme home — @Fix@/@cata@/@ana@/@hylo@ — so the fixpoint vocabulary is declared ONCE and the multiresolution lift can be NAMED (a capture catamorphism, a reconstruct anamorphism, the round-trip a hylomorphism) instead of re-deriving @Fix@ privately in every module.
 
-This module is the one shared fixpoint foundation. It contains ONLY the schemes that have
-≥2 honest consumers in the spec — the structural fold 'cata' and unfold 'ana' (the octree
-collapse/lift in "SixFour.Spec.OctreeCell"), their fused composite 'hylo', and 'meta' (Gibbons'
-metamorphism: a fold that fully completes, then an unfold) which NAMES the capture→reconstruct
-PAIR as one object.
+This module is the one shared fixpoint foundation. It contains ONLY the schemes that have a REAL
+consumer in the spec — the structural fold 'cata' and unfold 'ana' (the octree collapse/lift in
+"SixFour.Spec.OctreeCell") and their fused composite 'hylo' (the build→flatten codec,
+"SixFour.Spec.OctreeCell" @lawOctantBuildFlattenIsHylo@).
 
 WHAT THIS MODULE DELIBERATELY DOES NOT EXPORT (the anti-jargon boundary):
 
-  * @apo@\/@para@\/@histo@\/@futu@ — each had exactly one proposed call site (jargon-by-absence),
-    and @histo@ is the wrong direction for "read at depth n" (it carries FINER children; the
-    coarser ancestors a depth-read needs already come from "SixFour.Spec.ScaleFiltration"
-    @valuation@). They are admitted only if a SECOND real consumer appears.
+  * @meta@\/@apo@\/@para@\/@histo@\/@futu@ — each has at most one (proposed) call site
+    (jargon-by-absence). @meta@ (Gibbons' metamorphism = fold-then-unfold) would NAME the
+    capture→reconstruct pair, but the real codec ("SixFour.Spec.OctreeCell"
+    @octantDistill@\/@octantSynthesize@) folds-then-unfolds over LISTS, not a literal @Fix f → Fix g@,
+    so the name has no typed consumer; admit it only when one appears. @histo@ is also the wrong
+    direction for "read at depth n" (it carries FINER children; the coarser ancestors a depth-read
+    needs come from "SixFour.Spec.ScaleFiltration" @valuation@).
 
-  * The metamorphism naming is DOCUMENTATION, not a free theorem. 'meta' asserts NOTHING about
-    mutual-inverseness: @ana coalg . cata alg@ is not @id@ for arbitrary @alg@\/@coalg@. The
-    reversibility of the shipped lift stays a TESTED bijection law
+  * No scheme here is a free theorem about reversibility: @ana coalg . cata alg@ is not @id@ for
+    arbitrary @alg@\/@coalg@. The reversibility of the shipped lift stays a TESTED bijection law
     ("SixFour.Spec.OctreeCell" @lawOctantLadderBijective@), never "structural by construction" —
     the floored @sLift@ is a SET-bijection, not a ℤ-module homomorphism
     ("SixFour.Spec.RootLatticeDetail" honest boundary).
@@ -36,11 +37,9 @@ module SixFour.Spec.Recursion
   , cata
   , ana
   , hylo
-  , meta
     -- * Laws (QuickCheck'd in @Properties.Recursion@; pinned against a sample functor)
   , lawHyloFusesCataAna
   , lawCataAnaRoundTrip
-  , lawMetaFoldThenUnfold
   ) where
 
 -- | The least fixed point of a functor. An octree cube is @Fix (OctF l)@; a cons-list is
@@ -63,13 +62,6 @@ ana coalg = Fix . fmap (ana coalg) . coalg
 hylo :: Functor f => (f b -> b) -> (a -> f a) -> a -> b
 hylo alg coalg = alg . fmap (hylo alg coalg) . coalg
 
--- | Metamorphism (Gibbons) — a 'cata' that FULLY COMPLETES to a summary, then an 'ana' that
--- rebuilds a (possibly different) structure from it. This NAMES the capture→reconstruct PAIR as
--- one object. It is documentation: it asserts nothing about @ana coalg . cata alg@ being the
--- identity. Round-trip exactness is a SEPARATE, TESTED fact about the specific @alg@\/@coalg@.
-meta :: (Functor f, Functor g) => (f b -> b) -> (b -> g b) -> Fix f -> Fix g
-meta alg coalg = ana coalg . cata alg
-
 -- ---------------------------------------------------------------------------
 -- A sample functor to pin the combinators (non-vacuous laws).
 -- ---------------------------------------------------------------------------
@@ -87,16 +79,10 @@ toListAlg :: ListF [Int] -> [Int]
 toListAlg NilF         = []
 toListAlg (ConsF x xs) = x : xs
 
--- | Algebra: the LENGTH of a @Fix ListF@ (the middle summary for the 'meta' law).
+-- | Algebra: the LENGTH of a @Fix ListF@ (the summary used by the 'hylo' fusion law).
 lengthAlg :: ListF Int -> Int
 lengthAlg NilF         = 0
 lengthAlg (ConsF _ n)  = 1 + n
-
--- | Coalgebra: unfold a count @n@ into the descending list-tree @[n, n-1, …, 1]@.
-countDownCoalg :: Int -> ListF Int
-countDownCoalg n
-  | n <= 0    = NilF
-  | otherwise = ConsF n (n - 1)
 
 -- | The FUSION law: the fused 'hylo' equals build-then-fold @cata alg . ana coalg@. Non-vacuous —
 -- a 'hylo' that dropped the @fmap@ recursion, or an 'ana' that mis-threaded the seed, would differ.
@@ -109,14 +95,3 @@ lawHyloFusesCataAna xs =
 lawCataAnaRoundTrip :: [Int] -> Bool
 lawCataAnaRoundTrip xs =
   cata toListAlg (ana fromListCoalg xs) == xs
-
--- | 'meta' as fold-then-unfold: collapse a length-@n@ list-tree to its length @n@, then unfold the
--- descending @[n, n-1, …, 1]@. Witnesses that the named composite computes (NOT that it is an
--- identity — it is deliberately a DIFFERENT structure out). Capped so the unfold stays finite.
-lawMetaFoldThenUnfold :: [Int] -> Bool
-lawMetaFoldThenUnfold xs0 =
-  let xs   = take 64 xs0
-      n    = length xs
-      src  = ana fromListCoalg xs                 -- Fix ListF of length n
-      out  = meta lengthAlg countDownCoalg src    -- Fix ListF = [n, n-1, …, 1]
-  in cata toListAlg out == reverse [1 .. n]

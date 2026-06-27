@@ -136,10 +136,10 @@ learns this barycenter.)
 2⁸ palette one @2→1@ merge at a time to any posterization N; the lossless-split sibling of the fixed PairTree),
 "SixFour.Spec.RGBTLift" (the @2×2 ↔ RGBT@ reversible integer lifting — the spatial sibling of the
 1-D PairTreeFixed S-transform; the @(2×2)<->1@ bijection that makes the cube ladder lossless),
-"SixFour.Spec.Recursion" (the boot-only fixpoint foundation — @Fix@/@cata@/@ana@/@hylo@/@meta@
+"SixFour.Spec.Recursion" (the boot-only fixpoint foundation — @Fix@/@cata@/@ana@/@hylo@
 declared ONCE so the multiresolution lift is NAMED, not re-derived per module; @hylo@-fusion +
-round-trip laws pinned against a sample functor; deliberately NO @apo@/@para@/@histo@/@futu@
-(one-call-site jargon) and @meta@ is doc-naming NOT a reversibility theorem),
+round-trip laws pinned against a sample functor; deliberately NO @meta@/@apo@/@para@/@histo@/@futu@
+(jargon-by-absence — no typed consumer; @hylo@ alone has one, OctreeCell @lawOctantBuildFlattenIsHylo@)),
 "SixFour.Spec.OctreeCell" (★ octree keystone — the @2×2×2 → 1@ structured-leaf
 fixpoint @Fix (OctF l)@: collapse = catamorphism, lift = anamorphism, octant edge
 @liftOct@ lifts "SixFour.Spec.RGBTLift" to @8→8@; PROVES "1 at the bottom" is a
