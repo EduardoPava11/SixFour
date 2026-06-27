@@ -7,6 +7,23 @@ the concrete steps, the laws/goldens it must add, the gate command, and the acce
 
 Punctuation note: this doc avoids em-dashes on purpose (owner preference).
 
+## Progress (updated 2026-06-26)
+
+Done and committed on `master` (spec gate green at each step, app compile-checks arm64):
+- **W0.1** `Spec.AboveFloorMargin` (`c78c2e1`) — margin is finite (1 Q16 LSB survives, half-LSB
+  snaps to floor), floor non-absorbing above it, surviving detail is A_7-legal. Verdict: GO.
+- **W1.1** `Spec.ModelForward` (`c78c2e1`) — nudge-conditioned forward frame; closes ModelIO's
+  unused `miNudge`/`miGauge`. Budget gates, opaque head decides A_7 coords.
+- **W1.2** `Codegen.ModelIO` → `SixFourModelIO.swift` (`3f9b121`) — wireable boundary, drift-gated.
+- **W2.1** `ModelRender.swift` (`8a49c5c`) — render surface, `palette[index]` byte-exact.
+- **Floor bridge** `ModelFloor.swift` (`cbd0579`) — adapts the existing byte-exact 64³ cube into
+  `SixFourModelOutput` so the render previews the REAL floor. (Inserted before W2.2 per owner choice;
+  the 256³ super-res floor / Swift `upscale256` port stays deferred to Phase 3.)
+
+Spec totals: 1144 tests, 180 Spec modules, 29 generated files.
+
+NEXT: **W2.2** (the paint tool) — the last Phase 2 task, then the GREENLIGHT GATE before Phase 3.
+
 ## Owner rules that constrain ordering (do not violate)
 
 1. **No training until the model is wireable** (CLAUDE.md / NEXT-STEPS). App boundary first.
