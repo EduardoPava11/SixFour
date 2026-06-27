@@ -32,49 +32,74 @@ from masked_band_trainer import train_band_joint_stable
 from q16 import to_q16
 
 
-def l_volume(seed: int, kind: str) -> np.ndarray:
-    """Reconstruct the (F, 64, 64) scene-linear L (Q16 OKLab channel 0) volume of a capture."""
+def lab_volume(seed: int, kind: str) -> np.ndarray:
+    """Reconstruct the (F, 64, 64, 3) Q16 OKLab (L, a, b) volume of a capture.
+
+    STEP 2: the corpus DOES carry real chroma -- palettes_q16 channels 1 (a) and 2 (b) reach
+    abs ~17k on high-lab. The old l_volume kept only channel 0 (L), which discarded all chroma
+    before it could ever reach the value-head target. We now keep all three channels.
+    """
     cap = synthetic_capture(seed, kind)
     f, s = cap.indices.shape[0], 64
-    # L per voxel = palette L at that voxel's index; reshape the flat 4096 to (64, 64).
-    vol = np.empty((f, s, s), dtype=np.int64)
+    # (L, a, b) per voxel = palette (L, a, b) at that voxel's index; reshape flat 4096 -> (64, 64, 3).
+    vol = np.empty((f, s, s, 3), dtype=np.int64)
     for fr in range(f):
-        L = cap.palettes_q16[fr, cap.indices[fr], 0]  # (4096,)
-        vol[fr] = L.reshape(s, s)
+        lab = cap.palettes_q16[fr, cap.indices[fr], :]  # (4096, 3)
+        vol[fr] = lab.reshape(s, s, 3)
     return vol
 
 
-def octant_records(seed: int, kind: str, frame_step: int = 8, space_step: int = 6):
-    """Yield (cube, coarse, detail, (xblk, yblk)) for 2x2x2 octants of a capture's L volume.
+def _cube_at(vol: np.ndarray, f: int, r: int, c: int, ch: int) -> list:
+    """The 8 voxels of a 2x2x2 octant of channel `ch`, in the fixed frame-major lift order."""
+    return [
+        int(vol[f, r, c, ch]),         int(vol[f, r, c + 1, ch]),
+        int(vol[f, r + 1, c, ch]),     int(vol[f, r + 1, c + 1, ch]),
+        int(vol[f + 1, r, c, ch]),     int(vol[f + 1, r, c + 1, ch]),
+        int(vol[f + 1, r + 1, c, ch]), int(vol[f + 1, r + 1, c + 1, ch]),
+    ]
 
-    Asserts the lift round-trips on every cube (the data-engine law). The octant order is
-    fixed (frame-major then row then col) so the lift is deterministic.
+
+def octant_records(seed: int, kind: str, frame_step: int = 8, space_step: int = 6):
+    """Yield (cubeL, coarseL, detailL, (xblk, yblk), chroma) for 2x2x2 octants of a capture.
+
+    Each of the THREE channels (L, a, b) is lifted by the SAME reversible lift and round-trip
+    asserted (the data-engine law, now on chroma too). `chroma = ((coarseA, detailA),
+    (coarseB, detailB))` carries the a/b lift so the value-head target and the chroma-bearing
+    tokens can be reconstructed downstream. The L tuple is byte-identical to the old L-only
+    behaviour, so the masked-band (theta_B) path is unchanged. Octant order is fixed
+    (frame-major then row then col) so the lift is deterministic.
     """
-    vol = l_volume(seed, kind)
-    F, S, _ = vol.shape
+    vol = lab_volume(seed, kind)
+    F, S, _, _ = vol.shape
     for f in range(0, F - 1, frame_step):
         for r in range(0, S - 1, space_step):
             for c in range(0, S - 1, space_step):
-                cube = [
-                    int(vol[f, r, c]),     int(vol[f, r, c + 1]),
-                    int(vol[f, r + 1, c]), int(vol[f, r + 1, c + 1]),
-                    int(vol[f + 1, r, c]),     int(vol[f + 1, r, c + 1]),
-                    int(vol[f + 1, r + 1, c]), int(vol[f + 1, r + 1, c + 1]),
-                ]
-                coarse, detail = lift_oct(cube)
-                assert unlift_oct(coarse, detail) == cube, f"data engine drift on cube {cube}"
-                yield cube, coarse, detail, (c // 2, r // 2)
+                cubeL = _cube_at(vol, f, r, c, 0)
+                cubeA = _cube_at(vol, f, r, c, 1)
+                cubeB = _cube_at(vol, f, r, c, 2)
+                cL, dL = lift_oct(cubeL)
+                cA, dA = lift_oct(cubeA)
+                cB, dB = lift_oct(cubeB)
+                assert unlift_oct(cL, dL) == cubeL, f"L data engine drift on cube {cubeL}"
+                assert unlift_oct(cA, dA) == cubeA, f"a data engine drift on cube {cubeA}"
+                assert unlift_oct(cB, dB) == cubeB, f"b data engine drift on cube {cubeB}"
+                chroma = ((cA, tuple(dA)), (cB, tuple(dB)))
+                yield cubeL, cL, dL, (c // 2, r // 2), chroma
 
 
 def build_corpus(specs, frame_step=8, space_step=6):
     """Build MaskedBandExamples from several (seed, kind) captures, cycling the masked band
-    across 0..6 so every one of the 63 params receives gradient. Returns (examples, n_octants)."""
+    across 0..6 so every one of the 63 params receives gradient. Returns (examples, n_octants).
+
+    An example is (coarseL, detailL, mask, chroma): the L coarse/detail drive the theta_B
+    masked-band path; `chroma` carries the a/b lift for the value head (palette) target and the
+    chroma-bearing ViT tokens."""
     examples = []
     n_oct = 0
     for k, (seed, kind) in enumerate(specs):
-        for i, (_cube, coarse, detail, _xy) in enumerate(octant_records(seed, kind, frame_step, space_step)):
+        for i, (_cube, coarse, detail, _xy, chroma) in enumerate(octant_records(seed, kind, frame_step, space_step)):
             mask = (i + k) % NUM_BANDS
-            examples.append((coarse, tuple(detail), mask))
+            examples.append((coarse, tuple(detail), mask, chroma))
             n_oct += 1
     return examples, n_oct
 
@@ -170,7 +195,7 @@ def held_out_ratio(kind: str, mask: int = 0, steps: int = 1000, frame_step: int 
     just expressed as matrix ops so a 4096-octant fit runs in milliseconds instead of a minute.
     """
     from encoder_frozen import features_b
-    rows = [(c, tuple(d)) for _cube, c, d, _xy in octant_records(3, kind, frame_step, space_step)]
+    rows = [(c, tuple(d)) for _cube, c, d, _xy, _ch in octant_records(3, kind, frame_step, space_step)]
     rows = [r for r in rows if max(abs(b) for b in r[1]) > 0]
     X = np.array([features_b(c, [b for j, b in enumerate(d) if j != mask]) for c, d in rows])
     t = np.array([to_q16(d[mask]) for c, d in rows])

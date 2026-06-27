@@ -37,6 +37,8 @@ MODULES = [
     ("test_centered_cube.py", True),
     ("test_cube_learning.py", True),
     ("test_dashboard_verdict.py", True),
+    # STEP 2 chroma flow (skips cleanly if MLX/synth-capture deps are absent; locks the fix otherwise)
+    ("test_chroma_flow.py", True),
     # MLX autodiff cross-check (optional)
     ("autograd_check.py", False),
 ]

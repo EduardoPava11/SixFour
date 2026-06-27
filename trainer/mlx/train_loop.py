@@ -79,7 +79,7 @@ import numpy as np
 
 import large_head
 from large_head import N_TOKENS, D_MODEL, octant_lattice_d6
-from encoder_frozen import features_b_pos, POSITION_FEATURE_COUNT  # width-11 frozen embedding
+from encoder_frozen import features_b_pos_lab, CHROMA_FEATURE_COUNT  # width-25 chroma-bearing token
 import theta_b
 from theta_b import (
     NUM_BANDS, zero_params_b, mbe_coarse, mbe_masked, siblings_of, masked_target_band,
@@ -100,9 +100,9 @@ LAMBDA_VIC = 5e-2
 VIC_NEURON_SLICE = 16
 _SIDE = round(N_TOKENS ** (1 / 3))  # 4 -> the 4x4x4 octant token lattice
 # STEP 1 GIF89a VALUE head: per-octant palette size = the 8 voxels of the octant cube
-# (the smallest data-tied "local color table"; L-channel for now, a,b pending the chroma loader).
+# (the smallest data-tied "local color table"; full (L, a, b) chroma flows end-to-end, STEP 2).
 N_PAL = 8
-PAL_CH = 3  # OKLab triples (a,b are 0 until the per-frame chroma loader lands)
+PAL_CH = 3  # OKLab (L, a, b) triples -- real chroma now flows end-to-end (STEP 2)
 # STEP 2 GIF89a discrete CONTENT head: each of the octant's N_VOX voxels is assigned an index
 # into the N_PAL palette slots (the GIF index map). TAU = straight-through softmax temperature.
 N_VOX = N_PAL
@@ -120,7 +120,7 @@ MARGIN_EPS = 1e-4
 class JepaHead(nn.Module):
     def __init__(self, vit):
         super().__init__()
-        self.inproj = nn.Linear(POSITION_FEATURE_COUNT, D_MODEL)  # 11 -> 512 (places tokens)
+        self.inproj = nn.Linear(CHROMA_FEATURE_COUNT, D_MODEL)  # 25 -> 512 (chroma-bearing tokens)
         self.vit = vit                                            # the 18.9M-param ViT
         self.readout = nn.Linear(D_MODEL, NUM_BANDS)              # pooled latent -> 7 band raws
         # STEP 1 GIF89a VALUE head. Constructed LAST on purpose: inproj/vit/readout consume the
@@ -150,29 +150,44 @@ class JepaHead(nn.Module):
 # the d6 ALiBi to attend over. (A single broadcast row would collapse the latent.)
 # ===========================================================================
 def example_tokens(ex) -> mx.array:
+    # L coarse + the six visible L siblings (the theta_B view), PLUS the matching a/b coarse and
+    # the six visible a/b siblings -> a chroma-bearing token. Without the a/b context here the
+    # value head would have to predict chroma from L alone (the off-diagonal chroma-by-space cells
+    # would be unfittable); carrying it lets the head supervise actual colour (STEP 2).
     v = mbe_coarse(ex)
-    sibs = siblings_of(ex)
+    sibsL = siblings_of(ex)
+    m = mbe_masked(ex)
+    (cA, dA), (cB, dB) = ex[3]
+    sibsA = [b for j, b in enumerate(dA) if j != m]
+    sibsB = [b for j, b in enumerate(dB) if j != m]
+    sibs_lab = list(zip(sibsL, sibsA, sibsB))
+    coarse_lab = (v, cA, cB)
     step = 65536 // _SIDE
-    rows = np.empty((N_TOKENS, POSITION_FEATURE_COUNT), dtype=np.float32)
+    rows = np.empty((N_TOKENS, CHROMA_FEATURE_COUNT), dtype=np.float32)
     for i in range(N_TOKENS):
         xb, yb = i % _SIDE, (i // _SIDE) % _SIDE
-        rows[i] = np.asarray(features_b_pos(v, sibs, (xb * step, yb * step)), dtype=np.float32)
+        rows[i] = np.asarray(features_b_pos_lab(coarse_lab, sibs_lab, (xb * step, yb * step)),
+                             dtype=np.float32)
     return mx.array(rows)
 
 
 # ===========================================================================
-# STEP 1 palette target: each octant's byte-exact reconstructed cube as an OKLab palette.
-# unlift_oct(coarse, detail) is the data-engine inverse (round-trip asserted in the corpus),
-# so the target is DATA-MANUFACTURED, not free-floating. L-channel only (a,b=0) until the
-# per-frame chroma loader lands. Normalized through to_q16, the SAME scaling the band targets use.
+# STEP 2 palette target: each octant's byte-exact reconstructed (L, a, b) cube as an OKLab palette.
+# unlift_oct(coarse, detail) is the data-engine inverse (round-trip asserted per channel in the
+# corpus), so the target is DATA-MANUFACTURED, not free-floating. REAL chroma now: the a and b
+# channels are reconstructed from the chroma lift carried on the example, so the value head
+# supervises actual colour content. Normalized through to_q16, the SAME scaling the band targets use.
 # ===========================================================================
 def palette_target(ex) -> list:
     coarse = mbe_coarse(ex)
-    detail = list(ex[1])                       # the full 7-band detail (ex = (coarse, detail, mask[, xy]))
-    cube = unlift_oct(coarse, detail)          # 8 byte-exact Q16 L values
+    detail = list(ex[1])                       # the full 7-band L detail (ex = (coarseL, detailL, mask, chroma))
+    (cA, dA), (cB, dB) = ex[3]                 # the a/b lift carried alongside
+    cubeL = unlift_oct(coarse, detail)         # 8 byte-exact Q16 L values
+    cubeA = unlift_oct(cA, list(dA))           # 8 byte-exact Q16 a values
+    cubeB = unlift_oct(cB, list(dB))           # 8 byte-exact Q16 b values
     out = []
-    for L in cube:
-        out += [to_q16(L), 0.0, 0.0]           # (L, a=0, b=0) per entry -> N_PAL*PAL_CH floats
+    for L, a, b in zip(cubeL, cubeA, cubeB):
+        out += [to_q16(L), to_q16(a), to_q16(b)]   # real (L, a, b) per entry -> N_PAL*PAL_CH floats
     return out
 
 
@@ -464,7 +479,7 @@ def _corpus_for_epoch(args, epoch, kinds):
         stride = max(1, n_oct // n_use)
         examples = examples[::stride][:n_use]
     if args.mask is not None:
-        examples = [(c, d, args.mask) for (c, d, _m) in examples]
+        examples = [(c, d, args.mask, ch) for (c, d, _m, ch) in examples]
     return examples, n_oct
 
 
@@ -485,7 +500,7 @@ def _heldout_corpus(args, kinds, n_use):
         stride = max(1, len(examples) // n_use)
         examples = examples[::stride][:n_use]
     if args.mask is not None:
-        examples = [(c, d, args.mask) for (c, d, _m) in examples]
+        examples = [(c, d, args.mask, ch) for (c, d, _m, ch) in examples]
     return examples
 
 
@@ -882,7 +897,7 @@ def main():
         if not (0 <= args.mask < NUM_BANDS):
             ap.error(f"--mask must be in 0..{NUM_BANDS - 1}")
         # per-band specialist: every octant now supervises the SAME encoded band.
-        examples = [(c, d, args.mask) for (c, d, _m) in examples]
+        examples = [(c, d, args.mask, ch) for (c, d, _m, ch) in examples]
 
     d6 = mx.array(octant_lattice_d6(N_TOKENS), dtype=mx.float32)  # integer L1 ALiBi lattice
     mx.eval(d6)

@@ -27,6 +27,11 @@ COARSE_FEATURE_COUNT = 3  # [1, v~, v~^2]
 SIBLING_COUNT = NUM_BANDS - 1            # one band masked, six visible
 FEATURE_COUNT_B = COARSE_FEATURE_COUNT + SIBLING_COUNT   # 3 + 6 = 9
 POSITION_FEATURE_COUNT = FEATURE_COUNT_B + 2             # + (x~, y~) = 11
+# Chroma-extended token map (STEP 2): the width-11 L token PLUS coarse (a~, b~) and the six
+# visible sibling a~ and b~ bands, so the ViT input carries REAL (L, a, b) colour content (not
+# just L). This is a HEAD-input width used by the trainer's token builder only; the theta_B /
+# masked-band path stays on the width-9/11 L embedding (so PARAM_COUNT_B == 63 is untouched).
+CHROMA_FEATURE_COUNT = POSITION_FEATURE_COUNT + 2 + 2 * SIBLING_COUNT   # 11 + 2 + 12 = 25
 
 # The encoder owns ZERO learnable parameters. This is not a config knob; it is the
 # architectural keystone (lawEmbeddingFeatureMapIsParameterFree). A learned projection
@@ -53,6 +58,26 @@ def features_b_pos(v: int, sibs: list[int], xy: tuple[int, int]) -> list[float]:
     """
     x, y = xy
     return features_b(v, sibs) + [to_q16(x), to_q16(y)]
+
+
+def features_b_pos_lab(coarse_lab, sibs_lab, xy: tuple[int, int]) -> list[float]:
+    """STEP 2 chroma-extended token map: the width-11 L token (features_b_pos) PLUS the coarse
+    (a~, b~) and the six visible sibling a~ and b~ bands. Carries real (L, a, b) colour content
+    into the ViT so the value head supervises actual chroma, not L alone.
+
+        coarse_lab = (cL, ca, cb)            the octant's coarse L, a, b
+        sibs_lab   = [(L, a, b), ...]        the six VISIBLE sibling (L, a, b) bands
+
+    Width = CHROMA_FEATURE_COUNT (25). The encoder stays parameter-free (composition of fixed maps).
+    """
+    cL, ca, cb = coarse_lab
+    sL = [s[0] for s in sibs_lab]
+    base = features_b_pos(cL, sL, xy)                     # width 11 (L coarse/sibs + position)
+    sa = [to_q16(s[1]) for s in sibs_lab][:SIBLING_COUNT]
+    sa += [0.0] * (SIBLING_COUNT - len(sa))
+    sb = [to_q16(s[2]) for s in sibs_lab][:SIBLING_COUNT]
+    sb += [0.0] * (SIBLING_COUNT - len(sb))
+    return base + [to_q16(ca), to_q16(cb)] + sa + sb
 
 
 if __name__ == "__main__":
@@ -84,6 +109,22 @@ if __name__ == "__main__":
         print(f"FAIL: features_b_pos width {len(embp)} != {POSITION_FEATURE_COUNT}"); fails += 1
     if abs(embp[FEATURE_COUNT_B] - 0.5) > 1e-15:
         print("FAIL: x~ token wrong"); fails += 1
+
+    # STEP 2 chroma-extended token map: width 25, and a nonzero a/b actually surfaces.
+    lab = features_b_pos_lab((20000, 8000, -8000),
+                             [(0, 4000, -4000)] + [(0, 0, 0)] * 5, (32768, 0))
+    if len(lab) != CHROMA_FEATURE_COUNT:
+        print(f"FAIL: features_b_pos_lab width {len(lab)} != {CHROMA_FEATURE_COUNT}"); fails += 1
+    # the L sub-token is byte-identical to features_b_pos (no drift in the theta_B path's view).
+    if lab[:POSITION_FEATURE_COUNT] != features_b_pos(20000, [0] * 6, (32768, 0)):
+        print("FAIL: chroma map perturbed the width-11 L sub-token"); fails += 1
+    # coarse a~, b~ ride right after the L token; a nonzero chroma is non-zero (NOT discarded).
+    if abs(lab[POSITION_FEATURE_COUNT] - 8000 / 65536) > 1e-15:
+        print("FAIL: coarse a~ not carried"); fails += 1
+    if abs(lab[POSITION_FEATURE_COUNT + 1] - (-8000) / 65536) > 1e-15:
+        print("FAIL: coarse b~ not carried"); fails += 1
+    if abs(lab[POSITION_FEATURE_COUNT + 2] - 4000 / 65536) > 1e-15:
+        print("FAIL: sibling a~ not carried"); fails += 1
 
     print("encoder_frozen: PASS" if fails == 0 else f"encoder_frozen: {fails} FAIL")
     raise SystemExit(1 if fails else 0)
