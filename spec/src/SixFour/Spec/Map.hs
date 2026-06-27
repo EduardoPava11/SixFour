@@ -542,6 +542,19 @@ cell-aggregate matrix (@lawRungTargetIsCellAggregate@) via the same 2-level twic
 @lawInputIsPaintable@ +
 @lawNudgeGovernsSuperRes@ (the 9-channel paint maps to the 256³ build). The TRAINER targets a
 @ModelOutput@, so one boundary serves UI render, 256³ build, and training. Additive),
+"SixFour.Spec.AboveFloorMargin" (★ the TRAINING GO/NO-GO de-risk: invented detail can survive the Q16
+commit (@reenterQ16@ = @round(x*65536)@) and move the output OFF the deterministic floor, and the margin
+is FINITE (½ a Q16 LSB rounds to the floor under round-half-to-even; 1 LSB survives). The floor is not
+absorbing above the margin because the octant lift is a reversible bijection (distinct detail ⇒ distinct
+cube). @marginCoeffQ16@/@marginCoeffLatent@ name the number the trainer must exceed; the 7 surviving
+bands read as A_7 root coords are a legal mean-free residual. @lawFloorMarginIsFinite@,
+@lawAboveFloorMarginReachable@, @lawSurvivingDetailIsA7@. Emits no golden. Additive),
+"SixFour.Spec.ModelForward" (★ the NUDGE-CONDITIONED FORWARD CONTRACT that closes ModelIO's unused-field
+gap: @forward = octantLift floor (commit (gate budget (net …)))@. The paint BUDGET gates (zero ⇒ floor
+for ANY head); the opaque learned @PonderHead@ decides the A_7 coordinates (codomain pinned to the lattice
+chart, so it cannot leave). @lawZeroNudgeForwardIsFloor@ (byte-exact unpainted floor), @lawNudgeMovesOutput@
+(delegates AboveFloorMargin reachability), @lawResidualStaysInA7@, @lawForwardCommitIsQ16@ (sole reenterQ16
+crossing, no drift). @forwardFromInput@ consumes @ModelInput.miNudge@/@miGauge@. Emits no golden. Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;

@@ -129,6 +129,8 @@ library
         SixFour.Spec.MotionFloorCorpus
         SixFour.Spec.ScaleSpineRungs
         SixFour.Spec.ModelIO
+        SixFour.Spec.AboveFloorMargin
+        SixFour.Spec.ModelForward
         SixFour.Spec.TransportGroup
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
@@ -426,6 +428,8 @@ test-suite spec-tests
         Properties.MotionFloorCorpus
         Properties.ScaleSpineRungs
         Properties.ModelIO
+        Properties.AboveFloorMargin
+        Properties.ModelForward
         Properties.TransportGroup
         Properties.TemporalData
         Properties.DeltaSurrogate
