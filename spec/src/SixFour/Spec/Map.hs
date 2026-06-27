@@ -642,6 +642,13 @@ informative — the feature-rank analogue of the lattice-rank story), so the las
 (@lawReadoutConvergesGivenFeatures@). The TRUNK is PROVEN OUTSIDE that guarantee: a ReLU unit violates
 Jensen (@lawTrunkLossCanBeNonConvex@), so end-to-end fine-tuning stays DEMONSTRATED (P4), not proven —
 the scope boundary is itself a theorem (@lawHeadDescentScopeIsReadoutNotTrunk@). Emits no golden. Additive),
+"SixFour.Spec.Generalization" (★ the GENERALIZATION teaching, why held-out follows train (not memorization):
+the data-manufactured target is a SEED-INDEPENDENT pure function @T@ of the input, so train & held draw from
+the SAME map — NO distribution shift. Held error decomposes into exactly two NAMED parts: input COVERAGE +
+the irreducible masked-band residual (visible-context conditional mean, the +88% reachable oracle), NEVER a
+shift gap. @lawTargetMapIsSeedIndependent@ (teeth: a seed-leaking target would break it), @lawNoDistributionShift@,
+@lawHeldErrorIsCoverageNotShift@ (on-support exact), @lawHeldReachableFromContext@ (delegates AboveFloorMargin),
+capstone @lawModelGeneralizesUpToCoverage@. Lifts the empirical test_detail_reachable to a theorem. Emits no golden. Additive),
 "SixFour.Spec.ParadigmSoundness" (★★ THE MASTER THEOREM: the one browsable capstone conjoining ALL SEVEN
 necessary teachings of the self-supervised paradigm — SIGNAL (AnchorDiagnostic d6/ℤ[i]) ∧ EXPRESSIVITY
 (AboveFloorMargin/A7) ∧ IDENTIFIABILITY (LearnabilityTheorem) ∧ CONVERGENCE (Convergence, the GENERAL
