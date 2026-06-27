@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 import math
 import os
 
@@ -467,6 +468,83 @@ def _corpus_for_epoch(args, epoch, kinds):
     return examples, n_oct
 
 
+# ===========================================================================
+# Held-out EVALUATION + zero-prediction FLOOR baseline -- the "is it actually learning?"
+# dashboard. Train loss FALLING is NOT proof of learning: the prior run FLOORED (train loss
+# fell while held-out band loss sat BELOW the zero-prediction floor -- i.e. WORSE than just
+# predicting zero). A FIXED held-out corpus (seeds DISJOINT from training, never resampled),
+# scored each checkpoint against the floor, makes learning observable with an explicit verdict.
+# ===========================================================================
+def _heldout_corpus(args, kinds, n_use):
+    """A FIXED held-out corpus on seeds DISJOINT from training. Training uses
+    (seed + epoch*101 + i) % 100000; held-out uses (seed + 500003 + i), never resampled, so the
+    eval signal is true generalization, not memorized train octants."""
+    specs = [((args.seed + 500003 + i), k) for i, k in enumerate(kinds)]
+    examples, _n_oct = build_corpus(specs, frame_step=8, space_step=8)
+    if len(examples) > n_use:
+        stride = max(1, len(examples) // n_use)
+        examples = examples[::stride][:n_use]
+    if args.mask is not None:
+        examples = [(c, d, args.mask) for (c, d, _m) in examples]
+    return examples
+
+
+def _held_eval(head, held, d6, w_value, w_policy):
+    """Held-out losses via the BATCHED forward, NO gradient -- the same loss terms training
+    descends, scored on data the optimizer never saw."""
+    h_tb, h_midx, h_tg, h_pl = held
+    band, vic, pal, idx = _composite_terms_batched(head, h_tb, h_midx, h_tg, h_pl, d6)
+    comp = band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx
+    mx.eval(band, vic, pal, idx, comp)
+    return {"band": float(band), "vic": float(vic), "pal": float(pal),
+            "idx": float(idx), "composite": float(comp)}
+
+
+def _floor_baseline(held):
+    """The ZERO-PREDICTION floor: the loss a model that emits zero would score on the held set.
+    The band head MUST beat band_floor on held-out or it is not learning (the prior run's exact
+    failure: held band ~0.00054 vs floor ~0.00035 -- worse than zero)."""
+    _h_tb, _h_midx, h_tg, h_pl = held
+    return {"band": 0.5 * float(mx.mean(h_tg ** 2)),
+            "value": 0.5 * float(mx.mean(h_pl ** 2))}
+
+
+def _fmt_dur(s):
+    s = int(max(0, s))
+    if s < 60:
+        return f"{s}s"
+    if s < 3600:
+        return f"{s // 60}m{s % 60:02d}s"
+    return f"{s // 3600}h{(s % 3600) // 60:02d}m"
+
+
+def _dashboard(step, total, held, floor, train_loss, sps, batch, t_elapsed):
+    """The CLI that MATTERS: held-out vs the zero-prediction floor with an explicit verdict, plus
+    the collapse guard, throughput, and ETA. Returns (verdict, lines)."""
+    bf = floor["band"]
+    margin = (bf - held["band"]) / bf * 100 if bf > 0 else 0.0
+    max_vic = VIC_GAMMA * VIC_NEURON_SLICE                       # ~all neurons collapsed
+    collapsed = held["vic"] > 0.5 * max_vic
+    if collapsed:
+        verdict = "COLLAPSE (variance floor tripped)"
+    elif held["band"] < bf * 0.98:
+        verdict = "LEARNING"
+    elif held["band"] > bf * 1.02:
+        verdict = "FLOORED (worse than predicting zero)"
+    else:
+        verdict = "AT FLOOR"
+    eta = _fmt_dur((total - step) / sps) if sps > 0 else "?"
+    tl = "   --" if train_loss != train_loss else f"{train_loss:.6f}"   # nan-safe
+    lines = [
+        f"=== EVAL @ step {step}/{total} :: {verdict} ===",
+        f"  band   held {held['band']:.6f}  vs floor {bf:.6f}   margin {margin:+.1f}%   (>0 = beating zero-prediction)",
+        f"  value  held {held['pal']:.6f}   index held {held['idx']:.6f}   train L {tl}",
+        f"  collapse-guard(VICReg) {held['vic']:.4f} / {max_vic:.1f}  [{'ok' if not collapsed else 'TRIPPED'}]",
+        f"  throughput {sps:.1f} steps/s · {sps * batch:.0f} oct/s   elapsed {_fmt_dur(t_elapsed)}   ETA {eta}",
+    ]
+    return verdict, lines
+
+
 def train_persistent(args) -> int:
     """The hours/days trainer: resumable, checkpointing, streaming-corpus, file-logged."""
     out_dir = args.out or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "out", "run")
@@ -530,15 +608,34 @@ def train_persistent(args) -> int:
     print(f"corpus epoch {epoch}: {len(examples)} octants from {len(kinds)} fresh captures "
           f"(of {n_oct}); SGD lr={lr}, w_value={w_value}, w_policy={w_policy}")
 
+    # Held-out eval: a FIXED, disjoint-seed corpus scored against the zero-prediction floor so
+    # the run reports whether it is LEARNING, not just whether train loss fell.
+    eval_every = (getattr(args, "eval_every", 0) or save_every)
+    eval_octants = (getattr(args, "eval_octants", 0) or 64)
+    held_examples = _heldout_corpus(args, kinds, eval_octants)
+    h_tb, h_masks, h_tg, h_pl = _build_batch(held_examples, d6)
+    held = (h_tb, mx.array(h_masks, dtype=mx.int32), h_tg, h_pl)
+    floor = _floor_baseline(held)
+    batch_sz = len(examples)
+    print(f"held-out: {len(held_examples)} octants (disjoint seeds, fixed); "
+          f"floor band={floor['band']:.6f} value={floor['value']:.6f} (the bars to beat)")
+    _bv, _bl = _dashboard(start_step, total_steps,
+                          _held_eval(head, held, d6, w_value, w_policy),
+                          floor, float("nan"), 0.0, batch_sz, 0.0)
+    for _ln in _bl:
+        print(_ln)
+
     logf = open(log_path, "a")
     last_loss = float("nan")
     done_step = start_step
+    t0 = time.time()
     try:
         for step in range(start_step, total_steps):
             if resample_every and step > start_step and step % resample_every == 0:
                 epoch += 1
                 examples, n_oct = _corpus_for_epoch(args, epoch, kinds)
                 grad_fn = make_grad(head, _build_batch(examples, d6), d6, w_value, w_policy)
+                batch_sz = len(examples)
                 print(f"  [resample] epoch {epoch}: {len(examples)} fresh octants")
             loss, grads = grad_fn(head)
             opt.update(head, grads)
@@ -552,6 +649,17 @@ def train_persistent(args) -> int:
             if done_step % save_every == 0:
                 _save_ckpt(head, ckpt_path, done_step, args.seed, lr, last_loss, epoch)
                 print(f"  [ckpt] {ckpt_path} @ step {done_step}  (L={last_loss:.8f})")
+            if done_step % eval_every == 0:
+                elapsed = time.time() - t0
+                sps = (done_step - start_step) / elapsed if elapsed > 0 else 0.0
+                ev = _held_eval(head, held, d6, w_value, w_policy)
+                verdict, lines = _dashboard(done_step, total_steps, ev, floor,
+                                            last_loss, sps, batch_sz, elapsed)
+                for ln in lines:
+                    print(ln)
+                logf.write(json.dumps({"step": done_step, "eval": ev, "floor": floor,
+                                       "verdict": verdict}) + "\n")
+                logf.flush()
     finally:
         # Always persist progress on exit (normal end, Ctrl-C, or crash) so no work is lost.
         _save_ckpt(head, ckpt_path, done_step, args.seed, lr, last_loss, epoch)
@@ -715,6 +823,11 @@ def main():
                     help="comma list of capture kinds to stream (default high-lab,high-detail,smooth-grey).")
     ap.add_argument("--no-batch", dest="no_batch", action="store_true",
                     help="use the slow per-octant LOOPED forward (default is the ~4.3x batched forward).")
+    ap.add_argument("--eval-every", dest="eval_every", type=int, default=0,
+                    help="held-out eval + zero-prediction floor dashboard every N steps "
+                         "(long mode; default = save-every). The 'is it learning?' signal.")
+    ap.add_argument("--eval-octants", dest="eval_octants", type=int, default=0,
+                    help="held-out octants for the eval dashboard (default 64; disjoint seeds, fixed).")
     args = ap.parse_args()
 
     # DISPATCH: persistent long-run trainer vs the 4-property demo. Long mode is entered

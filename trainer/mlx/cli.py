@@ -82,6 +82,10 @@ def cmd_train(a) -> int:
         fwd += ["--kinds", a.kinds]
     if a.no_batch:
         fwd.append("--no-batch")
+    if a.eval_every:
+        fwd += ["--eval-every", str(a.eval_every)]
+    if a.eval_octants:
+        fwd += ["--eval-octants", str(a.eval_octants)]
     return _run("train_loop.py", *fwd)
 
 
@@ -188,6 +192,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="comma list of capture kinds to stream (default high-lab,high-detail,smooth-grey)")
     t.add_argument("--no-batch", dest="no_batch", action="store_true",
                    help="use the slow per-octant looped forward (default is the ~4.3x batched forward)")
+    t.add_argument("--eval-every", dest="eval_every", type=int, default=0,
+                   help="held-out eval + floor dashboard every N steps (default = save-every): the 'is it learning?' signal")
+    t.add_argument("--eval-octants", dest="eval_octants", type=int, default=0,
+                   help="held-out octants for the eval dashboard (default 64)")
     t.set_defaults(fn=cmd_train)
 
     f = sub.add_parser("floor", help="the byte-exact theta_B floor trainer")
