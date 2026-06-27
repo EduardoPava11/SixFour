@@ -19,6 +19,7 @@ library
     import:           warnings
     exposed-modules:
         SixFour.Spec.Map
+        SixFour.Spec.Recursion
         SixFour.Spec.Shape
         SixFour.Spec.Color
         SixFour.Spec.ColorFixed
@@ -359,6 +360,7 @@ test-suite spec-tests
         Properties.PairTreeFixed
         Properties.RGBTLift
         Properties.OctreeCell
+        Properties.Recursion
         Properties.NudgeRankTheorem
         Properties.LadderIdentity
         Properties.LargeJepaHead

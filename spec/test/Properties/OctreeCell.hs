@@ -63,6 +63,9 @@ tests = testGroup "OctreeCell (2x2x2 <-> 1 octree: structured-leaf invariant)"
   , testProperty "octant ladder round-trips (delegates to liftOct): synth . distill = id" $
       forAll genDepthXs (uncurry lawOctantLadderBijective)
 
+  , testProperty "build->flatten IS a hylo: hylo flattenAlg buildCoalg == flatten . buildCube == id" $
+      forAll genDepthXs (uncurry lawOctantBuildFlattenIsHylo)
+
   , testProperty "detailBand is the shared canonical band selector (slot order pinned; OOR = 0)" $
       forAll genDetail $ \d -> forAll genInt (lawDetailBandSelectsSlot d)
 

@@ -76,9 +76,16 @@ module SixFour.Spec.OctreeCell
   , lawScalarLeafFailsUnlessSmooth
   , lawOctantLadderBijective
   , lawDetailBandSelectsSlot
+    -- * The build→flatten pair, NAMED a hylomorphism (re-uses "SixFour.Spec.Recursion")
+  , buildCoalg
+  , lawOctantBuildFlattenIsHylo
   ) where
 
 import SixFour.Spec.RGBTLift (liftQuad, unliftQuad)
+-- The fixpoint vocabulary now lives in ONE place ("SixFour.Spec.Recursion") instead of being
+-- re-declared here; re-exported below so existing importers of @OctreeCell (Fix, cata, ana)@ are
+-- unaffected. @hylo@ names the build→flatten pair ('lawOctantBuildFlattenIsHylo').
+import SixFour.Spec.Recursion (Fix(..), cata, ana, hylo)
 
 -- | Eight children in fixed Morton lane order (the order is load-bearing).
 data V8 a = V8 a a a a a a a a deriving (Eq, Show, Functor)
@@ -87,19 +94,9 @@ data V8 a = V8 a a a a a a a a deriving (Eq, Show, Functor)
 -- node of eight sub-cells. The leaf payload type @l@ is exactly the open question.
 data OctF l a = Leaf l | Node (V8 a) deriving (Eq, Show, Functor)
 
--- | The least fixed point of a functor — an octree cube is @Fix (OctF l)@.
-newtype Fix f = Fix { unFix :: f (Fix f) }
-
--- | An octree cube with leaf payload @l@.
+-- | An octree cube with leaf payload @l@ — the least fixed point @Fix (OctF l)@. 'Fix', 'cata'
+-- (collapse), and 'ana' (lift) are imported from "SixFour.Spec.Recursion" and re-exported.
 type Cube l = Fix (OctF l)
-
--- | Catamorphism (the @collapse@ direction).
-cata :: Functor f => (f b -> b) -> Fix f -> b
-cata alg = alg . fmap (cata alg) . unFix
-
--- | Anamorphism (the @lift@ direction).
-ana :: Functor f => (b -> f b) -> b -> Fix f
-ana coalg = Fix . fmap (ana coalg) . coalg
 
 -- | A scalar octant payload (one OKLab channel value at a voxel).
 type Scalar = Int
@@ -156,6 +153,17 @@ flatten :: Cube Scalar -> [Scalar]
 flatten = cata alg
   where alg (Leaf v) = [v]
         alg (Node (V8 a b c d e f g h)) = a++b++c++d++e++f++g++h
+
+-- | 'buildCube' expressed as an F-coalgebra over the seed @(depth, voxels)@, so @ana buildCoalg@
+-- reproduces 'buildCube'. This is what lets the existing build→flatten pair be NAMED a hylomorphism
+-- ('lawOctantBuildFlattenIsHylo') using the shared "SixFour.Spec.Recursion" combinators, rather than
+-- the recursion living implicitly inside 'buildCube'.
+buildCoalg :: (Int, [Scalar]) -> OctF Scalar (Int, [Scalar])
+buildCoalg (0, xs) = Leaf (case xs of (v : _) -> v; [] -> 0)
+buildCoalg (d, xs) =
+  let blk  = (8 ^ d) `div` 8
+      ch i = (d - 1, take blk (drop (i * blk) xs))
+  in Node (V8 (ch 0) (ch 1) (ch 2) (ch 3) (ch 4) (ch 5) (ch 6) (ch 7))
 
 -- | COLLAPSE: fold a scalar cube to a STRUCTURED cube (leaf type @OctBand@, not
 -- @Int@) so no detail is discarded — the move that makes round-trip possible.
@@ -323,3 +331,21 @@ lawDetailBandSelectsSlot d@(b0, b1, b2, b3, b4, b5, b6) i =
   in detailToList d == [b0, b1, b2, b3, b4, b5, b6]
      && detailBand d j == [b0, b1, b2, b3, b4, b5, b6] !! j
      && detailBand d 7 == 0 && detailBand d (-1) == 0
+
+-- | The build→flatten pair IS a hylomorphism over the octree functor: building a cube from a flat
+-- voxel list ('buildCube' = @ana 'buildCoalg'@) then flattening it ('flatten' = @cata flattenAlg@)
+-- equals the fused 'SixFour.Spec.Recursion.hylo' in one pass — and both equal the identity on the
+-- @8^d@ voxels. This NAMES the existing pair with the shared combinators; it is NOT a reversibility
+-- claim (that is 'lawOctantLadderBijective', which goes through the averaging 'liftOct' edge — a
+-- DIFFERENT, byte-exact fact). Teeth: a @buildCoalg@ with a permuted child order, or a @flattenAlg@
+-- that reordered the eight sub-lists, breaks the identity.
+lawOctantBuildFlattenIsHylo :: Int -> [Scalar] -> Bool
+lawOctantBuildFlattenIsHylo d xs =
+  not (d >= 0 && d <= 5 && length xs == 8 ^ d)
+    || (h == flatten (buildCube d ys) && h == ys)
+  where
+    ys = take (8 ^ d) xs
+    h  = hylo flattenAlg buildCoalg (d, ys)
+    flattenAlg :: OctF Scalar [Scalar] -> [Scalar]
+    flattenAlg (Leaf v)                            = [v]
+    flattenAlg (Node (V8 c0 c1 c2 c3 c4 c5 c6 c7)) = c0++c1++c2++c3++c4++c5++c6++c7
