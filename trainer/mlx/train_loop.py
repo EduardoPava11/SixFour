@@ -518,27 +518,52 @@ def _fmt_dur(s):
     return f"{s // 3600}h{(s % 3600) // 60:02d}m"
 
 
-def _dashboard(step, total, held, floor, train_loss, sps, batch, t_elapsed):
-    """The CLI that MATTERS: held-out vs the zero-prediction floor with an explicit verdict, plus
-    the collapse guard, throughput, and ETA. Returns (verdict, lines)."""
+def dashboard_verdict(held, floor):
+    """The verdict logic, separated so it is unit-testable without a full run. The verdict keys on
+    the VALUE (reconstruction) margin, NOT the band margin.
+
+    WHY value, not band: the per-band theta_B target is provably rank-1/per-voxel-blind
+    (Spec.NudgeRankTheorem.cellAggregate + Spec.MatrixTarget.lawMatrixLossSeesOffDiagonal): a
+    band-only metric cannot see the off-diagonal structure the model actually predicts, so even a
+    perfectly-trained head sits at/below the band floor (a small regularized linear model peaks at
+    about -0.2% band margin -- the band target is unbeatable, hence judging on it is incorrect).
+    The reconstruction/value head DOES generalize (about +91% held margin today), so the value
+    margin is the honest learning signal. Band is retained as a labeled secondary diagnostic.
+
+    Returns (verdict, value_margin_pct, band_margin_pct, collapsed, max_vic)."""
+    vf = floor["value"]
     bf = floor["band"]
-    margin = (bf - held["band"]) / bf * 100 if bf > 0 else 0.0
+    value_margin = (vf - held["pal"]) / vf * 100 if vf > 0 else 0.0
+    band_margin = (bf - held["band"]) / bf * 100 if bf > 0 else 0.0
     max_vic = VIC_GAMMA * VIC_NEURON_SLICE                       # ~all neurons collapsed
     collapsed = held["vic"] > 0.5 * max_vic
+    # COLLAPSE guard FIRST (a collapsed head can score a misleading margin).
     if collapsed:
         verdict = "COLLAPSE (variance floor tripped)"
-    elif held["band"] < bf * 0.98:
+    elif held["pal"] < vf * 0.98:
         verdict = "LEARNING"
-    elif held["band"] > bf * 1.02:
+    elif held["pal"] > vf * 1.02:
         verdict = "FLOORED (worse than predicting zero)"
     else:
         verdict = "AT FLOOR"
+    return verdict, value_margin, band_margin, collapsed, max_vic
+
+
+def _dashboard(step, total, held, floor, train_loss, sps, batch, t_elapsed):
+    """The CLI that MATTERS: held-out vs the zero-prediction floor with an explicit verdict, plus
+    the collapse guard, throughput, and ETA. The verdict is the VALUE (reconstruction) margin --
+    the head that actually generalizes -- with band kept as a labeled secondary diagnostic (see
+    dashboard_verdict for why band-only is the blind metric). Returns (verdict, lines)."""
+    bf = floor["band"]
+    vf = floor["value"]
+    verdict, value_margin, band_margin, collapsed, max_vic = dashboard_verdict(held, floor)
     eta = _fmt_dur((total - step) / sps) if sps > 0 else "?"
     tl = "   --" if train_loss != train_loss else f"{train_loss:.6f}"   # nan-safe
     lines = [
         f"=== EVAL @ step {step}/{total} :: {verdict} ===",
-        f"  band   held {held['band']:.6f}  vs floor {bf:.6f}   margin {margin:+.1f}%   (>0 = beating zero-prediction)",
-        f"  value  held {held['pal']:.6f}   index held {held['idx']:.6f}   train L {tl}",
+        f"  value  held {held['pal']:.6f}  vs floor {vf:.6f}   margin {value_margin:+.1f}%   (>0 = beating zero-prediction; THE VERDICT METRIC)",
+        f"  band   held {held['band']:.6f}  vs floor {bf:.6f}   margin {band_margin:+.1f}%   (diagnostic ONLY -- rank-1 blind, see NudgeRankTheorem)",
+        f"  index  held {held['idx']:.6f}   train L {tl}",
         f"  collapse-guard(VICReg) {held['vic']:.4f} / {max_vic:.1f}  [{'ok' if not collapsed else 'TRIPPED'}]",
         f"  throughput {sps:.1f} steps/s · {sps * batch:.0f} oct/s   elapsed {_fmt_dur(t_elapsed)}   ETA {eta}",
     ]
