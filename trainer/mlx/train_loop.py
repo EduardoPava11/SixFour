@@ -120,6 +120,17 @@ MARGIN_EPS = 1e-4
 # This is the term the trainer trains AND the dashboard judges on; the per-band band term is demoted
 # to a labeled diagnostic (it is rank-1/per-voxel-blind, so it sits at floor even when learning).
 W_CELL = 1.0  # weight on the cell-aggregate objective in the composite (the primary trained loss)
+# STEP 4 ANTI-OVERFIT defaults. The 18.9M-param ViT is heavily over-capacity for 8-voxel octants,
+# so the band target (rank-1) memorizes (held margin -16..-28%). Three controls keep the train-to-
+# held gap bounded so the rank-3 cell-aggregate margin stays POSITIVE over a long run:
+#   * DEFAULT_LR lowered 8e-3 -> 1e-3: the old 8e-3 default NaNs by ~step 50 with w_value/w_policy>0
+#     (REPRODUCED: composite loss -> nan). 1e-3 is stable AND climbs the cell margin to +99% and
+#     keeps rising (LEARNING) -- this is the lr "NaN trap" fix the run protocol calls out.
+#   * DEFAULT_WEIGHT_DECAY (SGD L2) shrinks the effective capacity of the over-parameterized head.
+#   * held-out-margin EARLY STOP (--early-stop-patience) halts once the primary margin stops
+#     improving, so a long run cannot drift back into memorization after its best generalization.
+DEFAULT_LR = 1e-3
+DEFAULT_WEIGHT_DECAY = 1e-4
 # The data-fixed (x,y,t) space vectors of the 8 octant voxels (the octant axes the spec collapses,
 # NudgeRankTheorem H2). Float for the gradient path; the colour input it weights re-enters Q16.
 _SPACE_NP = np.asarray(octant_space_matrix(2), dtype=np.float32)  # (N_VOX, 3)
@@ -668,7 +679,11 @@ def train_persistent(args) -> int:
                 start_step = int(json.load(f).get("step", 0))
         print(f"RESUMED from {args.resume} at step {start_step}")
 
-    opt = optim.SGD(learning_rate=lr)
+    # STEP 4: weight decay (L2) on SGD is the capacity control that bounds the train->held gap on
+    # the over-parameterized 18.9M ViT. weight_decay==0 reproduces the old memorizing optimizer.
+    weight_decay = getattr(args, "weight_decay", DEFAULT_WEIGHT_DECAY)
+    opt = optim.SGD(learning_rate=lr, weight_decay=weight_decay)
+    print(f"SGD lr={lr}  weight_decay={weight_decay} (STEP 4 capacity control)")
     epoch = (start_step // resample_every) if resample_every else 0
     examples, n_oct = _corpus_for_epoch(args, epoch, kinds)
     batch0 = _build_batch(examples, d6)
@@ -712,6 +727,11 @@ def train_persistent(args) -> int:
     logf = open(log_path, "a")
     last_loss = float("nan")
     done_step = start_step
+    # STEP 4 held-out-margin EARLY STOP: track the best primary (cell-aggregate) held loss and the
+    # number of consecutive evals with no improvement; stop when it exceeds the patience budget.
+    early_stop_patience = getattr(args, "early_stop_patience", 0) or 0
+    best_primary = float("inf")
+    no_improve = 0
     t0 = time.time()
     try:
         for step in range(start_step, total_steps):
@@ -744,6 +764,17 @@ def train_persistent(args) -> int:
                 logf.write(json.dumps({"step": done_step, "eval": ev, "floor": floor,
                                        "verdict": verdict}) + "\n")
                 logf.flush()
+                # STEP 4 early stop on the PRIMARY held metric (cell aggregate; fall back to value).
+                primary = ev.get("cell", ev.get("pal"))
+                if primary == primary and primary < best_primary - 1e-9:   # nan-safe improvement
+                    best_primary = primary
+                    no_improve = 0
+                else:
+                    no_improve += 1
+                if early_stop_patience and no_improve >= early_stop_patience:
+                    print(f"  [early-stop] primary held loss did not improve for "
+                          f"{no_improve} evals (best {best_primary:.6f}); stopping at step {done_step}")
+                    break
     finally:
         # Always persist progress on exit (normal end, Ctrl-C, or crash) so no work is lost.
         _save_ckpt(head, ckpt_path, done_step, args.seed, lr, last_loss, epoch)
@@ -873,7 +904,16 @@ def main():
                     help="fast mode: 8 octants, 30 steps (< ~10s); shows all four properties.")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--steps", type=int, default=None)
-    ap.add_argument("--lr", type=float, default=8e-3)
+    ap.add_argument("--lr", type=float, default=DEFAULT_LR,
+                    help="SGD learning rate. STEP 4: default lowered 8e-3 -> 1e-3; the old 8e-3 "
+                         "NaNs by ~step 50 with w_value/w_policy>0 (the reproduced 'NaN trap').")
+    ap.add_argument("--weight-decay", dest="weight_decay", type=float, default=DEFAULT_WEIGHT_DECAY,
+                    help="STEP 4 anti-overfit: SGD L2 weight decay (capacity control on the "
+                         "over-parameterized ViT). 0 = the old memorizing optimizer.")
+    ap.add_argument("--early-stop-patience", dest="early_stop_patience", type=int, default=0,
+                    help="STEP 4 anti-overfit: stop after this many consecutive evals with NO "
+                         "improvement in the primary (cell-aggregate) held-out loss (long mode; "
+                         "0 = off). Protects a long run from drifting back into memorization.")
     ap.add_argument("--octants", type=int, default=None,
                     help="FULL mode: number of octants to train on, deterministically STRIDED "
                          "across all captures so every kind + mask is seen (default 24; the "

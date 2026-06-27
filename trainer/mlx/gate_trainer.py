@@ -41,6 +41,7 @@ MODULES = [
     ("test_cell_loss.py", True),   # STEP 3: trained+judged cell-aggregate objective lock
     # STEP 2 chroma flow (skips cleanly if MLX/synth-capture deps are absent; locks the fix otherwise)
     ("test_chroma_flow.py", True),
+    ("test_anti_overfit.py", True),   # STEP 4: lr NaN-trap fix + weight decay + non-declining margin
     # MLX autodiff cross-check (optional)
     ("autograd_check.py", False),
 ]

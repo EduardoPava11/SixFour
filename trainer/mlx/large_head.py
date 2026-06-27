@@ -32,10 +32,15 @@ from typing import NamedTuple
 from theta_b import predict_masked_band_pos, zero_params_b_pos, PARAM_COUNT_B_POS
 
 # ViT dimensions (the spec's d_model / heads / depth; N = 64 = the 4x4x4 octant token lattice).
+# STEP 4 anti-overfit: the width/depth are now env-overridable CAPACITY KNOBS so the 18.9M-param
+# head can be SHRUNK to bound the train->held gap, without editing source. Defaults are UNCHANGED
+# (512/8/6) so the depth-1 byte-exact keystone (law_depth1_reduces_to_features_b_pos) and the gate
+# stay green; set SIXFOUR_VIT_DMODEL / SIXFOUR_VIT_HEADS / SIXFOUR_VIT_LAYERS to shrink for a run.
+import os as _os
 N_TOKENS = 64
-D_MODEL = 512
-N_HEADS = 8
-N_LAYERS = 6
+D_MODEL = int(_os.environ.get("SIXFOUR_VIT_DMODEL", "512"))
+N_HEADS = int(_os.environ.get("SIXFOUR_VIT_HEADS", "8"))
+N_LAYERS = int(_os.environ.get("SIXFOUR_VIT_LAYERS", "6"))
 
 
 # ---------------------------------------------------------------------------
