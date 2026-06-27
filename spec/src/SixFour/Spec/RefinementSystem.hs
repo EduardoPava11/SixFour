@@ -34,6 +34,9 @@ module SixFour.Spec.RefinementSystem
     -- * Ring laws
   , lawRingAddAssoc, lawRingAddComm, lawRingAddIdentity, lawRingAddInverse
   , lawRingMulAssoc, lawRingMulComm, lawRingMulIdentity, lawRingDistrib
+    -- * Unit-group laws (the "not a field" structure made checkable)
+  , lawUnitsClosedUnderMul, lawUnitInverseOnlyOnUnits
+  , lawNonUnitsHaveNoInverse, lawGaussianUnitsAreQuarterTurns
     -- * Module laws
   , lawModuleAddInverse, lawModuleSmulOne, lawModuleSmulMul
   , lawModuleSmulDistribModule, lawModuleSmulDistribRing
@@ -49,6 +52,15 @@ class CommutativeRing r where
   radd  :: r -> r -> r
   rmul  :: r -> r -> r
   rneg  :: r -> r
+  -- | The FINITE enumerated unit group @R*@ (the elements with a multiplicative inverse). This is
+  -- the one net-new datum the generalization adds: it turns "@R@ is not a field" from a prose
+  -- claim (the absence of @recip@) into a CHECKABLE list — @ℤ* = {±1}@, @ℤ[i]* = {±1, ±i}@ — both
+  -- FAR smaller than @R \ {0}@, which is exactly what "not a field" means.
+  units :: [r]
+  -- | The multiplicative inverse, DEFINED ONLY on units (@Just@) and @Nothing@ everywhere else. This
+  -- is the deliberately-partial stand-in for the absent field @recip@: byte-exactness forbids
+  -- dividing by a non-unit, so @unitInverse@ refuses rather than introducing a non-integer.
+  unitInverse :: r -> Maybe r
 
 -- | The canonical base ring: @ℤ@ (the Q16 substrate; units only @±1@, so NOT a field).
 instance CommutativeRing Integer where
@@ -57,6 +69,11 @@ instance CommutativeRing Integer where
   radd  = (+)
   rmul  = (*)
   rneg  = negate
+  units = [1, -1]                                   -- ℤ* = {±1}: NOT a field (2 has no inverse)
+  unitInverse x
+    | x ==  1   = Just 1                            -- 1⁻¹ = 1
+    | x == -1   = Just (-1)                         -- (-1)⁻¹ = -1
+    | otherwise = Nothing                           -- every other integer is a non-unit
 
 -- | The SECOND base ring: the Gaussian integers @ℤ[i] = a + b·i@, the ring of integers of @ℚ(i)@ —
 -- a genuine commutative ring (Euclidean domain) distinct from @ℤ@. This is the "Gaussian-chroma"
@@ -69,6 +86,15 @@ instance CommutativeRing Gaussian where
   radd (Gaussian (a, b)) (Gaussian (c, d)) = Gaussian (a + c, b + d)
   rmul (Gaussian (a, b)) (Gaussian (c, d)) = Gaussian (a * c - b * d, a * d + b * c)
   rneg (Gaussian (a, b)) = Gaussian (negate a, negate b)
+  -- ℤ[i]* = {1, i, -1, -i} = the four quarter-turns (the order-4 hue-rotation group); these are the
+  -- ONLY Gaussian integers of norm 1, so again FAR fewer than @R \ {0}@ — ℤ[i] is not a field.
+  units = [Gaussian (1, 0), Gaussian (0, 1), Gaussian (-1, 0), Gaussian (0, -1)]
+  unitInverse u
+    | u == Gaussian ( 1,  0) = Just (Gaussian ( 1,  0))   -- 1⁻¹  = 1
+    | u == Gaussian (-1,  0) = Just (Gaussian (-1,  0))   -- (-1)⁻¹ = -1
+    | u == Gaussian ( 0,  1) = Just (Gaussian ( 0, -1))   -- i⁻¹  = -i   (i·(-i) = 1)
+    | u == Gaussian ( 0, -1) = Just (Gaussian ( 0,  1))   -- (-i)⁻¹ = i
+    | otherwise              = Nothing                    -- norm > 1 ⇒ non-unit
 
 -- | A free module over the ring @r@ (the carrier @m@ determines @r@). The @ColourDelta@ algebra,
 -- abstracted away from @ℤ@ OKLab to any base ring.
@@ -162,6 +188,52 @@ lawRingMulIdentity a = rmul a rone == a && rmul rone a == a
 
 lawRingDistrib :: (CommutativeRing r, Eq r) => r -> r -> r -> Bool
 lawRingDistrib a b c = rmul a (radd b c) == radd (rmul a b) (rmul a c)
+
+-- | 'units' with the type fixed by a sample value (so the polymorphic, value-free 'units' can be
+-- tested at a chosen ring without TypeApplications at the call site).
+unitsLike :: CommutativeRing r => r -> [r]
+unitsLike _ = units
+
+-- ---------------------------------------------------------------------------
+-- Unit-group laws (tested at BOTH Integer and Gaussian).
+-- ---------------------------------------------------------------------------
+
+-- | The enumerated 'units' are CLOSED under ring multiplication — they form a group, not a loose
+-- list. Teeth: dropping @-1@ from @ℤ*@ (or @-i@ from @ℤ[i]*@) breaks closure since @(-1)(-1)=1@
+-- stays in but @(-1)·1 = -1@ would escape.
+lawUnitsClosedUnderMul :: (CommutativeRing r, Eq r) => r -> Bool
+lawUnitsClosedUnderMul w =
+  let us = unitsLike w
+  in all (`elem` us) [ rmul a b | a <- us, b <- us ]
+
+-- | 'unitInverse' is defined EXACTLY on 'units': it returns @Just y@ with @x · y = 1@ precisely when
+-- @x@ is a unit, and @Nothing@ for every non-unit. This is the deliberately-partial @recip@ —
+-- the proof that @R@ is a ring-of-integers, not a field. Teeth: a non-unit yielding @Just@, or a unit
+-- yielding @Nothing@, or an inverse that did not multiply back to @rone@, all fail.
+lawUnitInverseOnlyOnUnits :: (CommutativeRing r, Eq r) => r -> Bool
+lawUnitInverseOnlyOnUnits x =
+  let us = unitsLike x
+  in case unitInverse x of
+       Just y  -> x `elem` us && rmul x y == rone
+       Nothing -> x `notElem` us
+
+-- | Teeth pinning concrete non-units: @2@ in @ℤ@, and @1+i@ / @2@ in @ℤ[i]@ (norms 4, 2, 4) have NO
+-- inverse. This is the falsifiable core of "not a field".
+lawNonUnitsHaveNoInverse :: Bool
+lawNonUnitsHaveNoInverse =
+     unitInverse (2 :: Integer)      == Nothing
+  && unitInverse (Gaussian (1, 1))   == Nothing
+  && unitInverse (Gaussian (2, 0))   == Nothing
+
+-- | The Gaussian units ARE the four quarter-turns @{1, i, -1, -i}@ — the same order-4 hue-rotation
+-- group "SixFour.Spec.GaussianChroma" @lawChromaQuarterTurnOrderFour@ acts by — and @i⁻¹ = -i@. Ties
+-- the ring's unit group to the chroma knob: rotating chroma by a unit is multiplying by an element
+-- of @ℤ[i]*@, and undoing it is multiplying by that element's 'unitInverse'.
+lawGaussianUnitsAreQuarterTurns :: Bool
+lawGaussianUnitsAreQuarterTurns =
+     (units :: [Gaussian]) == [Gaussian (1, 0), Gaussian (0, 1), Gaussian (-1, 0), Gaussian (0, -1)]
+  && unitInverse (Gaussian (0, 1)) == Just (Gaussian (0, -1))
+  && rmul (Gaussian (0, 1)) (Gaussian (0, -1)) == (rone :: Gaussian)
 
 -- ---------------------------------------------------------------------------
 -- Module laws (tested at Triple Integer and Triple Gaussian).

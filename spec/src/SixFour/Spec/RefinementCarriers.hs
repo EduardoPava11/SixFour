@@ -23,6 +23,7 @@ module SixFour.Spec.RefinementCarriers
   , pairToOctBand
   , lawOctLeafLiftIsLiftOct
   , lawOctLeafOverridesDefault
+  , lawOctLeaf8FromVecTotal
     -- * The POLICY carrier bridged to the transport group (induced, not identical)
   , lawIndexDeltaRealizesTransport
     -- * The LEARNED head (θ_B): NOT an algebraic instance, governed only at the floor seam
@@ -106,11 +107,19 @@ pairToOctBand (c, ds) =
 instance ReversibleLift OctLeaf8 where
   liftBranching _ = 8
   toVec (OctLeaf8 (V8 a b c d e f g h)) = map fromIntegral [a,b,c,d,e,f,g,h]
-  fromVec xs = case map fromIntegral (take 8 (xs ++ repeat 0)) of
-    (a:b:c:d:e:f:g:h:_) -> OctLeaf8 (V8 a b c d e f g h)
-    _                   -> OctLeaf8 (V8 0 0 0 0 0 0 0 0)
+  fromVec xs = OctLeaf8 (listToV8 (map fromIntegral xs))
   liftF  (OctLeaf8 v) = octBandToPair (liftOct v)
   unliftF p           = OctLeaf8 (unliftOct (pairToOctBand p))
+
+-- | A TOTAL @[Int] → V8 Int@ conversion: read exactly eight slots, padding a short input with 0
+-- per-missing-slot. This replaces the old @case … of (a:…:h:_) → …; _ → V8 0…0@ whose catch-all
+-- could silently collapse the ENTIRE octant to zero on a byte-exact carrier if the upstream
+-- @take 8 (… ++ repeat 0)@ expression ever changed. Indexing an infinite list is total (no
+-- incomplete-pattern), and a short input now KEEPS the values it carries instead of being swallowed.
+listToV8 :: [Int] -> V8 Int
+listToV8 ys = V8 (g 0) (g 1) (g 2) (g 3) (g 4) (g 5) (g 6) (g 7)
+  where v   = ys ++ repeat 0
+        g i = v !! i
 
 -- | The governing law: the carrier's @liftF@ IS the real 'liftOct' (read as a coarse\/detail pair),
 -- and it round-trips through @unliftF@. So the @ReversibleLift@ interface now names the shipped
@@ -129,6 +138,17 @@ lawOctLeafOverridesDefault =
   let x = OctLeaf8 (V8 0 8 0 0 0 0 0 0)
   in liftF x /= liftVec (toVec x)
      && unliftF (liftF x) == x
+
+-- | 'fromVec' is TOTAL and per-slot: it round-trips every 'OctLeaf8' (so the carrier conversion is a
+-- genuine retraction, no data-swallowing catch-all), and a SHORT input keeps the values it has,
+-- padding only the missing tail with zeros — @fromVec [5,6] = V8 5 6 0 0 0 0 0 0@, NOT the all-zero
+-- octant the old defensive @_@ branch would have produced. Teeth: a fallback that collapsed ragged
+-- input to zero, or a conversion that dropped a present value, fails the second/third conjunct.
+lawOctLeaf8FromVecTotal :: V8 Int -> Bool
+lawOctLeaf8FromVecTotal v =
+     fromVec (toVec (OctLeaf8 v)) == OctLeaf8 v
+  && fromVec [5, 6] == OctLeaf8 (V8 5 6 0 0 0 0 0 0)
+  && fromVec []     == OctLeaf8 (V8 0 0 0 0 0 0 0 0)
 
 -- ============================================================================
 -- The POLICY carrier: IndexDelta bridged to the transport group (INDUCED action)

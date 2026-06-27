@@ -43,4 +43,9 @@ tests = testGroup "RootLatticeDetail (1 coarse + (b-1) detail = the root lattice
           forAll genVoxels $ \xs -> forAll (choose (-4000, 4000)) $ \k ->
             lawDetailKernelIsConstants xs k
       ]
+
+  , testGroup "MeanFree: the Σ=0 detail invariant carried in the TYPE (Win C)"
+      [ testProperty "both constructors yield Σ=0; a sum-1 vector is REFUSED (no mean-subtraction)" $
+          forAll genCoords lawMeanFreeIsSigmaZero
+      ]
   ]

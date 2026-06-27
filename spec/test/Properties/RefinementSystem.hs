@@ -56,10 +56,24 @@ liftLaws name b g = testGroup name
   , testProperty ("detail count == b-1 == " ++ show (b - 1)) $ forAll g lawLiftDetailCount
   ]
 
+-- Unit-group laws over a generator (proves the "not a field" structure at each ring).
+unitLaws :: (CommutativeRing r, Eq r, Show r) => String -> Gen r -> TestTree
+unitLaws name g = testGroup name
+  [ testProperty "units closed under * (they form a group)" $ forAll g lawUnitsClosedUnderMul
+  , testProperty "unitInverse defined EXACTLY on units (x*x⁻¹=1 iff unit, else Nothing)" $
+      forAll g lawUnitInverseOnlyOnUnits
+  ]
+
 tests :: TestTree
 tests = testGroup "RefinementSystem (the spine: CommutativeRing -> RModule -> ReversibleLift)"
   [ ringLaws "CommutativeRing over ℤ (the Q16 base, units ±1, NOT a field)" genInt
   , ringLaws "CommutativeRing over ℤ[i] (Gaussian integers — the SECOND ring)" genGaussian
+  , unitLaws "ℤ* = {±1} (the enumerated unit group, not a field)" genInt
+  , unitLaws "ℤ[i]* = {±1,±i} (the four quarter-turns)" genGaussian
+  , testProperty "teeth: 2 (ℤ) and 1+i, 2 (ℤ[i]) are non-units (no inverse)" $
+      once lawNonUnitsHaveNoInverse
+  , testProperty "Gaussian units ARE the quarter-turns; i⁻¹ = -i (ties GaussianChroma)" $
+      once lawGaussianUnitsAreQuarterTurns
   , moduleLaws "RModule over ℤ³ (the ColourDelta carrier)" genInt genTripleI
   , moduleLaws "RModule over ℤ[i]³ (Gaussian chroma — base-ring generalizes)" genGaussian genTripleG
   , liftLaws "ReversibleLift: dyadic b=8 octant" 8 genDyad8

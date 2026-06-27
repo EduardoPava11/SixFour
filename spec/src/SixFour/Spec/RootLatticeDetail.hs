@@ -24,6 +24,11 @@ module SixFour.Spec.RootLatticeDetail
   , simpleRoots
   , rootCoords
   , fromRootCoords
+    -- * The mean-free detail band as a TYPE (Σ = 0 by construction; constructor hidden)
+  , MeanFree
+  , unMeanFree
+  , mkMeanFreeFromRootCoords
+  , mkMeanFreeChecked
     -- * The idealized linear Haar detail (consecutive differences)
   , haarDetail
     -- * Laws
@@ -34,6 +39,7 @@ module SixFour.Spec.RootLatticeDetail
   , lawRootCoordsRoundTrip
   , lawDetailKernelIsConstants
   , lawOctantIsA7
+  , lawMeanFreeIsSigmaZero
   ) where
 
 -- | The coarse projection Σ : ℤ^b ↠ ℤ — the rank-1 sum quotient (the DC component).
@@ -77,6 +83,37 @@ fromRootCoords b cs = [ c k - c (k - 1) | k <- [0 .. b - 1] ]
 -- @x_{i+1} − x_i@. Adding a constant to every voxel leaves it unchanged (the DC is in the kernel).
 haarDetail :: [Integer] -> [Integer]
 haarDetail xs = zipWith (-) (drop 1 xs) xs
+
+-- ---------------------------------------------------------------------------
+-- MeanFree: the detail band's Σ = 0 invariant, carried in the TYPE.
+-- ---------------------------------------------------------------------------
+
+-- | A detail vector with its mean-free invariant @Σ x_i = 0@ (membership in @A_{b-1} = ker Σ@)
+-- carried in the TYPE, not re-checked at every call site. The constructor is HIDDEN: a 'MeanFree'
+-- can be built ONLY via 'mkMeanFreeFromRootCoords' (always mean-free, by the root-coordinate chart)
+-- or the checked 'mkMeanFreeChecked' guard. It can NEVER be built by subtracting a mean — that would
+-- divide by @b@, a NON-UNIT of @ℤ@ (see "SixFour.Spec.RefinementSystem" @units@), and break
+-- byte-exactness. This is Win C of the expressivity plan: make the mean-free property a type
+-- invariant instead of the runtime obligation 'lawDetailIsMeanFree' re-establishes.
+newtype MeanFree = MeanFree [Integer] deriving (Eq, Show)
+
+-- | Read the underlying mean-free vector out of a 'MeanFree'.
+unMeanFree :: MeanFree -> [Integer]
+unMeanFree (MeanFree xs) = xs
+
+-- | Build a 'MeanFree' from @b-1@ root coordinates via 'fromRootCoords' (consecutive subtraction
+-- ONLY — no division). The result is ALWAYS in @A_{b-1}@ (@Σ = 0@), so this constructor is total and
+-- cannot produce an invalid band. The canonical, byte-exact way to make a detail band.
+mkMeanFreeFromRootCoords :: Int -> [Integer] -> MeanFree
+mkMeanFreeFromRootCoords b cs = MeanFree (fromRootCoords b cs)
+
+-- | Build a 'MeanFree' from an arbitrary vector, returning 'Nothing' unless it is ALREADY mean-free
+-- ('inA'). The honest guard REFUSES non-mean-free input rather than silently projecting it onto the
+-- kernel (projection would divide by @b@). So a value of type 'MeanFree' is a PROOF that @Σ = 0@.
+mkMeanFreeChecked :: [Integer] -> Maybe MeanFree
+mkMeanFreeChecked xs
+  | inA xs    = Just (MeanFree xs)
+  | otherwise = Nothing
 
 -- ---------------------------------------------------------------------------
 -- Laws (each FAILS if the lattice structure is violated — non-vacuous).
@@ -137,3 +174,19 @@ lawOctantIsA7 =
   && length (simpleRoots 8) == 7
   && all inA (simpleRoots 8)
   && all ((== 8) . length) (simpleRoots 8)
+
+-- | The 'MeanFree' invariant @Σ = 0@ holds BY CONSTRUCTION for both constructors: any root-coordinate
+-- chart builds a mean-free band ('mkMeanFreeFromRootCoords' is total and sums to 0), the checked
+-- guard accepts exactly the mean-free vectors, and a sum-1 vector is REFUSED ('Nothing'). This is the
+-- law that lets the band's mean-freeness be a TYPE fact rather than a re-checked runtime obligation.
+-- Teeth: a 'fromRootCoords' that introduced a non-zero sum, or a 'mkMeanFreeChecked' that admitted a
+-- non-mean-free vector, fails.
+lawMeanFreeIsSigmaZero :: [Integer] -> Bool
+lawMeanFreeIsSigmaZero cs =
+  let b       = length cs + 1
+      built   = unMeanFree (mkMeanFreeFromRootCoords b cs)
+      checked = mkMeanFreeChecked built
+      refused = mkMeanFreeChecked (1 : replicate (length cs) 0)   -- Σ = 1 ≠ 0
+  in sumFunctional built == 0
+     && (case checked of Just mf -> sumFunctional (unMeanFree mf) == 0; Nothing -> False)
+     && refused == Nothing

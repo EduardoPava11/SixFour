@@ -69,6 +69,8 @@ tests = testGroup "RefinementCarriers (the capstone classes GOVERN the productio
       , testProperty "liftF IS liftOct" $ forAll genV8 lawOctLeafLiftIsLiftOct
       , testProperty "overrides the generic prefix-difference default"
           lawOctLeafOverridesDefault
+      , testProperty "fromVec is TOTAL + per-slot (no all-zero swallow of ragged input)" $
+          forAll genV8 lawOctLeaf8FromVecTotal
       ]
   , testGroup "IndexDelta bridged to the transport group (induced action, not one instance)"
       [ testProperty "a slot transport's action is realized by the induced positional IndexDelta" $

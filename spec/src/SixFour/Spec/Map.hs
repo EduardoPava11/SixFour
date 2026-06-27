@@ -136,6 +136,10 @@ learns this barycenter.)
 2⁸ palette one @2→1@ merge at a time to any posterization N; the lossless-split sibling of the fixed PairTree),
 "SixFour.Spec.RGBTLift" (the @2×2 ↔ RGBT@ reversible integer lifting — the spatial sibling of the
 1-D PairTreeFixed S-transform; the @(2×2)<->1@ bijection that makes the cube ladder lossless),
+"SixFour.Spec.Recursion" (the boot-only fixpoint foundation — @Fix@/@cata@/@ana@/@hylo@/@meta@
+declared ONCE so the multiresolution lift is NAMED, not re-derived per module; @hylo@-fusion +
+round-trip laws pinned against a sample functor; deliberately NO @apo@/@para@/@histo@/@futu@
+(one-call-site jargon) and @meta@ is doc-naming NOT a reversibility theorem),
 "SixFour.Spec.OctreeCell" (★ octree keystone — the @2×2×2 → 1@ structured-leaf
 fixpoint @Fix (OctF l)@: collapse = catamorphism, lift = anamorphism, octant edge
 @liftOct@ lifts "SixFour.Spec.RGBTLift" to @8→8@; PROVES "1 at the bottom" is a
@@ -418,7 +422,10 @@ functional Σ, detail = its kernel @A_{b-1}@ (the densest-packing root lattice, 
 vanishing-zeroth-moment). @lawBandCountEqualsRank@ makes the band count @b-1@ a THEOREM for ANY
 branching (b=8 octant → 7 = rank A_7 via @lawOctantIsA7@), @lawRootCoordsRoundTrip@ = A_{b-1} is the
 free ℤ-module on the simple roots, @lawDetailKernelIsConstants@ = detail captures exactly the
-mean-free part. Gates the IDEALIZED LINEAR Haar skeleton, not the floored kernel. Additive),
+mean-free part. The @MeanFree@ newtype (hidden constructor; built ONLY via @mkMeanFreeFromRootCoords@
+or the checked @mkMeanFreeChecked@, NEVER by subtracting a mean = dividing by the non-unit @b@)
+carries @Σ=0@ in the TYPE (@lawMeanFreeIsSigmaZero@). Gates the IDEALIZED LINEAR Haar skeleton, not
+the floored kernel. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with
@@ -560,8 +567,12 @@ crossing, no drift). @forwardFromInput@ consumes @ModelInput.miNudge@/@miGauge@.
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
 the SAME laws hold over @R=ℤ[i]@ (Gaussian integers — the chroma knob) and a non-dyadic @b=3@ lift,
 proving GENERALIZATION not rename. NO @recip@ (field axiom absent by design — byte-exactness forbids
-dividing by non-units). @lawModuleSmul*@ (free-module = ColourDelta abstracted), @lawLiftRoundTrips@
-(the bijection), @lawLiftDetailCount@ = b-1 = rank A_{b-1} (ties RootLatticeDetail). Additive),
+dividing by non-units); INSTEAD the apex carries the FINITE enumerated unit group @units@ (@ℤ*={±1}@,
+@ℤ[i]*={±1,±i}@) + the partial @unitInverse@, so "not a field" is a CHECKABLE fact
+(@lawUnitsClosedUnderMul@, @lawUnitInverseOnlyOnUnits@, @lawNonUnitsHaveNoInverse@) and the Gaussian
+units ARE the quarter-turns (@lawGaussianUnitsAreQuarterTurns@ ties GaussianChroma). @lawModuleSmul*@
+(free-module = ColourDelta abstracted), @lawLiftRoundTrips@ (the bijection), @lawLiftDetailCount@ =
+b-1 = rank A_{b-1} (ties RootLatticeDetail). Additive),
 "SixFour.Spec.RefinementCarriers" (★ WIRES the capstone spine to the PRODUCTION carriers so the
 abstraction GOVERNS, not parallels: @ColourDelta@ is a real @RModule ℤ@ (instance in HierarchicalDelta;
 4 module laws strict, additive-inverse modulo trailing-zero @canonColourDelta@) and
