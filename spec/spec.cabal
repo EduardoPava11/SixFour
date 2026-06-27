@@ -135,6 +135,7 @@ library
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
         SixFour.Spec.LearnabilityTheorem
+        SixFour.Spec.Convergence
         SixFour.Spec.NudgeContamination
         SixFour.Spec.DeltaGesture
         SixFour.Spec.TriScaleBench
@@ -437,6 +438,7 @@ test-suite spec-tests
         Properties.TemporalData
         Properties.DeltaSurrogate
         Properties.LearnabilityTheorem
+        Properties.Convergence
         Properties.NudgeContamination
         Properties.DeltaGesture
         Properties.TriScaleBench
