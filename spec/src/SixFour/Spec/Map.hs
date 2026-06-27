@@ -666,6 +666,13 @@ checkerboard @cb(v)=(−1)^popcount(v)@ that @cellLoss@ cannot see (Convergence 
 (LearnabilityTheorem), making the lattice load-bearing in identifiability/convergence. @lawCheckerboardIsMeanFree@,
 @lawBlindDirectionIsLatticeVector@, @lawNonLatticeDirectionRefused@, capstone @lawCellBlindComplementIsA7@.
 Emits no golden. Additive),
+"SixFour.Spec.IdentifiabilityIsA7Bridge" (★ the owner-requested FOLD, staged additively: conjoins
+"SixFour.Spec.ParadigmSoundness" @teachingIdentifiability@ with "SixFour.Spec.BlindComplementIsA7"
+@lawCellBlindComplementIsA7@ so the @A_7@ membership of the recovered complement (load-bearing only via the
+@mkMeanFreeChecked@ typed consumer) becomes a guard on the master theorem's IDENTIFIABILITY conjunct, ready
+to inline into @ParadigmSoundness@. HONEST scope: claims only @cb ∈ S^⊥∩A_7@ (not that all 15 blind DOF are
+lattice). Teeth reuse @lawNonLatticeDirectionRefused@ (a non-mean-free @e_0@ cannot masquerade). Capstone
+@lawIdentifiabilityComplementIsA7@. Emits no golden. Additive),
 "SixFour.Spec.BlindComplementGeometry" (★ the PRECISE geometry behind BlindComplementIsA7, the honest
 audit refinement: the cell-blind complement @S^⊥@ (5-dim/channel, 15 across OKLab) and the lattice @A_7@
 (7/channel, 21) are DISTINCT — neither contains the other — so "the 15-DOF blind complement IS @A_7@" is

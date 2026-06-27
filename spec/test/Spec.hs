@@ -122,6 +122,7 @@ import qualified Properties.Convergence as Convergence
 import qualified Properties.HeadConvergence as HeadConvergence
 import qualified Properties.Generalization as Generalization
 import qualified Properties.BlindComplementIsA7 as BlindComplementIsA7
+import qualified Properties.IdentifiabilityIsA7Bridge as IdentifiabilityIsA7Bridge
 import qualified Properties.BlindComplementGeometry as BlindComplementGeometry
 import qualified Properties.LatticeRankComputed as LatticeRankComputed
 import qualified Properties.ChromaUnitGauge as ChromaUnitGauge
@@ -314,6 +315,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , HeadConvergence.tests
   , Generalization.tests
   , BlindComplementIsA7.tests
+  , IdentifiabilityIsA7Bridge.tests
   , BlindComplementGeometry.tests
   , LatticeRankComputed.tests
   , ChromaUnitGauge.tests

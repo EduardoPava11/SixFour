@@ -140,6 +140,7 @@ library
         SixFour.Spec.HeadConvergence
         SixFour.Spec.Generalization
         SixFour.Spec.BlindComplementIsA7
+        SixFour.Spec.IdentifiabilityIsA7Bridge
         SixFour.Spec.BlindComplementGeometry
         SixFour.Spec.LatticeRankComputed
         SixFour.Spec.ChromaUnitGauge
@@ -454,6 +455,7 @@ test-suite spec-tests
         Properties.HeadConvergence
         Properties.Generalization
         Properties.BlindComplementIsA7
+        Properties.IdentifiabilityIsA7Bridge
         Properties.BlindComplementGeometry
         Properties.LatticeRankComputed
         Properties.ChromaUnitGauge
