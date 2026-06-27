@@ -194,7 +194,7 @@ emitLearnabilityGolden = T.pack $ unlines
 
   -- SIDE CONDITION ----------------------------------------------------------
   , "  \"sideCondition\": {"
-  , "    \"_doc\": \"Full-palette learnability holds IFF w_value>0 (current trainer default w_value=0 leaves the 15-DOF complement unconstrained).\","
+  , "    \"_doc\": \"Full-palette learnability holds IFF w_value>0. The trainer ADOPTS the proven point as its default (train_loop.py --w-value default 1.0 = willLearn(1.0)); w_value=0 is the disabled-head boundary that leaves the 15-DOF complement unconstrained.\","
   , "    \"wValueRequired\": true,"
   , "    \"willLearnAtOne\": " ++ bool (willLearn 1.0) ++ ","
   , "    \"willLearnAtZero\": " ++ bool (willLearn 0) ++ ","

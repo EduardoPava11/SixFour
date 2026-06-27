@@ -40,7 +40,9 @@ EXACTLY unchanged (blind), while the palette genuinely differs. The value (palet
 the OKLab regression @valueLoss@ with weight @w_value > 0@, is a sufficient statistic for that
 complement, so the PAIR @(cellLoss, w_value·valueLoss)@ jointly identifies the full palette. Hence
 full-palette learnability is CONDITIONAL on @w_value > 0@; the capstone is TRUE at @w_value = 1@ and
-FALSE at @w_value = 0@ (the current trainer default), proving the side condition is load-bearing.
+FALSE at @w_value = 0@ (the disabled-head boundary), proving the side condition is load-bearing. The
+trainer ADOPTS the proven point as its default (@train_loop.py --w-value@ default @1.0@ = the proven
+@willLearn 1.0@), so the improvement the theorem implies is applied, not merely available.
 
 Pure-spec, emits no golden (the goldens are the delegated modules' exported constants). Laws @once@- /
 QuickCheck'd in "Properties.LearnabilityTheorem".
@@ -203,7 +205,7 @@ lawCellLossIdentifiesRank3Subspace =
 -- @valueLoss@ sees it (@Σ cb² = 8 > 0@). Therefore the PAIR @(cellLoss, w_value·valueLoss)@ identifies
 -- the complement IFF @w_value > 0@. Teeth: (1) the in-@span(S)@ @x@-perturbation @cellLoss@ DOES see
 -- (so the loss is not blind to everything), and (2) the joint objective separates the palettes at
--- @w_value = 1@ but NOT at @w_value = 0@ — the current trainer default leaves the 15 DOF unconstrained.
+-- @w_value = 1@ but NOT at @w_value = 0@ — the @w_value = 0@ disabled-head boundary leaves the 15 DOF unconstrained.
 lawValueHeadIdentifiesComplement :: Bool
 lawValueHeadIdentifiesComplement =
      cellLoss predCellComplement tgtCell == 0       -- (1) cellLoss is BLIND to the complement perturbation
@@ -259,8 +261,9 @@ willLearn wValue =
 -- objective @(cellLoss + w_value·valueLoss)@ IDENTIFIES the full palette (rank-3 via @cellLoss@ + the
 -- complement via the value head), monotone DESCENT REACHES the byte-exact optimum, and NO-COLLAPSE keeps
 -- that optimum non-degenerate. The law is TRUE at @w_value = 1@ and FALSE at @w_value = 0@ — proving the
--- side condition is load-bearing, not decorative (the current trainer default @w_value = 0@ leaves the
--- 15-DOF complement unidentified, so "the model will learn" is FALSE for those DOF). Drop ANY conjunct
+-- side condition is load-bearing, not decorative (at the @w_value = 0@ disabled-head boundary the
+-- 15-DOF complement is unidentified, so "the model will learn" is FALSE for those DOF; the trainer
+-- therefore defaults @w_value = 1.0@, the proven point, applying the improvement). Drop ANY conjunct
 -- and a concrete witness breaks the promise (a Flat corpus, a ½-LSB target, the checkerboard-parity
 -- palette, a high-ṽ fixed-η batch, or a constant mid-latent factor).
 lawModelWillLearn :: Bool

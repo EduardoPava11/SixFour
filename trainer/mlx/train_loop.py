@@ -957,10 +957,22 @@ def main():
                     help="train a per-band SPECIALIST: override every octant's masked band to "
                          "this index (0..6), so the head learns to predict that ONE encoded "
                          "parameter from the other six. Default cycles all 7 bands.")
-    ap.add_argument("--w-value", dest="w_value", type=float, default=0.1,
-                    help="weight on the GIF89a palette VALUE head (Step 1). 0 = palette inert, "
-                         "band trajectory bit-identical to the value-only trainer; >0 = the "
-                         "palette head trains on the shared trunk under the one optimizer.")
+    ap.add_argument("--w-value", dest="w_value", type=float, default=1.0,
+                    help="weight on the GIF89a palette VALUE head (Step 1). DEFAULT 1.0 = the "
+                         "theorem's proven point willLearn(1.0) (Spec.LearnabilityTheorem; pinned "
+                         "willLearnAtOne in learnability_golden.json). The primary cellLoss "
+                         "(W_CELL=1.0) is rank-DEFICIENT: A=C.S^T is rank<=3, so it identifies only "
+                         "the 9-DOF projection of the 24-DOF palette onto span(S) and is PROVABLY "
+                         "BLIND to the 15-DOF orthogonal complement (span(S)^perp tensor 3 channels, "
+                         "the checkerboard-parity within-octant patterns). The value head's OKLab "
+                         "regression is the sufficient statistic for that complement, so w_value>0 is "
+                         "the load-bearing side condition that makes 'the model will learn' TRUE for "
+                         "the FULL palette, not just the rank-3 coupling. At full weight 1.0 the 15 "
+                         "blind DOF get a gradient share equal to the rank-3 cellLoss (they are >half "
+                         "the palette). 0 = palette inert (complement UNidentified: held value margin "
+                         "FLOORS to -28% on the disjoint corpus while the cell margin still reads "
+                         "+99% -- the exact blind spot the theorem exposes); the band trajectory is "
+                         "then bit-identical to the value-only trainer.")
     ap.add_argument("--w-policy", dest="w_policy", type=float, default=0.1,
                     help="weight on the GIF89a discrete INDEX head (Step 2, straight-through, "
                          "fused palette[index] reconstruction). 0 = index head inert.")
