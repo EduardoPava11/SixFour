@@ -601,6 +601,19 @@ to the byte-exact data slot); @lawPolicyArgmaxMarginOrFallback@ = the LOGIT-MARG
 (@commitWithMargin@/@policyMarginEps@: at a sub-eps float near-tie, fall back to the data slot rather
 than a device-dependent argmax). Collapse-safety inherited from the
 data-manufactured carriers. Additive),
+"SixFour.Spec.LearnabilityTheorem" (★ THE LEARNABILITY THEOREM: the capstone @lawModelWillLearn@ proving
+θ_B + the value head WILL learn the data-manufactured target, walking the STATISTICAL moment ladder
+(mean < variance/covariance < higher < full distribution) over the cell aggregate @A=C·Sᵀ=Σ colour⊗space@
+= the 2nd CROSS-MOMENT. Conjoins SIGNAL (@lawLearnableSignalExists@→AnchorDiagnostic) ∧ EXPRESSIVITY
+(@lawTargetExpressibleAboveFloor@→AboveFloorMargin/RootLatticeDetail) ∧ rank-3 IDENTIFIABILITY
+(@lawCellLossIdentifiesRank3Subspace@→MatrixTarget/NudgeRankTheorem, @cellLoss@ = sufficient statistic for
+9 of 24 colour DOF) ∧ DESCENT (@lawDescentReachesGoldenByteExact@→MaskedBandTrainer, golden 3000) ∧
+NO-COLLAPSE (@lawNoCollapseKeepsCrossMomentFullRank@→VarianceFloorGuard). NET-NEW
+@lawValueHeadIdentifiesComplement@: @cellLoss@ is rank-DEFICIENT, exactly ANCILLARY on the 15-DOF
+complement of @span(S)@ — the checkerboard-parity witness @cb=(-1)^(x+y+t)@ gives @cellLoss=0@ yet
+@valueLoss>0@, so the full palette is identified IFF @w_value>0@. Capstone TRUE at w_value=1, FALSE at
+w_value=0 (the load-bearing side condition + the concrete improvement: turn the value head on). Emits no
+golden. Additive),
 "SixFour.Spec.NudgeContamination" (★ the collapse-safety QUARANTINE for a USER nudge — a taste
 steer enters ONLY the invented detail (the latent tail) and CANNOT move the self-supervised energy,
 which lives in the gated coarse/DC band. @applyTaste@ re-feeds the cube's ORIGINAL coarse (structural

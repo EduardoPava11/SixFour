@@ -134,6 +134,7 @@ library
         SixFour.Spec.TransportGroup
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
+        SixFour.Spec.LearnabilityTheorem
         SixFour.Spec.NudgeContamination
         SixFour.Spec.DeltaGesture
         SixFour.Spec.TriScaleBench
@@ -434,6 +435,7 @@ test-suite spec-tests
         Properties.TransportGroup
         Properties.TemporalData
         Properties.DeltaSurrogate
+        Properties.LearnabilityTheorem
         Properties.NudgeContamination
         Properties.DeltaGesture
         Properties.TriScaleBench

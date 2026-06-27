@@ -116,6 +116,7 @@ import qualified Properties.ModelForward as ModelForward
 import qualified Properties.TransportGroup as TransportGroup
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
+import qualified Properties.LearnabilityTheorem as LearnabilityTheorem
 import qualified Properties.NudgeContamination as NudgeContamination
 import qualified Properties.DeltaGesture as DeltaGesture
 import qualified Properties.TriScaleBench as TriScaleBench
@@ -295,6 +296,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , TransportGroup.tests
   , TemporalData.tests
   , DeltaSurrogate.tests
+  , LearnabilityTheorem.tests
   , NudgeContamination.tests
   , DeltaGesture.tests
   , TriScaleBench.tests
