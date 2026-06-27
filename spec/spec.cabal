@@ -128,6 +128,7 @@ library
         SixFour.Spec.VarianceFloorGuard
         SixFour.Spec.MotionFloorCorpus
         SixFour.Spec.ScaleSpineRungs
+        SixFour.Spec.ModelIO
         SixFour.Spec.TransportGroup
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
@@ -424,6 +425,7 @@ test-suite spec-tests
         Properties.VarianceFloorGuard
         Properties.MotionFloorCorpus
         Properties.ScaleSpineRungs
+        Properties.ModelIO
         Properties.TransportGroup
         Properties.TemporalData
         Properties.DeltaSurrogate

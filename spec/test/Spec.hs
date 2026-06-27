@@ -110,6 +110,7 @@ import qualified Properties.PonderHaltDistribution as PonderHaltDistribution
 import qualified Properties.VarianceFloorGuard as VarianceFloorGuard
 import qualified Properties.MotionFloorCorpus as MotionFloorCorpus
 import qualified Properties.ScaleSpineRungs as ScaleSpineRungs
+import qualified Properties.ModelIO as ModelIO
 import qualified Properties.TransportGroup as TransportGroup
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
@@ -286,6 +287,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , VarianceFloorGuard.tests
   , MotionFloorCorpus.tests
   , ScaleSpineRungs.tests
+  , ModelIO.tests
   , TransportGroup.tests
   , TemporalData.tests
   , DeltaSurrogate.tests

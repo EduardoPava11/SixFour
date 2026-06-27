@@ -534,6 +534,14 @@ the refutation it guards (a static loop zeroes the persistence loss). Additive),
 two HeldOutTarget axes, SCALE (super-res 256³, Invented) + TIME (t+1, Held), both scoring the
 cell-aggregate matrix (@lawRungTargetIsCellAggregate@) via the same 2-level twiceness operator
 (@lawBothRungsSelfSimilar@). @lawTwoRungsAreTheTwoHeldAxes@, @lawScaleInventedTimeHeld@. Additive),
+"SixFour.Spec.ModelIO" (★ the MODEL I/O CONTRACT, the wireable boundary: INPUT = 64³ capture
+(@Upscale256.UpscaleInput@) + the 16³ 9-channel paint (@CellNudge@) + φ6 gauge; OUTPUT = the 256³ as
+@Upscale256.UpscaleOutput@ = per-frame palettes (VALUE) + index planes (CONTENT) = GIF89a, rendered by
+@renderFrame@. @lawOutputIsPerFrameValueContent@ (UI-renderable),
+@lawNeutralNudgeIsAllFloor@ (unpainted = the lossless floor, byte-exact via Upscale256.lawK0PaletteExact),
+@lawInputIsPaintable@ +
+@lawNudgeGovernsSuperRes@ (the 9-channel paint maps to the 256³ build). The TRAINER targets a
+@ModelOutput@, so one boundary serves UI render, 256³ build, and training. Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
