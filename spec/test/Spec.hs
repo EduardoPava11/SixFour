@@ -126,6 +126,7 @@ import qualified Properties.BlindComplementGeometry as BlindComplementGeometry
 import qualified Properties.LatticeRankComputed as LatticeRankComputed
 import qualified Properties.ChromaUnitGauge as ChromaUnitGauge
 import qualified Properties.ParadigmSoundness as ParadigmSoundness
+import qualified Properties.ParadigmRobustness as ParadigmRobustness
 import qualified Properties.ValueWeightThreshold as ValueWeightThreshold
 import qualified Properties.GlobalUniqueness as GlobalUniqueness
 import qualified Properties.NudgeContamination as NudgeContamination
@@ -317,6 +318,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LatticeRankComputed.tests
   , ChromaUnitGauge.tests
   , ParadigmSoundness.tests
+  , ParadigmRobustness.tests
   , ValueWeightThreshold.tests
   , GlobalUniqueness.tests
   , NudgeContamination.tests

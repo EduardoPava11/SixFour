@@ -144,6 +144,7 @@ library
         SixFour.Spec.LatticeRankComputed
         SixFour.Spec.ChromaUnitGauge
         SixFour.Spec.ParadigmSoundness
+        SixFour.Spec.ParadigmRobustness
         SixFour.Spec.ValueWeightThreshold
         SixFour.Spec.GlobalUniqueness
         SixFour.Spec.NudgeContamination
@@ -457,6 +458,7 @@ test-suite spec-tests
         Properties.LatticeRankComputed
         Properties.ChromaUnitGauge
         Properties.ParadigmSoundness
+        Properties.ParadigmRobustness
         Properties.ValueWeightThreshold
         Properties.GlobalUniqueness
         Properties.NudgeContamination

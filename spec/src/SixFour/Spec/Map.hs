@@ -707,6 +707,19 @@ the two-point witness left open: @lawFractionalWeightStillUnique@ (0<w<1 still u
 closed form, non-degenerate slope), capstone @lawConvergenceThresholdIsExactlyZero@, bridge
 @lawParadigmGuardIsExactlyConvergenceThreshold@ (the guard == @convergesAt@ weight-by-weight). Reuses
 @Convergence.composite@/@checkerboard@/@valueLoss@ + @ParadigmSoundness.paradigmSound@. Emits no golden. Additive),
+"SixFour.Spec.ParadigmRobustness" (★ the AUDIT CLOSE on the SEED residue of PARAMETRIZATION-GAP-1:
+@ParadigmSoundness.teachingConvergence@ is a @:: Bool@ constant pinned at ONE hardcoded 24-element seed, so the
+master theorem's convergence conjunct is single-witness on the INPUT/TARGET axis. Lifts the pinned constant to a
+universally-quantified predicate @paradigmConvergesAt :: Double -> [Double] -> Bool@ (the @(wv>0 && teachingConvergence)@
+clause with the frozen seed freed), reusing @Convergence.lawCompositeUniqueMinIffValueWeighted@/@lawConvexNoSpuriousLocalMin@'s
+already-seed-parametrized signatures. Proves it for ALL seeds: @lawConvergesAllSeedsAtPositiveWeight@ (True at wv=1,
+QuickCheck over randomized seeds — a lucky-seed result fails), @lawDivergesAllSeedsAtZeroWeight@ (False at wv=0
+universally, load-bearing for every seed not one), @lawPinnedConstantIsOneInstance@ (@paradigmConvergesAt 1 pinnedSeed
+== teachingConvergence@, the constant is representative not cherry-picked), keystone
+@lawSeedChoiceIsWithoutLossOfGenerality@ (the conjunct's truth is seed-INVARIANT, so the pin is harmless),
+corollary @lawSeedWeightThresholdIsZeroForAllSeeds@ (the weight threshold is exactly 0 for every seed). The SEED
+axis of the capstone — NOT a rename of @ValueWeightThreshold@ (the WEIGHT axis) nor @GlobalUniqueness@ (the
+DIRECTION axis). Reuses @Convergence@ laws + @ParadigmSoundness.teachingConvergence@. Emits no golden. Additive),
 "SixFour.Spec.GlobalUniqueness" (★ the AUDIT CLOSE on OVERCLAIM-CONVERGENCE-1: the docstring claimed a UNIQUE
 global minimum but @Convergence@/@ValueWeightThreshold@ examine only the ONE cell-blind checkerboard direction.
 Global uniqueness over all 24 DOF is STRICT convexity of @composite w@ for @w>0@, which the @≤@-chord laws
