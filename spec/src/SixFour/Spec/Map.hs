@@ -485,6 +485,14 @@ COUPLING not extra DOF). KEYSTONE @lawMatrixLossSeesOffDiagonal@: a prediction d
 is invisible to the L-row loss (@lRowLoss@=0) but visible to the full @matrixSqLoss@ (>0), so fitting the
 whole matrix forces learning the chroma the L-anchor floored. @lawTargetIsFullMatrixNotMaskedPair@.
 Builds on ChannelProduct + HeldOutTarget. Additive),
+"SixFour.Spec.PonderBudget" (★ THE USER NUDGE: a PAINTABLE per-octant detail-budget field over an
+empty 256³; the user paints sections to refine and the BRUSH is the 3-D octant TWICENESS @[2×2×2 ↔ 1]@
+twice — one stroke = a two-level subtree (@twicenessSpan = 8^levelsPerStep = 64@ finest octants, the
+@reconstruct256@ span, @lawTwicenessBrushIsTwoLevels@). Octant refines iff budget>0; ZERO field = the
+byte-exact FLOOR (@lawZeroBudgetIsFloor@), paint-up invents EXACTLY that block (@lawBudgetMonotoneInvention@
++ @lawBudgetIsLocal@), clamped non-negative (no sub-floor). Touches only the LocalPonder refine mask,
+never the coarse/DC. HONEST: monotone-in-invention ≠ monotone-in-quality; byte-exact only at the floor.
+Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;

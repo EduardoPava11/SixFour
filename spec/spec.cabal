@@ -121,6 +121,7 @@ library
         SixFour.Spec.ChannelProduct
         SixFour.Spec.HeldOutTarget
         SixFour.Spec.MatrixTarget
+        SixFour.Spec.PonderBudget
         SixFour.Spec.TransportGroup
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
@@ -410,6 +411,7 @@ test-suite spec-tests
         Properties.ChannelProduct
         Properties.HeldOutTarget
         Properties.MatrixTarget
+        Properties.PonderBudget
         Properties.TransportGroup
         Properties.TemporalData
         Properties.DeltaSurrogate
