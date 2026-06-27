@@ -20,6 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MODULES = [
     # v1 floor (byte-exact)
     ("q16.py", True),
+    ("cell_loss.py", True),   # STEP 3: Spec.MatrixTarget.cellLoss byte-exact (the held-out objective)
     ("encoder_frozen.py", True),
     ("theta_b.py", True),
     ("jepa_loss.py", True),
@@ -37,6 +38,7 @@ MODULES = [
     ("test_centered_cube.py", True),
     ("test_cube_learning.py", True),
     ("test_dashboard_verdict.py", True),
+    ("test_cell_loss.py", True),   # STEP 3: trained+judged cell-aggregate objective lock
     # STEP 2 chroma flow (skips cleanly if MLX/synth-capture deps are absent; locks the fix otherwise)
     ("test_chroma_flow.py", True),
     # MLX autodiff cross-check (optional)

@@ -87,6 +87,8 @@ from theta_b import (
 from q16 import to_q16, quantize_q16
 import vicreg
 from vicreg import VIC_GAMMA, VIC_EPS
+import cell_loss
+from cell_loss import octant_space_matrix
 
 # jepa_synth_octants imported LAST (after mlx is cached) -- see the import-order note above.
 from jepa_synth_octants import build_corpus
@@ -110,6 +112,18 @@ TAU = 0.5
 # Cross-device logit-margin floor for the index commit (mirrors spec policyMarginEps): below this
 # top1-top2 gap, float argmax is not cross-device deterministic, so commit the data slot instead.
 MARGIN_EPS = 1e-4
+# STEP 3 the HELD-OUT objective: Spec.MatrixTarget.cellLoss = aggSqLoss(cellAggregate pred, tgt).
+# The cell aggregate A = C.Sᵀ (cell_loss.cell_aggregate) couples the per-voxel colour (the value
+# head, columns L,a,b) by the data-fixed octant space lattice (x,y,t), so it is rank 3: it CONTAINS
+# the reconstruction the value head nails AND the off-diagonal chroma×space coupling the per-band
+# L-row loss is provably blind to (Spec.NudgeRankTheorem.lawHeldOutLossIsCellAggregateNotPerVoxel).
+# This is the term the trainer trains AND the dashboard judges on; the per-band band term is demoted
+# to a labeled diagnostic (it is rank-1/per-voxel-blind, so it sits at floor even when learning).
+W_CELL = 1.0  # weight on the cell-aggregate objective in the composite (the primary trained loss)
+# The data-fixed (x,y,t) space vectors of the 8 octant voxels (the octant axes the spec collapses,
+# NudgeRankTheorem H2). Float for the gradient path; the colour input it weights re-enters Q16.
+_SPACE_NP = np.asarray(octant_space_matrix(2), dtype=np.float32)  # (N_VOX, 3)
+SPACE_MX = mx.array(_SPACE_NP)
 
 
 # ===========================================================================
@@ -252,13 +266,13 @@ def vicreg_python_read(latent: mx.array):
 # L_pal, L_idx) MLX scalars for one full batch. (Body lifted verbatim from run()'s _heads.)
 # ===========================================================================
 def _composite_terms(h, tokens_b, masks, targets, pal_targets, d6):
-    band_terms, vic_terms, pal_terms, idx_terms = [], [], [], []
+    band_terms, vic_terms, pal_terms, idx_terms, cell_terms = [], [], [], [], []
     for i in range(tokens_b.shape[0]):
         latent, raws, palette, idx_logits = h(tokens_b[i], d6)
         d = raws[masks[i]] - targets[i]
         band_terms.append(0.5 * d * d)
         vic_terms.append(mlx_variance_floor(latent))
-        pal = palette.reshape(N_PAL, PAL_CH)                       # (slots, ch)
+        pal = palette.reshape(N_PAL, PAL_CH)                       # (slots, ch) predicted (L,a,b)
         pd = pal.reshape(-1) - pal_targets[i]
         pal_terms.append(0.5 * mx.mean(pd * pd))
         assign = straight_through_onehot(idx_logits.reshape(N_VOX, N_PAL), TAU)  # (vox, slots)
@@ -266,8 +280,15 @@ def _composite_terms(h, tokens_b, masks, targets, pal_targets, d6):
         tgt = pal_targets[i].reshape(N_VOX, PAL_CH)               # the cube colours per voxel
         rd = recon - tgt
         idx_terms.append(0.5 * mx.mean(rd * rd))
+        # STEP 3 cell-aggregate loss (Spec.MatrixTarget.cellLoss): A = colourᵀ · space, predicted
+        # vs target, both weighted by the SAME data-fixed octant space lattice -> the rank-3 coupling.
+        a_pred = pal.T @ SPACE_MX                                 # (ch, 3) cell aggregate (pred)
+        a_tgt = tgt.T @ SPACE_MX                                  # (ch, 3) cell aggregate (target)
+        cd = a_pred - a_tgt
+        cell_terms.append(0.5 * mx.mean(cd * cd))
     return (mx.mean(mx.stack(band_terms)), mx.mean(mx.stack(vic_terms)),
-            mx.mean(mx.stack(pal_terms)), mx.mean(mx.stack(idx_terms)))
+            mx.mean(mx.stack(pal_terms)), mx.mean(mx.stack(idx_terms)),
+            mx.mean(mx.stack(cell_terms)))
 
 
 # ===========================================================================
@@ -320,7 +341,11 @@ def _composite_terms_batched(h, tokens_b, mask_idx, targets, pal_targets, d6):
     recon = assign @ pal                                                 # (B, vox, ch)
     tgt = pal_targets.reshape(B, N_VOX, PAL_CH)
     idxL = mx.mean(0.5 * mx.mean((recon - tgt) ** 2, axis=(1, 2)))
-    return band, vic, palL, idxL
+    # STEP 3 cell-aggregate loss (Spec.MatrixTarget.cellLoss), batched: A[b] = pal[b]ᵀ · space.
+    a_pred = mx.matmul(pal.transpose(0, 2, 1), SPACE_MX)                 # (B, ch, 3)
+    a_tgt = mx.matmul(tgt.transpose(0, 2, 1), SPACE_MX)                  # (B, ch, 3)
+    cellL = mx.mean(0.5 * mx.mean((a_pred - a_tgt) ** 2, axis=(1, 2)))
+    return band, vic, palL, idxL, cellL
 
 
 # ===========================================================================
@@ -365,11 +390,11 @@ def run(seed: int, examples, d6, steps: int, lr: float, w_value: float, w_policy
         return _composite_terms(h, tokens_b, masks, targets, pal_targets, d6)
 
     def composite(h):
-        """L = L_band + LAMBDA_VIC*L_vic + w_value*L_pal + w_policy*L_idx (the ONE MLX scalar the
-        single optimizer descends over ALL heads). w_value=w_policy=0 -> palette + index heads
-        inert and the band trajectory is bit-identical to the value-only trainer (additivity)."""
-        band, vic, pal, idx = _heads(h)
-        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx
+        """L = L_band + LAMBDA_VIC*L_vic + w_value*L_pal + w_policy*L_idx + W_CELL*L_cell (the ONE MLX
+        scalar the single optimizer descends over ALL heads). L_cell (Spec.MatrixTarget.cellLoss) is
+        the primary held-out objective; the per-band L_band is demoted to a diagnostic."""
+        band, vic, pal, idx, cell = _heads(h)
+        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell
 
     opt = optim.SGD(learning_rate=lr)
     loss_and_grad = nn.value_and_grad(head, composite)
@@ -389,8 +414,8 @@ def run(seed: int, examples, d6, steps: int, lr: float, w_value: float, w_policy
         trajectory.append(lval)
         # Record EACH head's objective separately so a verifier can confirm each descends
         # (not merely the collapse guard relaxing to its floor).
-        band_s, vic_s, pal_s, idx_s = _heads(head)
-        mx.eval(band_s, vic_s, pal_s, idx_s)
+        band_s, vic_s, pal_s, idx_s, cell_s = _heads(head)
+        mx.eval(band_s, vic_s, pal_s, idx_s, cell_s)
         band_traj.append(float(band_s))
         pal_traj.append(float(pal_s))
         idx_traj.append(float(idx_s))
@@ -398,9 +423,9 @@ def run(seed: int, examples, d6, steps: int, lr: float, w_value: float, w_policy
             latent0, _, _, _ = head(tokens_b[0], d6)
             mx.eval(latent0)
             py_hinge, py_cov, _ = vicreg_python_read(latent0)
-            print(f"    step {step:2d}  L_composite={lval:.8f}  L_band={float(band_s):.8f}  "
-                  f"L_pal={float(pal_s):.8f}  L_idx={float(idx_s):.8f}  L_vic={float(vic_s):.6f}   "
-                  f"VICReg hinge={py_hinge:.4f} cov={py_cov:.4f}")
+            print(f"    step {step:2d}  L_composite={lval:.8f}  L_cell={float(cell_s):.8f}  "
+                  f"L_band={float(band_s):.8f}  L_pal={float(pal_s):.8f}  L_idx={float(idx_s):.8f}  "
+                  f"L_vic={float(vic_s):.6f}   VICReg hinge={py_hinge:.4f} cov={py_cov:.4f}")
 
     return trajectory, band_traj, pal_traj, idx_traj, head, tokens_b, masks
 
@@ -425,8 +450,8 @@ def _make_grad(head, batch, d6, w_value, w_policy):
     tokens_b, masks, targets, pal_targets = batch
 
     def composite(h):
-        band, vic, pal, idx = _composite_terms(h, tokens_b, masks, targets, pal_targets, d6)
-        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx
+        band, vic, pal, idx, cell = _composite_terms(h, tokens_b, masks, targets, pal_targets, d6)
+        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell
 
     return nn.value_and_grad(head, composite)
 
@@ -437,8 +462,8 @@ def _make_grad_batched(head, batch, d6, w_value, w_policy):
     mask_idx = mx.array(masks, dtype=mx.int32)
 
     def composite(h):
-        band, vic, pal, idx = _composite_terms_batched(h, tokens_b, mask_idx, targets, pal_targets, d6)
-        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx
+        band, vic, pal, idx, cell = _composite_terms_batched(h, tokens_b, mask_idx, targets, pal_targets, d6)
+        return band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell
 
     return nn.value_and_grad(head, composite)
 
@@ -508,11 +533,11 @@ def _held_eval(head, held, d6, w_value, w_policy):
     """Held-out losses via the BATCHED forward, NO gradient -- the same loss terms training
     descends, scored on data the optimizer never saw."""
     h_tb, h_midx, h_tg, h_pl = held
-    band, vic, pal, idx = _composite_terms_batched(head, h_tb, h_midx, h_tg, h_pl, d6)
-    comp = band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx
-    mx.eval(band, vic, pal, idx, comp)
+    band, vic, pal, idx, cell = _composite_terms_batched(head, h_tb, h_midx, h_tg, h_pl, d6)
+    comp = band + LAMBDA_VIC * vic + w_value * pal + w_policy * idx + W_CELL * cell
+    mx.eval(band, vic, pal, idx, cell, comp)
     return {"band": float(band), "vic": float(vic), "pal": float(pal),
-            "idx": float(idx), "composite": float(comp)}
+            "idx": float(idx), "cell": float(cell), "composite": float(comp)}
 
 
 def _floor_baseline(held):
@@ -520,8 +545,16 @@ def _floor_baseline(held):
     The band head MUST beat band_floor on held-out or it is not learning (the prior run's exact
     failure: held band ~0.00054 vs floor ~0.00035 -- worse than zero)."""
     _h_tb, _h_midx, h_tg, h_pl = held
+    # The cell-aggregate floor: the cell loss a zero-colour prediction scores. A_pred = 0 -> the term
+    # is 0.5*mean((A_tgt)^2). Computed with the SAME octant space lattice the trained term uses, so
+    # the cell margin (floor - held) is apples-to-apples (Spec.MatrixTarget.cellLoss at pred=0).
+    B = h_pl.shape[0]
+    tgt = h_pl.reshape(B, N_VOX, PAL_CH)
+    a_tgt = mx.matmul(tgt.transpose(0, 2, 1), SPACE_MX)                  # (B, ch, 3)
+    cell_floor = float(mx.mean(0.5 * mx.mean(a_tgt ** 2, axis=(1, 2))))
     return {"band": 0.5 * float(mx.mean(h_tg ** 2)),
-            "value": 0.5 * float(mx.mean(h_pl ** 2))}
+            "value": 0.5 * float(mx.mean(h_pl ** 2)),
+            "cell": cell_floor}
 
 
 def _fmt_dur(s):
@@ -534,16 +567,17 @@ def _fmt_dur(s):
 
 
 def dashboard_verdict(held, floor):
-    """The verdict logic, separated so it is unit-testable without a full run. The verdict keys on
-    the VALUE (reconstruction) margin, NOT the band margin.
+    """The verdict logic, separated so it is unit-testable without a full run.
 
-    WHY value, not band: the per-band theta_B target is provably rank-1/per-voxel-blind
-    (Spec.NudgeRankTheorem.cellAggregate + Spec.MatrixTarget.lawMatrixLossSeesOffDiagonal): a
-    band-only metric cannot see the off-diagonal structure the model actually predicts, so even a
-    perfectly-trained head sits at/below the band floor (a small regularized linear model peaks at
-    about -0.2% band margin -- the band target is unbeatable, hence judging on it is incorrect).
-    The reconstruction/value head DOES generalize (about +91% held margin today), so the value
-    margin is the honest learning signal. Band is retained as a labeled secondary diagnostic.
+    PRIMARY metric (STEP 3) = the CELL-AGGREGATE margin (Spec.MatrixTarget.cellLoss) when the eval
+    supplies it. The cell aggregate A = colourᵀ·space is rank 3 (Spec.NudgeRankTheorem
+    lawCellAggregateReachesRank3), so it sees BOTH the reconstruction the value head nails AND the
+    off-diagonal chroma×space coupling the per-band L-row loss is provably blind to
+    (lawHeldOutLossIsCellAggregateNotPerVoxel). It is the formally-proven held-out objective.
+
+    The per-band theta_B target is rank-1/per-voxel-blind, so even a perfectly-trained head sits
+    at/below the band floor -- band is kept ONLY as a labeled diagnostic. When no 'cell' key is
+    present the verdict falls back to the VALUE (reconstruction) margin (the legacy behaviour).
 
     Returns (verdict, value_margin_pct, band_margin_pct, collapsed, max_vic)."""
     vf = floor["value"]
@@ -552,12 +586,18 @@ def dashboard_verdict(held, floor):
     band_margin = (bf - held["band"]) / bf * 100 if bf > 0 else 0.0
     max_vic = VIC_GAMMA * VIC_NEURON_SLICE                       # ~all neurons collapsed
     collapsed = held["vic"] > 0.5 * max_vic
+    # PRIMARY = cell-aggregate margin (the spec held-out objective); fall back to value if absent.
+    cf = floor.get("cell")
+    if cf is not None and "cell" in held:
+        primary, pfloor = held["cell"], cf
+    else:
+        primary, pfloor = held["pal"], vf
     # COLLAPSE guard FIRST (a collapsed head can score a misleading margin).
     if collapsed:
         verdict = "COLLAPSE (variance floor tripped)"
-    elif held["pal"] < vf * 0.98:
+    elif primary < pfloor * 0.98:
         verdict = "LEARNING"
-    elif held["pal"] > vf * 1.02:
+    elif primary > pfloor * 1.02:
         verdict = "FLOORED (worse than predicting zero)"
     else:
         verdict = "AT FLOOR"
@@ -571,12 +611,15 @@ def _dashboard(step, total, held, floor, train_loss, sps, batch, t_elapsed):
     dashboard_verdict for why band-only is the blind metric). Returns (verdict, lines)."""
     bf = floor["band"]
     vf = floor["value"]
+    cf = floor.get("cell", 0.0)
     verdict, value_margin, band_margin, collapsed, max_vic = dashboard_verdict(held, floor)
+    cell_margin = (cf - held.get("cell", 0.0)) / cf * 100 if cf > 0 else 0.0
     eta = _fmt_dur((total - step) / sps) if sps > 0 else "?"
     tl = "   --" if train_loss != train_loss else f"{train_loss:.6f}"   # nan-safe
     lines = [
         f"=== EVAL @ step {step}/{total} :: {verdict} ===",
-        f"  value  held {held['pal']:.6f}  vs floor {vf:.6f}   margin {value_margin:+.1f}%   (>0 = beating zero-prediction; THE VERDICT METRIC)",
+        f"  cell   held {held.get('cell', 0.0):.6f}  vs floor {cf:.6f}   margin {cell_margin:+.1f}%   (>0 = beating zero-prediction; THE VERDICT METRIC -- Spec.MatrixTarget.cellLoss, rank-3)",
+        f"  value  held {held['pal']:.6f}  vs floor {vf:.6f}   margin {value_margin:+.1f}%   (reconstruction diagnostic)",
         f"  band   held {held['band']:.6f}  vs floor {bf:.6f}   margin {band_margin:+.1f}%   (diagnostic ONLY -- rank-1 blind, see NudgeRankTheorem)",
         f"  index  held {held['idx']:.6f}   train L {tl}",
         f"  collapse-guard(VICReg) {held['vic']:.4f} / {max_vic:.1f}  [{'ok' if not collapsed else 'TRIPPED'}]",
@@ -658,7 +701,8 @@ def train_persistent(args) -> int:
     floor = _floor_baseline(held)
     batch_sz = len(examples)
     print(f"held-out: {len(held_examples)} octants (disjoint seeds, fixed); "
-          f"floor band={floor['band']:.6f} value={floor['value']:.6f} (the bars to beat)")
+          f"floor cell={floor['cell']:.6f} value={floor['value']:.6f} band={floor['band']:.6f} "
+          f"(cell is THE bar to beat)")
     _bv, _bl = _dashboard(start_step, total_steps,
                           _held_eval(head, held, d6, w_value, w_policy),
                           floor, float("nan"), 0.0, batch_sz, 0.0)
@@ -823,6 +867,7 @@ def demo_determinism(seed, examples, d6, steps, lr, w_value, w_policy):
 
 
 def main():
+    global W_CELL  # --w-cell overrides the module-constant the composite closures read
     ap = argparse.ArgumentParser(description="End-to-end MLX H-JEPA training loop.")
     ap.add_argument("--smoke", action="store_true",
                     help="fast mode: 8 octants, 30 steps (< ~10s); shows all four properties.")
@@ -844,6 +889,9 @@ def main():
     ap.add_argument("--w-policy", dest="w_policy", type=float, default=0.1,
                     help="weight on the GIF89a discrete INDEX head (Step 2, straight-through, "
                          "fused palette[index] reconstruction). 0 = index head inert.")
+    ap.add_argument("--w-cell", dest="w_cell", type=float, default=W_CELL,
+                    help="weight on the cell-aggregate objective (Step 3, Spec.MatrixTarget.cellLoss, "
+                         "the primary held-out loss the dashboard judges on). Default 1.0.")
     # --- persistent long-run (hours/days): checkpoint, resume, streaming corpus ---
     ap.add_argument("--long", action="store_true",
                     help="persistent training: a single resumable run that checkpoints to disk "
@@ -869,6 +917,9 @@ def main():
     ap.add_argument("--eval-octants", dest="eval_octants", type=int, default=0,
                     help="held-out octants for the eval dashboard (default 64; disjoint seeds, fixed).")
     args = ap.parse_args()
+
+    # The cell-aggregate weight is a module constant the composite closures read; honor --w-cell.
+    W_CELL = args.w_cell
 
     # DISPATCH: persistent long-run trainer vs the 4-property demo. Long mode is entered
     # explicitly (--long) or implicitly whenever the user asks to save or resume.
