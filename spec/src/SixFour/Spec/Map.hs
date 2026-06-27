@@ -444,6 +444,71 @@ Additive),
 @lawUnitBallsDiffer@ proves the knob is real (geometries differ at @d ≥ 2@); @lawLInfBoundedByL1@ the
 norm inequality. @p = 2@ (Euclidean → dual-lattice/sphere-packing) is a documented un-gated extension.
 Re-homes the d6 metric laws. Additive),
+"SixFour.Spec.AnchorDiagnostic" (★ experiment #1 of the L-anchor model review, made a THEOREM: ONE
+@ChannelDetail@ interface @channelEnergy@ with TWO lenses as instances — L scored by DISCRETE GEOMETRY
+(@MetricLattice@ @d6@\/@ℓ¹@ lattice norm) and chroma by ALGEBRAIC NUMBER THEORY (@GaussianChroma@
+@ℤ[i]@ field norm). @0@ energy = at the root-lattice floor (nothing to learn). KEYSTONE
+@lawIsoLuminantSignalIsInChromaRingNotL@: a constant-L\/varying-chroma octant has its whole signal in
+the chroma ring while L is at floor, so an L-only target (@palette_target@ a=b=0) is provably BLIND to
+it = the structural reason the masked-band head can sit at the zero floor. Contrast laws pin the other
+regimes (@lawLumaRampSignalIsInL@ where L-anchoring is right, @lawFlatSceneFloorsAllChannels@ where the
+data engine is the culprit). Reuses frozen @liftOct@; emits no golden. Additive),
+"SixFour.Spec.DualCube" (★ THE PIVOT off L-anchoring: the colour cube @(L,a,b)@ and space cube
+@(x,y,t)@ as TWO copies of one @ℤ ⊕ ℤ[i]@ module (real BALANCE axis + Gaussian SEARCH plane),
+EXCHANGED by the φ6 involution @phi6@ (built on @XYTLabDuality@ φ + @GaussianChroma@ ℤ[i]). KEYSTONE
+@lawCubesExchangedByPhi6@: @colorCube (phi6 p) == spaceCube p@; @lawPhi6IsModuleAutomorphism@ makes φ6
+a ℤ⁶ symmetry ⇒ @lawNoPrivilegedCarrier@: L (colour balance) and t (space balance) are φ6-images, so
+anchoring on L is ARBITRARY not canonical. Replaces the asymmetric @{L,t}@-carrier/@{a,b,x,y}@-search
+story (CarrierL/RelationalMemory) with a SYMMETRIC dual-cube carrier. @lawBalanceRealSearchGaussian@ =
+the two lenses (ℓ¹ lattice on the real axis, ℤ[i] norm on the Gaussian plane). Additive),
+"SixFour.Spec.ChannelProduct" (★ ABSTRACT AGAIN: all NINE colour×space comparisons as FREE channels
+(@L:t,L:x,L:y,a:x,a:y,a:t,b:x,b:y,b:t@) = the complete 3×3 bilinear matrix @M[c][s]=colour(c)·space(s)@,
+which is GIF89a (separable @value×content@ = RANK 1, @lawComparisonIsSeparable@) AND transformer
+attention (outer product @q⊗k@, @lawComparisonIsOuterProduct@) AND generalizes @DualCube@ (whose φ6
+diagonal = the φ6-FIXED cells, @lawDiagonalIsPhi6Fixed@). Two lenses per block: balance @L:t@ = @ℤ@
+lattice product (geometry); search block @{a,b}×{x,y}@ = the @ℤ[i]@ Gaussian product @(a+bi)(x+yi)@
+(@lawSearchBlockIsGaussianProduct@, number theory). KEYSTONE @lawAllChannelsSeeWhatLAnchorMisses@: two
+points differing only in chroma are IDENTICAL to the L-anchored single row but DISTINCT under the full
+nine — the provable expressiveness gap behind band-at-floor. PonderNet+transformer = adaptive-depth
+attention over this matrix; H-JEPA target rides on it. Additive),
+"SixFour.Spec.HeldOutTarget" (★ THE CRUX of the holistic full-matrix H-JEPA: the JEPA target is HELD
+OUT from the input across SCALE (coarse in, the 7 octree-orthogonal DETAIL bands held) and TIME
+(frame t in, frame t+1 held), the structural REPLACEMENT for per-pair masking. Predict the WHOLE held
+set with NO mask, yet @lawScaleTargetNotAFunctionOfInput@/@lawTimeTargetNotAFunctionOfInput@ (same
+input, different target exists) + @law*IdentityIncursLoss@ (copy/floor predictor loses) make it
+collapse-proof. KEYSTONE @lawHeldOutReplacesMasking@; @lawTargetIsWholeNotMaskedPair@ (all 7 bands, not
+1 masked). Reuses frozen @liftOct@. The two held axes = the two RungPivot rungs. Additive),
+"SixFour.Spec.MatrixTarget" (★ the HOLISTIC target object: the whole 9-channel ChannelProduct matrix
+at the held scale/frame, predicted in one shot. RANK-1 HONEST (@lawMatrixTargetIsRank1@ /
+@lawGeneratorIsSixNotNine@: the matrix is rank 1, real DOF = the 6-D P6 generator, holism = value×content
+COUPLING not extra DOF). KEYSTONE @lawMatrixLossSeesOffDiagonal@: a prediction differing only in chroma
+is invisible to the L-row loss (@lRowLoss@=0) but visible to the full @matrixSqLoss@ (>0), so fitting the
+whole matrix forces learning the chroma the L-anchor floored. @lawTargetIsFullMatrixNotMaskedPair@.
+Builds on ChannelProduct + HeldOutTarget. Additive),
+"SixFour.Spec.NudgeRankTheorem" (★ THREE hypotheses as theorems. RANK: per voxel @M=colorVec⊗spaceVec@
+is rank ≤1 (@lawSingleVoxelRank1@, all 2×2 minors 0 = the 6-DOF generator) but the CELL-aggregate
+@A=Σ colour⊗space=C·Sᵀ@ reaches rank 3 (@lawCellAggregateReachesRank3@, 3 φ6-diagonal voxels give I,
+det 1) ⇒ the 9-pair nudge is honest at the CELL not the VOXEL (@lawNineIndependentAtCellNotVoxel@), so
+the held-out @MatrixTarget@ loss must be the full-rank aggregate (@lawHeldOutLossIsCellAggregateNotPerVoxel@,
+a mispaired-chroma swap is invisible per-voxel but @aggSqLoss=4>0@). COLLAPSE: @liftOct@ = two spatial
+@liftQuad@ + one temporal @sLift@ (@lawOctantAxesAreSpaceTime@), the octant axes ARE @(x,y,t)@ and the
+@Int@ payload is one OKLab channel (@lawColourIsTheLiftedValue@, three independent passes); 64³→16³ folds
+space-time /4 while colour rides lossless (@lawTwoLevelsCollapseSpaceTimeNotColour@); BOTH levels mix both
+axes (@lawBothLevelsAreMixedSpaceTime@ REFUTES one-spatial-one-temporal) and the value/collapsed split is a
+φ6 GAUGE (@lawValueSplitIsPhi6Gauge@ REFUTES intrinsic colour, reuses DualCube). RESIDUAL: down (16³→64³)
+and up (64³→256³) residuals are the SAME @[[Detail]]@ + SAME @octantLift@ (@lawResidualTypeScaleInvariant@)
+both ∈ A₇=ker Σ (@lawResidualIsA7AtEveryLevel@), so the down band is a legit conditioning SEED richer than
+the zero floor (@lawDownResidualConditionsUpInvention@) — but NOT the answer (@lawDownResidualIsNotUpGroundTruth@
+REFUTES copy-as-ground-truth via @lawBeyondCaptureInvented@'s non-injectivity). Reuses ChannelProduct/
+MatrixTarget/OctreeCell/RGBTLift/DualCube/SelfSimilarReconstruct/RootLatticeDetail; emits no golden. Additive),
+"SixFour.Spec.PonderBudget" (★ THE USER NUDGE: a PAINTABLE per-octant detail-budget field over an
+empty 256³; the user paints sections to refine and the BRUSH is the 3-D octant TWICENESS @[2×2×2 ↔ 1]@
+twice — one stroke = a two-level subtree (@twicenessSpan = 8^levelsPerStep = 64@ finest octants, the
+@reconstruct256@ span, @lawTwicenessBrushIsTwoLevels@). Octant refines iff budget>0; ZERO field = the
+byte-exact FLOOR (@lawZeroBudgetIsFloor@), paint-up invents EXACTLY that block (@lawBudgetMonotoneInvention@
++ @lawBudgetIsLocal@), clamped non-negative (no sub-floor). Touches only the LocalPonder refine mask,
+never the coarse/DC. HONEST: monotone-in-invention ≠ monotone-in-quality; byte-exact only at the floor.
+Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
@@ -451,6 +516,20 @@ the SAME laws hold over @R=ℤ[i]@ (Gaussian integers — the chroma knob) and a
 proving GENERALIZATION not rename. NO @recip@ (field axiom absent by design — byte-exactness forbids
 dividing by non-units). @lawModuleSmul*@ (free-module = ColourDelta abstracted), @lawLiftRoundTrips@
 (the bijection), @lawLiftDetailCount@ = b-1 = rank A_{b-1} (ties RootLatticeDetail). Additive),
+"SixFour.Spec.RefinementCarriers" (★ WIRES the capstone spine to the PRODUCTION carriers so the
+abstraction GOVERNS, not parallels: @ColourDelta@ is a real @RModule ℤ@ (instance in HierarchicalDelta;
+4 module laws strict, additive-inverse modulo trailing-zero @canonColourDelta@) and
+@lawColourModuleActsAsRecolour@ ties @madd@/@smul@ to the @applyValueDelta@ call site; the octant
+@OctLeaf8@ is a real @ReversibleLift@ whose @liftF@ IS @OctreeCell.liftOct@ (@lawOctLeafLiftIsLiftOct@),
+OVERRIDING the generic prefix-difference default (@lawOctLeafOverridesDefault@). Uses the new
+@ReversibleLift@ @liftF@/@unliftF@ methods. Additive),
+"SixFour.Spec.GaussianChroma" (★ the @ℤ[i]@ CHROMA KNOB the capstone unlocked, carried toward the
+trainer: pack the two OKLab chroma axes @(a,b)@ into ONE Gaussian integer @a+b·i@ (L stays real) ⇒
+@GColourDelta@ is a second fixed-shape @RModule ℤ@ (every module law strict, incl. additive inverse —
+unlike ragged @ColourDelta@). FAITHFUL re-encoding (@lawChromaAddAgreesWithRealPairs@) that UNLOCKS a
+hue-rotation operator two scalar channels lack: complex multiply rotates\/scales the chroma plane,
+the unit @i@ = an exact 90° quarter-turn (@lawChromaUnitIsQuarterTurn@), norm-preserving
+(@lawChromaUnitRotationPreservesNorm@), order 4 (@lawChromaQuarterTurnOrderFour@). Additive),
 "SixFour.Spec.TransportGroup" (★ the POLICY channel's algebra — @IndexDelta@ as a NON-ABELIAN
 transport group acting on the index set, the counterpart to the VALUE channel's abelian @ColourDelta@
 ℤ-module. @tcomp@ chains, @tinv@ reverses, @tbetween@ data-manufactures; @lawTransportActionHomomorphism@

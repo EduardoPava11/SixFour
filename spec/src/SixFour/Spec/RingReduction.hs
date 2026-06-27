@@ -9,6 +9,7 @@ grid — @reduce@ is a retraction/quantizer, NOT a ring homomorphism. 'lawReduce
 the half-to-even tie rule. Generalizes @q16.quantize_q16@ / @reenterQ16@; see "SixFour.Spec.ScaleFiltration"
 (the dyadic scale these grids sit on).
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.RingReduction
   ( -- * The two dyadic grids
     Q16(..)

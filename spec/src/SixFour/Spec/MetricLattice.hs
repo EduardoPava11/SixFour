@@ -12,6 +12,7 @@ theta-series / sphere-packing machinery, but its triangle inequality needs Cauch
 not integer-comparison, fact) — it is NOT gated here; only the two integer-exact corners @p ∈ {1, ∞}@
 are. The model itself uses @p = 1@.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.MetricLattice
   ( -- * The ℓ^p knob
     NormP(..)

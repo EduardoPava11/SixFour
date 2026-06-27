@@ -12,6 +12,7 @@ supply. Subsumes @lawPaletteIndexGaugeInvariant@ (ConstructionEncoder), @lawReor
 + @lawEquivariance@ (SameObjectInvariance), @lawPhi6Involution@ (Dim6) under one law family.
 See "SixFour.Spec.RootLatticeDetail" (the lift's lattice algebra) for the sibling generalization.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.GaugeAction
   ( -- * The interface
     Group(..)

@@ -55,6 +55,7 @@ library
         SixFour.Spec.PairTreeFixed
         SixFour.Spec.RGBTLift
         SixFour.Spec.OctreeCell
+        SixFour.Spec.NudgeRankTheorem
         SixFour.Spec.LadderIdentity
         SixFour.Spec.LargeJepaHead
         SixFour.Spec.PerScaleWeights
@@ -114,6 +115,14 @@ library
         SixFour.Spec.RingReduction
         SixFour.Spec.MetricLattice
         SixFour.Spec.RefinementSystem
+        SixFour.Spec.RefinementCarriers
+        SixFour.Spec.GaussianChroma
+        SixFour.Spec.AnchorDiagnostic
+        SixFour.Spec.DualCube
+        SixFour.Spec.ChannelProduct
+        SixFour.Spec.HeldOutTarget
+        SixFour.Spec.MatrixTarget
+        SixFour.Spec.PonderBudget
         SixFour.Spec.TransportGroup
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
@@ -337,6 +346,7 @@ test-suite spec-tests
         Properties.PairTreeFixed
         Properties.RGBTLift
         Properties.OctreeCell
+        Properties.NudgeRankTheorem
         Properties.LadderIdentity
         Properties.LargeJepaHead
         Properties.PerScaleWeights
@@ -396,6 +406,14 @@ test-suite spec-tests
         Properties.RingReduction
         Properties.MetricLattice
         Properties.RefinementSystem
+        Properties.RefinementCarriers
+        Properties.GaussianChroma
+        Properties.AnchorDiagnostic
+        Properties.DualCube
+        Properties.ChannelProduct
+        Properties.HeldOutTarget
+        Properties.MatrixTarget
+        Properties.PonderBudget
         Properties.TransportGroup
         Properties.TemporalData
         Properties.DeltaSurrogate

@@ -96,6 +96,15 @@ import qualified Properties.ScaleFiltration as ScaleFiltration
 import qualified Properties.RingReduction as RingReduction
 import qualified Properties.MetricLattice as MetricLattice
 import qualified Properties.RefinementSystem as RefinementSystem
+import qualified Properties.RefinementCarriers as RefinementCarriers
+import qualified Properties.GaussianChroma as GaussianChroma
+import qualified Properties.AnchorDiagnostic as AnchorDiagnostic
+import qualified Properties.DualCube as DualCube
+import qualified Properties.ChannelProduct as ChannelProduct
+import qualified Properties.HeldOutTarget as HeldOutTarget
+import qualified Properties.MatrixTarget as MatrixTarget
+import qualified Properties.NudgeRankTheorem as NudgeRankTheorem
+import qualified Properties.PonderBudget as PonderBudget
 import qualified Properties.TransportGroup as TransportGroup
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
@@ -258,6 +267,15 @@ main = defaultMain $ testGroup "sixfour-spec"
   , RingReduction.tests
   , MetricLattice.tests
   , RefinementSystem.tests
+  , RefinementCarriers.tests
+  , GaussianChroma.tests
+  , AnchorDiagnostic.tests
+  , DualCube.tests
+  , ChannelProduct.tests
+  , HeldOutTarget.tests
+  , MatrixTarget.tests
+  , NudgeRankTheorem.tests
+  , PonderBudget.tests
   , TransportGroup.tests
   , TemporalData.tests
   , DeltaSurrogate.tests

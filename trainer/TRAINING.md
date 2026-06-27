@@ -88,6 +88,49 @@ cabal build && cabal test && cabal run spec-codegen   # re-emits trainer/generat
 The Python loaders (`jepa_head_golden.py`, `temporal_data.py`, `jepa_data.py`) then reproduce them
 byte-exact, so a one-byte drift between the spec and the trainer is a gate failure.
 
+## Long runs (hours/days): checkpoint, resume, streaming corpus
+
+`cli.py train --smoke` and the default `train` run the 4-property DEMO (two runs + the
+determinism check). For an actual multi-day training run, use `--long` (a single resumable
+run that checkpoints to disk and streams fresh data). It is also entered implicitly by
+`--save-every` or `--resume`.
+
+All `cli.py` commands run from `trainer/mlx/`:
+
+```bash
+cd trainer/mlx
+
+# start a long run: save every 2000 steps, regenerate fresh data every 5000 steps.
+# Omitting --out uses the git-ignored default trainer/out/run.
+python3 cli.py train --long --steps 500000 --octants 96 \
+    --save-every 2000 --resample-every 5000 --out ../out/run1
+
+# resume after a crash / stop / reboot — continues from the checkpoint's step
+python3 cli.py train --long --steps 500000 --octants 96 \
+    --save-every 2000 --resample-every 5000 --out ../out/run1 \
+    --resume ../out/run1/head.safetensors
+```
+
+(`--out` is relative to `trainer/mlx`, so `../out/run1` lands in the git-ignored `trainer/out/`.)
+
+What it writes to `--out` (default `trainer/out/run`, git-ignored):
+- `head.safetensors` — the full 18.9M-param ViT head, saved ATOMICALLY (temp + `os.replace`)
+  every `--save-every` steps and again on exit (normal end, Ctrl-C, or crash), so no work is lost.
+- `head.safetensors.meta.json` — the resume cursor (`step`, `seed`, `lr`, `epoch`).
+- `loss.jsonl` — a flushed per-step loss log, so progress survives an SSH disconnect.
+
+`--resample-every N` is the key flag for a multi-day run: it regenerates the corpus from FRESH
+synthetic seeds every N steps, so more wall-clock means more DISTINCT captures rather than
+memorizing one fixed 24-octant set. SGD is stateless, so head weights + the meta step fully
+determine a bit-faithful resume.
+
+**The long run uses a BATCHED forward by default (~4.3x).** All B octants go through the GPU in one
+dispatch instead of a per-octant Python loop (which left the GPU idle, ~145 octants/s vs ~610
+batched). The run self-verifies the batched forward matches the looped one (`[faithful] max|Δ|`)
+before training and refuses to start if they diverge. Pass `--no-batch` to force the old looped
+path (only useful for the demo's bit-exact additivity proofs). To scope your machine's throughput
+and the wall-clock for a target step count: `python3 capabilities.py` (or `--quick`).
+
 ## Deploy
 
 The trained 63-param `theta_B` blob ships as a **hand-written Swift forward pass**

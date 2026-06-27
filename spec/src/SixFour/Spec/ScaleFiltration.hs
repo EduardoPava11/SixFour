@@ -12,6 +12,7 @@ HONEST BOUNDARY (the analysis flagged it): this is a FINITE-DEPTH filtration. Th
 completion to (ℤ₂)³ (a profinite boundary) is NOT constructed and NOT claimed; only the finite
 truncation the model runs is gated.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.ScaleFiltration
   ( -- * Octant addresses and the s-adic valuation
     Path
