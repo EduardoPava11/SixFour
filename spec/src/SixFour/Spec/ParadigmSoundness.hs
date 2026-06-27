@@ -11,7 +11,8 @@ label, never the model's own output, so collapse is structurally impossible) and
 ("SixFour.Spec.ByteCarrier"/"SixFour.Spec.Q16": the learned float re-enters the integer grid byte-exact,
 so it never breaks cross-device replay).
 
-The seven necessary teachings (each a delegated, green law):
+The nine necessary teachings (each a delegated, green law) — the original seven plus HEAD-CONVERGENCE
+(the actual ViT readout converges; trunk scoped out) and GENERALIZATION (held-out follows train, no shift):
 
   1. SIGNAL        — there is learnable signal, read through the owner's two lenses: discrete geometry
                      (the @d6@/ℓ¹ lattice norm on L) and algebraic number theory (the @ℤ[i]@ Gaussian norm
@@ -37,7 +38,7 @@ Emits no golden (it is the assembly of guarantees, each already gated).
 -}
 -- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.ParadigmSoundness
-  ( -- * The seven teachings, named
+  ( -- * The nine teachings, named
     teachingSignal
   , teachingExpressivity
   , teachingIdentifiability
@@ -45,6 +46,8 @@ module SixFour.Spec.ParadigmSoundness
   , teachingNoCollapse
   , teachingAntiCheat
   , teachingDeterminism
+  , teachingHeadConvergence
+  , teachingGeneralization
     -- * The master theorem
   , paradigmSound
   , lawParadigmIsSound
@@ -55,6 +58,8 @@ import SixFour.Spec.AnchorDiagnostic    (lawIsoLuminantSignalIsInChromaRingNotL,
 import SixFour.Spec.AboveFloorMargin    (lawAboveFloorMarginReachable, lawSurvivingDetailIsA7)
 import SixFour.Spec.LearnabilityTheorem (lawCellLossIdentifiesRank3Subspace, lawValueHeadIdentifiesComplement)
 import SixFour.Spec.Convergence         (lawCompositeUniqueMinIffValueWeighted, lawConvexNoSpuriousLocalMin)
+import SixFour.Spec.HeadConvergence     (lawReadoutConvergesGivenFeatures, lawHeadDescentScopeIsReadoutNotTrunk)
+import SixFour.Spec.Generalization      (lawNoDistributionShift, lawHeldErrorIsCoverageNotShift, lawModelGeneralizesUpToCoverage)
 import SixFour.Spec.VarianceFloorGuard  (lawEitherCollapseTripsGuard)
 import SixFour.Spec.JepaTarget          (lawTargetIsDataManufacturedNotEncoded, lawCollapseIsRejected, lawNoSelfProducedRolloutTarget)
 import SixFour.Spec.ByteCarrier         (lawReentryIsFloor)
@@ -103,7 +108,21 @@ teachingAntiCheat =
 teachingDeterminism :: Bool
 teachingDeterminism = lawReentryIsFloor 3000 && lawTerminalQuantizationIdempotent 3000
 
--- | The paradigm is sound at value-head weight @wv@: ALL seven teachings hold. The CONVERGENCE and
+-- | TEACHING 8 — HEAD CONVERGENCE: the ViT value head's LAST layer (the linear readout over fixed
+-- features) provably converges to the unique minimum, and the non-convex trunk is PROVEN outside that
+-- guarantee (so the scope boundary is itself a theorem). Delegates "SixFour.Spec.HeadConvergence".
+teachingHeadConvergence :: Bool
+teachingHeadConvergence = lawReadoutConvergesGivenFeatures && lawHeadDescentScopeIsReadoutNotTrunk
+
+-- | TEACHING 9 — GENERALIZATION: held-out follows train because the data-manufactured target is a
+-- SEED-INDEPENDENT pure function (no distribution shift); held error is COVERAGE + the irreducible
+-- masked-band residual, never a shift gap. Delegates "SixFour.Spec.Generalization".
+teachingGeneralization :: Bool
+teachingGeneralization =
+  lawNoDistributionShift 17 [1, 2, 3, 4, 5, 6, 7] && lawHeldErrorIsCoverageNotShift 3
+  && lawModelGeneralizesUpToCoverage 3
+
+-- | The paradigm is sound at value-head weight @wv@: ALL NINE teachings hold. The CONVERGENCE and
 -- IDENTIFIABILITY teachings carry the @w_value > 0@ requirement, so soundness is gated on @wv > 0@.
 paradigmSound :: Double -> Bool
 paradigmSound wv =
@@ -114,6 +133,8 @@ paradigmSound wv =
   && teachingNoCollapse
   && teachingAntiCheat
   && teachingDeterminism
+  && teachingHeadConvergence           -- the actual ViT head's readout provably converges
+  && teachingGeneralization            -- and held-out follows train (no distribution shift)
 
 -- | THE MASTER THEOREM: with the value head on (@w_value = 1@) the self-supervised paradigm is SOUND —
 -- every necessary teaching holds. Non-vacuous: 'lawParadigmNeedsValueHead' shows it is FALSE at

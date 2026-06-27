@@ -14,6 +14,8 @@ tests = testGroup "ParadigmSoundness (the master theorem: all seven teachings ho
   , testProperty "teaching 5 NO-COLLAPSE (variance guard)"        (once teachingNoCollapse)
   , testProperty "teaching 6 ANTI-CHEAT (data-manufactured target)" (once teachingAntiCheat)
   , testProperty "teaching 7 DETERMINISM (byte-exact Q16 re-entry)" (once teachingDeterminism)
+  , testProperty "teaching 8 HEAD-CONVERGENCE (readout proven, trunk scoped out)" (once teachingHeadConvergence)
+  , testProperty "teaching 9 GENERALIZATION (no distribution shift)" (once teachingGeneralization)
   , testProperty "MASTER: the paradigm is sound (w_value on)"     (once lawParadigmIsSound)
   , testProperty "the soundness side condition is load-bearing (false at w_value=0)" (once lawParadigmNeedsValueHead)
   ]
