@@ -123,6 +123,7 @@ library
         SixFour.Spec.HeldOutTarget
         SixFour.Spec.MatrixTarget
         SixFour.Spec.PonderBudget
+        SixFour.Spec.CellNudge
         SixFour.Spec.TransportGroup
         SixFour.Spec.TemporalData
         SixFour.Spec.DeltaSurrogate
@@ -414,6 +415,7 @@ test-suite spec-tests
         Properties.HeldOutTarget
         Properties.MatrixTarget
         Properties.PonderBudget
+        Properties.CellNudge
         Properties.TransportGroup
         Properties.TemporalData
         Properties.DeltaSurrogate

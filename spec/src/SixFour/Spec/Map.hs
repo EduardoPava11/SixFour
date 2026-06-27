@@ -509,6 +509,13 @@ byte-exact FLOOR (@lawZeroBudgetIsFloor@), paint-up invents EXACTLY that block (
 + @lawBudgetIsLocal@), clamped non-negative (no sub-floor). Touches only the LocalPonder refine mask,
 never the coarse/DC. HONEST: monotone-in-invention ≠ monotone-in-quality; byte-exact only at the floor.
 Additive),
+"SixFour.Spec.CellNudge" (★ the THEOREM-CORRECTED nudge (Option C): a per-cell NINE-channel paint over
+the 16³ COARSE captured grid (the scale the user actually paints), honest at the cell because the
+cell-aggregate is rank 3 (@lawNineHonestAtCell@ via NudgeRankTheorem) while the per-voxel basis stays the
+6-D generator. Supersedes PonderBudget's single-scalar/256³ guess. @lawNineChannelsAtCell@ (the 9
+ChannelProduct pairs), @lawLossIsCellAggregate@ (MatrixTarget must score the aggregate, not per-voxel),
+@lawGaugeExplicit@ (which 9 is a φ6 gauge toggle). Brush unchanged: one 16³ cell governs a 4096-leaf 256³
+subtree (@lawCellGovernsSuperResSubtree@ = twicenessSpan², two rungs 16→64→256). Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
