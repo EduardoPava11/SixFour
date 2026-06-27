@@ -649,6 +649,14 @@ the irreducible masked-band residual (visible-context conditional mean, the +88%
 shift gap. @lawTargetMapIsSeedIndependent@ (teeth: a seed-leaking target would break it), @lawNoDistributionShift@,
 @lawHeldErrorIsCoverageNotShift@ (on-support exact), @lawHeldReachableFromContext@ (delegates AboveFloorMargin),
 capstone @lawModelGeneralizesUpToCoverage@. Lifts the empirical test_detail_reachable to a theorem. Emits no golden. Additive),
+"SixFour.Spec.BlindComplementIsA7" (★ the ANT-LOAD-BEARING bridge: the cell objective's BLIND complement IS
+the mean-free @A_7@ detail lattice — NOT a rename of the rank argument but a REAL typed consumer. The
+checkerboard @cb(v)=(−1)^popcount(v)@ that @cellLoss@ cannot see (Convergence null space) has @Σ cb = 0@, so
+"SixFour.Spec.RootLatticeDetail" @mkMeanFreeChecked@ ADMITS it as a @MeanFree@/@A_7@ vector; a non-mean-free
+@e_0@ is REFUSED (teeth). So what the rank-3 cell loss misses = the @A_7@ subspace the value head recovers
+(LearnabilityTheorem), making the lattice load-bearing in identifiability/convergence. @lawCheckerboardIsMeanFree@,
+@lawBlindDirectionIsLatticeVector@, @lawNonLatticeDirectionRefused@, capstone @lawCellBlindComplementIsA7@.
+Emits no golden. Additive),
 "SixFour.Spec.ParadigmSoundness" (★★ THE MASTER THEOREM: the one browsable capstone conjoining ALL NINE
 necessary teachings of the self-supervised paradigm — SIGNAL (AnchorDiagnostic d6/ℤ[i]) ∧ EXPRESSIVITY
 (AboveFloorMargin/A7) ∧ IDENTIFIABILITY (LearnabilityTheorem) ∧ CONVERGENCE (Convergence, the GENERAL

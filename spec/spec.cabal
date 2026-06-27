@@ -139,6 +139,7 @@ library
         SixFour.Spec.Convergence
         SixFour.Spec.HeadConvergence
         SixFour.Spec.Generalization
+        SixFour.Spec.BlindComplementIsA7
         SixFour.Spec.ParadigmSoundness
         SixFour.Spec.NudgeContamination
         SixFour.Spec.DeltaGesture
@@ -446,6 +447,7 @@ test-suite spec-tests
         Properties.Convergence
         Properties.HeadConvergence
         Properties.Generalization
+        Properties.BlindComplementIsA7
         Properties.ParadigmSoundness
         Properties.NudgeContamination
         Properties.DeltaGesture
