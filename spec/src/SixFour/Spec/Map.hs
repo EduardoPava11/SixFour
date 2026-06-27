@@ -623,6 +623,14 @@ checkerboard in null space); value Hessian = 2I (strict, unique); composite stri
 term is weighted. @lawCellLossConvex@/@lawValueLossConvex@/@lawCompositeConvex@, @lawCellMinimizerNotUnique@,
 @lawValueMinimizerUnique@, capstone @lawCompositeUniqueMinIffValueWeighted@, @lawConvexNoSpuriousLocalMin@,
 @lawGradStepContractsToTarget@, @lawConvergenceGovernedByLatticeRank@. Emits no golden. Additive),
+"SixFour.Spec.ParadigmSoundness" (★★ THE MASTER THEOREM: the one browsable capstone conjoining ALL SEVEN
+necessary teachings of the self-supervised paradigm — SIGNAL (AnchorDiagnostic d6/ℤ[i]) ∧ EXPRESSIVITY
+(AboveFloorMargin/A7) ∧ IDENTIFIABILITY (LearnabilityTheorem) ∧ CONVERGENCE (Convergence, the GENERAL
+unique-min-reachable guarantee, not the golden fixture) ∧ NO-COLLAPSE (VarianceFloorGuard) ∧ ANTI-CHEAT
+(JepaTarget: data-manufactured target, collapse rejected, no self-produced rollout) ∧ DETERMINISM
+(ByteCarrier/Q16 byte-exact re-entry). @lawParadigmIsSound@ TRUE at w_value=1, @lawParadigmNeedsValueHead@
+proves it FALSE at w_value=0 (load-bearing side condition). Each conjunct DELEGATES to a green teaching, so
+a regression in ANY teaching breaks here. Emits no golden. Additive),
 "SixFour.Spec.NudgeContamination" (★ the collapse-safety QUARANTINE for a USER nudge — a taste
 steer enters ONLY the invented detail (the latent tail) and CANNOT move the self-supervised energy,
 which lives in the gated coarse/DC band. @applyTaste@ re-feeds the cube's ORIGINAL coarse (structural

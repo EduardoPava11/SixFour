@@ -136,6 +136,7 @@ library
         SixFour.Spec.DeltaSurrogate
         SixFour.Spec.LearnabilityTheorem
         SixFour.Spec.Convergence
+        SixFour.Spec.ParadigmSoundness
         SixFour.Spec.NudgeContamination
         SixFour.Spec.DeltaGesture
         SixFour.Spec.TriScaleBench
@@ -439,6 +440,7 @@ test-suite spec-tests
         Properties.DeltaSurrogate
         Properties.LearnabilityTheorem
         Properties.Convergence
+        Properties.ParadigmSoundness
         Properties.NudgeContamination
         Properties.DeltaGesture
         Properties.TriScaleBench
