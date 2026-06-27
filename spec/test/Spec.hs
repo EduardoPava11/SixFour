@@ -107,6 +107,9 @@ import qualified Properties.NudgeRankTheorem as NudgeRankTheorem
 import qualified Properties.PonderBudget as PonderBudget
 import qualified Properties.CellNudge as CellNudge
 import qualified Properties.PonderHaltDistribution as PonderHaltDistribution
+import qualified Properties.VarianceFloorGuard as VarianceFloorGuard
+import qualified Properties.MotionFloorCorpus as MotionFloorCorpus
+import qualified Properties.ScaleSpineRungs as ScaleSpineRungs
 import qualified Properties.TransportGroup as TransportGroup
 import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
@@ -280,6 +283,9 @@ main = defaultMain $ testGroup "sixfour-spec"
   , PonderBudget.tests
   , CellNudge.tests
   , PonderHaltDistribution.tests
+  , VarianceFloorGuard.tests
+  , MotionFloorCorpus.tests
+  , ScaleSpineRungs.tests
   , TransportGroup.tests
   , TemporalData.tests
   , DeltaSurrogate.tests

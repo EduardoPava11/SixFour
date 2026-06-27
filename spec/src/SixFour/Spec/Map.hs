@@ -522,6 +522,18 @@ over refinement steps (Σ p_halt = 1, @lawHaltIsProperDistribution@), the EXPECT
 is KL-regularized toward (@lawKLZeroAtSelf@). NUDGE TIE: lowering the halt probabilities (more painted
 CellNudge budget) raises the expected steps = more refinement (@lawLowerHaltRefinesMore@), so the paint and
 the halting are one mechanism. Additive),
+"SixFour.Spec.VarianceFloorGuard" (★ the collapse guard: a VICReg per-FACTOR std hinge on the colour q
+and space k comparison factors. @lawEitherCollapseTripsGuard@: a flat colour OR a flat space factor trips
+the combined guard, full variance in both clears it (neither factor can collapse to a point). Tested at
+the std boundary @lawHingeAtBoundary@. Additive),
+"SixFour.Spec.MotionFloorCorpus" (★ the TEMPORAL collapse guard as a law: the corpus must carry a real
+inter-frame MOTION floor (@lawCorpusHasMotionFloor@: persistence @t+1:=t@ loses on motion) AND off-floor
+TEXTURE (@lawCorpusHasOffFloorTexture@), else the rungs are vacuous; @lawStaticCorpusStarvesGradient@ is
+the refutation it guards (a static loop zeroes the persistence loss). Additive),
+"SixFour.Spec.ScaleSpineRungs" (★ the binding keystone: the model has exactly TWO held-out rungs = the
+two HeldOutTarget axes, SCALE (super-res 256³, Invented) + TIME (t+1, Held), both scoring the
+cell-aggregate matrix (@lawRungTargetIsCellAggregate@) via the same 2-level twiceness operator
+(@lawBothRungsSelfSimilar@). @lawTwoRungsAreTheTwoHeldAxes@, @lawScaleInventedTimeHeld@. Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
