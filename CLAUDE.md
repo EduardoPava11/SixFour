@@ -67,9 +67,10 @@ take on a dependency.
 > HAND-WRITTEN in `SixFour/Native/MaskedBandForward.swift` (golden-gated, no Core AI).
 > The frozen grayscale-L net this amendment served was the MLX look-net abandoned
 > 2026-06-17 (its global-palette path is V2-deferred, `Feature.globalPaletteV2 = false`).
-> Core AI is RETIRED from the spine; the seam (`SixFour/CoreAI/`, `trainer/coreai_export/`)
-> is kept ORPHANED as an audit record only. Resurrect ONLY if a genuinely LARGE
-> on-device generative-L head is roadmapped with a real trainer + weights. The Tier-2
+> Core AI is RETIRED from the spine; the orphaned seam (`SixFour/CoreAI/`,
+> `trainer/coreai_export/`) was DELETED 2026-06-26 in the L-anchor pivot cleanup (it was
+> audit-only and unreferenced; git history is the record). Resurrect from scratch ONLY if a
+> genuinely LARGE on-device generative-L head is roadmapped with a real trainer + weights. The Tier-2
 > rule stands unchanged: on-device NN inference is a hand-written forward pass, never a
 > CoreML black box, never an opaque ANE runtime. The amendment below is the historical
 > record of why Core AI was considered.
