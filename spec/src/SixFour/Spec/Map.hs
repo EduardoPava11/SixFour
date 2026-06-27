@@ -453,6 +453,14 @@ the chroma ring while L is at floor, so an L-only target (@palette_target@ a=b=0
 it = the structural reason the masked-band head can sit at the zero floor. Contrast laws pin the other
 regimes (@lawLumaRampSignalIsInL@ where L-anchoring is right, @lawFlatSceneFloorsAllChannels@ where the
 data engine is the culprit). Reuses frozen @liftOct@; emits no golden. Additive),
+"SixFour.Spec.DualCube" (★ THE PIVOT off L-anchoring: the colour cube @(L,a,b)@ and space cube
+@(x,y,t)@ as TWO copies of one @ℤ ⊕ ℤ[i]@ module (real BALANCE axis + Gaussian SEARCH plane),
+EXCHANGED by the φ6 involution @phi6@ (built on @XYTLabDuality@ φ + @GaussianChroma@ ℤ[i]). KEYSTONE
+@lawCubesExchangedByPhi6@: @colorCube (phi6 p) == spaceCube p@; @lawPhi6IsModuleAutomorphism@ makes φ6
+a ℤ⁶ symmetry ⇒ @lawNoPrivilegedCarrier@: L (colour balance) and t (space balance) are φ6-images, so
+anchoring on L is ARBITRARY not canonical. Replaces the asymmetric @{L,t}@-carrier/@{a,b,x,y}@-search
+story (CarrierL/RelationalMemory) with a SYMMETRIC dual-cube carrier. @lawBalanceRealSearchGaussian@ =
+the two lenses (ℓ¹ lattice on the real axis, ℤ[i] norm on the Gaussian plane). Additive),
 "SixFour.Spec.RefinementSystem" (★ THE CAPSTONE of the ANT generalization — the spine triad
 @CommutativeRing → RModule → ReversibleLift@ that makes the model's structures instances of one
 base-ring abstraction. Current model = the @R=ℤ@ (Q16), rank-3 (OKLab), @b=8@ (dyadic octant) corner;
