@@ -1,0 +1,69 @@
+{
+  "_doc": "Learnability theorem golden (SixFour.Codegen.LearnabilityTheorem): the byte-exact",
+  "_doc2": "port of Spec.LearnabilityTheorem.lawModelWillLearn. One section per conjunct.",
+  "signal": {
+    "_doc": "d6/l1 lattice norm on L (discrete geometry) + Z[i] Gaussian norm on chroma (algebraic number theory). channelEnergy==0 IFF detail at the root-lattice floor.",
+    "scenes": [
+    {"kind":"Flat","lVoxels":[50,50,50,50,50,50,50,50],"aVoxels":[5,5,5,5,5,5,5,5],"bVoxels":[5,5,5,5,5,5,5,5],"lEnergy":0,"chromaEnergy":0},
+    {"kind":"LumaRamp","lVoxels":[0,16,32,48,64,80,96,112],"aVoxels":[10,10,10,10,10,10,10,10],"bVoxels":[10,10,10,10,10,10,10,10],"lEnergy":160,"chromaEnergy":0},
+    {"kind":"IsoLuminantChroma","lVoxels":[50,50,50,50,50,50,50,50],"aVoxels":[0,30,0,30,0,30,0,30],"bVoxels":[20,0,20,0,20,0,20,0],"lEnergy":0,"chromaEnergy":2600},
+    {"kind":"HighFreq","lVoxels":[10,40,12,38,8,44,6,46],"aVoxels":[5,25,7,23,9,21,3,27],"bVoxels":[15,2,17,4,13,6,19,1],"lEnergy":75,"chromaEnergy":1247}
+    ]
+  },
+  "expressivity": {
+    "_doc": "The Q16 commit margin + the A7 mean-free residual witness.",
+    "marginCoeffQ16": 1,
+    "oneLsbLatent": 1.52587890625e-5,
+    "survivesOneLsb": true,
+    "survivesHalfLsb": false,
+    "commitOneLsb": 1,
+    "commitHalfLsb": 0,
+    "a7Witness": {"b":8,"coords":[1,1,1,1,1,1,1],"result":[1,0,0,0,0,0,0,-1]}
+  },
+  "identifiability": {
+    "_doc": "The HEART: cellLoss on the 2nd cross-moment A=C.S^T identifies rank-3 (9 DOF); the value head identifies the 15-DOF complement IFF w_value>0.",
+    "rankS": 3,
+    "identifiedDof": 9,
+    "blindDof": 15,
+    "totalColourDof": 24,
+    "cellAggregateIdentityWitness": {
+      "_doc": "3 phi6-diagonal voxels => A = I, det = 1.",
+      "cell": [[0,1,0,1,0,0],[0,0,1,0,1,0],[1,0,0,0,0,1]],
+      "aggregate": [[1,0,0],[0,1,0],[0,0,1]],
+      "det": 1
+    },
+    "offDiagonalMispairCell": [[0,1,0,0,1,0],[0,0,1,1,0,0],[1,0,0,0,0,1]],
+    "offDiagonalMispairLoss": 4,
+    "valueHead": {
+      "_doc": "checkerboard cb is S-orthogonal+mean-free => cellLoss==0 (blind) but valueLoss=Sum cb^2>0 (seen).",
+      "checkerboardParity": [1,-1,-1,1,-1,1,1,-1],
+      "tgtCell": [[0,2,0,0,0,0],[0,2,0,1,0,0],[0,2,0,0,1,0],[0,2,0,1,1,0],[0,2,0,0,0,1],[0,2,0,1,0,1],[0,2,0,0,1,1],[0,2,0,1,1,1]],
+      "predCellComplement": [[0,3,0,0,0,0],[0,1,0,1,0,0],[0,1,0,0,1,0],[0,3,0,1,1,0],[0,1,0,0,0,1],[0,3,0,1,0,1],[0,3,0,0,1,1],[0,1,0,1,1,1]],
+      "cellLossComplement": 0,
+      "complementValueLoss": 8,
+      "predCellSubspace": [[0,2,0,0,0,0],[0,3,0,1,0,0],[0,2,0,0,1,0],[0,3,0,1,1,0],[0,2,0,0,0,1],[0,3,0,1,0,1],[0,2,0,0,1,1],[0,3,0,1,1,1]],
+      "cellLossSubspace": 24,
+      "tgtCellAggregateDet": 0
+    }
+  },
+  "descent": {
+    "_doc": "trainBandJoint drives the loss to the golden committed band, byte-exact.",
+    "trainerSteps": 2000,
+    "goldenFloorBand": 0,
+    "goldenTrainedBand": 3000
+  },
+  "noCollapse": {
+    "_doc": "VICReg combined guard: a flat factor trips it (>0.5); two varied factors pass (<1e-9). Exact factor vectors emitted so the float compare is deterministic.",
+    "variedFactor": [0.0,10.0,0.0,10.0,0.0,10.0,0.0,10.0],
+    "flatFactor": [5.0,5.0,5.0,5.0,5.0,5.0,5.0,5.0],
+    "flatVariedTripsGuard": true,
+    "variedVariedPasses": true
+  },
+  "sideCondition": {
+    "_doc": "Full-palette learnability holds IFF w_value>0 (current trainer default w_value=0 leaves the 15-DOF complement unconstrained).",
+    "wValueRequired": true,
+    "willLearnAtOne": true,
+    "willLearnAtZero": false,
+    "lawModelWillLearn": true
+  }
+}

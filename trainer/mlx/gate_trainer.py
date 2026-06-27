@@ -31,6 +31,7 @@ MODULES = [
     ("large_head.py", True),
     # v3 spec-emitted goldens (the spec is the authority for the trainer)
     ("jepa_head_golden.py", True),
+    ("test_learnability.py", True),  # the LEARNABILITY THEOREM ported byte-exact (Spec.LearnabilityTheorem)
     ("temporal_data.py", True),
     ("test_motion_floor.py", True),   # TimeRung prerequisite: corpus has inter-frame motion (MotionFloorCorpus)
     ("temporal_rung.py", True),        # TimeRung: a learned model beats PERSISTENCE on held-out (learns motion)

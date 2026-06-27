@@ -612,8 +612,9 @@ NO-COLLAPSE (@lawNoCollapseKeepsCrossMomentFullRank@→VarianceFloorGuard). NET-
 @lawValueHeadIdentifiesComplement@: @cellLoss@ is rank-DEFICIENT, exactly ANCILLARY on the 15-DOF
 complement of @span(S)@ — the checkerboard-parity witness @cb=(-1)^(x+y+t)@ gives @cellLoss=0@ yet
 @valueLoss>0@, so the full palette is identified IFF @w_value>0@. Capstone TRUE at w_value=1, FALSE at
-w_value=0 (the load-bearing side condition + the concrete improvement: turn the value head on). Emits no
-golden. Additive),
+w_value=0 (the load-bearing side condition + the concrete improvement: turn the value head on). Ported to
+the trainer byte-exact via @Codegen.LearnabilityTheorem@→@trainer/generated/learnability_golden.json@ +
+@trainer/mlx/test_learnability.py@ (one section per conjunct). Additive),
 "SixFour.Spec.NudgeContamination" (★ the collapse-safety QUARANTINE for a USER nudge — a taste
 steer enters ONLY the invented detail (the latent tail) and CANNOT move the self-supervised energy,
 which lives in the gated coarse/DC band. @applyTaste@ re-feeds the cube's ORIGINAL coarse (structural
