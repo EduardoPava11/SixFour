@@ -119,6 +119,7 @@ import qualified Properties.TemporalData as TemporalData
 import qualified Properties.DeltaSurrogate as DeltaSurrogate
 import qualified Properties.LearnabilityTheorem as LearnabilityTheorem
 import qualified Properties.Convergence as Convergence
+import qualified Properties.HeadConvergence as HeadConvergence
 import qualified Properties.ParadigmSoundness as ParadigmSoundness
 import qualified Properties.NudgeContamination as NudgeContamination
 import qualified Properties.DeltaGesture as DeltaGesture
@@ -302,6 +303,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , DeltaSurrogate.tests
   , LearnabilityTheorem.tests
   , Convergence.tests
+  , HeadConvergence.tests
   , ParadigmSoundness.tests
   , NudgeContamination.tests
   , DeltaGesture.tests

@@ -634,6 +634,14 @@ checkerboard in null space); value Hessian = 2I (strict, unique); composite stri
 term is weighted. @lawCellLossConvex@/@lawValueLossConvex@/@lawCompositeConvex@, @lawCellMinimizerNotUnique@,
 @lawValueMinimizerUnique@, capstone @lawCompositeUniqueMinIffValueWeighted@, @lawConvexNoSpuriousLocalMin@,
 @lawGradStepContractsToTarget@, @lawConvergenceGovernedByLatticeRank@. Emits no golden. Additive),
+"SixFour.Spec.HeadConvergence" (★ the ViT value-head descent teaching, HONESTLY DECOMPOSED: head =
+@readout ∘ trunk@; the READOUT (last linear layer over fixed features) is convex in its weights
+(@lawReadoutLossConvexInWeights@, Convergence output-convexity pushed through the affine @W↦W·φ@) and a
+gradient step contracts to the unique min (@lawReadoutGradStepDecreases@, unique iff the feature is
+informative — the feature-rank analogue of the lattice-rank story), so the last layer PROVABLY converges
+(@lawReadoutConvergesGivenFeatures@). The TRUNK is PROVEN OUTSIDE that guarantee: a ReLU unit violates
+Jensen (@lawTrunkLossCanBeNonConvex@), so end-to-end fine-tuning stays DEMONSTRATED (P4), not proven —
+the scope boundary is itself a theorem (@lawHeadDescentScopeIsReadoutNotTrunk@). Emits no golden. Additive),
 "SixFour.Spec.ParadigmSoundness" (★★ THE MASTER THEOREM: the one browsable capstone conjoining ALL SEVEN
 necessary teachings of the self-supervised paradigm — SIGNAL (AnchorDiagnostic d6/ℤ[i]) ∧ EXPRESSIVITY
 (AboveFloorMargin/A7) ∧ IDENTIFIABILITY (LearnabilityTheorem) ∧ CONVERGENCE (Convergence, the GENERAL
