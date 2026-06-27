@@ -673,6 +673,15 @@ Emits no golden. Additive),
 to inline into @ParadigmSoundness@. HONEST scope: claims only @cb ∈ S^⊥∩A_7@ (not that all 15 blind DOF are
 lattice). Teeth reuse @lawNonLatticeDirectionRefused@ (a non-mean-free @e_0@ cannot masquerade). Capstone
 @lawIdentifiabilityComplementIsA7@. Emits no golden. Additive),
+"SixFour.Spec.CoverageMonotone" (★ the PROVABLE part of the generalization-coverage story, separated from the
+empirical threshold: "SixFour.Spec.Generalization" names coverage only as a DATA CONDITION; this proves coverage
+is a MONOTONE set function over its @generator@/@targetMap@ — if run A's seen inputs ⊆ run B's, then B's
+held-error set ⊆ A's (more data weakly REDUCES held error). Plain set-monotonicity, NO numeric multi-day
+threshold (that stays empirical). @lawCoverageMonotone@ (the antitone-in-error lemma); teeth
+@lawForgetfulLearnerBreaksMonotone@ (a forgetful learner FAILS it ⇒ non-vacuous), @lawDisjointInputAlwaysInError@
+(a constant-detail tuple the generator can never emit stays in error for every run ⇒ no conjuring),
+@lawOnSupportZeroHeldError@ (on-support exactness inherited); capstone @lawCoverageIsMonotoneSetFunction@.
+Emits no golden. Additive),
 "SixFour.Spec.BlindComplementGeometry" (★ the PRECISE geometry behind BlindComplementIsA7, the honest
 audit refinement: the cell-blind complement @S^⊥@ (5-dim/channel, 15 across OKLab) and the lattice @A_7@
 (7/channel, 21) are DISTINCT — neither contains the other — so "the 15-DOF blind complement IS @A_7@" is

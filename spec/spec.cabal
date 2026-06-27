@@ -141,6 +141,7 @@ library
         SixFour.Spec.Generalization
         SixFour.Spec.BlindComplementIsA7
         SixFour.Spec.IdentifiabilityIsA7Bridge
+        SixFour.Spec.CoverageMonotone
         SixFour.Spec.BlindComplementGeometry
         SixFour.Spec.LatticeRankComputed
         SixFour.Spec.ChromaUnitGauge
@@ -456,6 +457,7 @@ test-suite spec-tests
         Properties.Generalization
         Properties.BlindComplementIsA7
         Properties.IdentifiabilityIsA7Bridge
+        Properties.CoverageMonotone
         Properties.BlindComplementGeometry
         Properties.LatticeRankComputed
         Properties.ChromaUnitGauge
