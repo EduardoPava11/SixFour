@@ -69,9 +69,16 @@ def value_content_heads(pixels_q16, k: int, steps: int, lr: float, seed: int):
     return palette_q16, [int(i) for i in index]
 
 
-def forward(mi: ModelInput, k: int = 16, steps: int = 0, lr: float = 0.5, seed: int = 0):
+def _nudge_magnitude(nudge):
+    """Total paint magnitude of a CellBudget (0 at the neutral nudge). The signal forward READS."""
+    return sum(abs(v) for row in nudge for v in row)
+
+
+def forward(mi: ModelInput, k: int = 16, steps: int = 0, lr: float = 0.5, seed: int = 0, theta=None):
     """ModelInput -> ModelOutput. The learned heads ride ABOVE build_floor; steps=0 is the untrained pass.
-    Returns a ModelOutput dict {"palettes": [...], "cube": [...]} (the Spec.ModelIO contract)."""
+    READS mi_nudge / mi_gauge: when a conditioning `theta` is supplied AND the nudge is painted, the
+    invented detail is added to the VALUE (palette); a NEUTRAL nudge (or theta=None) yields EXACTLY the
+    floor-based output (lawNeutralNudgeIsAllFloor). Returns a ModelOutput dict (the Spec.ModelIO contract)."""
     floor = build_floor(mi)
     out_palettes, out_cube = [], []
     for f, (fpal, fplane) in enumerate(zip(floor["palettes"], floor["cube"])):
@@ -80,7 +87,33 @@ def forward(mi: ModelInput, k: int = 16, steps: int = 0, lr: float = 0.5, seed: 
         palette_q16, index = value_content_heads(pixels, max(1, kk), steps, lr, seed + f)
         out_palettes.append([tuple(c) for c in palette_q16])
         out_cube.append(index)
-    return {"palettes": out_palettes, "cube": out_cube}
+    out = {"palettes": out_palettes, "cube": out_cube}
+
+    # READ mi_nudge: condition the invented detail on the paint. Neutral nudge or no theta => no change.
+    if theta is not None and _nudge_magnitude(mi.mi_nudge) > 0:
+        out = _apply_nudge_conditioning(out, mi.mi_nudge, mi.mi_gauge, theta)
+    return out
+
+
+def _apply_nudge_conditioning(out, nudge, gauge, theta):
+    """Add the nudge-conditioned residual (full_matrix_train.condition_cell) to the VALUE palette of the
+    painted region. The first non-neutral cell's 9-vec drives the first frame's leading 2x2x2 cell; a
+    neutral nudge never reaches here (caller-gated), so the floor is preserved when unpainted."""
+    from full_matrix_train import condition_cell
+    from full_matrix_loss import cell_from_output
+    side_out = int(round(len(out["cube"][0]) ** 0.5))
+    budget = next((row for row in nudge if any(v != 0 for v in row)), [0] * 9)
+    floor_cell = cell_from_output(out, 0, side_out, 0, 0)
+    inv = condition_cell(floor_cell, budget, theta, gauge=gauge)
+    # write the conditioned colours back as new palette entries the region's pixels point at.
+    new = {"palettes": [list(p) for p in out["palettes"]], "cube": [list(c) for c in out["cube"]]}
+    for vi, (L, a, b, x, y, t) in enumerate(inv):
+        f = t
+        px = (y) * side_out + (x)
+        pal = new["palettes"][f]
+        pal.append((L, a, b))                    # new VALUE colour
+        new["cube"][f][px] = len(pal) - 1        # the region's pixel points at the invented colour
+    return new
 
 
 def _smoke():
@@ -143,7 +176,19 @@ def _smoke():
     assert d_paint[0] < d0[0], "more paint must lower the immediate-halt probability (refine deeper)"
     print("  (4) ponder halt OK: proper distribution; paint lowers immediate-halt (refines deeper)")
 
-    print("full_matrix_model: STRUCTURAL forward wired to Spec.ModelIO (UNTRAINED, ready to train).")
+    # (5) forward READS mi_nudge: a NEUTRAL nudge (or no theta) yields exactly the floor-based output; a
+    #     PAINTED nudge with a conditioning theta changes the output (the input half is no longer inert).
+    from cell_budget import paint_cell_pair
+    base_out = forward(mi, k=4, steps=0, theta=None)
+    theta = [0, 0, 0, 600, 0, 0, 0, 0, 0]                       # nonzero on the (a,x) channel
+    neutral_cond = forward(mi, k=4, steps=0, theta=theta)       # neutral nudge -> still the floor output
+    assert neutral_cond == base_out, "a neutral nudge must yield exactly the floor output (theta irrelevant)"
+    mi_painted = ModelInput(mi_capture=cap, mi_nudge=paint_cell_pair(mi.mi_nudge, 0, 3, 5), mi_gauge=False)
+    painted_cond = forward(mi_painted, k=4, steps=0, theta=theta)
+    assert painted_cond != base_out, "a PAINTED nudge with theta must change the output (mi_nudge is read)"
+    print("  (5) forward READS mi_nudge: neutral=floor, painted+theta conditions the output (input half live)")
+
+    print("full_matrix_model: STRUCTURAL forward wired to Spec.ModelIO; mi_nudge READ (UNTRAINED, ready to train).")
 
 
 if __name__ == "__main__":

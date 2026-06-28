@@ -48,11 +48,16 @@ def render_frame(out: ModelOutput, f: int):
 def capture_to_upscale_input(palettes_q16, indices, side: int) -> UpscaleInputDict:
     """Assemble an UpscaleInput from a per-frame capture (e.g. synth_capture.SyntheticCapture).
 
-    This is the SINGLE-CUBE (degenerate) assembly: cube A = cube B = the per-frame indices, paletteMap =
-    identity, global = the per-frame palette, no anchors, empty exit, nothing killed, lambda = 0 (so the
-    quantizer is plain nearestQ16). It produces a VALID, deterministic floor. The richer TWO-CUBE cascade
-    assembly (global-collapse cube A + paletteMap + carried ExitState + anchors, lambda = 1) is a
-    follow-up that reuses the same upscale256 port unchanged.
+    SINGLE-CUBE PER-FRAME assembly: cube A = cube B = the per-frame indices, paletteMap = identity, global
+    = the per-frame palette, no anchors, empty exit, nothing killed, lambda = 0 (plain nearestQ16). It
+    produces a VALID, deterministic floor.
+
+    This is the MVP1-CORRECT floor, NOT a stopgap. The richer TWO-CUBE cascade (global-collapse cube A +
+    cross-frame paletteMap) is the GLOBAL-palette path, which Spec.GlobalCollapseQ16 marks V2-DEFERRED
+    (Feature.globalPaletteV2 = false, HARD MUST #1 = per-frame palettes only, "do not add new callers").
+    So the global cascade is intentionally NOT built here -- building it would contradict the spec. The
+    lambda=1 drift-prior / anchor parts of upscale256 ARE exercised + byte-exact-gated by the Phase-1
+    golden (test_upscale256.py), just not driven from this synthetic per-frame capture.
 
     palettes_q16 : (T, K, 3) per-frame Q16 OKLab palettes.
     indices      : (T, side*side) per-frame palette indices.
