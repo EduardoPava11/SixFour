@@ -130,6 +130,7 @@ library
         SixFour.Spec.MotionFloorCorpus
         SixFour.Spec.ScaleSpineRungs
         SixFour.Spec.ModelIO
+        SixFour.Spec.Model
         SixFour.Spec.AboveFloorMargin
         SixFour.Spec.ModelForward
         SixFour.Spec.TransportGroup
@@ -448,6 +449,7 @@ test-suite spec-tests
         Properties.MotionFloorCorpus
         Properties.ScaleSpineRungs
         Properties.ModelIO
+        Properties.Model
         Properties.AboveFloorMargin
         Properties.ModelForward
         Properties.TransportGroup

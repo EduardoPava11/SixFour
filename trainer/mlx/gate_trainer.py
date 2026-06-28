@@ -47,6 +47,15 @@ MODULES = [
     # STEP 2 chroma flow (skips cleanly if MLX/synth-capture deps are absent; locks the fix otherwise)
     ("test_chroma_flow.py", True),
     ("test_anti_overfit.py", True),   # STEP 4: lr NaN-trap fix + weight decay + non-declining margin
+    # FULL-MATRIX boundary (Spec.ModelIO alignment): the floor, the paint surface, the held corpus,
+    # the floor-aligned loss, and the acceptance harness. No training; byte-exact / law twins.
+    ("test_upscale256.py", True),     # buildFloor = upscale256, byte-exact vs the Haskell golden
+    ("cell_budget.py", True),         # CellBudget = Spec.CellNudge laws
+    ("model_io.py", True),            # ModelInput->buildFloor, nudge-invariant
+    ("heldout_corpus.py", True),      # held-WHOLE (scale+time) corpus + motion floor
+    ("full_matrix_loss.py", True),    # cell loss vs the REAL floor + float<->byte cross-check
+    ("above_floor_margin.py", True),  # the acceptance number harness (survivesCommit + mean-dominance guard)
+    ("full_matrix_model.py", True),   # ModelInput->ModelOutput forward wired to Spec.ModelIO (untrained smoke)
     # MLX autodiff cross-check (optional)
     ("autograd_check.py", False),
 ]

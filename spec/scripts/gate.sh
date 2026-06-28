@@ -67,6 +67,32 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/jepa_data.py" ]; th
   run "JEPA data engine (Python lift == spec corpus golden)" "python3 '$root/trainer/jepa_data.py'"
 fi
 
+# The deterministic FLOOR (Spec.ModelIO.buildFloor = Spec.Upscale256.upscale256): the Python trainer
+# port must reproduce the Haskell oracle byte-exact, so the learned-detail margin (Phase 5) is measured
+# against the REAL floor, not a zero baseline. Regenerate the golden from spec, then reproduce it.
+if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/mlx/test_upscale256.py" ]; then
+  run "upscale256 floor (Python port == Haskell buildFloor golden)" "
+    cabal run -v0 spec-fixtures >/dev/null 2>&1 &&
+    python3 '$root/trainer/mlx/test_upscale256.py'
+  "
+fi
+
+# The FULL-MATRIX boundary (Spec.ModelIO / Spec.CellNudge / Spec.AboveFloorMargin): the trainer-side
+# CellBudget paint twins the CellNudge laws; build_floor = upscale256(miCapture) is nudge-invariant
+# (lawNeutralNudgeIsAllFloor); the held-WHOLE corpus has the held property + motion floor; the loss is
+# measured against the REAL floor (float<->byte cross-check); and the acceptance harness reports the
+# survivesCommit margin with the mean-dominance guard. No training; byte-exact / law twins only.
+if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/mlx/model_io.py" ]; then
+  run "full-matrix boundary (CellBudget + ModelInput->floor + held corpus + floor loss + margin harness)" "
+    ( cd '$root/trainer/mlx' &&
+      python3 cell_budget.py &&
+      python3 model_io.py &&
+      python3 heldout_corpus.py &&
+      python3 full_matrix_loss.py &&
+      python3 above_floor_margin.py )
+  "
+fi
+
 # The 64³-scale realizer: synthetic bursts encode byte-exact AND the entropy vectors are
 # extractable + responsive at the real 262144-voxel capture shape (the Spec.SyntheticCorpus
 # guarantees, at scale). Realness irrelevant; this is a pipeline/spec-guarantee check.

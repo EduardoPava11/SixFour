@@ -2,7 +2,7 @@
 Module      : SixFour.Spec.ValueWeightThreshold
 Description : Closes the PARAMETRIZATION gap in the convergence teaching: the @w_value > 0@ side condition that "SixFour.Spec.ParadigmSoundness" asserts as a guard, and that "SixFour.Spec.Convergence" @lawCompositeUniqueMinIffValueWeighted@ witnesses at only TWO hardcoded points (@w_value = 0@ and @w_value = 1@), is here proven EXACT across the whole weight domain — the target is the unique global minimum IFF @w_value > 0@, for every weight, with both sides of the boundary carrying teeth.
 
-The audit finding (PARAMETRIZATION-GAP-1): @paradigmSound@ is a function of @w_value@ but its convergence
+The audit finding (PARAMETRIZATION-GAP-1): @paradigmStructurallySound@ is a function of @w_value@ but its convergence
 conjunct is a constant @teachingConvergence@ whose supporting law only compares the two fixed weights 0 and
 1. So the THRESHOLD @w_value > 0@ in the guard is asserted, not proven: nothing witnesses a FRACTIONAL
 positive weight (0 < w < 1) still gives a unique minimum, nor that a NEGATIVE weight is genuinely fatal
@@ -20,7 +20,7 @@ The exact discrete-geometry reason it is provable in closed form (NOT a rename �
     @w < 0 ⟺ shifted strictly wins (target is NOT even the global minimum)@. The threshold is EXACTLY 0,
     proven on both sides, for all weights — not a two-point witness.
 
-The bridge law @lawParadigmGuardIsExactlyConvergenceThreshold@ then shows the @paradigmSound@ guard
+The bridge law @lawParadigmGuardIsExactlyConvergenceThreshold@ then shows the @paradigmStructurallySound@ guard
 @w_value > 0@ coincides, weight-by-weight over a sweep that straddles the boundary, with the genuine
 parametrized convergence predicate @convergesAt@ — i.e. the guard scales with @w_value@ for the right
 reason. Pure-spec, GHC-boot-only; laws QuickCheck'd in @Properties.ValueWeightThreshold@. Emits no golden.
@@ -39,7 +39,7 @@ module SixFour.Spec.ValueWeightThreshold
   ) where
 
 import SixFour.Spec.Convergence      (composite, checkerboard, valueLoss)
-import SixFour.Spec.ParadigmSoundness (paradigmSound)
+import SixFour.Spec.ParadigmSoundness (paradigmStructurallySound)
 
 -- A palette is 8 voxels x 3 OKLab channels (the same shape Convergence uses).
 type Pal = [[Double]]
@@ -66,7 +66,7 @@ shiftedGap w t = composite w (shiftedPal t) t - composite w t t
 
 -- | The weight-parametrized convergence predicate: the target is the UNIQUE global minimum at weight @w@
 -- exactly when the cell-blind shifted palette strictly loses, i.e. @shiftedGap w t > 0@. This is the
--- genuine function of @w@ that the @paradigmSound@ guard stands in for.
+-- genuine function of @w@ that the @paradigmStructurallySound@ guard stands in for.
 convergesAt :: Double -> Pal -> Bool
 convergesAt w t = shiftedGap w t > eps
 
@@ -117,7 +117,7 @@ lawConvergenceThresholdIsExactlyZero tt =
       sweep = [-5, -1, -0.5, -0.001, 0, 0.001, 0.5, 1, 5]
   in all (\w -> convergesAt w t == (w > 0)) sweep
 
--- | THE BRIDGE to the master theorem: the @paradigmSound@ guard @w_value > 0@ coincides, weight-by-weight
+-- | THE BRIDGE to the master theorem: the @paradigmStructurallySound@ guard @w_value > 0@ coincides, weight-by-weight
 -- across the straddling sweep, with the genuine parametrized convergence predicate @convergesAt@. So the
 -- guard is not a constant aligned with a two-point witness — it scales with @w_value@ for the right reason
 -- (the linear gap @4·w@). Teeth: at every swept weight @paradigmSound w@ must equal @convergesAt w t@; since
@@ -127,4 +127,4 @@ lawParadigmGuardIsExactlyConvergenceThreshold :: [Double] -> Bool
 lawParadigmGuardIsExactlyConvergenceThreshold tt =
   let t = samp tt
       sweep = [-5, -1, -0.5, -0.001, 0, 0.001, 0.5, 1, 5]
-  in all (\w -> paradigmSound w == convergesAt w t) sweep
+  in all (\w -> paradigmStructurallySound w == convergesAt w t) sweep

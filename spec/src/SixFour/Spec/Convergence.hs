@@ -156,7 +156,7 @@ lawValueMinimizerUnique tt =
 -- | THE CONVERGENCE CAPSTONE — the composite has a UNIQUE global minimum at the target IFF @w_value > 0@:
 -- at @w_value = 0@ the checkerboard-shifted palette ties the target (non-unique, cannot converge), while
 -- at @w_value > 0@ it strictly loses (unique → GD converges to the target). Same switch as
--- "SixFour.Spec.LearnabilityTheorem" @lawModelWillLearn@. Teeth: both arms are checked, so dropping the
+-- "SixFour.Spec.LearnabilityTheorem" @lawJointObjectiveIdentifiesFullPalette@. Teeth: both arms are checked, so dropping the
 -- value weight is observably fatal to uniqueness.
 lawCompositeUniqueMinIffValueWeighted :: [Double] -> Bool
 lawCompositeUniqueMinIffValueWeighted tt =

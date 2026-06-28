@@ -43,6 +43,8 @@ module SixFour.Spec.AboveFloorMargin
   , lawFloorMarginIsFinite
   , lawAboveFloorMarginReachable
   , lawSurvivingDetailIsA7
+    -- * The empirical obligation (CONTRACT-ONLY)
+  , contractAboveFloorMarginMeasured
   ) where
 
 import SixFour.Spec.ByteCarrier          (mkLatent, reenterQ16, toByte)
@@ -121,3 +123,14 @@ lawSurvivingDetailIsA7 =
   in inA vec                                                              -- legal A_7 detail (mean-free)
      && vec == [1,0,0,0,0,0,0,-1]                                         -- the explicit mean-free witness
      && not (inA (1 : replicate 7 0))                                     -- teeth: e_0 (Σ=1) is not in A_7
+
+-- | CONTRACT-ONLY (unproven until trained) — the EMPIRICAL margin (W4.3). The laws above prove the floor
+-- is reachable IN PRINCIPLE (a 1-LSB invention survives the commit and moves the cube). They do NOT prove
+-- the TRAINED model actually emits coefficients above 'marginCoeffQ16' on real captures. That measurement
+-- is the discharge metric: the FRACTION of the model's emitted latent detail coefficients with
+-- @survivesCommit x == True@, reported by the trainer harness @trainer/mlx/above_floor_margin.py@ and
+-- guarded against the mean-dominated cell margin. This marker carries no truth value; it is the documented
+-- obligation, pinned in "SixFour.Spec.Model" @modelLawLedger@ as 'ContractOnly' so a green gate never reads
+-- as "the up-rung learns detail". See @SIXFOUR-MODEL.md@ and @trainer/TRAINER-BUILD-PLAN.md@ (Phase 5).
+contractAboveFloorMarginMeasured :: ()
+contractAboveFloorMarginMeasured = ()

@@ -1,14 +1,21 @@
 {- |
 Module      : SixFour.Spec.LearnabilityTheorem
-Description : THE LEARNABILITY THEOREM — a single capstone law 'lawModelWillLearn' proving, as a theorem over the project's discrete-geometry + algebraic-number-theory substrate, that θ_B + the value head WILL learn the data-manufactured target. The proof walks the STATISTICAL moment ladder (mean < variance/covariance < higher moments < the full distribution) and pivots on the cell aggregate @A = C·Sᵀ = Σ_v colour(v) ⊗ space(v)@ — literally the 2nd CROSS-MOMENT (cross-covariance) between colour and the data-fixed octant space lattice.
+Description : THE IDENTIFIABILITY THEOREM — a single capstone law 'lawJointObjectiveIdentifiesFullPalette' proving, as a theorem over the project's discrete-geometry + algebraic-number-theory substrate, that the joint objective (the rank-3 cell aggregate + the value head) IDENTIFIES the full data-manufactured target — i.e. the target is the UNIQUE minimiser the objective can see, conditional on the value-head weight @w_value > 0@. The proof walks the STATISTICAL moment ladder (mean < variance/covariance < higher moments < the full distribution) and pivots on the cell aggregate @A = C·Sᵀ = Σ_v colour(v) ⊗ space(v)@ — literally the 2nd CROSS-MOMENT (cross-covariance) between colour and the data-fixed octant space lattice.
 
-The capstone is the conjunction of five delegated, already-green conjuncts plus ONE net-new
+This module proves IDENTIFIABILITY (the objective can SEE the whole target), NOT empirical
+REACHABILITY-on-data (that gradient descent actually reaches it on real captures). The latter is
+'contractDescentOnRealDataUnproven' — CONTRACT-ONLY, unproven until trained: the new full-matrix
+trainer does not yet exist and the only run to date floored. The capstone was named @lawModelWillLearn@
+until the model-spec unification renamed it to what it actually proves, so a green gate never reads as
+"the model will learn".
+
+The capstone is the conjunction of four delegated, already-green conjuncts plus ONE net-new
 identifiability completion:
 
-  SIGNAL ∧ EXPRESSIVITY ∧ IDENTIFIABILITY ∧ DESCENT ∧ NO-COLLAPSE  ⇒  the model WILL learn,
+  SIGNAL ∧ EXPRESSIVITY ∧ IDENTIFIABILITY ∧ NO-COLLAPSE  ⇒  the objective identifies the full palette,
   conditional on the value-head weight @w_value > 0@.
 
-The five delegated conjuncts (each a green law of an existing module):
+The delegated conjuncts (each a green law of an existing module):
 
   * SIGNAL ('lawLearnableSignalExists') — there is detail energy above the root-lattice floor in at
     least one of the owner's two lenses (the @d6@\/@ℓ¹@ lattice norm on L = DISCRETE GEOMETRY, the
@@ -23,9 +30,6 @@ The five delegated conjuncts (each a green law of an existing module):
     exactly the rank-3 projection of the palette onto @span(S)@ (the 9 aggregate entries), the honest
     cell-aggregate not a per-voxel rank-1 sum. Delegates "SixFour.Spec.MatrixTarget" +
     "SixFour.Spec.NudgeRankTheorem".
-  * DESCENT ('lawDescentReachesGoldenByteExact') — @trainBandJoint@ drives the loss monotonically to a
-    tiny fraction of the floor loss and recovers the golden committed band @3000@ byte-exact. Delegates
-    "SixFour.Spec.MaskedBandTrainer".
   * NO-COLLAPSE ('lawNoCollapseKeepsCrossMomentFullRank') — the VICReg per-factor std hinge keeps both
     factors of @A@ above a variance floor, so @A@ stays rank-3 and the sufficient statistic stays
     informative. Delegates "SixFour.Spec.VarianceFloorGuard".
@@ -39,10 +43,10 @@ perturbing the palette's @a@-channel by @cb@ leaves the cross-moment @A@ — and
 EXACTLY unchanged (blind), while the palette genuinely differs. The value (palette) head, supervised by
 the OKLab regression @valueLoss@ with weight @w_value > 0@, is a sufficient statistic for that
 complement, so the PAIR @(cellLoss, w_value·valueLoss)@ jointly identifies the full palette. Hence
-full-palette learnability is CONDITIONAL on @w_value > 0@; the capstone is TRUE at @w_value = 1@ and
+full-palette IDENTIFIABILITY is CONDITIONAL on @w_value > 0@; the capstone is TRUE at @w_value = 1@ and
 FALSE at @w_value = 0@ (the disabled-head boundary), proving the side condition is load-bearing. The
-trainer ADOPTS the proven point as its default (@train_loop.py --w-value@ default @1.0@ = the proven
-@willLearn 1.0@), so the improvement the theorem implies is applied, not merely available.
+trainer ADOPTS the proven point as its default (@train_loop.py --w-value@ default @1.0@ = the identifiable
+@objectiveIdentifiesFullPalette 1.0@), so the improvement the theorem implies is applied, not merely available.
 
 Pure-spec, emits no golden (the goldens are the delegated modules' exported constants). Laws @once@- /
 QuickCheck'd in "Properties.LearnabilityTheorem".
@@ -57,16 +61,17 @@ module SixFour.Spec.LearnabilityTheorem
   , checkerboardParity
   , octantCorners
   , complementIdentifiedAt
-    -- * The six conjuncts of the theorem
+    -- * The conjuncts of the theorem
   , lawLearnableSignalExists
   , lawTargetExpressibleAboveFloor
   , lawCellLossIdentifiesRank3Subspace
   , lawValueHeadIdentifiesComplement
-  , lawDescentReachesGoldenByteExact
   , lawNoCollapseKeepsCrossMomentFullRank
-    -- * The capstone
-  , willLearn
-  , lawModelWillLearn
+    -- * The capstone (IDENTIFIABILITY, not empirical reachability)
+  , objectiveIdentifiesFullPalette
+  , lawJointObjectiveIdentifiesFullPalette
+    -- * The honest boundary
+  , contractDescentOnRealDataUnproven
   ) where
 
 import SixFour.Spec.DualCube            (P6(..))
@@ -80,7 +85,6 @@ import qualified SixFour.Spec.AboveFloorMargin  as Margin
 import qualified SixFour.Spec.RootLatticeDetail as Root
 import qualified SixFour.Spec.MatrixTarget      as MT
 import qualified SixFour.Spec.NudgeRankTheorem  as NR
-import qualified SixFour.Spec.MaskedBandTrainer as Trainer
 import qualified SixFour.Spec.VarianceFloorGuard as Guard
 
 -- ===========================================================================
@@ -216,19 +220,6 @@ lawValueHeadIdentifiesComplement =
   && complementIdentifiedAt 1.0                      -- (4a) w_value = 1 > 0  ⇒ complement identified
   && not (complementIdentifiedAt 0)                  -- (4b) w_value = 0      ⇒ complement UNidentified (default)
 
--- | DESCENT — on the data-manufactured golden fixture @trainBandJoint@ drives the masked-band loss
--- MONOTONICALLY to a tiny fraction of the floor loss and recovers the golden committed band @3000@
--- byte-exact (the MLX-trained θ_B and the device hand-written forward pass must both reproduce it). The
--- identified optimum is not just reachable but actually REACHED. Delegates "SixFour.Spec.MaskedBandTrainer".
-lawDescentReachesGoldenByteExact :: Bool
-lawDescentReachesGoldenByteExact =
-     Trainer.lawZeroGenomeIsFloor                   -- start at the floor band, off-floor target incurs loss
-  && Trainer.lawTrainingDrivesLossDown              -- loss → < 1e-3 of the floor loss
-  && Trainer.lawTrainedForwardIsGolden              -- the committed band is exactly the golden 3000
-  && Trainer.lawTrainingDescendsMonotonically       -- more steps never increase the loss
-  && Trainer.lawStableTrainerSurvivesBatchDivergence -- the mean-gradient trainer survives high-ṽ batches
-  && Trainer.goldenTrainedBand == 3000              -- the byte-exact endpoint pinned
-
 -- | NO-COLLAPSE — the VICReg per-factor std hinge penalizes a collapse of EITHER the colour factor or
 -- the space factor of @A@. Since the target is data-manufactured (no EMA, no @L_close@ orbit), the only
 -- collapse risk is the never-surfaced mid-latent going constant; the guard keeps each factor's 2nd
@@ -243,30 +234,43 @@ lawNoCollapseKeepsCrossMomentFullRank =
 -- The capstone
 -- ===========================================================================
 
--- | The full learnability conjunction PARAMETERIZED by the value-head weight @w_value@: SIGNAL ∧
--- EXPRESSIVITY ∧ rank-3 IDENTIFIABILITY ∧ (the complement is identified at this @w_value@) ∧ DESCENT ∧
+-- | The full IDENTIFIABILITY conjunction PARAMETERIZED by the value-head weight @w_value@: SIGNAL ∧
+-- EXPRESSIVITY ∧ rank-3 IDENTIFIABILITY ∧ (the complement is identified at this @w_value@) ∧
 -- NO-COLLAPSE. The complement conjunct is the ONLY one that depends on @w_value@ — it holds iff
--- @w_value > 0@ — so this is the precise place the side condition enters.
-willLearn :: Double -> Bool
-willLearn wValue =
+-- @w_value > 0@ — so this is the precise place the side condition enters. (The earlier @willLearn@ also
+-- conjoined a DESCENT leg that delegated to a single retired-trainer fixture; it was removed in the
+-- model-spec unification because reaching the optimum on real data is empirical, not a theorem — see
+-- 'contractDescentOnRealDataUnproven'.)
+objectiveIdentifiesFullPalette :: Double -> Bool
+objectiveIdentifiesFullPalette wValue =
      lawLearnableSignalExists
   && lawTargetExpressibleAboveFloor
   && lawCellLossIdentifiesRank3Subspace
   && complementIdentifiedAt wValue
-  && lawDescentReachesGoldenByteExact
   && lawNoCollapseKeepsCrossMomentFullRank
 
--- | THE CAPSTONE — the model WILL learn the data-manufactured target, as a theorem CONDITIONAL on the
--- value-head weight @w_value > 0@. There IS signal, it is EXPRESSIBLE above the Q16 floor, the joint
--- objective @(cellLoss + w_value·valueLoss)@ IDENTIFIES the full palette (rank-3 via @cellLoss@ + the
--- complement via the value head), monotone DESCENT REACHES the byte-exact optimum, and NO-COLLAPSE keeps
--- that optimum non-degenerate. The law is TRUE at @w_value = 1@ and FALSE at @w_value = 0@ — proving the
--- side condition is load-bearing, not decorative (at the @w_value = 0@ disabled-head boundary the
--- 15-DOF complement is unidentified, so "the model will learn" is FALSE for those DOF; the trainer
--- therefore defaults @w_value = 1.0@, the proven point, applying the improvement). Drop ANY conjunct
--- and a concrete witness breaks the promise (a Flat corpus, a ½-LSB target, the checkerboard-parity
--- palette, a high-ṽ fixed-η batch, or a constant mid-latent factor).
-lawModelWillLearn :: Bool
-lawModelWillLearn =
-     willLearn 1.0          -- with the value head on (w_value > 0): the full palette is learnable
-  && not (willLearn 0)      -- with the value head off (w_value = 0): the complement is UNidentified
+-- | THE CAPSTONE — the joint objective IDENTIFIES the full data-manufactured target, as a theorem
+-- CONDITIONAL on the value-head weight @w_value > 0@. There IS signal, it is EXPRESSIBLE above the Q16
+-- floor, the joint objective @(cellLoss + w_value·valueLoss)@ IDENTIFIES the full palette (rank-3 via
+-- @cellLoss@ + the complement via the value head), and NO-COLLAPSE keeps that optimum non-degenerate.
+-- The law is TRUE at @w_value = 1@ and FALSE at @w_value = 0@ — proving the side condition is
+-- load-bearing, not decorative (at the @w_value = 0@ disabled-head boundary the 15-DOF complement is
+-- unidentified; the trainer therefore defaults @w_value = 1.0@). This proves the optimum is UNIQUE and
+-- VISIBLE to the objective; it does NOT prove gradient descent reaches it on a real corpus — that is
+-- 'contractDescentOnRealDataUnproven'. Drop ANY conjunct and a concrete witness breaks the proof (a Flat
+-- corpus, a ½-LSB target, the checkerboard-parity palette, or a constant mid-latent factor).
+lawJointObjectiveIdentifiesFullPalette :: Bool
+lawJointObjectiveIdentifiesFullPalette =
+     objectiveIdentifiesFullPalette 1.0   -- with the value head on (w_value > 0): the full palette is identified
+  && not (objectiveIdentifiesFullPalette 0)  -- with the value head off (w_value = 0): the complement is UNidentified
+
+-- | CONTRACT-ONLY (unproven until trained). This module proves the target is IDENTIFIABLE — the
+-- objective's minimum is unique and equals the target. It does NOT prove that gradient descent actually
+-- REACHES that minimum on a real captured corpus. The earlier @lawDescentReachesGoldenByteExact@ conjunct
+-- delegated to ONE retired-trainer fixture (@MaskedBandTrainer.goldenTrainedBand == 3000@) and was
+-- contradicted by the only real run, which floored (held-out @L_band ≈ 5.4e-4@ vs the zero floor
+-- @≈ 3.5e-4@). The new full-matrix trainer does not yet exist. This marker carries no truth value; it is
+-- the documented obligation, here so a green gate never reads as "the model will learn". See
+-- @SIXFOUR-MODEL.md@ §contract-only and @docs/NEXT-STEPS.md@ (W4.3).
+contractDescentOnRealDataUnproven :: ()
+contractDescentOnRealDataUnproven = ()
