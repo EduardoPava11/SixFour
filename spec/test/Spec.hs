@@ -112,6 +112,7 @@ import qualified Properties.VarianceFloorGuard as VarianceFloorGuard
 import qualified Properties.MotionFloorCorpus as MotionFloorCorpus
 import qualified Properties.ScaleSpineRungs as ScaleSpineRungs
 import qualified Properties.ModelIO as ModelIO
+import qualified Properties.Model as Model
 import qualified Properties.AboveFloorMargin as AboveFloorMargin
 import qualified Properties.ModelForward as ModelForward
 import qualified Properties.TransportGroup as TransportGroup
@@ -308,6 +309,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , MotionFloorCorpus.tests
   , ScaleSpineRungs.tests
   , ModelIO.tests
+  , Model.tests
   , AboveFloorMargin.tests
   , ModelForward.tests
   , TransportGroup.tests

@@ -30,8 +30,8 @@ assignment). This module gives each delta its internal algebra and a SHARED hier
     of the next captured frame, and the constant\/identity orbit (predict the zero delta) STRICTLY
     misses any frame that moved. The time-axis collapse guard, per band.
   * 'lawDeltaBandsArePerBandDataProvenance' — strengthens "SixFour.Spec.JepaTarget"
-    @lawNoSelfProducedRolloutTarget@ from per-STEP to per-BAND: a coarse-conditioned
-    (teacher-forced) fine band is @RolledForwardSelf@ and makes the WHOLE hierarchy inadmissible.
+    @admissibleRolloutSource@ (the rollout-provenance design rule) from per-STEP to per-BAND: a
+    coarse-conditioned (teacher-forced) fine band is @RolledForwardSelf@ and makes the WHOLE hierarchy inadmissible.
     This closes the @L_close@ escape the coarse-to-fine reading would otherwise open.
 
 Additive: imports "SixFour.Spec.ConstructionEncoder" (@Construction@, @QColour@, @buildPixels@),
@@ -300,8 +300,8 @@ lawHierarchicalDeltaTargetIsDataManufactured d cur0 next0
          && (next == cur || any (/= 0) dl)          -- a moved frame ⇒ nonzero delta (zero-orbit misses)
 
 -- | THE per-BAND quantifier (the collapse-refutation fix). Strengthens
--- "SixFour.Spec.JepaTarget" @lawNoSelfProducedRolloutTarget@ from one provenance per rollout
--- STEP to one per BAND: the data-delta pyramid is admissible because EVERY band (coarse and all
+-- "SixFour.Spec.JepaTarget" @admissibleRolloutSource@ (the rollout-provenance design rule) from one
+-- provenance per rollout STEP to one per BAND: the data-delta pyramid is admissible because EVERY band (coarse and all
 -- detail) is 'NextFrameData'; a single coarse-conditioned (teacher-forced) band tagged
 -- 'RolledForwardSelf' makes the WHOLE hierarchy inadmissible. Teeth: a guard that only checked
 -- one provenance per step would pass the tainted hierarchy; the @all@ over bands does not.

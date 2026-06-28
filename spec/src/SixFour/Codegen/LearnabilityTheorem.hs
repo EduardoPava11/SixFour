@@ -1,8 +1,9 @@
 {- |
 Module      : SixFour.Codegen.LearnabilityTheorem
 Description : Emit @learnability_golden.json@ — the byte-exact PORT of the learnability theorem
-("SixFour.Spec.LearnabilityTheorem") to the trainer. The capstone @lawModelWillLearn@ is a Haskell
-proof; this emitter pins the concrete scalars and small integer vectors the proof turns on, so the
+("SixFour.Spec.LearnabilityTheorem") to the trainer. The capstone @lawJointObjectiveIdentifiesFullPalette@
+is a Haskell IDENTIFIABILITY proof (NOT an empirical-reachability claim — see the @descentFixture@ section's
+@_contractOnly@ note); this emitter pins the concrete scalars and small integer vectors the proof turns on, so the
 MLX trainer (@trainer/mlx/test_learnability.py@) reproduces them byte-exact and FAILS the trainer
 gate on any drift. The spec is the DESIGN AUTHORITY for the learnability claim, not just the data.
 
@@ -17,10 +18,12 @@ The golden walks the same statistical moment ladder as the theorem, one section 
   * IDENTIFIABILITY — the heart. @rank S = 3@, the @9@ identified \/ @15@ blind DOF split, the
     cell-aggregate identity witness, and THE value-head teeth: the @S@-orthogonal mean-free
     checkerboard-parity perturbation gives @cellLoss = 0@ (blind) while @valueLoss = Σcb² = 8 > 0@.
-  * DESCENT — the pinned trajectory endpoints @0 → 3000@ over @2000@ steps ("SixFour.Spec.MaskedBandTrainer").
+  * DESCENT FIXTURE (CONTRACT-ONLY) — the pinned trajectory endpoints @0 → 3000@ over @2000@ steps
+    ("SixFour.Spec.MaskedBandTrainer"). This is ONE retired-trainer fixture, NOT proof the full-matrix
+    model descends on real data; emitted under @descentFixture@ with a @_contractOnly@ note.
   * NO-COLLAPSE — the VICReg combined guard's exact factor vectors (so the float compare is
     deterministic): a flat factor trips the guard (@> 0.5@), two varied factors pass (@< 1e-9@).
-  * SIDE CONDITION — @w_value > 0@ is required: @willLearn 1 = True@, @willLearn 0 = False@.
+  * SIDE CONDITION — @w_value > 0@ is required: @objectiveIdentifiesFullPalette 1 = True@, @objectiveIdentifiesFullPalette 0 = False@.
 
 GHC-boot-only; the emitter returns @Text@ like the other @Codegen.*@ emitters. Additive: pins
 nothing new in the spec, re-pins no shipped contract. All values are COMPUTED from the spec
@@ -43,7 +46,7 @@ import SixFour.Spec.RootLatticeDetail   (fromRootCoords)
 import SixFour.Spec.LearnabilityTheorem
   ( octantCorners, checkerboardParity
   , identifiedDof, blindDof, totalColourDof
-  , willLearn, lawModelWillLearn )
+  , objectiveIdentifiesFullPalette, lawJointObjectiveIdentifiesFullPalette )
 import qualified SixFour.Spec.AnchorDiagnostic   as Anchor
 import qualified SixFour.Spec.AboveFloorMargin   as Margin
 import qualified SixFour.Spec.MaskedBandTrainer  as Trainer
@@ -124,7 +127,7 @@ emitLearnabilityGolden :: Text
 emitLearnabilityGolden = T.pack $ unlines
   [ "{"
   , "  \"_doc\": \"Learnability theorem golden (SixFour.Codegen.LearnabilityTheorem): the byte-exact\","
-  , "  \"_doc2\": \"port of Spec.LearnabilityTheorem.lawModelWillLearn. One section per conjunct.\","
+  , "  \"_doc2\": \"port of Spec.LearnabilityTheorem.lawJointObjectiveIdentifiesFullPalette (IDENTIFIABILITY, not empirical reachability). One section per conjunct.\","
 
   -- SIGNAL ------------------------------------------------------------------
   , "  \"signal\": {"
@@ -175,9 +178,9 @@ emitLearnabilityGolden = T.pack $ unlines
   , "    }"
   , "  },"
 
-  -- DESCENT -----------------------------------------------------------------
-  , "  \"descent\": {"
-  , "    \"_doc\": \"trainBandJoint drives the loss to the golden committed band, byte-exact.\","
+  -- DESCENT FIXTURE (CONTRACT-ONLY) -----------------------------------------
+  , "  \"descentFixture\": {"
+  , "    \"_contractOnly\": \"A SINGLE retired-trainer fixture (MaskedBandTrainer), NOT proof the full-matrix model descends on real data. The only real run floored. See SIXFOUR-MODEL.md contract-only.\","
   , "    \"trainerSteps\": " ++ show Trainer.trainerSteps ++ ","
   , "    \"goldenFloorBand\": " ++ show Trainer.goldenFloorBand ++ ","
   , "    \"goldenTrainedBand\": " ++ show Trainer.goldenTrainedBand
@@ -194,11 +197,11 @@ emitLearnabilityGolden = T.pack $ unlines
 
   -- SIDE CONDITION ----------------------------------------------------------
   , "  \"sideCondition\": {"
-  , "    \"_doc\": \"Full-palette learnability holds IFF w_value>0. The trainer ADOPTS the proven point as its default (train_loop.py --w-value default 1.0 = willLearn(1.0)); w_value=0 is the disabled-head boundary that leaves the 15-DOF complement unconstrained.\","
+  , "    \"_doc\": \"Full-palette IDENTIFIABILITY holds IFF w_value>0. The trainer ADOPTS the proven point as its default (train_loop.py --w-value default 1.0 = objectiveIdentifiesFullPalette(1.0)); w_value=0 is the disabled-head boundary that leaves the 15-DOF complement unconstrained. IDENTIFIABILITY != reaching the optimum on real data (contract-only).\","
   , "    \"wValueRequired\": true,"
-  , "    \"willLearnAtOne\": " ++ bool (willLearn 1.0) ++ ","
-  , "    \"willLearnAtZero\": " ++ bool (willLearn 0) ++ ","
-  , "    \"lawModelWillLearn\": " ++ bool lawModelWillLearn
+  , "    \"identifiesAtOne\": " ++ bool (objectiveIdentifiesFullPalette 1.0) ++ ","
+  , "    \"identifiesAtZero\": " ++ bool (objectiveIdentifiesFullPalette 0) ++ ","
+  , "    \"lawJointObjectiveIdentifiesFullPalette\": " ++ bool lawJointObjectiveIdentifiesFullPalette
   , "  }"
   , "}"
   ]

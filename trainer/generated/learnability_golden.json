@@ -1,6 +1,6 @@
 {
   "_doc": "Learnability theorem golden (SixFour.Codegen.LearnabilityTheorem): the byte-exact",
-  "_doc2": "port of Spec.LearnabilityTheorem.lawModelWillLearn. One section per conjunct.",
+  "_doc2": "port of Spec.LearnabilityTheorem.lawJointObjectiveIdentifiesFullPalette (IDENTIFIABILITY, not empirical reachability). One section per conjunct.",
   "signal": {
     "_doc": "d6/l1 lattice norm on L (discrete geometry) + Z[i] Gaussian norm on chroma (algebraic number theory). channelEnergy==0 IFF detail at the root-lattice floor.",
     "scenes": [
@@ -46,8 +46,8 @@
       "tgtCellAggregateDet": 0
     }
   },
-  "descent": {
-    "_doc": "trainBandJoint drives the loss to the golden committed band, byte-exact.",
+  "descentFixture": {
+    "_contractOnly": "A SINGLE retired-trainer fixture (MaskedBandTrainer), NOT proof the full-matrix model descends on real data. The only real run floored. See SIXFOUR-MODEL.md contract-only.",
     "trainerSteps": 2000,
     "goldenFloorBand": 0,
     "goldenTrainedBand": 3000
@@ -60,10 +60,10 @@
     "variedVariedPasses": true
   },
   "sideCondition": {
-    "_doc": "Full-palette learnability holds IFF w_value>0. The trainer ADOPTS the proven point as its default (train_loop.py --w-value default 1.0 = willLearn(1.0)); w_value=0 is the disabled-head boundary that leaves the 15-DOF complement unconstrained.",
+    "_doc": "Full-palette IDENTIFIABILITY holds IFF w_value>0. The trainer ADOPTS the proven point as its default (train_loop.py --w-value default 1.0 = objectiveIdentifiesFullPalette(1.0)); w_value=0 is the disabled-head boundary that leaves the 15-DOF complement unconstrained. IDENTIFIABILITY != reaching the optimum on real data (contract-only).",
     "wValueRequired": true,
-    "willLearnAtOne": true,
-    "willLearnAtZero": false,
-    "lawModelWillLearn": true
+    "identifiesAtOne": true,
+    "identifiesAtZero": false,
+    "lawJointObjectiveIdentifiesFullPalette": true
   }
 }

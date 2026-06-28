@@ -21,6 +21,7 @@ import           Data.Bits            (shiftR, (.&.))
 import           Data.List            (intercalate)
 import           Data.Maybe           (fromMaybe)
 import qualified Data.Text            as T
+import qualified Data.Vector          as V
 import qualified Data.Vector.Unboxed  as U
 import           Data.Word            (Word8)
 import           System.Directory     (createDirectoryIfMissing)
@@ -48,6 +49,11 @@ import SixFour.Spec.LookTransfer
 import SixFour.Spec.RedFrontEnd       (log3g10DecodeLut, filmicTonemapLut, filmicXMaxQ16)
 import SixFour.Spec.CubeLut           (srgbEncodeLutQ16, buildCubeQ16, cubeSizeGolden)
 import SixFour.Gen.GifWire            (assembleGifRGB8)
+import SixFour.Spec.Upscale256
+  ( UpscaleInput(..), UpscaleOutput(..), upscale256, PxQ16
+  , driftPrior, quantizePrior
+  , consumptionFixturePalette, consumptionFixtureExit, consumptionFixtureTarget )
+import SixFour.Spec.AtlasCascade      (ExitState(..), SlotExit(..), zeroSlot, exitSlotCount)
 
 main :: IO ()
 main = do
@@ -108,6 +114,11 @@ main = do
   BS.writeFile (nativeDir </> "filmic_tonemap_lut.bin")  (le32Vec filmicTonemapLut)
   BS.writeFile (nativeDir </> "srgb_encode_lut.bin")     (le32Vec srgbEncodeLutQ16)
   writeFile (outDir </> "lut_golden.json") emitLutGolden
+
+  -- upscale256_golden.json: the deterministic 64³→256³ FLOOR (Spec.Upscale256.upscale256 =
+  -- Spec.ModelIO.buildFloor at zero nudge). The Python trainer port (trainer/mlx/upscale256.py)
+  -- must reproduce this byte-exact, so "above-floor" margin is measured against the REAL floor.
+  writeFile (outDir </> "upscale256_golden.json") emitUpscaleGolden
 
   putStrLn $ "spec-fixtures: wrote color_golden.json to " <> outDir
   putStrLn $ "  linear_to_oklab cases: " <> show (length goldenLinearInputsQ16)
@@ -597,6 +608,108 @@ emitRGBT4DGolden =
     ints xs        = "[" <> intercalate "," (map show xs) <> "]"
     triple (a, b, c) = "[" <> intercalate "," (map show [a, b, c]) <> "]"
     triples ts     = "[" <> intercalate ", " (map triple ts) <> "]"
+
+-- ---------------------------------------------------------------------------
+-- upscale256 golden for trainer/mlx/upscale256.py (the byte-exact buildFloor)
+-- ---------------------------------------------------------------------------
+
+-- | The carried drift (slot, dL, da, db) the ExitState exposes — sparse; used BOTH to build
+-- 'ugInput's exit state AND to serialize it, so the Python port reads exactly what Haskell ran.
+ugDrift :: [(Int, Int, Int, Int)]
+ugDrift = [ (3, -40, 5, -5), (7, 60, -3, 3) ]
+
+-- | The killed-bin threshold: a colour is in a curation-killed region iff L > this (cube A wins).
+ugKillThreshold :: Int
+ugKillThreshold = 63000
+
+-- | A fully-explicit, serializable upscale input. It exercises: the temporal blend (incl. NEGATIVE
+-- chroma with a non-multiple-of-4 numerator, so the arithmetic shift @>>2@ differs from truncation),
+-- NON-IDENTITY slot alignment (@upMap@ @[3,7]@ vs @[7,3]@ ⇒ σ = [1,0], the match branch is non-trivial),
+-- MULTI-ANCHOR substitution (two anchors ⇒ the taken-set arbitration runs), killed-bin arbitration, and
+-- the 3×3 candidate neighbourhood. The drift-PRIOR's DECISIVENESS (where the carried exit flips a quantize
+-- choice) is gated separately by 'ugPriorCase' (the spec's consumption fixture), since on this cube the
+-- gamut distances dwarf the prior.
+ugInput :: UpscaleInput
+ugInput = UpscaleInput
+  { upFrames   = 2
+  , upSide     = 2
+  , upPalettes = [ [(0, 0, 0), (65535, 8193, -8191)]
+                 , [(4097, 0, 0), (61440, 4096, -4096)] ]
+  , upMap      = [ [3, 7], [7, 3] ]
+  , upGlobal   = [ (0, 0, 0), (32768, 0, 0), (65536, 0, 0) ]
+  , upCubeB    = [ V.fromList [0, 1, 1, 0], V.fromList [1, 1, 0, 0] ]
+  , upCubeA    = [ V.fromList [0, 2, 2, 0], V.fromList [2, 2, 0, 0] ]
+  , upKilled   = \(l, _, _) -> l > ugKillThreshold
+  , upExit     = ExitState
+      (V.replicate exitSlotCount zeroSlot V.//
+         [ (s, SlotExit 0 (fromIntegral dl) (fromIntegral da) (fromIntegral db) 0 0 0)
+         | (s, dl, da, db) <- ugDrift ])
+      1
+  , upAnchors  = [ (32768, 16384, 0), (20000, -6000, 8000) ]
+  , upLambda   = 1
+  }
+
+-- | The drift-prior DECISIVE case = the spec's consumption fixture: @λ = 0@ picks the nearest slot (0),
+-- @λ = 1@ flips to slot 1 because the carried exit drift agrees there. Gates the Python @drift_prior@ +
+-- @quantize_prior_among@ byte-exact (the path the full-cube golden does not make decisive).
+ugPriorPalette :: [PxQ16]
+ugPriorPalette = consumptionFixturePalette
+
+ugPriorMap :: [Int]
+ugPriorMap = [0, 1]
+
+ugPriorTarget :: PxQ16
+ugPriorTarget = consumptionFixtureTarget
+
+-- The consumption fixture carries a NEGATIVE dL on slot 1 (SlotExit 0 (-5) 0 …); serialise it sparsely.
+ugPriorDrift :: [(Int, Int, Int, Int)]
+ugPriorDrift = [ (1, -5, 0, 0) ]
+
+ugPriorPick :: Int -> Int
+ugPriorPick lam = quantizePrior lam ugPriorPalette prior ugPriorTarget
+  where prior = driftPrior consumptionFixtureExit ugPriorMap ugPriorPalette ugPriorTarget
+
+emitUpscaleGolden :: String
+emitUpscaleGolden =
+  let UpscaleOutput pals planes = upscale256 ugInput
+  in unlines
+    [ "{"
+    , "  \"_comment\": \"GENERATED by sixfour-spec / spec-fixtures — do not edit. Spec.Upscale256.upscale256 = Spec.ModelIO.buildFloor. trainer/mlx/upscale256.py reproduces this byte-exact.\","
+    , "  \"input\": {"
+    , "    \"frames\": " <> show (upFrames ugInput) <> ","
+    , "    \"side\": " <> show (upSide ugInput) <> ","
+    , "    \"palettes\": " <> triples2 (upPalettes ugInput) <> ","
+    , "    \"map\": " <> ints2 (upMap ugInput) <> ","
+    , "    \"global\": " <> triples (upGlobal ugInput) <> ","
+    , "    \"cubeB\": " <> ints2 (map V.toList (upCubeB ugInput)) <> ","
+    , "    \"cubeA\": " <> ints2 (map V.toList (upCubeA ugInput)) <> ","
+    , "    \"killThreshold\": " <> show ugKillThreshold <> ","
+    , "    \"exitDrift\": [" <> intercalate ", " [ ints [s, dl, da, db] | (s, dl, da, db) <- ugDrift ] <> "],"
+    , "    \"anchors\": " <> triples (upAnchors ugInput) <> ","
+    , "    \"lambda\": " <> show (upLambda ugInput)
+    , "  },"
+    , "  \"output\": {"
+    , "    \"palettes\": " <> triples2 pals <> ","
+    , "    \"cube\": " <> ints2 (map V.toList planes)
+    , "  },"
+    , "  \"priorCase\": {"
+    , "    \"_doc\": \"drift-prior DECISIVE (consumption fixture): lambda=0 picks slot 0 (nearest), lambda=1 flips to slot 1 (carried exit drift agrees). Gates drift_prior + quantize_prior byte-exact.\","
+    , "    \"palette\": " <> triples ugPriorPalette <> ","
+    , "    \"map\": " <> ints ugPriorMap <> ","
+    , "    \"exitDrift\": [" <> intercalate ", " [ ints [s, dl, da, db] | (s, dl, da, db) <- ugPriorDrift ] <> "],"
+    , "    \"target\": " <> triple ugPriorTarget <> ","
+    , "    \"pick0\": " <> show (ugPriorPick 0) <> ","
+    , "    \"pick1\": " <> show (ugPriorPick 1)
+    , "  }"
+    , "}"
+    ]
+  where
+    triple (l, a, b) = "[" <> intercalate "," (map show [l, a, b]) <> "]"
+    triples ts  = "[" <> intercalate ", " (map triple ts) <> "]"
+    triples2 :: [[PxQ16]] -> String
+    triples2 tss = "[" <> intercalate ", " (map triples tss) <> "]"
+    ints xs     = "[" <> intercalate "," (map show xs) <> "]"
+    ints2 xss   = "[" <> intercalate ", " (map ints xss) <> "]"
 
 -- | @--key value@ / @--key=value@ parser (mirrors app/Spec.hs).
 parseArgs :: [String] -> [(String, String)]

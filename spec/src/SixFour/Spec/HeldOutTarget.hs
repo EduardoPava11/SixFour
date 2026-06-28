@@ -121,6 +121,13 @@ lawTargetIsWholeNotMaskedPair =
 -- | THE KEYSTONE: across BOTH held axes the target is non-trivial (not a function of the input) AND
 -- the identity predictor incurs loss — collapse-proof — with NO masking of the input. The held-out
 -- gap (scale + time) is the structural replacement for per-pair I-JEPA masking.
+--
+-- HONEST LABEL on the TIME half: the SCALE half runs the real byte-exact 'liftOct' \/ 'unliftOct'
+-- kernels, so it is a strong witness. The TIME half models a frame as a bare 'Int' ('Clip' = two
+-- Ints), so 'lawTimeTargetNotAFunctionOfInput' \/ 'lawTimeIdentityIncursLoss' are minimal STRUCTURAL
+-- witnesses (the strength is the motion-ambiguity ARGUMENT, not the toy Int computation). A real
+-- per-frame model would strengthen them; until then the time axis is structural, not empirical. See
+-- @SIXFOUR-MODEL.md@.
 lawHeldOutReplacesMasking :: Bool
 lawHeldOutReplacesMasking =
      lawScaleTargetNotAFunctionOfInput && lawScaleIdentityIncursLoss

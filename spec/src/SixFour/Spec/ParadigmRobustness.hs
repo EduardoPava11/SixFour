@@ -56,7 +56,7 @@ pinnedSeed =
 
 -- | The master theorem's CONVERGENCE CONJUNCT, re-parametrized on BOTH axes: at value weight @wv@ and seed
 -- @seed@, the convergence teaching holds iff the weight is positive AND the seed-parametrized convergence
--- laws hold. This is exactly @ParadigmSoundness.paradigmSound@'s @(wv > 0 && teachingConvergence)@ clause,
+-- laws hold. This is exactly @ParadigmSoundness.paradigmStructurallySound@'s @(wv > 0 && teachingConvergence)@ clause,
 -- but with the teaching's frozen seed lifted to a free argument. By construction
 -- @paradigmConvergesAt 1 pinnedSeed == teachingConvergence@. The @lawConvexNoSpuriousLocalMin seed seed@
 -- form mirrors @teachingConvergence@ faithfully so the pinned-instance identity is literal, not coincidental.

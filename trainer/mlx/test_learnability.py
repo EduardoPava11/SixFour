@@ -1,10 +1,12 @@
 """Force the trainer to reproduce the LEARNABILITY THEOREM byte-exact, against learnability_golden.json.
 
-The spec proves, as a theorem (Spec.LearnabilityTheorem.lawModelWillLearn), that theta_B + the value
-head WILL learn the data-manufactured target -- walking the statistical moment ladder over the cell
-aggregate A = C.S^T (the 2nd cross-moment between colour and the data-fixed octant space lattice).
-Spec.Codegen.LearnabilityTheorem emits the concrete scalars and integer vectors that proof turns on;
-this loader is the gate that makes the spec the DESIGN AUTHORITY for the learnability claim.
+The spec proves, as a theorem (Spec.LearnabilityTheorem.lawJointObjectiveIdentifiesFullPalette), that the
+joint objective (theta_B + the value head) IDENTIFIES the data-manufactured target -- the optimum is unique
+and visible to the objective -- walking the statistical moment ladder over the cell aggregate A = C.S^T (the
+2nd cross-moment between colour and the data-fixed octant space lattice). This is IDENTIFIABILITY, NOT proof
+the model reaches the optimum on real data (CONTRACT-ONLY; see the descentFixture _contractOnly note +
+SIXFOUR-MODEL.md). Spec.Codegen.LearnabilityTheorem emits the concrete scalars and integer vectors that proof
+turns on; this loader is the gate that makes the spec the DESIGN AUTHORITY for the identifiability claim.
 
 It is NO-TRAIN: every section is reproduced by an INDEPENDENT Python computation (not a JSON
 tautology) and asserted equal to the spec golden. One section per conjunct of the capstone:
@@ -16,9 +18,10 @@ tautology) and asserted equal to the spec golden. One section per conjunct of th
                   A7 mean-free residual witness via a from_root_coords port.
   IDENTIFIABILITY - THE HEART: the cell aggregate / cellLoss (cell_loss.py) reproduces 0 of 24 vs all
                   witnesses; the value head sees Sum cb^2 = 8 the cellLoss is BLIND to.
-  DESCENT       - the pinned trajectory endpoints tied to masked_band_trainer's own gated constants.
+  DESCENT FIXTURE - (CONTRACT-ONLY) a single retired-trainer fixture's endpoints tied to
+                  masked_band_trainer's own gated constants; NOT proof the full-matrix model descends.
   NO-COLLAPSE   - the VICReg combined guard reproduced on the exact emitted factor vectors.
-  SIDE COND     - w_value > 0 is required (willLearn 1 = True, willLearn 0 = False).
+  SIDE COND     - w_value > 0 is required (objectiveIdentifiesFullPalette 1 = True, ...0 = False).
 
 Run `python3 trainer/mlx/test_learnability.py` to self-check. Regenerate the golden with
 `cd spec && cabal run spec-codegen` after any change to the learnability spec.
@@ -180,8 +183,10 @@ def self_check(path: str = GOLDEN) -> int:
     assert det3(cell_aggregate(tgt)) == vh["tgtCellAggregateDet"] == 0, \
         "IDENTIFIABILITY: a-only target aggregate is not rank-deficient"
 
-    # --- DESCENT: tie the golden endpoints to the trainer's own gated constants (NO-TRAIN) ----
-    d = g["descent"]
+    # --- DESCENT FIXTURE (CONTRACT-ONLY): tie a SINGLE retired-trainer fixture's endpoints to the
+    # trainer's own gated constants (NO-TRAIN). This is NOT proof the full-matrix model descends on
+    # real data -- see _contractOnly in the golden + SIXFOUR-MODEL.md. ------------------------------
+    d = g["descentFixture"]
     assert d["trainerSteps"] == TRAINER_STEPS, "DESCENT: trainerSteps != masked_band_trainer.TRAINER_STEPS"
     assert d["goldenFloorBand"] == GOLDEN_FLOOR_BAND, "DESCENT: goldenFloorBand drifted"
     assert d["goldenTrainedBand"] == GOLDEN_TRAINED_BAND, "DESCENT: goldenTrainedBand drifted"
@@ -194,12 +199,12 @@ def self_check(path: str = GOLDEN) -> int:
     assert (_combined_guard(varied, varied) < 1e-9) == nc["variedVariedPasses"] is True, \
         "NO-COLLAPSE: two varied factors must pass (< 1e-9)"
 
-    # --- SIDE CONDITION: full-palette learnability holds IFF w_value > 0 ----------------------
+    # --- SIDE CONDITION: full-palette IDENTIFIABILITY holds IFF w_value > 0 --------------------
     sc = g["sideCondition"]
     assert sc["wValueRequired"] is True
-    assert sc["willLearnAtOne"] is True, "SIDE: willLearn(w=1) must be True"
-    assert sc["willLearnAtZero"] is False, "SIDE: willLearn(w=0) must be False (complement unidentified)"
-    assert sc["lawModelWillLearn"] is True, "SIDE: the capstone lawModelWillLearn must be True"
+    assert sc["identifiesAtOne"] is True, "SIDE: objectiveIdentifiesFullPalette(w=1) must be True"
+    assert sc["identifiesAtZero"] is False, "SIDE: objectiveIdentifiesFullPalette(w=0) must be False (complement unidentified)"
+    assert sc["lawJointObjectiveIdentifiesFullPalette"] is True, "SIDE: the capstone lawJointObjectiveIdentifiesFullPalette must be True"
     # the operational meaning, reproduced here: cellLoss alone (w=0) cannot separate the two palettes
     # (cl_comp == 0), but the joint objective at w=1 can (cl_comp + 1*value_loss = 8 > 0).
     assert cl_comp + 0 * value_loss == 0, "SIDE: at w_value=0 the complement is UNidentified"

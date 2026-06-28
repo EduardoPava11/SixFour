@@ -1,8 +1,8 @@
 {- |
 Module      : SixFour.Spec.ParadigmSoundness
-Description : THE MASTER THEOREM of the self-supervised paradigm — the single browsable capstone that conjoins ALL the necessary teachings into "the paradigm is SOUND": it learns the right thing, reaches it, cannot cheat, and stays byte-exact. Every conjunct DELEGATES to an already-green teaching module, so this is the one place a reader sees the whole proof, and a regression in ANY teaching breaks it here.
+Description : THE MASTER THEOREM of the self-supervised paradigm, scoped to STRUCTURAL soundness — the single browsable capstone that conjoins ALL the necessary teachings into "the paradigm is STRUCTURALLY sound": the objective identifies the right thing, the readout has a unique reachable minimum, collapse is structurally impossible, and the crossing stays byte-exact. Every conjunct DELEGATES to an already-green teaching module, so this is the one place a reader sees the whole structural proof, and a regression in ANY teaching breaks it here. STRUCTURAL is the load-bearing word: this does NOT assert the real model has been trained on real captures (the only run to date floored; the full-matrix trainer does not yet exist) — that empirical obligation is 'contractEmpiricalSoundnessUnproven'. Renamed from @lawParadigmIsSound@ in the model-spec unification so a green gate never reads as "the model works".
 
-This supersedes "SixFour.Spec.LearnabilityTheorem" @lawModelWillLearn@ as the top of the chain in two
+This supersedes "SixFour.Spec.LearnabilityTheorem" @lawJointObjectiveIdentifiesFullPalette@ as the top of the chain in two
 ways: (1) its CONVERGENCE conjunct uses the GENERAL guarantee "SixFour.Spec.Convergence"
 @lawCompositeUniqueMinIffValueWeighted@ (a unique-global-minimum-reachable-by-GD proof) rather than the
 single-fixture golden descent the learnability capstone delegated to; (2) it ADDS the two teachings the
@@ -35,10 +35,11 @@ The nine necessary teachings (each a delegated, green law) — the original seve
   7. DETERMINISM   — the float→device crossing is byte-exact (re-entry to the Q16 grid is a fixpoint), so
                      the learned head never breaks the integer replay. "SixFour.Spec.ByteCarrier" / Q16.
 
-The capstone 'lawParadigmIsSound' is the conjunction, carrying the SAME @w_value > 0@ side condition as
-identifiability and convergence — it is TRUE with the value head on and FALSE with it off, so it is
-load-bearing, not decorative. Pure-spec, GHC-boot-only; @once@-tested in "Properties.ParadigmSoundness".
-Emits no golden (it is the assembly of guarantees, each already gated).
+The capstone 'lawParadigmIsStructurallySound' is the conjunction, carrying the SAME @w_value > 0@ side
+condition as identifiability and convergence — it is TRUE with the value head on and FALSE with it off, so
+it is load-bearing, not decorative. Pure-spec, GHC-boot-only; @once@-tested in "Properties.ParadigmSoundness".
+Emits no golden (it is the assembly of STRUCTURAL guarantees, each already gated). The empirical gap (the
+model actually trains to the minimum on real data) is 'contractEmpiricalSoundnessUnproven', not a law.
 -}
 -- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.ParadigmSoundness
@@ -52,10 +53,12 @@ module SixFour.Spec.ParadigmSoundness
   , teachingDeterminism
   , teachingHeadConvergence
   , teachingGeneralization
-    -- * The master theorem
-  , paradigmSound
-  , lawParadigmIsSound
-  , lawParadigmNeedsValueHead
+    -- * The master theorem (STRUCTURAL soundness — see the empirical-gap marker)
+  , paradigmStructurallySound
+  , lawParadigmIsStructurallySound
+  , lawStructuralSoundnessNeedsValueHead
+    -- * The honest boundary
+  , contractEmpiricalSoundnessUnproven
   ) where
 
 import SixFour.Spec.AnchorDiagnostic    (lawIsoLuminantSignalIsInChromaRingNotL, lawConstantChannelIsLatticeFloor)
@@ -66,7 +69,7 @@ import SixFour.Spec.Convergence         (lawCompositeUniqueMinIffValueWeighted, 
 import SixFour.Spec.HeadConvergence     (lawReadoutConvergesGivenFeatures, lawHeadDescentScopeIsReadoutNotTrunk)
 import SixFour.Spec.Generalization      (lawNoDistributionShift, lawHeldErrorIsCoverageNotShift, lawModelGeneralizesUpToCoverage)
 import SixFour.Spec.VarianceFloorGuard  (lawEitherCollapseTripsGuard)
-import SixFour.Spec.JepaTarget          (lawTargetIsDataManufacturedNotEncoded, lawCollapseIsRejected, lawNoSelfProducedRolloutTarget)
+import SixFour.Spec.JepaTarget          (lawTargetIsDataManufacturedNotEncoded, lawCollapseIsRejected, lawConstantOrbitMissesMovedFrame)
 import SixFour.Spec.ByteCarrier         (lawReentryIsFloor)
 import SixFour.Spec.Q16                 (lawTerminalQuantizationIdempotent)
 
@@ -105,13 +108,15 @@ teachingConvergence = lawCompositeUniqueMinIffValueWeighted seed && lawConvexNoS
 teachingNoCollapse :: Bool
 teachingNoCollapse = lawEitherCollapseTripsGuard
 
--- | TEACHING 6 — ANTI-CHEAT: the target is a data-manufactured label (not an encoded/EMA output), the
--- trivial collapse predictor is rejected, and there is no self-produced rollout target. So the model
--- cannot satisfy its own prediction — the defining soundness of a SELF-reinforcement paradigm.
--- Delegates "SixFour.Spec.JepaTarget".
+-- | TEACHING 6 — ANTI-CHEAT (STRUCTURAL): the target is a data-manufactured label (not an encoded/EMA
+-- output), the trivial collapse predictor is rejected, and the inter-frame constant orbit strictly
+-- misses a moved frame. So the model cannot satisfy its own prediction by collapsing — the defining
+-- STRUCTURAL soundness of a self-supervised paradigm. Delegates "SixFour.Spec.JepaTarget". (The earlier
+-- @lawNoSelfProducedRolloutTarget@ conjunct was retired as a definitional restatement; the real motion
+-- witness 'lawConstantOrbitMissesMovedFrame' replaces it.)
 teachingAntiCheat :: Bool
 teachingAntiCheat =
-  lawTargetIsDataManufacturedNotEncoded && lawCollapseIsRejected && lawNoSelfProducedRolloutTarget
+  lawTargetIsDataManufacturedNotEncoded && lawCollapseIsRejected && lawConstantOrbitMissesMovedFrame
 
 -- | TEACHING 7 — DETERMINISM: the learned float re-enters the Q16 integer grid byte-exact (re-entry is a
 -- fixpoint, requantisation is idempotent), so the learned head never breaks cross-device replay.
@@ -133,10 +138,13 @@ teachingGeneralization =
   lawNoDistributionShift 17 [1, 2, 3, 4, 5, 6, 7] && lawHeldErrorIsCoverageNotShift 3
   && lawModelGeneralizesUpToCoverage 3
 
--- | The paradigm is sound at value-head weight @wv@: ALL NINE teachings hold. The CONVERGENCE and
--- IDENTIFIABILITY teachings carry the @w_value > 0@ requirement, so soundness is gated on @wv > 0@.
-paradigmSound :: Double -> Bool
-paradigmSound wv =
+-- | The paradigm is STRUCTURALLY sound at value-head weight @wv@: ALL NINE teachings hold. The
+-- CONVERGENCE and IDENTIFIABILITY teachings carry the @w_value > 0@ requirement, so soundness is gated
+-- on @wv > 0@. STRUCTURAL means: the objective identifies the target, the readout converges to a unique
+-- minimum, collapse is structurally impossible, and the float crossing is byte-exact. It does NOT mean
+-- the real model has been trained to that minimum on a real corpus — see 'contractEmpiricalSoundnessUnproven'.
+paradigmStructurallySound :: Double -> Bool
+paradigmStructurallySound wv =
      teachingSignal
   && teachingExpressivity
   && teachingIdentifiability
@@ -147,14 +155,28 @@ paradigmSound wv =
   && teachingHeadConvergence           -- the actual ViT head's readout provably converges
   && teachingGeneralization            -- and held-out follows train (no distribution shift)
 
--- | THE MASTER THEOREM: with the value head on (@w_value = 1@) the self-supervised paradigm is SOUND —
--- every necessary teaching holds. Non-vacuous: 'lawParadigmNeedsValueHead' shows it is FALSE at
--- @w_value = 0@, so the conjunction is load-bearing.
-lawParadigmIsSound :: Bool
-lawParadigmIsSound = paradigmSound 1.0
+-- | THE MASTER THEOREM (STRUCTURAL): with the value head on (@w_value = 1@) the self-supervised paradigm
+-- is STRUCTURALLY sound — every necessary teaching holds (the objective identifies the target, the
+-- readout has a unique reachable minimum, collapse is impossible, the crossing is byte-exact). Non-vacuous:
+-- 'lawStructuralSoundnessNeedsValueHead' shows it is FALSE at @w_value = 0@, so the conjunction is
+-- load-bearing. This is NOT a claim that the model has learned, or will learn, on real captures — that is
+-- 'contractEmpiricalSoundnessUnproven'. The name was @lawParadigmIsSound@ until the model-spec unification
+-- scoped it to STRUCTURAL soundness (the only run to date floored; the full-matrix trainer does not yet exist).
+lawParadigmIsStructurallySound :: Bool
+lawParadigmIsStructurallySound = paradigmStructurallySound 1.0
 
--- | The side condition is load-bearing: the paradigm is NOT sound with the value head off
--- (@w_value = 0@) — convergence loses its unique minimizer (the 15-DOF complement is free), so the
--- model would not learn the full palette. Teeth: this is exactly the bug the @w_value = 1@ default fixes.
-lawParadigmNeedsValueHead :: Bool
-lawParadigmNeedsValueHead = lawParadigmIsSound && not (paradigmSound 0.0)
+-- | The side condition is load-bearing: structural soundness FAILS with the value head off
+-- (@w_value = 0@) — convergence loses its unique minimizer (the 15-DOF complement is free). Teeth: this
+-- is exactly the bug the @w_value = 1@ default fixes.
+lawStructuralSoundnessNeedsValueHead :: Bool
+lawStructuralSoundnessNeedsValueHead = lawParadigmIsStructurallySound && not (paradigmStructurallySound 0.0)
+
+-- | CONTRACT-ONLY (unproven until trained). Structural soundness ('lawParadigmIsStructurallySound') proves
+-- the objective, identifiability, convergence-of-readout, no-collapse, and determinism HOLD — it does NOT
+-- prove the real model has been trained to the identified minimum on a real corpus. As of the model-spec
+-- unification, the new full-matrix trainer does not exist and the only training run to date FLOORED
+-- (held-out @L_band ≈ 5.4e-4@ vs the zero-prediction floor @≈ 3.5e-4@). This marker exists so a green gate
+-- never reads as "the model works". It carries no truth value; it is the documented obligation. See
+-- @SIXFOUR-MODEL.md@ §contract-only and @docs/NEXT-STEPS.md@ (W4.3).
+contractEmpiricalSoundnessUnproven :: ()
+contractEmpiricalSoundnessUnproven = ()

@@ -17,8 +17,6 @@ tests = testGroup "JepaTarget (the I-JEPA correspondence: data-manufactured targ
       once lawCollapseIsRejected
   , testProperty "the target carries info beyond the context (prediction is genuine work)" $
       once lawTargetCarriesInfoBeyondContext
-  , testProperty "TIME axis stays data-manufactured (policy/value next-frame targets are θ-free; no L_close collapse)" $
-      once lawTemporalDeltaTargetIsDataManufactured
-  , testProperty "GLOBAL guard: no self-produced rollout target on any time-axis term (L_close inadmissible)" $
-      once lawNoSelfProducedRolloutTarget
+  , testProperty "TIME axis motion witness: the constant orbit (t+1:=t) strictly misses a moved frame" $
+      once lawConstantOrbitMissesMovedFrame
   ]

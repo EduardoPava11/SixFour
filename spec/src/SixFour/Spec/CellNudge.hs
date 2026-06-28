@@ -108,6 +108,12 @@ lawPaintOnePairIsLocal =
 -- | One painted 16³ control cell governs a @4096@-leaf subtree of the 256³ output: @(256/16)³ ==
 -- twicenessSpan² == 4096@, the two octant-twiceness rungs (16 → 64 → 256). Ties the paint scale to the
 -- self-similar reconstruct, not an arbitrary mapping.
+--
+-- HONEST LABEL: this is a DIMENSIONAL IDENTITY (the self-similar scale @(256/16)³ = 8² = 4096@), not a
+-- behavioural theorem — every operand is a compile-time constant. It is kept (not retired) because it is
+-- a real, load-bearing consistency check: "SixFour.Spec.ModelIO" consumes it (@lawNudgeGovernsSuperRes@)
+-- to pin the paint→subtree mapping, so a wrong control-grid or output side would break it. See
+-- @SIXFOUR-MODEL.md@ for its place in the load-bearing-vs-contract taxonomy.
 lawCellGovernsSuperResSubtree :: Bool
 lawCellGovernsSuperResSubtree =
   cellSubtreeLeaves == twicenessSpan * twicenessSpan

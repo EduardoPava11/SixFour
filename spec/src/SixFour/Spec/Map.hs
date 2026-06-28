@@ -414,8 +414,8 @@ object: ONE @HierarchicalDelta@ interface (@coarseBand@/@fineBand@ that reassemb
 ℤ-module, deltas ADD) and POLICY @IndexDelta@ (transport group, deltas COMPOSE; provenance-carrying
 so invertible) — plus @bandedDeltaTarget@ = the data-delta octant pyramid reusing the frozen ladder.
 @lawHierarchicalDeltaTargetIsDataManufactured@ + @lawDeltaBandsArePerBandDataProvenance@ strengthen
-@JepaTarget.lawNoSelfProducedRolloutTarget@ per-STEP→per-BAND (closes the coarse-to-fine L_close
-escape). Additive; re-pins nothing),
+@JepaTarget.admissibleRolloutSource@ (the rollout-provenance design rule) per-STEP→per-BAND (closes the
+coarse-to-fine L_close escape). Additive; re-pins nothing),
 "SixFour.Spec.RootLatticeDetail" (★ ALGEBRA of the band count — the "1 coarse + (b-1) detail"
 structure IS the split exact sequence @0 → A_{b-1} → ℤ^b → ℤ → 0@: coarse = the rank-1 sum
 functional Σ, detail = its kernel @A_{b-1}@ (the densest-packing root lattice, mean-free /
@@ -541,6 +541,15 @@ the refutation it guards (a static loop zeroes the persistence loss). Additive),
 two HeldOutTarget axes, SCALE (super-res 256³, Invented) + TIME (t+1, Held), both scoring the
 cell-aggregate matrix (@lawRungTargetIsCellAggregate@) via the same 2-level twiceness operator
 (@lawBothRungsSelfSimilar@). @lawTwoRungsAreTheTwoHeldAxes@, @lawScaleInventedTimeHeld@. Additive),
+"SixFour.Spec.Model" (★★ THE SINGLE SOURCE — start here for the Held-Out Full-Matrix H-JEPA. Assembles
+the model boundary (re-exports @ModelIO@ + @CellNudge@), re-exports the load-bearing laws that survived the
+model-spec unification (@lawJointObjectiveIdentifiesFullPalette@ = IDENTIFIABILITY not reachability,
+@lawParadigmIsStructurallySound@ = STRUCTURAL not trained, @lawHeldOutReplacesMasking@, the floor + boundary
+laws), and PINS the two CONTRACT-ONLY honesty markers (@contractDescentOnRealDataUnproven@,
+@contractEmpiricalSoundnessUnproven@) into the build. @modelLawLedger@ is the authoritative
+load-bearing-vs-contract taxonomy; @lawNoEmpiricalOverclaim@ FAILS if a "the-model-works" law is
+re-introduced as load-bearing — the structural guard against a lying-green regression. See @SIXFOUR-MODEL.md@.
+Emits no golden. Additive),
 "SixFour.Spec.ModelIO" (★ the MODEL I/O CONTRACT, the wireable boundary: INPUT = 64³ capture
 (@Upscale256.UpscaleInput@) + the 16³ 9-channel paint (@CellNudge@) + φ6 gauge; OUTPUT = the 256³ as
 @Upscale256.UpscaleOutput@ = per-frame palettes (VALUE) + index planes (CONTENT) = GIF89a, rendered by
@@ -631,20 +640,22 @@ to the byte-exact data slot); @lawPolicyArgmaxMarginOrFallback@ = the LOGIT-MARG
 (@commitWithMargin@/@policyMarginEps@: at a sub-eps float near-tie, fall back to the data slot rather
 than a device-dependent argmax). Collapse-safety inherited from the
 data-manufactured carriers. Additive),
-"SixFour.Spec.LearnabilityTheorem" (★ THE LEARNABILITY THEOREM: the capstone @lawModelWillLearn@ proving
-θ_B + the value head WILL learn the data-manufactured target, walking the STATISTICAL moment ladder
-(mean < variance/covariance < higher < full distribution) over the cell aggregate @A=C·Sᵀ=Σ colour⊗space@
-= the 2nd CROSS-MOMENT. Conjoins SIGNAL (@lawLearnableSignalExists@→AnchorDiagnostic) ∧ EXPRESSIVITY
-(@lawTargetExpressibleAboveFloor@→AboveFloorMargin/RootLatticeDetail) ∧ rank-3 IDENTIFIABILITY
+"SixFour.Spec.LearnabilityTheorem" (★ THE IDENTIFIABILITY THEOREM: the capstone
+@lawJointObjectiveIdentifiesFullPalette@ proving the joint objective (rank-3 cell aggregate + value head)
+IDENTIFIES the data-manufactured target — the optimum is UNIQUE and VISIBLE to the objective — walking the
+STATISTICAL moment ladder (mean < variance/covariance < higher < full distribution) over the cell aggregate
+@A=C·Sᵀ=Σ colour⊗space@ = the 2nd CROSS-MOMENT. Conjoins SIGNAL (@lawLearnableSignalExists@→AnchorDiagnostic)
+∧ EXPRESSIVITY (@lawTargetExpressibleAboveFloor@→AboveFloorMargin/RootLatticeDetail) ∧ rank-3 IDENTIFIABILITY
 (@lawCellLossIdentifiesRank3Subspace@→MatrixTarget/NudgeRankTheorem, @cellLoss@ = sufficient statistic for
-9 of 24 colour DOF) ∧ DESCENT (@lawDescentReachesGoldenByteExact@→MaskedBandTrainer, golden 3000) ∧
-NO-COLLAPSE (@lawNoCollapseKeepsCrossMomentFullRank@→VarianceFloorGuard). NET-NEW
+9 of 24 colour DOF) ∧ NO-COLLAPSE (@lawNoCollapseKeepsCrossMomentFullRank@→VarianceFloorGuard). NET-NEW
 @lawValueHeadIdentifiesComplement@: @cellLoss@ is rank-DEFICIENT, exactly ANCILLARY on the 15-DOF
 complement of @span(S)@ — the checkerboard-parity witness @cb=(-1)^(x+y+t)@ gives @cellLoss=0@ yet
 @valueLoss>0@, so the full palette is identified IFF @w_value>0@. Capstone TRUE at w_value=1, FALSE at
-w_value=0 (the load-bearing side condition + the concrete improvement: turn the value head on). Ported to
-the trainer byte-exact via @Codegen.LearnabilityTheorem@→@trainer/generated/learnability_golden.json@ +
-@trainer/mlx/test_learnability.py@ (one section per conjunct). Additive),
+w_value=0 (the load-bearing side condition + the concrete improvement: turn the value head on). CONTRACT-ONLY
+boundary @contractDescentOnRealDataUnproven@: this proves IDENTIFIABILITY, NOT that GD reaches the optimum on
+real data (the retired DESCENT conjunct rested on one MaskedBandTrainer fixture and was removed in the
+model-spec unification — see @SIXFOUR-MODEL.md@). Ported to the trainer byte-exact via
+@Codegen.LearnabilityTheorem@→@trainer/generated/learnability_golden.json@. Additive),
 "SixFour.Spec.Convergence" (★ the CONVERGENCE teaching, sibling of LearnabilityTheorem: the palette
 objective is a CONVEX QUADRATIC whose UNIQUE global minimum is the target IFF w_value>0, so GD reaches it
 with NO spurious local minima — closing the learnability theorem's delegated-descent caveat with a GENERAL
@@ -729,14 +740,15 @@ golden. Additive),
 necessary teachings of the self-supervised paradigm — SIGNAL (AnchorDiagnostic d6/ℤ[i]) ∧ EXPRESSIVITY
 (AboveFloorMargin/A7) ∧ IDENTIFIABILITY (LearnabilityTheorem) ∧ CONVERGENCE (Convergence, the GENERAL
 unique-min-reachable guarantee, not the golden fixture) ∧ NO-COLLAPSE (VarianceFloorGuard) ∧ ANTI-CHEAT
-(JepaTarget: data-manufactured target, collapse rejected, no self-produced rollout) ∧ DETERMINISM
+(JepaTarget: data-manufactured target, collapse rejected, constant orbit misses a moved frame) ∧ DETERMINISM
 (ByteCarrier/Q16 byte-exact re-entry) ∧ HEAD-CONVERGENCE (HeadConvergence: the actual ViT readout converges,
-trunk scoped out) ∧ GENERALIZATION (Generalization: held follows train, no distribution shift).
-@lawParadigmIsSound@ TRUE at w_value=1, @lawParadigmNeedsValueHead@ proves it FALSE at w_value=0 (load-bearing
-side condition). Each conjunct DELEGATES to a green teaching, so a regression in ANY teaching breaks here.
-Emits no golden. Additive),
+trunk scoped out) ∧ GENERALIZATION (Generalization: held follows train, no distribution shift). Scoped to
+STRUCTURAL soundness: @lawParadigmIsStructurallySound@ TRUE at w_value=1, @lawStructuralSoundnessNeedsValueHead@
+proves it FALSE at w_value=0 (load-bearing side condition). NOT an empirical-training claim — the gap that the
+model actually trains on real captures is @contractEmpiricalSoundnessUnproven@ (the only run floored). Each
+conjunct DELEGATES to a green teaching, so a regression in ANY teaching breaks here. Emits no golden. Additive),
 "SixFour.Spec.ValueWeightThreshold" (★ the AUDIT CLOSE on the convergence side condition: proves the
-@w_value > 0@ threshold @paradigmSound@ guards on, and that @Convergence.lawCompositeUniqueMinIffValueWeighted@
+@w_value > 0@ threshold @paradigmStructurallySound@ guards on, and that @Convergence.lawCompositeUniqueMinIffValueWeighted@
 witnesses only at the two points 0 and 1, is EXACT over the WHOLE weight domain. The cell-blind checkerboard
 shift makes the shifted-vs-target gap linear in the weight (@shiftedGap w = 4·w@, slope = the full-rank
 @valueLoss = 4@), so the target is the unique global min IFF @w > 0@ for EVERY weight. Closes the two regimes
@@ -744,7 +756,7 @@ the two-point witness left open: @lawFractionalWeightStillUnique@ (0<w<1 still u
 (w<0 is fatal — target not even the min, stronger than the w=0 tie). @lawShiftedGapIsLinearInWeight@ (exact
 closed form, non-degenerate slope), capstone @lawConvergenceThresholdIsExactlyZero@, bridge
 @lawParadigmGuardIsExactlyConvergenceThreshold@ (the guard == @convergesAt@ weight-by-weight). Reuses
-@Convergence.composite@/@checkerboard@/@valueLoss@ + @ParadigmSoundness.paradigmSound@. Emits no golden. Additive),
+@Convergence.composite@/@checkerboard@/@valueLoss@ + @ParadigmSoundness.paradigmStructurallySound@. Emits no golden. Additive),
 "SixFour.Spec.ParadigmRobustness" (★ the AUDIT CLOSE on the SEED residue of PARAMETRIZATION-GAP-1:
 @ParadigmSoundness.teachingConvergence@ is a @:: Bool@ constant pinned at ONE hardcoded 24-element seed, so the
 master theorem's convergence conjunct is single-witness on the INPUT/TARGET axis. Lifts the pinned constant to a
