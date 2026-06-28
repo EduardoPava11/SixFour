@@ -99,3 +99,28 @@ Only the **paint tool** remains (codegen + render + floor adapter already exist)
    data-manufactured (no EMA/self-rollout) to preserve the anti-cheat conjunct.
 5. **Corpus realism gate**: how much real `(L,a,b)` chroma + inter-frame motion the synthetic corpus must carry
    (`lawCorpusHasMotionFloor`/`lawCorpusHasOffFloorTexture`) to avoid re-flooring on iso-luminant/static data.
+
+---
+
+## Measured results (the training educated us)
+
+`contractAboveFloorMarginMeasured` is now an actual number, not a `()` marker. Three experiments, all
+honest, all gated:
+
+| Experiment | Predictor | Held verdict | Why |
+|---|---|---|---|
+| `full_matrix_train_loop` (linear) | coarse + intra-octant position | **FLOORED** | only ~13% of detail is determined by the features even when memorising |
+| `full_matrix_train_loop` (mlp) | + block position, nonlinear | **FLOORED** | MLP no better than linear → no nonlinear signal in these features |
+| `context_super_res` | 5×5 surrounding **coarse field** | **FLOORED** | 1% generalisation despite 36–46% overfit on a small set |
+
+**The bottleneck is the DATA, not the architecture.** The decisive evidence: a high-capacity MLP
+*overfits* detail from a 5×5 context window (~36–46% train-loss drop on a small set) but only
+*generalises* ~1% to a held capture. So the model **can** fit detail from context — the context→detail
+mapping in the *synthetic* corpus is simply **not a transferable prior**. A bigger model (the 64-token
+ViT) would overfit harder and still floor on held data.
+
+**Implication for the next phase:** the path to flipping `FLOORED → LEARNING` is **better data**, not a
+bigger predictor — real capture frames (natural images, where high-frequency detail *is* inferable from
+low-frequency context, which is what makes super-resolution work) or a synthetic corpus deliberately
+generated with a coarse→detail structure. Building the ViT trunk before fixing the data would just
+produce a more expensive FLOORED.

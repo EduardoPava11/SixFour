@@ -58,6 +58,7 @@ MODULES = [
     ("full_matrix_model.py", True),   # ModelInput->ModelOutput forward wired to Spec.ModelIO (untrained smoke)
     ("full_matrix_train.py", True),   # nudge-conditioned invention + end-to-end train (beats floor on synthetic held detail)
     ("full_matrix_train_loop.py", True),  # the REAL training run: trains a held-out predictor, MEASURES the margin (honest verdict)
+    ("context_super_res.py", True),   # context experiment: detail from surrounding coarse field (finds the bottleneck = DATA)
     # MLX autodiff cross-check (optional)
     ("autograd_check.py", False),
 ]
