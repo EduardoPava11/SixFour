@@ -57,6 +57,7 @@ MODULES = [
     ("above_floor_margin.py", True),  # the acceptance number harness (survivesCommit + mean-dominance guard)
     ("full_matrix_model.py", True),   # ModelInput->ModelOutput forward wired to Spec.ModelIO (untrained smoke)
     ("full_matrix_train.py", True),   # nudge-conditioned invention + end-to-end train (beats floor on synthetic held detail)
+    ("full_matrix_train_loop.py", True),  # the REAL training run: trains a held-out predictor, MEASURES the margin (honest verdict)
     # MLX autodiff cross-check (optional)
     ("autograd_check.py", False),
 ]
