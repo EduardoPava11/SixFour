@@ -44,9 +44,8 @@ module SixFour.Spec.IdentifiabilityIsA7Bridge
 
 import Data.Maybe (isJust)
 
-import SixFour.Spec.ParadigmSoundness   (teachingIdentifiability)
 import SixFour.Spec.BlindComplementIsA7 (lawCellBlindComplementIsA7, lawNonLatticeDirectionRefused, checkerboardMeanFree)
-import SixFour.Spec.LearnabilityTheorem (identifiedDof, blindDof, totalColourDof)
+import SixFour.Spec.LearnabilityTheorem (lawCellLossIdentifiesRank3Subspace, lawValueHeadIdentifiesComplement, identifiedDof, blindDof, totalColourDof)
 
 -- ---------------------------------------------------------------------------
 -- The DOF accounting (re-surfaced from the master theorem's identifiability story)
@@ -70,11 +69,15 @@ bridgeTotalDof = totalColourDof
 -- The two halves of the fold + teeth (QuickCheck'd in Properties.IdentifiabilityIsA7Bridge)
 -- ---------------------------------------------------------------------------
 
--- | HALF 1 — the master theorem's IDENTIFIABILITY conjunct holds: the rank-3 cell aggregate is a
--- sufficient statistic and the value head identifies the complement (at @w_value > 0@). Delegates
--- "SixFour.Spec.ParadigmSoundness" @teachingIdentifiability@ verbatim, so this bridge tracks it exactly.
+-- | HALF 1 — the BASE identifiability holds: the rank-3 cell aggregate is a sufficient statistic
+-- ("SixFour.Spec.LearnabilityTheorem" @lawCellLossIdentifiesRank3Subspace@) AND the value head identifies
+-- the complement (@lawValueHeadIdentifiesComplement@). These ARE the two base laws
+-- "SixFour.Spec.ParadigmSoundness" @teachingIdentifiability@ is built from; the bridge delegates them
+-- DIRECTLY (not via @teachingIdentifiability@) so the fold can be imported INTO the capstone without a
+-- module cycle. @ParadigmSoundness@ now sets @teachingIdentifiability = lawIdentifiabilityComplementIsA7@,
+-- so the two stay identical by construction with the bridge as the single source.
 lawMasterIdentifiabilityHolds :: Bool
-lawMasterIdentifiabilityHolds = teachingIdentifiability
+lawMasterIdentifiabilityHolds = lawCellLossIdentifiesRank3Subspace && lawValueHeadIdentifiesComplement
 
 -- | HALF 2 — the recovered complement direction is an @A_7@ lattice vector, witnessed by the TYPED
 -- consumer. @cellLoss@ is blind to the checkerboard AND @mkMeanFreeChecked@ ADMITS it as a @MeanFree@/@A_7@
