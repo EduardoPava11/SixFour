@@ -21,6 +21,13 @@ The lift (two proven facts ⇒ the minimizer is @g = i@).
     the operation "SixFour.Spec.DetentNudge" @stepDelta@ consumes. So the minimizer the convex objective
     identifies is precisely the byte-exact hue quarter-turn the trainer already uses.
 
+The two roles are NOT conflated. G-SPACE UNIQUENESS (the minimizer is exactly @g = i@, no other multiplier)
+is carried by the closed form 'lawContinuousLossIsDistanceToI' alone — @L(g) = ½·|g − i|²·‖source‖²@ is a
+quadratic in @g@ whose unique zero is @i@. The "SixFour.Spec.Convergence" tie ('lawObjectiveIsConvergenceValueLoss')
+does a DIFFERENT job: it certifies that the thing being minimized is a GENUINE convex value loss in PAL-SPACE
+(it IS @Convergence.valueLoss@, inheriting @Convergence.lawValueMinimizerUnique@), not an ad-hoc functional
+hand-tuned to land on @i@. Closed form ⇒ which @g@; Convergence ⇒ the objective is a bona-fide convex value loss.
+
 Therefore ('lawValueMinimizerIsZiUnitI'): the convex value objective for a hue-rotated target is UNIQUELY
 minimized at @g = i@ — PROVEN, not merely demonstrated.
 
