@@ -20,7 +20,11 @@ The nine necessary teachings (each a delegated, green law) — the original seve
   2. EXPRESSIVITY  — the target is reachable above the Q16 floor and lives in the @A_7@ root lattice.
                      "SixFour.Spec.AboveFloorMargin".
   3. IDENTIFIABILITY — the objective is a sufficient statistic for the target: the rank-3 cell aggregate
-                     plus the value head jointly identify the full palette. "SixFour.Spec.LearnabilityTheorem".
+                     plus the value head jointly identify the full palette ("SixFour.Spec.LearnabilityTheorem"),
+                     AND the recovered cell-blind complement is a genuine @A_7@ mean-free lattice vector,
+                     admitted by the typed @mkMeanFreeChecked@ consumer (a non-mean-free @e_0@, @Σ=1@,
+                     is REFUSED) — the inlined "SixFour.Spec.IdentifiabilityIsA7Bridge" fold, so @A_7@
+                     membership is load-bearing in the capstone.
   4. CONVERGENCE   — the objective is a convex quadratic with a UNIQUE global minimum = the target
                      (reachable by GD, no spurious local minima), CONDITIONAL on @w_value > 0@.
                      "SixFour.Spec.Convergence".
@@ -56,7 +60,10 @@ module SixFour.Spec.ParadigmSoundness
 
 import SixFour.Spec.AnchorDiagnostic    (lawIsoLuminantSignalIsInChromaRingNotL, lawConstantChannelIsLatticeFloor)
 import SixFour.Spec.AboveFloorMargin    (lawAboveFloorMarginReachable, lawSurvivingDetailIsA7)
-import SixFour.Spec.LearnabilityTheorem (lawCellLossIdentifiesRank3Subspace, lawValueHeadIdentifiesComplement)
+import Data.Maybe (isJust)
+
+import SixFour.Spec.LearnabilityTheorem (lawCellLossIdentifiesRank3Subspace, lawValueHeadIdentifiesComplement, identifiedDof, blindDof, totalColourDof)
+import SixFour.Spec.BlindComplementIsA7 (lawCellBlindComplementIsA7, lawNonLatticeDirectionRefused, checkerboardMeanFree)
 import SixFour.Spec.Convergence         (lawCompositeUniqueMinIffValueWeighted, lawConvexNoSpuriousLocalMin)
 import SixFour.Spec.HeadConvergence     (lawReadoutConvergesGivenFeatures, lawHeadDescentScopeIsReadoutNotTrunk)
 import SixFour.Spec.Generalization      (lawNoDistributionShift, lawHeldErrorIsCoverageNotShift, lawModelGeneralizesUpToCoverage)
@@ -77,10 +84,25 @@ teachingExpressivity :: Bool
 teachingExpressivity = lawAboveFloorMarginReachable && lawSurvivingDetailIsA7
 
 -- | TEACHING 3 — IDENTIFIABILITY: the rank-3 cell aggregate is a sufficient statistic for 9 of 24 DOF
--- and the value head identifies the 15-DOF complement, so the pair identifies the full palette.
--- Delegates "SixFour.Spec.LearnabilityTheorem".
+-- and the value head identifies the 15-DOF complement, so the pair identifies the full palette
+-- (delegates "SixFour.Spec.LearnabilityTheorem"). STRENGTHENED (the inlined @IdentifiabilityIsA7Bridge@
+-- fold, per owner alignment): the recovered cell-blind complement is not just SOME null direction — the
+-- specific checkerboard-parity direction the value head must supply is a genuine @A_7@ mean-free lattice
+-- vector, ADMITTED by the typed @RootLatticeDetail.mkMeanFreeChecked@ consumer ('checkerboardMeanFree'
+-- isJust, 'lawCellBlindComplementIsA7'), with REAL teeth — a non-mean-free direction (@e_0@, @Σ = 1@) is
+-- REFUSED ('lawNonLatticeDirectionRefused') — and the DOF accounting closes (@9 + 15 = 24@). So @A_7@
+-- lattice membership is load-bearing IN THE CAPSTONE, not just in a side-bridge. (Inlined from the
+-- 'SixFour.Spec.IdentifiabilityIsA7Bridge' fold via its source laws: the bridge's @lawMasterIdentifiability\
+-- Holds@ conjunct IS @teachingIdentifiability@ itself, so importing the fold directly would form a module
+-- cycle; conjoining the fold's other three teeth-bearing laws from their source modules is semantically
+-- identical and cycle-free.)
 teachingIdentifiability :: Bool
-teachingIdentifiability = lawCellLossIdentifiesRank3Subspace && lawValueHeadIdentifiesComplement
+teachingIdentifiability =
+     lawCellLossIdentifiesRank3Subspace && lawValueHeadIdentifiesComplement
+  && lawCellBlindComplementIsA7 && isJust checkerboardMeanFree  -- recovered complement admitted as A_7
+  && lawNonLatticeDirectionRefused                              -- TEETH: non-mean-free e_0 (Σ=1) refused
+  && identifiedDof == 9 && blindDof == 15                       -- DOF accounting:
+  && identifiedDof + blindDof == totalColourDof                 --   9 identified + 15 blind = 24 total
 
 -- | TEACHING 4 — CONVERGENCE: the convex objective has a unique global minimum = the target (no spurious
 -- local minima), reachable by GD, CONDITIONAL on @w_value > 0@. Delegates "SixFour.Spec.Convergence".
