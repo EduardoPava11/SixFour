@@ -50,7 +50,9 @@ import SixFour.Spec.RedFrontEnd       (log3g10DecodeLut, filmicTonemapLut, filmi
 import SixFour.Spec.CubeLut           (srgbEncodeLutQ16, buildCubeQ16, cubeSizeGolden)
 import SixFour.Gen.GifWire            (assembleGifRGB8)
 import SixFour.Spec.Upscale256
-  ( UpscaleInput(..), UpscaleOutput(..), upscale256, PxQ16 )
+  ( UpscaleInput(..), UpscaleOutput(..), upscale256, PxQ16
+  , driftPrior, quantizePrior
+  , consumptionFixturePalette, consumptionFixtureExit, consumptionFixtureTarget )
 import SixFour.Spec.AtlasCascade      (ExitState(..), SlotExit(..), zeroSlot, exitSlotCount)
 
 main :: IO ()
@@ -620,15 +622,20 @@ ugDrift = [ (3, -40, 5, -5), (7, 60, -3, 3) ]
 ugKillThreshold :: Int
 ugKillThreshold = 63000
 
--- | A fully-explicit, serializable upscale input that exercises every path (temporal blend, slot
--- alignment, anchor substitution, drift prior, killed arbitration, 3×3 candidate neighbourhood).
+-- | A fully-explicit, serializable upscale input. It exercises: the temporal blend (incl. NEGATIVE
+-- chroma with a non-multiple-of-4 numerator, so the arithmetic shift @>>2@ differs from truncation),
+-- NON-IDENTITY slot alignment (@upMap@ @[3,7]@ vs @[7,3]@ ⇒ σ = [1,0], the match branch is non-trivial),
+-- MULTI-ANCHOR substitution (two anchors ⇒ the taken-set arbitration runs), killed-bin arbitration, and
+-- the 3×3 candidate neighbourhood. The drift-PRIOR's DECISIVENESS (where the carried exit flips a quantize
+-- choice) is gated separately by 'ugPriorCase' (the spec's consumption fixture), since on this cube the
+-- gamut distances dwarf the prior.
 ugInput :: UpscaleInput
 ugInput = UpscaleInput
   { upFrames   = 2
   , upSide     = 2
-  , upPalettes = [ [(0, 0, 0), (65536, 8192, -8192)]
-                 , [(4096, 0, 0), (61440, 4096, -4096)] ]
-  , upMap      = [ [3, 7], [3, 7] ]
+  , upPalettes = [ [(0, 0, 0), (65535, 8193, -8191)]
+                 , [(4097, 0, 0), (61440, 4096, -4096)] ]
+  , upMap      = [ [3, 7], [7, 3] ]
   , upGlobal   = [ (0, 0, 0), (32768, 0, 0), (65536, 0, 0) ]
   , upCubeB    = [ V.fromList [0, 1, 1, 0], V.fromList [1, 1, 0, 0] ]
   , upCubeA    = [ V.fromList [0, 2, 2, 0], V.fromList [2, 2, 0, 0] ]
@@ -638,9 +645,29 @@ ugInput = UpscaleInput
          [ (s, SlotExit 0 (fromIntegral dl) (fromIntegral da) (fromIntegral db) 0 0 0)
          | (s, dl, da, db) <- ugDrift ])
       1
-  , upAnchors  = [ (32768, 16384, 0) ]
+  , upAnchors  = [ (32768, 16384, 0), (20000, -6000, 8000) ]
   , upLambda   = 1
   }
+
+-- | The drift-prior DECISIVE case = the spec's consumption fixture: @λ = 0@ picks the nearest slot (0),
+-- @λ = 1@ flips to slot 1 because the carried exit drift agrees there. Gates the Python @drift_prior@ +
+-- @quantize_prior_among@ byte-exact (the path the full-cube golden does not make decisive).
+ugPriorPalette :: [PxQ16]
+ugPriorPalette = consumptionFixturePalette
+
+ugPriorMap :: [Int]
+ugPriorMap = [0, 1]
+
+ugPriorTarget :: PxQ16
+ugPriorTarget = consumptionFixtureTarget
+
+-- The consumption fixture carries a NEGATIVE dL on slot 1 (SlotExit 0 (-5) 0 …); serialise it sparsely.
+ugPriorDrift :: [(Int, Int, Int, Int)]
+ugPriorDrift = [ (1, -5, 0, 0) ]
+
+ugPriorPick :: Int -> Int
+ugPriorPick lam = quantizePrior lam ugPriorPalette prior ugPriorTarget
+  where prior = driftPrior consumptionFixtureExit ugPriorMap ugPriorPalette ugPriorTarget
 
 emitUpscaleGolden :: String
 emitUpscaleGolden =
@@ -664,6 +691,15 @@ emitUpscaleGolden =
     , "  \"output\": {"
     , "    \"palettes\": " <> triples2 pals <> ","
     , "    \"cube\": " <> ints2 (map V.toList planes)
+    , "  },"
+    , "  \"priorCase\": {"
+    , "    \"_doc\": \"drift-prior DECISIVE (consumption fixture): lambda=0 picks slot 0 (nearest), lambda=1 flips to slot 1 (carried exit drift agrees). Gates drift_prior + quantize_prior byte-exact.\","
+    , "    \"palette\": " <> triples ugPriorPalette <> ","
+    , "    \"map\": " <> ints ugPriorMap <> ","
+    , "    \"exitDrift\": [" <> intercalate ", " [ ints [s, dl, da, db] | (s, dl, da, db) <- ugPriorDrift ] <> "],"
+    , "    \"target\": " <> triple ugPriorTarget <> ","
+    , "    \"pick0\": " <> show (ugPriorPick 0) <> ","
+    , "    \"pick1\": " <> show (ugPriorPick 1)
     , "  }"
     , "}"
     ]

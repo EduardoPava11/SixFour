@@ -11,8 +11,11 @@ loss and collapse is impossible WITHOUT masking. Two held axes:
     deltas whose application recovers t+1 EXACTLY (temporal_data, lawTemporalEngineRoundTrips) -- a TRUE
     label off the real next frame, never a self-produced rollout.
 
-This replaces the RETIRED per-band mask corpus (jepa_synth_octants' mask=(i+k)%NUM_BANDS). It composes
-already-gated engines; the self-test re-asserts the held property + the motion floor (Spec.MotionFloorCorpus).
+This is the NEW-PATH corpus for the full-matrix model (full_matrix_model.py); it composes already-gated
+engines and the self-test re-asserts the held property + the motion floor (Spec.MotionFloorCorpus). NOTE:
+it does NOT yet replace the OLD masked-band path -- train_loop.py still trains on jepa_synth_octants'
+mask=(i+k)%NUM_BANDS. Wiring this corpus into the live training loop (and retiring the mask path) is the
+remaining step; until then this module is consumed only by the full-matrix smoke + the gate.
 """
 from __future__ import annotations
 

@@ -105,25 +105,36 @@ def _smoke():
         assert min(plane) >= 0 and max(plane) < len(p), "every index addresses its frame's palette"
     print(f"  (1) untrained forward OK: {n_frames} renderable frames (palette + in-range index)")
 
-    # (2) one differentiable gradient step of the VALUE head runs FINITE (ready to train, no NaN).
+    # (2) the VALUE head genuinely DESCENDS on a NON-degenerate frame (more distinct colours than K, so
+    #     the quantizer CANNOT reconstruct exactly -> real positive loss, strictly decreasing). This
+    #     refutes the loss=0 vacuity the review flagged (a 2-colour frame reconstructs exactly = no-op).
     from frame_palette import quantize
-    pixels = _frame_pixels(out["palettes"][0], out["cube"][0])
-    _, traj = quantize(pixels.astype(np.int64) if pixels.dtype != np.int64 else pixels,
-                       k=4, steps=1, lr=0.5, seed=0)
-    assert np.isfinite(traj[-1]), "the value-head loss must be finite (trainable)"
-    print(f"  (2) value-head gradient step OK: loss={traj[-1]:.6f} finite (trainable)")
+    rng = np.random.default_rng(0)
+    many = rng.integers(0, 65536, size=(256, 3)).astype(np.int64)    # 256 distinct OKLab-ish pixels
+    _, traj = quantize(many, k=8, steps=30, lr=0.3, seed=0)          # K=8 << 256 distinct -> lossy
+    assert np.isfinite(traj[-1]), "value-head loss must be finite"
+    assert traj[0] > 0 and traj[-1] < traj[0], \
+        f"value head must STRICTLY descend on a non-degenerate frame ({traj[0]:.6f} -> {traj[-1]:.6f})"
+    print(f"  (2) value-head DESCENDS on a non-degenerate frame: recon_MSE {traj[0]:.6f} -> {traj[-1]:.6f} "
+          f"(drop={traj[0]-traj[-1]:.6f}); genuinely trainable, not a loss=0 no-op")
 
-    # (3) the acceptance harness is callable on the head's emitted coefficients (the palette deltas vs the
-    #     floor): an UNTRAINED head emits ~no surviving detail -> the honest expected number is ~0.
+    # (3) the acceptance harness on the REAL deterministic floor (piped upscale256 -> cell_from_output ->
+    #     cell_margin/verdict). An UNTRAINED head does NOT beat the floor, so the verdict is FLOORED --
+    #     proving the harness is wired AND honest (untrained CANNOT pass as LEARNING).
+    from full_matrix_loss import cell_from_output
+    from above_floor_margin import cell_margin, dashboard_verdict
     floor = build_floor(mi)
-    deltas = []
-    for f in range(n_frames):
-        for c_out, c_fl in zip(out["palettes"][f], floor["palettes"][f]):
-            for a, b in zip(c_out, c_fl):
-                deltas.append((a - b) / 65536.0)
+    side_out = int(round(len(out["cube"][0]) ** 0.5))
+    model_cell = cell_from_output(out, 0, side_out, 0, 0)
+    floor_cell = cell_from_output(floor, 0, side_out, 0, 0)
+    target_cell = [(L, a + 4000, b - 4000, x, y, t) for (L, a, b, x, y, t) in floor_cell]  # held detail
+    m = cell_margin(model_cell, target_cell, floor_cell)
+    deltas = [(mc[i] - fc[i]) / 65536.0 for mc, fc in zip(model_cell, floor_cell) for i in range(3)]
     frac = surviving_fraction(deltas)
-    print(f"  (3) acceptance harness wired: surviving_fraction(untrained)={frac:.4f} "
-          f"(marginCoeffLatent={MARGIN_COEFF_LATENT:.2e}); the REAL number needs a TRAINED model.")
+    verdict = dashboard_verdict(m, frac, collapsed=False, diverged=False)
+    assert verdict in ("FLOORED", "MEAN-ONLY"), f"an UNTRAINED head must NOT pass as LEARNING (got {verdict})"
+    print(f"  (3) acceptance harness wired on the REAL floor: untrained verdict={verdict} "
+          f"(held={m['held']} vs floor={m['floor']}; correctly NOT LEARNING)")
 
     # (4) ponder halting is a proper distribution; more paint refines deeper.
     d0 = ponder_halt(8, 0.0)

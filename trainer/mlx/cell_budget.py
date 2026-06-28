@@ -4,7 +4,11 @@ A per-cell NINE-channel budget over the 16^3 COARSE control grid (the surface th
 256^3 they cannot see). One painted 16^3 cell governs its (256/16)^3 = 4096-leaf 256^3 subtree. The zero
 field is the byte-exact floor (lawNeutralNudgeIsAllFloor); painting is local and clamped (paintCellPair).
 
-Byte-exact twin of spec/src/SixFour/Spec/CellNudge.hs. Self-test reproduces its laws.
+Byte-exact twin of the DATA-STRUCTURE of spec/src/SixFour/Spec/CellNudge.hs. The self-test reproduces its
+STRUCTURAL/dimensional laws (lawNineChannelsAtCell, lawZeroCellBudgetIsFloor, lawPaintOnePairIsLocal,
+lawCellGovernsSuperResSubtree). It does NOT reproduce the three rank/honesty THEOREM-laws the spec module
+delegates to NudgeRankTheorem (lawNineHonestAtCell, lawLossIsCellAggregate, lawGaugeExplicit) -- those are
+proven Haskell-side and exercised by the trainer through cell_loss.py (the cell-aggregate objective).
 """
 from __future__ import annotations
 

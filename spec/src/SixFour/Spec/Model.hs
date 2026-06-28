@@ -72,13 +72,14 @@ import SixFour.Spec.ModelIO
 import SixFour.Spec.CellNudge
   ( CellBudget, paintCellPair, cellSubtreeLeaves )
 import SixFour.Spec.LearnabilityTheorem
-  ( lawJointObjectiveIdentifiesFullPalette, contractDescentOnRealDataUnproven )
+  ( lawJointObjectiveIdentifiesFullPalette, lawValueHeadIdentifiesComplement
+  , contractDescentOnRealDataUnproven )
 import SixFour.Spec.ParadigmSoundness
   ( lawParadigmIsStructurallySound, contractEmpiricalSoundnessUnproven )
 import SixFour.Spec.HeldOutTarget
   ( lawHeldOutReplacesMasking )
 import SixFour.Spec.AboveFloorMargin
-  ( contractAboveFloorMarginMeasured )
+  ( lawAboveFloorMarginReachable, contractAboveFloorMarginMeasured )
 
 -- | The honesty status of a model-spec law. The taxonomy a green gate must be read THROUGH: a passing
 -- 'LoadBearing' law is a real theorem; a passing 'ContractOnly' marker carries no truth value at all.
@@ -118,6 +119,8 @@ lawNoEmpiricalOverclaim =
      contractDescentOnRealDataUnproven == ()       -- pin the LearnabilityTheorem marker into the build
   && contractEmpiricalSoundnessUnproven == ()      -- pin the ParadigmSoundness marker into the build
   && contractAboveFloorMarginMeasured == ()        -- pin the AboveFloorMargin (W4.3) marker into the build
+  && and pinnedLoadBearing                          -- pin EVERY ledgered LoadBearing law as a value (rename in its
+                                                    -- home module ⇒ build break here, so the ledger cannot drift hollow)
   && all (not . overclaims . fst) loadBearing      -- no load-bearing law NAME claims the model trains/works
   && map fst contractOnly == [ "contractDescentOnRealDataUnproven"
                              , "contractEmpiricalSoundnessUnproven"
@@ -125,4 +128,15 @@ lawNoEmpiricalOverclaim =
   where
     loadBearing  = filter ((== LoadBearing) . snd) modelLawLedger
     contractOnly = filter ((== ContractOnly) . snd) modelLawLedger
-    overclaims n = any (`isInfixOf` n) ["WillLearn", "ModelWorks", "IsTrained", "ModelLearns"]
+    -- The six LoadBearing laws referenced as VALUES, so the ledger's string names are backed by real,
+    -- in-scope laws (closes the "ledger is a hand-curated string list" gap: renaming any of these in its
+    -- home module fails to compile here, not silently lie-green).
+    pinnedLoadBearing =
+      [ lawOutputIsPerFrameValueContent, lawNeutralNudgeIsAllFloor 0
+      , lawJointObjectiveIdentifiesFullPalette, lawValueHeadIdentifiesComplement
+      , lawParadigmIsStructurallySound, lawAboveFloorMarginReachable ]
+    -- The banned substrings catch the OUTCOME-asserting name shapes. "IsSound" (not "Sound") so the honest
+    -- 'lawParadigmIsStructurallySound' is NOT flagged while a re-introduced 'lawParadigmIsSound' IS.
+    overclaims n = any (`isInfixOf` n)
+      [ "WillLearn", "ModelWorks", "IsTrained", "ModelLearns", "IsSound"
+      , "Converges", "Generalizes", "Reaches", "BeatsFloor", "Trains" ]

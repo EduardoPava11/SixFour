@@ -118,6 +118,11 @@ def quantize_prior_among(lam, pal, prior_fn, cands, x) -> int:
     return bj
 
 
+def quantize_prior(lam, pal, prior_fn, x) -> int:
+    """argmin over ALL slots (the un-restricted form): Spec.Upscale256.quantizePrior."""
+    return quantize_prior_among(lam, pal, prior_fn, list(range(len(pal))), x)
+
+
 def upscale256(inp):
     """The deterministic re-render. `inp` is the golden's 'input' dict (or build_floor's output).
 

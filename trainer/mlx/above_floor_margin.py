@@ -56,8 +56,15 @@ def dashboard_verdict(margin, frac, *, collapsed: bool, diverged: bool):
     """The acceptance verdict. PASS requires BOTH numbers AND the guards held.
 
     - DIVERGED / COLLAPSE block a pass outright (no margin can be trusted).
-    - beats_floor (cell margin > 0 vs the REAL floor) is necessary but NOT sufficient (mean-dominated).
-    - surviving_fraction > 0 is REQUIRED: invented detail must actually survive the Q16 snap.
+    - beats_floor (cell margin > 0 vs the REAL floor) is the CORRECTNESS gate: the held cell-aggregate
+      loss is lower than the deterministic floor's, i.e. the head is closer to the held target on the
+      rank-3 identified subspace. Necessary but NOT sufficient alone (the cell aggregate is mean-dominated).
+    - surviving_fraction > 0 is a LIVENESS check, NOT correctness: it asserts invented detail survives the
+      Q16 snap, but says nothing about whether that detail is RIGHT. A head that beats the floor on the
+      aggregate while emitting large GARBAGE detail in the 15-DOF cell-blind complement still reads
+      LEARNING here -- proving the complement is correct needs the VALUE loss (w_value > 0,
+      LearnabilityTheorem.lawValueHeadIdentifiesComplement), which the full trainer adds. So LEARNING means
+      "beats the floor on the identified subspace AND emits surviving detail", not "the up-rung is correct".
     """
     if diverged:
         return "DIVERGED"
