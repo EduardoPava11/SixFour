@@ -596,6 +596,16 @@ the unit @i@ = an exact 90° quarter-turn (@lawChromaUnitIsQuarterTurn@), norm-p
 @canonicalQuarter@ dedup IS the unit-group orbit). Teeth @lawNonUnitIsNotAQuarterTurn@: a non-unit @1+i@
 scales the norm, so only the norm-1 unit group lands on a quarter-turn. Makes the @ℤ[i]@ units load-bearing
 via a REAL typed consumer (the analogue of BlindComplementIsA7's @mkMeanFreeChecked@). Emits no golden. Additive),
+"SixFour.Spec.ChromaUnitMinimizer" (★ LIFTS GaussianChroma's learned hue-rotation unit from DEMONSTRATED to
+PROVEN: the convex value objective's UNIQUE minimizer is the @ℤ[i]@ unit @g=i@ when the target palette is a
+quarter-turn of the source. Assembled from two real consumers: the objective IS @Convergence.valueLoss@ on the
+chroma embedding (@lawObjectiveIsConvergenceValueLoss@, inheriting its strictly-convex unique-min), made
+rigorous by the CLOSED FORM @lawContinuousLossIsDistanceToI@ (@contLoss == ½·|g−i|²·‖source‖²@, a quadratic
+zero only at @g=i@); and @g=i@ IS the model's bit-exact quarter-turn (@ChromaUnitGauge.lawGaussianUnitActsAsQuarterTurn@,
+consumed by DetentNudge). TEETH: @lawNonUnitMultiplierStrictlyLoses@ (a non-unit @1+i@ scales the norm,
+strictly loses) + @lawOtherUnitsStrictlyLose@ ({1,−1,−i} are other quarter-turns, each strictly loses ⇒
+minimizer uniquely @i@ among @ℤ[i]*@). Capstone @lawValueMinimizerIsZiUnitI@. No new forced algebra (only the
+existing @ℤ[i]@ + @rotateQuarter@). Emits no golden. Additive),
 "SixFour.Spec.TransportGroup" (★ the POLICY channel's algebra — @IndexDelta@ as a NON-ABELIAN
 transport group acting on the index set, the counterpart to the VALUE channel's abelian @ColourDelta@
 ℤ-module. @tcomp@ chains, @tinv@ reverses, @tbetween@ data-manufactures; @lawTransportActionHomomorphism@
@@ -651,6 +661,18 @@ informative — the feature-rank analogue of the lattice-rank story), so the las
 (@lawReadoutConvergesGivenFeatures@). The TRUNK is PROVEN OUTSIDE that guarantee: a ReLU unit violates
 Jensen (@lawTrunkLossCanBeNonConvex@), so end-to-end fine-tuning stays DEMONSTRATED (P4), not proven —
 the scope boundary is itself a theorem (@lawHeadDescentScopeIsReadoutNotTrunk@). Emits no golden. Additive),
+"SixFour.Spec.TrunkLinearization" (★ the HONEST PARTIAL trunk-convergence bound HeadConvergence left open: a
+CONDITIONAL theorem. IF the trunk is in the LINEARIZED (lazy\/frozen-tangent) regime — output affine in ALL
+params around an anchor (@lawLinearizedOutputAffineInParams@) — THEN training reduces EXACTLY to the convex
+readout problem (@lawLinearizedLossIsReadout@: the linearized loss IS @HeadConvergence.readoutLoss@ over the
+Jacobian as fixed features and the param delta as variable), which converges (@lawLinearizedLossConvexInParams@
++ @lawLinGradStepDecreases@ + delegates @HeadConvergence.lawReadoutConvergesGivenFeatures@). The genuine NTK
+reduction, checked not asserted (imports HeadConvergence as a real consumer). NAMED precondition, with TEETH:
+@lawLinearizationFailsAcrossKink@ — the lazy surrogate of a ReLU unit disagrees with the true unit across the
+kink (the activation flips), exactly the region @HeadConvergence.lawTrunkLossCanBeNonConvex@ proves non-convex,
+so the precondition is non-vacuous and the bare trunk is the uncovered case. Capstone
+@lawConditionalTrunkConvergence@: the reduction is PROVEN, unconditional trunk convergence stays DEMONSTRATED
+(P4). Emits no golden. Additive),
 "SixFour.Spec.Generalization" (★ the GENERALIZATION teaching, why held-out follows train (not memorization):
 the data-manufactured target is a SEED-INDEPENDENT pure function @T@ of the input, so train & held draw from
 the SAME map — NO distribution shift. Held error decomposes into exactly two NAMED parts: input COVERAGE +

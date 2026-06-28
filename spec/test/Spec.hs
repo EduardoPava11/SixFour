@@ -120,6 +120,7 @@ import qualified Properties.DeltaSurrogate as DeltaSurrogate
 import qualified Properties.LearnabilityTheorem as LearnabilityTheorem
 import qualified Properties.Convergence as Convergence
 import qualified Properties.HeadConvergence as HeadConvergence
+import qualified Properties.TrunkLinearization as TrunkLinearization
 import qualified Properties.Generalization as Generalization
 import qualified Properties.BlindComplementIsA7 as BlindComplementIsA7
 import qualified Properties.IdentifiabilityIsA7Bridge as IdentifiabilityIsA7Bridge
@@ -127,6 +128,7 @@ import qualified Properties.CoverageMonotone as CoverageMonotone
 import qualified Properties.BlindComplementGeometry as BlindComplementGeometry
 import qualified Properties.LatticeRankComputed as LatticeRankComputed
 import qualified Properties.ChromaUnitGauge as ChromaUnitGauge
+import qualified Properties.ChromaUnitMinimizer as ChromaUnitMinimizer
 import qualified Properties.ParadigmSoundness as ParadigmSoundness
 import qualified Properties.ParadigmRobustness as ParadigmRobustness
 import qualified Properties.ValueWeightThreshold as ValueWeightThreshold
@@ -314,6 +316,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LearnabilityTheorem.tests
   , Convergence.tests
   , HeadConvergence.tests
+  , TrunkLinearization.tests
   , Generalization.tests
   , BlindComplementIsA7.tests
   , IdentifiabilityIsA7Bridge.tests
@@ -321,6 +324,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , BlindComplementGeometry.tests
   , LatticeRankComputed.tests
   , ChromaUnitGauge.tests
+  , ChromaUnitMinimizer.tests
   , ParadigmSoundness.tests
   , ParadigmRobustness.tests
   , ValueWeightThreshold.tests
