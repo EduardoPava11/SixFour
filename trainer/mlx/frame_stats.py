@@ -7,11 +7,11 @@ all three axes the owner named:
   PROJECTION  (which linear combination of R,G,B we measure)
     R, G, B               -- the raw channels
     L = R+G+B             -- luma, the achromatic average axis
-    a = R-G               -- opponent red-green   (a Lab a* proxy, RGB-native)
-    b = R+G-2B            -- opponent yellow-blue  (a Lab b* proxy, RGB-native)
+    a = R-G               -- opponent red-green chrominance contrast (first-class RGB projection)
+    b = R+G-2B            -- opponent yellow-blue chrominance contrast (first-class RGB projection)
     Cr = R-B, Cg = G-B    -- the Eisenstein A2 chroma coords
-  These opponent projections are an invertible LINEAR proxy for Lab computed in sRGB; Lab is
-  deprecated, you get its opponent axes by projection.
+  These opponent projections are first-class RGB-native linear functionals, NOT an approximation of
+  any other colour space. RGB sRGB 8-bit is first class; Lab is deprecated entirely.
 
   STATISTIC  (which "average" the residual deviates from = which norm it minimizes)
     mean   = the L2 centre  -> residual energy = mean squared deviation
@@ -36,15 +36,15 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-# --- the projection basis (RGB-native; the opponent ones are a Lab proxy) -------
+# --- the projection basis (first-class RGB-native linear functionals) -----------
 
 PROJECTIONS: Dict[str, Tuple[int, int, int]] = {
     "R":        (1, 0, 0),
     "G":        (0, 1, 0),
     "B":        (0, 0, 1),
     "L=R+G+B":  (1, 1, 1),     # luma, the achromatic average axis
-    "a=R-G":    (1, -1, 0),    # opponent red-green   (Lab a* proxy)
-    "b=R+G-2B": (1, 1, -2),    # opponent yellow-blue  (Lab b* proxy)
+    "a=R-G":    (1, -1, 0),    # opponent red-green chrominance contrast (first-class RGB)
+    "b=R+G-2B": (1, 1, -2),    # opponent yellow-blue chrominance contrast (first-class RGB)
     "Cr=R-B":   (1, 0, -1),    # Eisenstein chroma coord
     "Cg=G-B":   (0, 1, -1),    # Eisenstein chroma coord
 }
@@ -183,7 +183,7 @@ def _self_check() -> int:
     md, _ = centre_and_energy(project(render(*skew), Lw), "median")
     mo, _ = centre_and_energy(project(render(*skew), Lw), "mode")
 
-    # the opponent basis (L, a, b) must be invertible (a real Lab-proxy change of coords)
+    # the opponent basis (L, a, b) must be invertible (a real first-class RGB change of coords)
     basis = np.array([PROJECTIONS["L=R+G+B"], PROJECTIONS["a=R-G"], PROJECTIONS["b=R+G-2B"]])
 
     laws = [
@@ -224,10 +224,10 @@ def plot_facets(frames, path: str) -> str:
     axes[0].set_title("the averages diverge: luma mean / median / mode over time")
     axes[0].set_xlabel("frame (time)"); axes[0].set_ylabel("luma centre"); axes[0].legend(); axes[0].grid(alpha=0.3)
 
-    # Panel 2: categorised residual energy (L2) for the Lab-proxy opponent channels
+    # Panel 2: categorised residual energy (L2) for the RGB opponent contrast channels
     for name, col in [("a=R-G", "C3"), ("b=R+G-2B", "C4"), ("L=R+G+B", "0.5")]:
         axes[1].plot(t, [ft["per_frame"][i][name]["mean_energy"] for i in t], marker="s", label=name, color=col)
-    axes[1].set_title("categorised energy: residual (L2) per projection  (a, b = Lab proxy)")
+    axes[1].set_title("categorised energy: residual (L2) per projection  (a, b = RGB opponent contrasts)")
     axes[1].set_xlabel("frame (time)"); axes[1].set_ylabel("residual energy"); axes[1].legend(); axes[1].grid(alpha=0.3)
 
     # Panel 3: momentum = inter-frame delta energy of luma, with the CYCLIC seam marked
