@@ -61,6 +61,22 @@ decode (l, cr, cg)
 exportFrame :: [Latent] -> Maybe [SRGB8]
 exportFrame = traverse decode
 
+-- | The PERCEPTUAL opponent VIEW (the owner's axes), derivable from the Eisenstein latent for FREE
+--   (integer add/sub, NO division): a = red-green = R-G = Cr-Cg; b = yellow-blue = R+G-2B = Cr+Cg
+--   (yellow = R+G, exactly). Same hexagonal chroma plane as (Cr,Cg), rotated 45 degrees. We STORE
+--   Eisenstein (its decode divides by 3, the clean inverse) and DERIVE this readable view.
+opponentRedGreen :: SRGB8 -> Int
+opponentRedGreen (r, g, _) = r - g
+
+opponentYellowBlue :: SRGB8 -> Int        -- yellow = R+G, so yellow-blue = (R+G) - 2B
+opponentYellowBlue (r, g, b) = r + g - 2 * b
+
+-- | The determinant of a 3x3 integer basis (the lattice index of the change of coordinates).
+det3 :: [[Int]] -> Int
+det3 [[a, b, c], [d, e, f], [g, h, i]] =
+  a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+det3 _ = 0
+
 -- The sRGB8 sample grid (a representative spread of the 256^3 cube; full 16.7M is too many for runghc).
 grid :: [Int]
 grid = [0, 1, 15, 16, 127, 128, 200, 254, 255]
@@ -116,12 +132,35 @@ lawBothScalesExportSrgb =
 --   = 3, which equals the index of Lambda. Nonzero => a genuine change of coordinates (not lossy); the
 --   value 3 is WHY the export divides by 3. Form follows function.
 lawLatentInvertibleDetIsThree :: Bool
-lawLatentInvertibleDetIsThree = basisDet == 3 && basisDet /= 0
+lawLatentInvertibleDetIsThree =
+  det3 [[1, 1, 1], [1, 0, -1], [0, 1, -1]] == 3   -- rows: L=R+G+B, Cr=R-B, Cg=G-B
+
+-- | THE OWNER'S PERCEPTUAL AXES ARE FREE: a = R-G = Cr-Cg, b = R+G-2B = Cr+Cg. So the red-green /
+--   yellow-blue view costs only integer adds from the stored Eisenstein latent (no division, no extra
+--   storage). The latent is one hexagonal chroma plane; (Cr,Cg) and (a,b) are two frames on it.
+lawPerceptualAxesAreFree :: Bool
+lawPerceptualAxesAreFree = all ok cube
   where
-    basisDet = det3 ([[1, 1, 1], [1, 0, -1], [0, 1, -1]] :: [[Int]])   -- rows: L=R+G+B, Cr=R-B, Cg=G-B
-    det3 [[a, b, c], [d, e, f], [g, h, i]] =
-      a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
-    det3 _ = 0
+    ok px = let (_, cr, cg) = encode px
+            in opponentRedGreen px == cr - cg && opponentYellowBlue px == cr + cg
+
+-- | b IS THE YELLOW-BLUE OPPONENT (yellow = R+G): yellow -> b>0, blue -> b<0, gray -> 0. And a is
+--   red-green: red -> a>0, green -> a<0, gray -> 0. The owner's intuition, witnessed.
+lawYellowBlueRedGreen :: Bool
+lawYellowBlueRedGreen =
+     opponentYellowBlue (255, 255, 0) > 0 && opponentYellowBlue (0, 0, 255) < 0
+  && opponentYellowBlue (128, 128, 128) == 0
+  && opponentRedGreen (255, 0, 0) > 0 && opponentRedGreen (0, 255, 0) < 0
+  && opponentRedGreen (128, 128, 128) == 0
+
+-- | WHY EISENSTEIN IS THE STORAGE BASIS: the (L, Cr, Cg) basis has det 3 (decode divides by 3 only);
+--   the perceptual (L, a, b) basis has det 6 (its decode would divide by 6). Same chroma plane, but
+--   Eisenstein gives the smaller index and the cleaner byte-exact inverse, so we store it and derive
+--   the perceptual view.
+lawEisensteinIsCleanerStorage :: Bool
+lawEisensteinIsCleanerStorage =
+     det3 [[1, 1, 1], [1, 0, -1], [0, 1, -1]] == 3     -- Eisenstein (L, Cr=R-B, Cg=G-B)
+  && det3 [[1, 1, 1], [1, -1, 0], [1, 1, -2]] == 6     -- perceptual (L, a=R-G, b=R+G-2B)
 
 -- ===========================================================================
 -- (3) Runner
@@ -135,6 +174,9 @@ laws =
   , ("lawExportIsSrgb                (every export is in 0..255 sRGB)",           lawExportIsSrgb)
   , ("lawBothScalesExportSrgb        (16^3 and 256^3 both export sRGB)",          lawBothScalesExportSrgb)
   , ("lawLatentInvertibleDetIsThree  (det = 3 = the index = why /3)",             lawLatentInvertibleDetIsThree)
+  , ("lawPerceptualAxesAreFree       (R-G and yellow-blue R+G-2B from latent free)", lawPerceptualAxesAreFree)
+  , ("lawYellowBlueRedGreen          (b = yellow-blue, a = red-green: witnessed)", lawYellowBlueRedGreen)
+  , ("lawEisensteinIsCleanerStorage  (det 3 store vs det 6 perceptual: /3 vs /6)", lawEisensteinIsCleanerStorage)
   ]
 
 main :: IO ()
