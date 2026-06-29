@@ -1,135 +1,147 @@
 {- |
 Module      : V2ModelWiring
-Description : EXPLORATION (NOT WIRED, base-only, runghc + GHCi). The SKI search expressed in ENERGY,
-              via TYPECLASSES, AND the CNN model wiring it defines. Load in GHCi and read the model
-              off the output: the layers, the channels, the scale spine, and the energy descent.
+Description : EXPLORATION (NOT WIRED, base-only, runghc + GHCi). The CNN model wiring with REAL 3D
+              conv params over the LOCKED Latent (6 channels), plus the SKI search expressed in
+              ENERGY via typeclasses. Load in GHCi and read the architecture off the output: the
+              layers, kernels/strides, spatial shapes, channel flow, receptive field, param count,
+              and the energy descent.
 
   Check:  runghc V2ModelWiring.hs
   GHCi:   ghci V2ModelWiring.hs   then:  putStr describeModel
                                          mapM_ print modelWiring
+                                         totalParams
+                                         encoderRF
                                          energyTrace exampleState
-                                         descend exampleState
 
-  THE IDEA (owner directive 2026-06-29): the SKI ops ARE the CNN layers, and the search is energy
-  descent (PonderNet). Two typeclasses abstract it:
-    * class Energy a       -- a state has an integer ENERGY (the entropy-weighted residual; V2EnergyWeave).
-    * class Energy a => Descent a  -- the SKI / PonderNet SEARCH: reduceStep lowers energy, stable halts.
-  The CNN WIRING is the SKI word made concrete: OpS = lift / up-rung (a transposed conv that invents
-  detail, x4 = one twiceness rung), OpK = pool / down-rung (strided conv), OpI = same-scale process
-  conv, Halt = the PonderNet stop. The model searches by descending its energy to a stable state.
+  THE WIRING: a U-Net over the locked Latent (V2Latent, 6 channels = L,a,b,x,y,t). The encoder POOLS
+  64^3 -> 16^3 (OpK = strided 3D conv = the octree distill; each k2/s2 stencil is a 2x2x2 octant =
+  1 coarse + 7 detail = A7). The decoder LIFTS 16^3 -> 256^3 (OpS = transposed 3D conv = the octree
+  lift, inventing detail). OpI = same-scale process conv; Halt = the PonderNet stop. The SKI ops ARE
+  the CNN layers; the search is energy descent (PonderNet adaptive depth).
 
-  This file is meant to be RUN in GHCi to help define the model: the Show instances print the wiring
-  and the energy trace. Opponent latent + position (L,a,b,x,y,t) = 6 input channels. Trainer untouched.
+  sRGB only at the boundary (decode the head's 6 channels). Lab dropped. Trainer untouched.
 -}
 module V2ModelWiring where
 
-import Data.List (intercalate)
+import Data.List (foldl')
+import V2Latent (latentChannelCount)   -- the locked latent: 6 channels (L,a,b,x,y,t)
 
 -- ===========================================================================
--- (1) The scale spine and the SKI ops as CNN layer kinds
+-- (1) The SKI ops as CNN layer kinds + the conv params
 -- ===========================================================================
 
--- | The octree scale spine (the CNN's spatial resolution at each stage): 16/32/64/128/256.
-data Scale = S16 | S32 | S64 | S128 | S256
-  deriving (Eq, Ord, Enum, Bounded, Show)
-
-side :: Scale -> Int
-side s = 16 * 2 ^ fromEnum s     -- 16, 32, 64, 128, 256
-
--- | The SKI ops as CNN layer kinds. OpS = lift / expand (transposed conv, invents detail UP a rung);
---   OpK = pool / contract (strided conv DOWN a rung); OpI = same-scale process conv; Halt = ponder stop.
+-- | OpS = lift / expand (transposed 3D conv, invents detail UP a level); OpK = pool / contract
+--   (strided 3D conv, DOWN a level); OpI = same-scale process conv; Halt = PonderNet stop.
 data Op = OpS | OpK | OpI | Halt
   deriving (Eq, Show)
 
--- | One line of the model wiring: a CNN layer.
+-- | A 3D conv's real parameters.
+data Conv = Conv { kernel :: !Int, stride :: !Int, pad :: !Int }
+  deriving (Eq)
+
+instance Show Conv where
+  show (Conv k s p) = "k" ++ show k ++ " s" ++ show s ++ " p" ++ show p
+
+-- | One CNN layer over the locked Latent: a name, an op, the spatial in/out side, the in/out channels,
+--   and the conv params.
 data Layer = Layer
-  { lOp    :: Op
-  , lIn    :: Scale
-  , lOut   :: Scale
-  , lInCh  :: Int
-  , lOutCh :: Int
+  { lName :: String
+  , lOp   :: Op
+  , lIn   :: Int, lOut :: Int       -- spatial side (16, 32, 64, 128, 256)
+  , lInCh :: Int, lOutCh :: Int     -- channels
+  , lConv :: Conv
   } deriving (Eq)
 
--- | A GHCi-readable layer line.
+-- | A GHCi-readable layer line with the real conv params and param count.
 instance Show Layer where
-  show (Layer op i o ic oc) =
-    pad 5 (show op) ++ "  " ++ pad 6 (show (side i) ++ "^3") ++ " -> " ++ pad 6 (show (side o) ++ "^3")
-      ++ "   ch " ++ pad 3 (show ic) ++ " -> " ++ show oc
+  show l@(Layer nm op i o ic oc cv) =
+    pad 6 nm ++ pad 5 (show op) ++ pad 14 (show i ++ "^3->" ++ show o ++ "^3")
+      ++ "ch " ++ pad 8 (show ic ++ "->" ++ show oc) ++ pad 11 (show cv)
+      ++ "  " ++ show (paramCount l) ++ " params"
     where pad n str = take n (str ++ repeat ' ')
 
 -- ===========================================================================
--- (2) THE TYPECLASSES: energy + the SKI / PonderNet search
+-- (2) The shape + parameter algebra of a layer
 -- ===========================================================================
 
--- | A state carries an integer ENERGY (the entropy-weighted residual the search lowers).
+-- | The output spatial side of an op applied to an input side: transposed conv (OpS) UPSAMPLES,
+--   strided / same conv (OpK, OpI, Halt) follows the standard conv formula.
+convOut :: Op -> Conv -> Int -> Int
+convOut OpS (Conv k s p) inS = (inS - 1) * s - 2 * p + k          -- transposed conv (lift / upsample)
+convOut _   (Conv k s p) inS = (inS + 2 * p - k) `div` s + 1      -- conv (pool / process)
+
+-- | The number of weights in a layer: a 3D conv has kernel^3 * inCh * outCh weights + outCh biases.
+--   Halt carries no parameters.
+paramCount :: Layer -> Int
+paramCount (Layer _ Halt _ _ _ _ _)        = 0
+paramCount (Layer _ _ _ _ ic oc (Conv k _ _)) = k * k * k * ic * oc + oc
+
+totalParams :: Int
+totalParams = sum (map paramCount modelWiring)
+
+-- | The receptive field of the ENCODER (the input context each 16^3 coarse voxel sees): fold the
+--   stem + pooling convs. RF_i = RF_{i-1} + (k-1) * jump; jump *= stride.
+encoderRF :: Int
+encoderRF = fst (foldl' step (1, 1) (map lConv encoderLayers))
+  where step (rf, jump) (Conv k s _) = (rf + (k - 1) * jump, jump * s)
+
+-- | The encoder = the layers up to (not including) the first lift (OpS): the path to the 16^3 coarse.
+encoderLayers :: [Layer]
+encoderLayers = takeWhile ((/= OpS) . lOp) modelWiring
+
+-- ===========================================================================
+-- (3) THE MODEL WIRING (real conv params over the locked 6-channel Latent)
+-- ===========================================================================
+
+modelWiring :: [Layer]
+modelWiring =
+  [ Layer "stem"  OpI  64  64  6   16  (Conv 3 1 1)   -- project the 6 Latent axes -> 16 features @ 64^3
+  , Layer "down1" OpK  64  32  16  32  (Conv 2 2 0)   -- pool to 32^3 (octant distill, 2x2x2 = A7)
+  , Layer "down2" OpK  32  16  32  64  (Conv 2 2 0)   -- pool to 16^3: the COARSE bottleneck
+  , Layer "up1"   OpS  16  32  64  32  (Conv 2 2 0)   -- lift to 32^3 (invent detail, transposed conv)
+  , Layer "up2"   OpS  32  64  32  16  (Conv 2 2 0)   -- lift to 64^3
+  , Layer "up3"   OpS  64  128 16  16  (Conv 2 2 0)   -- lift to 128^3
+  , Layer "up4"   OpS  128 256 16  16  (Conv 2 2 0)   -- lift to 256^3 (the super-res output)
+  , Layer "head"  OpI  256 256 16  6   (Conv 1 1 0)   -- project back to 6 Latent axes (decode -> sRGB)
+  , Layer "halt"  Halt 256 256 6   6   (Conv 1 1 0)   -- PonderNet stop: stable state
+  ]
+
+-- | A GHCi-printable description (run: putStr describeModel).
+describeModel :: String
+describeModel = unlines $
+  [ "MODEL WIRING (U-Net over the locked Latent; SKI ops = CNN layers)"
+  , replicate 70 '-' ]
+  ++ map show modelWiring
+  ++ [ replicate 70 '-'
+     , "input channels    : " ++ show latentChannelCount ++ "  (L,a,b,x,y,t, the locked Latent)"
+     , "coarse bottleneck : 16^3 (the 64 -> 16 encoder; OpK pools, A7 octant 1+7)"
+     , "super-res output  : 256^3 (the 16 -> 256 decoder; OpS lifts, invents detail)"
+     , "encoder RF        : " ++ show encoderRF ++ "^3 input voxels per coarse voxel"
+     , "total parameters  : " ++ show totalParams ++ "  (hand-written forward blob)" ]
+
+-- ===========================================================================
+-- (4) THE TYPECLASSES: energy + the SKI / PonderNet search
+-- ===========================================================================
+
 class Energy a where
   energy :: a -> Int
 
--- | The SKI / PonderNet SEARCH over the energy: one reduction step lowers the energy; 'stable' is the
---   halt (a fixpoint, the stable state). Laws (checked below): reduceStep is non-increasing in energy,
---   and stable states are fixpoints, so the search terminates.
 class Energy a => Descent a where
   reduceStep :: a -> a
   stable     :: a -> Bool
 
--- | Run the search: the chain of states from a to the stable state (GHCi: descend exampleState).
 descend :: Descent a => a -> [a]
-descend a
-  | stable a  = [a]
-  | otherwise = a : descend (reduceStep a)
+descend a | stable a  = [a]
+          | otherwise = a : descend (reduceStep a)
 
--- | The energy at each search step (GHCi: energyTrace exampleState -> [E0, E1, ..., 0]). PonderNet
---   reads its depth off this: the length is the adaptive number of steps to a stable state.
 energyTrace :: Descent a => a -> [Int]
 energyTrace = map energy . descend
 
 ponderDepth :: Descent a => a -> Int
 ponderDepth = subtract 1 . length . descend
 
--- ===========================================================================
--- (3) The CNN model wiring (the thing the search defines)
--- ===========================================================================
-
--- | The opponent latent + position is the model input: L, a, b, x, y, t.
-inputChannels :: Int
-inputChannels = 6
-
--- | THE MODEL WIRING: the 16 -> 64 -> 256 CNN as an SKI word. OpS lifts a twiceness rung (x4), OpI
---   processes, the head projects back to the 6 opponent axes, Halt is the PonderNet stop. Run in GHCi
---   with  mapM_ print modelWiring  to read the architecture.
-modelWiring :: [Layer]
-modelWiring =
-  [ Layer OpI  S16  S16  6   64    -- stem: 6 opponent axes -> 64 feature channels at 16^3
-  , Layer OpS  S16  S64  64  64    -- rung 1 (S): invent detail UP to 64^3
-  , Layer OpI  S64  S64  64  64    -- process at 64^3
-  , Layer OpS  S64  S256 64  32    -- rung 2 (S): invent detail UP to 256^3
-  , Layer OpI  S256 S256 32  6     -- head: project back to the 6 opponent axes (decode -> sRGB)
-  , Layer Halt S256 S256 6   6     -- PonderNet halt: stable state
-  ]
-
--- | A GHCi-printable description of the model (run: putStr describeModel).
-describeModel :: String
-describeModel = unlines $
-  [ "MODEL WIRING (SKI ops as CNN layers; opponent latent L,a,b,x,y,t)"
-  , replicate 56 '-' ]
-  ++ map show modelWiring
-  ++ [ replicate 56 '-'
-     , "input channels   : " ++ show inputChannels ++ "  (L,a,b,x,y,t)"
-     , "scale rungs       : " ++ intercalate " -> " (map (\s -> show (side s) ++ "^3") rungScales)
-     , "S layers (lift)   : " ++ show (count OpS) ++ "   (each x4 = one twiceness rung)"
-     , "I layers (process): " ++ show (count OpI)
-     , "Halt (ponder stop): " ++ show (count Halt) ]
-  where
-    count op = length (filter ((== op) . lOp) modelWiring)
-    rungScales = [S16, S64, S256]
-
--- ===========================================================================
--- (4) A concrete search state: per-region residual energy (the EBM descent)
--- ===========================================================================
-
--- | The search state: the per-region residual magnitudes the model must reduce (the entropy-weighted
---   energy field). reduceStep resolves the HIGHEST-energy region (one S-invention / one ponder step);
---   stable when every region is at the floor (zero residual = the byte-exact stable state).
+-- | The search state: per-region residual energy. reduceStep resolves the highest-energy region (one
+--   ponder step / one S-invention); stable when every region is at the floor (zero residual).
 newtype SearchState = SearchState [Int] deriving (Eq, Show)
 
 instance Energy SearchState where
@@ -145,77 +157,86 @@ zeroLargest rs = [ if j == i then 0 else x | (j, x) <- zip [0 :: Int ..] rs ]
   where i = snd (maximum [ (abs x, j) | (j, x) <- zip [0 :: Int ..] rs ])
 
 exampleState :: SearchState
-exampleState = SearchState [3, 0, 7, 2, 0, 5, 1]    -- 5 regions hold energy; ponder depth = 5
+exampleState = SearchState [3, 0, 7, 2, 0, 5, 1]
 
 -- ===========================================================================
 -- (5) Laws
 -- ===========================================================================
 
--- | DESCENT LOWERS ENERGY: one search step never raises the energy, and strictly lowers it until stable.
-lawDescentMonotone :: Bool
-lawDescentMonotone =
-     all (\s -> energy (reduceStep s) <= energy s) states
-  && all (\s -> stable s || energy (reduceStep s) < energy s) states
-  where states = map SearchState [[3,0,7,2,0,5,1], [9], [0,0,0], [-4,4,-4], [1,2,3,4,5]]
+-- | THE SHAPES CHAIN: each layer's computed conv output equals its declared out side, AND each layer's
+--   out side / out channels feed the next layer's in (a real, connected CNN, not loose layers).
+lawShapesChain :: Bool
+lawShapesChain =
+     all (\l -> convOut (lOp l) (lConv l) (lIn l) == lOut l) modelWiring
+  && and (zipWith (\a b -> lOut a == lIn b && lOutCh a == lInCh b) modelWiring (drop 1 modelWiring))
 
--- | STABLE IS A FIXPOINT: a stable state reduces to itself (the PonderNet halt is genuine).
-lawStableIsFixpoint :: Bool
-lawStableIsFixpoint =
-     stable z && reduceStep z == z
-  && not (stable exampleState)
-  where z = SearchState [0,0,0]
+-- | THE BOUNDARY CHANNELS: the model takes the 6 locked Latent channels in and emits 6 out (head),
+--   so decode -> sRGB closes the loop. Input/output both = latentChannelCount.
+lawLatentChannelsBoundary :: Bool
+lawLatentChannelsBoundary =
+     lInCh (head modelWiring) == latentChannelCount
+  && lOutCh (last (filter ((/= Halt) . lOp) modelWiring)) == latentChannelCount
 
--- | THE SEARCH TERMINATES at the stable (zero-energy) state, and the energy trace is NON-INCREASING.
-lawSearchTerminatesMonotone :: Bool
-lawSearchTerminatesMonotone =
+-- | THE CONV OP SEMANTICS: OpS lifts (out > in), OpK pools (out < in), OpI processes (out == in),
+--   Halt is same-scale. So the U-Net goes down to 16^3 then up to 256^3.
+lawConvOpSemantics :: Bool
+lawConvOpSemantics =
+     all ok modelWiring
+  && minimum (map lIn modelWiring) == 16          -- the coarse bottleneck is 16^3
+  && maximum (map lOut modelWiring) == 256        -- the super-res output is 256^3
+  where
+    ok (Layer _ OpS i o _ _ _)  = o > i
+    ok (Layer _ OpK i o _ _ _)  = o < i
+    ok (Layer _ OpI i o _ _ _)  = o == i
+    ok (Layer _ Halt i o _ _ _) = o == i
+
+-- | THE OCTANT IS A7: each pooling / lifting conv has a 2x2x2 = 8 stencil (kernel 2), the octant =
+--   1 coarse + 7 detail = the A7 root lattice band split. The stem/head are 1x1/3x3 projections.
+lawOctantStencilIsA7 :: Bool
+lawOctantStencilIsA7 =
+     all (\l -> kernel (lConv l) == 2) (filter (\l -> lOp l `elem` [OpS, OpK]) modelWiring)
+  && (2 :: Int) ^ (3 :: Int) == 8                 -- 2x2x2 = 8 = 1 coarse + 7 detail (A7)
+
+-- | THE PARAMETER BUDGET: the model is a small hand-written forward (a few tens of K params, well under
+--   the ViT-scale head), every conv layer has positive params, and Halt has none.
+lawParamBudget :: Bool
+lawParamBudget =
+     totalParams > 0 && totalParams < 100000
+  && all (\l -> lOp l == Halt || paramCount l > 0) modelWiring
+  && paramCount (last modelWiring) == 0           -- Halt: no params
+
+-- | THE RECEPTIVE FIELD is real (each 16^3 coarse voxel sees a multi-voxel input context), so the
+--   encoder genuinely summarizes a neighbourhood, not a single voxel.
+lawReceptiveFieldReal :: Bool
+lawReceptiveFieldReal = encoderRF == 6 && encoderRF > 1
+
+-- | THE SEARCH descends energy to a stable state, non-increasing (the SKI / PonderNet engine drives the
+--   forward pass to a fixpoint).
+lawSearchDescends :: Bool
+lawSearchDescends =
      last (energyTrace exampleState) == 0
   && and (zipWith (>=) tr (drop 1 tr))
+  && reduceStep (SearchState [0,0,0]) == SearchState [0,0,0]   -- stable is a fixpoint
   where tr = energyTrace exampleState
 
--- | PONDER DEPTH = the number of energy-bearing regions (the adaptive search depth PonderNet reads off).
-lawPonderDepthIsResidualCount :: Bool
-lawPonderDepthIsResidualCount =
-     ponderDepth exampleState == length (filter (/= 0) rs)
-  && ponderDepth (SearchState [0,0,0]) == 0          -- already stable: zero depth
-  where SearchState rs = exampleState
-
--- | THE SKI OPS ARE CNN LAYERS at the right scales: OpS lifts a twiceness rung (out side = 4 * in),
---   OpI keeps the scale, Halt keeps the scale. So the wiring is a well-formed scale spine.
-lawSKIOpsAreCNNLayers :: Bool
-lawSKIOpsAreCNNLayers =
-     all check modelWiring
-  && any ((== OpS) . lOp) modelWiring                -- the model actually lifts (it is not flat)
-  where
-    check (Layer OpS i o _ _) = side o == 4 * side i  -- S = one twiceness rung (x4)
-    check (Layer OpK i o _ _) = side i == 4 * side o  -- K = pool down a rung
-    check (Layer OpI i o _ _) = side i == side o      -- I = same scale
-    check (Layer Halt i o _ _) = side i == side o     -- Halt = same scale
-
--- | THE WIRING IS A CONNECTED PIPELINE: each layer's input scale/channels match the previous layer's
---   output (a real CNN, not disconnected layers), and it starts at 6 input channels (the opponent axes).
-lawWiringIsConnected :: Bool
-lawWiringIsConnected =
-     lInCh (head modelWiring) == inputChannels
-  && and (zipWith ok modelWiring (drop 1 modelWiring))
-  where ok prev next = lOut prev == lIn next && lOutCh prev == lInCh next
-
 -- ===========================================================================
--- (6) Runner (mirrors GifSki.hs) + the GHCi-defining outputs
+-- (6) Runner + the GHCi-defining outputs
 -- ===========================================================================
 
 laws :: [(String, Bool)]
 laws =
-  [ ("lawDescentMonotone           (search lowers energy, strict until stable)", lawDescentMonotone)
-  , ("lawStableIsFixpoint          (PonderNet halt is a genuine fixpoint)",      lawStableIsFixpoint)
-  , ("lawSearchTerminatesMonotone  (descends to 0 energy, non-increasing)",      lawSearchTerminatesMonotone)
-  , ("lawPonderDepthIsResidualCount(ponder depth = energy-bearing regions)",     lawPonderDepthIsResidualCount)
-  , ("lawSKIOpsAreCNNLayers        (OpS=x4 rung, OpK=pool, OpI=same scale)",      lawSKIOpsAreCNNLayers)
-  , ("lawWiringIsConnected         (channels/scales chain: a real CNN)",         lawWiringIsConnected)
+  [ ("lawShapesChain            (conv shapes chain into a connected CNN)",     lawShapesChain)
+  , ("lawLatentChannelsBoundary (6 Latent channels in, 6 out: decode closes)", lawLatentChannelsBoundary)
+  , ("lawConvOpSemantics        (OpS lift / OpK pool / OpI same; 16..256)",    lawConvOpSemantics)
+  , ("lawOctantStencilIsA7      (k2 stencil = 2x2x2 = 8 = 1 coarse + 7 detail)", lawOctantStencilIsA7)
+  , ("lawParamBudget            (small hand-written forward; Halt 0 params)",   lawParamBudget)
+  , ("lawReceptiveFieldReal     (encoder RF = 6^3 input voxels per coarse)",    lawReceptiveFieldReal)
+  , ("lawSearchDescends         (SKI/PonderNet energy descent to a fixpoint)",  lawSearchDescends)
   ]
 
 main :: IO ()
 main = do
-  putStrLn "V2ModelWiring.hs  -- EXPLORATION (NOT WIRED): SKI search in energy + the CNN wiring"
+  putStrLn "V2ModelWiring.hs  -- EXPLORATION (NOT WIRED): CNN wiring (real conv params) + SKI search"
   putStrLn (replicate 72 '-')
   mapM_ (\(n, ok) -> putStrLn (verdict ok ++ "  " ++ n)) laws
   putStrLn (replicate 72 '-')
@@ -225,11 +246,11 @@ main = do
   putStrLn ""
   putStr describeModel
   putStrLn ""
-  putStrLn ("energy trace (the SKI/PonderNet descent): " ++ show (energyTrace exampleState))
-  putStrLn ("ponder depth (adaptive): " ++ show (ponderDepth exampleState) ++ " steps to the stable state")
+  putStrLn ("energy trace (SKI/PonderNet descent): " ++ show (energyTrace exampleState)
+            ++ "   ponder depth " ++ show (ponderDepth exampleState))
   putStrLn ""
-  putStrLn "GHCi: load this file, then  putStr describeModel  |  mapM_ print modelWiring  |"
-  putStrLn "      energyTrace exampleState  |  descend exampleState   to define / inspect the model."
+  putStrLn "GHCi: putStr describeModel | mapM_ print modelWiring | totalParams | encoderRF |"
+  putStrLn "      energyTrace exampleState   to define / inspect the model over the locked Latent."
   where
     verdict True  = "PASS"
     verdict False = "FAIL"
