@@ -16,7 +16,7 @@ Description : EXPLORATION - NOT WIRED. The index map + LZW reading: GIF89a's dis
       growing dictionary seeded from the singletons. The hard part (and the real theorem)
       is the KwKwK edge case: the encoder can emit a code in the very step it defines that
       code, so the decoder must reconstruct an entry it has not yet been told. A naive
-      decoder that only looks codes up FAILS on exactly this case (lawNaiveDecoderFails),
+      decoder that only looks codes up FAILS on exactly this case (lawNaiveDecoderFailsKwKwK),
       while the proper one round-trips (lawLzwRoundTrips). LZW is lossless: that is a real,
       non-trivial property and it is the spine of this file.
 

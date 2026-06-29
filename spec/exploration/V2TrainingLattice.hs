@@ -62,8 +62,9 @@ lumaChromaToRgb l (Eisen ca cb)
   | (l - ca - cb) `mod` 3 == 0 = let bb = (l - ca - cb) `div` 3 in Just (bb + ca, bb + cb, bb)
   | otherwise                  = Nothing
 
--- | Snap LUMA into the congruence class so the inverse is byte-exact. Snaps luma (minimal
---   displacement <= 2), NOT a true nearest-lattice point (honest naming, per the digest).
+-- | Snap LUMA into the congruence class so the inverse is byte-exact. Subtracts the residual
+--   r in {0,1,2}, so luma moves by 0..2; this is NOT minimized (r=2 could move +1 instead) and
+--   NOT a true nearest-lattice point. The genuine closest-point is V2A2ClosestPoint.closestLambda.
 snapToLambda :: Int -> Eisen -> (Int, Eisen)
 snapToLambda l c@(Eisen ca cb) = (l - ((l - ca - cb) `mod` 3), c)
 
@@ -86,8 +87,9 @@ lawNormMultiplicative =
   and [ enorm (emul x y) == enorm x * enorm y | x <- sample, y <- sample ]
   where sample = [Eisen a b | a <- [-3 .. 3], b <- [-3 .. 3]]
 
--- | N >= 0 and N = 0 IFF gray (the chroma kernel). The loss is a genuine non-negative metric
---   that vanishes exactly on the luma axis.
+-- | N >= 0 and N = 0 IFF gray (the chroma kernel). N is a positive-definite quadratic form, so
+--   the chroma part of the loss is non-negative and vanishes exactly on the luma axis. (The full
+--   trainLoss mixes L1 luma with this squared chroma, so it is a training SCORE, not a metric.)
 lawNormPositiveDefinite :: Bool
 lawNormPositiveDefinite =
      all (\x -> enorm x >= 0) sample
@@ -119,8 +121,9 @@ lawSnapToLambdaByteExact =
            Just rgb -> chroma rgb == c && luma rgb == l'            -- integer RGB, chroma + luma exact
            Nothing  -> False
 
--- | The loss IS lumaL1 + the hexagonal A2 norm, and that metric is genuinely SHEARED (not
---   Euclidean): chroma deltas (2,1) and (2,-1) have EQUAL Euclidean length but DIFFERENT A2 norm.
+-- | The loss IS lumaL1 + the hexagonal A2 norm. N(a,b)=a^2-ab+b^2 is the TRUE squared Euclidean
+--   length in the hex embedding, and is SHEARED away from the naive square-coordinate L2 (a^2+b^2):
+--   chroma deltas (2,1) and (2,-1) have equal naive L2 (5) but A2 norms 3 and 7.
 --   So the discrete geometry does real work in the loss.
 lawTrainingLossIsLatticeNorm :: Bool
 lawTrainingLossIsLatticeNorm =
@@ -173,15 +176,15 @@ main = do
   putStrLn ""
   putStrLn ("hex norm  (2, 1) = " ++ show (enorm (Eisen 2 1))
             ++ "   hex norm (2,-1) = " ++ show (enorm (Eisen 2 (-1)))
-            ++ "   (Euclidean of both = 5: the A2 metric is sheared)")
+            ++ "   (naive square-coord L2 of both = 5: the A2 norm is sheared)")
   putStrLn ("snapToLambda 7 (Eisen 1 1) = " ++ show (snapToLambda 7 (Eisen 1 1))
             ++ "   inverts to " ++ show (uncurry lumaChromaToRgb (snapToLambda 7 (Eisen 1 1))))
   putStrLn ""
   putStrLn "HONEST NOTE: training in discrete geometry = the loss is the A2 hexagonal norm"
   putStrLn "(sheared away from Euclidean, proven), the target snaps to the index-3 sublattice L"
   putStrLn "so it stays byte-exact (the /3 guard), and the 6 units are hue-rotation isometries"
-  putStrLn "of the loss. snapToLambda snaps LUMA (minimal displacement), not a true nearest"
-  putStrLn "lattice point; a real closest-point routine is the next refinement."
+  putStrLn "of the loss. snapToLambda snaps LUMA (by 0..2, NOT minimized), not a true nearest"
+  putStrLn "lattice point; V2A2ClosestPoint.closestLambda is the genuine closest-point routine."
   where
     verdict True  = "PASS"
     verdict False = "FAIL"
