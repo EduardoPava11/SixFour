@@ -408,6 +408,19 @@ lawLzwReuseIsSharing =
     streams  = [ kwkwk, norepeat, [], [7], [3,3,3,3], [9,9,8,9,9,8,9,9,8] ]
     reuseCount s = length (filter (>= 256) (lzwEncode s))
 
+-- | The FRAME axis (t) is real, not type-level decoration. (a) Per-frame palette: the SAME index
+--   under two frames' palettes renders DIFFERENT colours, so which frame (t) you are in carries
+--   colour information (the GIF89a Local Color Table is per-frame). (b) d6 SEES the frame axis while
+--   dColour is BLIND: two points with identical colour and (x,y) but different t are separated by
+--   d6 (=1) yet collapsed by dColour (=0). TEETH: (a) needs a genuine palette disagreement; (b) pins
+--   d6 == 1 exactly (a t-blind metric would give 0).
+lawFrameAxisCarriesInfo :: Bool
+lawFrameAxisCarriesInfo =
+     any (\p -> render (pal0, idx0) p /= render (pal1, idx0) p) positions      -- (a) per-frame palette
+  && all (\p -> let q0 = pixelP6 (pal0, idx0) 0 p
+                    q1 = pixelP6 (pal0, idx0) 1 p
+                in dColour q0 q1 == 0 && d6 q0 q1 == 1) positions              -- (b) d6 sees t, dColour blind
+
 -- ===========================================================================
 -- (6) Runner (mirrors GifSki.hs exactly)
 -- ===========================================================================
@@ -419,6 +432,7 @@ laws =
   , ("lawValueArgumentAsymmetry(same slot, distinct (x,y))",    lawValueArgumentAsymmetry)
   , ("lawGrayIsEisensteinKernel(gray (k,k,k) -> chroma 0)",     lawGrayIsEisensteinKernel)
   , ("lawLzwReuseIsSharing      (dict ref = sharing; KwKwK ok)", lawLzwReuseIsSharing)
+  , ("lawFrameAxisCarriesInfo   (t real: per-frame palette, d6 sees t)", lawFrameAxisCarriesInfo)
   ]
 
 main :: IO ()

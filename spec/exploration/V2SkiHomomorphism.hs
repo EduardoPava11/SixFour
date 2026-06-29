@@ -39,7 +39,7 @@ data Op = OpFrame Frame | OpFun (Op -> Op)
 -- | Application in the domain. A frame ignores further arguments (kept total).
 app :: Op -> Op -> Op
 app (OpFun f)    x = f x
-app (OpFrame fr) _ = OpFrame fr
+app (OpFrame fr) _ = OpFrame fr     -- kept-total dead branch: no well-formed term applies a frame
 
 -- | THE HOMOMORPHISM h : Comb -> Op. Preserves application by construction
 --   (@h (App a b) = app (h a) (h b)@) and realizes the S/K/I reduction rules in the domain,
@@ -104,8 +104,10 @@ lawSKKIsIdentity =
   && opFrameEq (app (h skk) (opF inventedFrame)) (opF inventedFrame)
   where skk = G.App (G.App G.S G.K) G.K
 
--- | h COMMUTES WITH REDUCTION: interpreting nf(t) equals interpreting t, applied to a frame.
---   Tooth: at least one term genuinely reduces (t /= nf t), so the law is not vacuous.
+-- | h COMMUTES WITH REDUCTION (on terms NORMALIZING TO I): interpreting nf(t) equals interpreting
+--   t, applied to a frame. All test terms here normalize to I (a pure Comb term cannot embed a Frame
+--   atom, so closed combinator terms that reduce to a frame are not expressible; SKK is the
+--   load-bearing reducing case). Tooth: at least one term genuinely reduces (t /= nf t), not vacuous.
 lawHomCommutesWithReduction :: Bool
 lawHomCommutesWithReduction =
      and [ opFrameEq (app (h t) a) (app (h (G.nf t)) a) | t <- terms ]
@@ -117,9 +119,10 @@ lawHomCommutesWithReduction =
             , G.App (G.App G.K G.I) G.S          -- KIS -> I
             ]
 
--- | Consolidation: the native operators ARE the images of S, K, I under h.
-lawNativeOpsAreCombinatorImages :: Bool
-lawNativeOpsAreCombinatorImages =
+-- | Consolidation: the combinator images h I / h K / h S, applied to native frame atoms, act as
+--   the native operators gI / gK / gS (identity / discard / invent).
+lawCombinatorImagesActNatively :: Bool
+lawCombinatorImagesActNatively =
      opFrameEq (app (h G.I) (opF coarse)) (opF coarse)
   && opFrameEq (app (app (h G.K) (opF coarse)) (opF inventedFrame)) (opF coarse)
   && opFrameEq (app (app (app (h G.S) (op2 anchorBlend)) (op1 invent)) (opF coarse))
@@ -136,7 +139,7 @@ laws =
   , ("lawSIsNativeInvention       (native invention = image of S)",         lawSIsNativeInvention)
   , ("lawSKKIsIdentity            (SKK = I, native identity)",              lawSKKIsIdentity)
   , ("lawHomCommutesWithReduction (reduce-then-interp = interp-then-reduce)", lawHomCommutesWithReduction)
-  , ("lawNativeOpsAreCombImages   (gI/gK/gS = h I / h K / h S)",            lawNativeOpsAreCombinatorImages)
+  , ("lawCombinatorImagesActNatively (h I/K/S act as gI/gK/gS on frames)",  lawCombinatorImagesActNatively)
   ]
 
 main :: IO ()

@@ -20,8 +20,8 @@ Description : EXPLORATION (NOT WIRED, base-only, runghc). SKI made NATIVE to GIF
     * I = the reversible held rung: @shiftFrame@ is a genuine RGB888 bijection with a
       witnessed inverse (round-trips), and is non-trivial (a non-zero shift changes render).
     * S = contraction: @gS f g x = f x (g x)@ feeds the coarse frame x TWICE; the native
-      invention is the UNIQUE move that INCREASES the distinct-colour count (super-res),
-      where K cannot.
+      invention INCREASES the distinct-colour count (super-res) where I preserves it and K
+      discards it (checked over I/K/S, not a global uniqueness claim).
     * render = palette . index = B (the composition combinator), native sRGB888.
     * sRGB-8-bit closure: every operation stays in 0..255 (Lab dropped, nothing float/Lab stored).
 
@@ -176,13 +176,15 @@ lawNativeKDiscards =
   && frameEq (gK demoFrame coarse) (gK demoFrame inventedFrame)       -- 2nd arg discarded
   && not (frameEq coarse inventedFrame)                               -- tooth: the discarded args differ
 
--- | S is contraction = invention: @gS f g x@ uses the coarse x TWICE and is the UNIQUE move
---   that raises the distinct-colour count. Tooth: K (discarding) cannot raise it; only S does.
+-- | S is contraction = invention: @gS f g x@ uses the coarse x TWICE and RAISES the distinct-colour
+--   count where I and K do NOT. Teeth: the invented surplus is real (g genuinely creates colours),
+--   K discards exactly that surplus, and I preserves the count, so S is the move that raises it.
 lawNativeSInvents :: Bool
 lawNativeSInvents =
      distinctColours inventedFrame > distinctColours coarse           -- S raised cardinality (invention)
-  && distinctColours (gK coarse (invent coarse)) == distinctColours coarse  -- K cannot (discards detail)
-  && frameEq inventedFrame (anchorBlend coarse (invent coarse))       -- the S equation: f x (g x)
+  && distinctColours (invent coarse) > distinctColours coarse         -- the surplus is real (g creates it)
+  && distinctColours (gK coarse (invent coarse)) == distinctColours coarse  -- K discards that surplus
+  && distinctColours (gI coarse) == distinctColours coarse            -- I preserves the count (neither raises)
 
 -- | render = palette . index = B (the composition combinator), native sRGB888.
 --   Near-definitional pointwise (flagged); the bite is carried by the abstract-agreement law.
@@ -196,14 +198,16 @@ lawNativeRenderIsB =
 lawSrgb8NativeNoLab :: Bool
 lawSrgb8NativeNoLab =
      all inSrgb8 (concatMap renderSample [coarse, inventedFrame, demoFrame, shiftFrame 200 demoFrame])
+  && not (inSrgb8 (300, -5, 128))                                     -- tooth: this colour is OUT of the box
+  && inSrgb8 (clamp8 300, clamp8 (-5), clamp8 128)                    -- clamp genuinely brings it back in
   && clamp8 300 == 255 && clamp8 (-5) == 0                            -- the domain is closed under clamp8
 
--- | Fragment agreement with the ABSTRACT reducer: GifSki's B law holds (nf (b f g x) == nf (f (g x)))
---   AND the native render IS that same B / composition shape. This is the honest, SCOPED bridge to
---   GifSki: the two calculi realize the same composition equation. It does NOT claim a full
---   Comb -> GIF homomorphism (that is open for S).
-lawAbstractBMatchesNativeCompose :: Bool
-lawAbstractBMatchesNativeCompose =
+-- | Two facts that hold INDEPENDENTLY (this is a conjunction, NOT a cross-check): GifSki's abstract
+--   B law is green (nf (b f g x) == nf (f (g x))), and the native render is B-shaped (palette . index).
+--   The genuine native <-> abstract BRIDGE is V2SkiHomomorphism.lawSIsNativeInvention; this law only
+--   records that both calculi realize the same composition equation, not that one verifies the other.
+lawBLawGreenAndRenderBShaped :: Bool
+lawBLawGreenAndRenderBShaped =
      G.lawComposition                                                 -- abstract: B f g x reduces to f (g x)
   && all (\p -> renderAt demoFrame p == (fPal demoFrame . fIdx demoFrame) p) sampleGrid  -- native: same shape
 
@@ -215,10 +219,10 @@ laws :: [(String, Bool)]
 laws =
   [ ("lawNativeIReversible        (I = sRGB888 bijection, witnessed inverse)", lawNativeIReversible)
   , ("lawNativeKDiscards          (K f _ = f : weakening, 2nd arg lost)",       lawNativeKDiscards)
-  , ("lawNativeSInvents           (S f g x : x twice, raises colour count)",    lawNativeSInvents)
+  , ("lawNativeSInvents           (S raises colour count where I/K do not)",    lawNativeSInvents)
   , ("lawNativeRenderIsB          (render = palette . index = B)",              lawNativeRenderIsB)
   , ("lawSrgb8NativeNoLab         (8-bit sRGB closed, Lab dropped)",            lawSrgb8NativeNoLab)
-  , ("lawAbstractBMatchesNative   (GifSki B == native compose, fragment)",      lawAbstractBMatchesNativeCompose)
+  , ("lawBLawGreenAndRenderBShaped(GifSki B green + native render B-shaped)",   lawBLawGreenAndRenderBShaped)
   ]
 
 main :: IO ()
@@ -240,8 +244,8 @@ main = do
   putStrLn ""
   putStrLn "HONEST NOTE: the S/K/I reduction equations hold with GIF89a Frames as the reduced"
   putStrLn "values, in 8-bit sRGB (Lab dropped). I = a witnessed RGB888 bijection, K = genuine"
-  putStrLn "weakening, S = the unique colour-count-raising contraction (native invention). What"
-  putStrLn "stays SUGGESTIVE: reading the GIF codec AS A WHOLE as an SKI program. We show only"
+  putStrLn "weakening, S = the colour-count-raising contraction where I/K do not (invention)."
+  putStrLn "What stays SUGGESTIVE: reading the GIF codec AS A WHOLE as an SKI program. We show only"
   putStrLn "fragment agreement with the abstract reducer (B / composition, via GifSki.lawComposition);"
   putStrLn "a full typed homomorphism Comb -> GIF-operations for S is OPEN, the next honest step."
   where

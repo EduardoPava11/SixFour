@@ -10,10 +10,12 @@ Description : EXPLORATION (NOT WIRED, base-only, runghc). Discrete geometry + al
   THE POINT (owner directive 2026-06-29): "Discrete geometry + algebraic number theory in
   the training of the model." V2 is raw sRGB 8-bit (Lab DROPPED). The colour structure that
   drives training is the A2 lattice:
-    * LOSS = L1 on the (1,1,1) luma axis + the Eisenstein NORM a^2-ab+b^2 of the chroma
-      residual (the genuine hexagonal distance, sheared away from Euclidean).
-    * TARGET is snapped to the index-3 sublattice L = {l == ca+cb (mod 3)} so the
-      data-manufactured target is BYTE-EXACT invertible (the /3 guard; collapse-safe).
+    * LOSS = squared-Euclidean in the (luma) (+) (A2 chroma) embedding: squared luma residual +
+      the Eisenstein NORM a^2-ab+b^2 of the chroma residual (the true hex length, sheared away
+      from the naive square-coordinate L2). Positive-definite, so sqrt is a genuine metric.
+    * TARGET is snapped to the index-3 sublattice L = {l == ca+cb (mod 3)} via the TRUE
+      closest-point 'trainingTarget' (= closestLambda), so the data-manufactured target is
+      BYTE-EXACT invertible (the /3 guard; collapse-safe). snapToLambda is the older luma-only version.
     * INDUCTIVE BIAS: the 6 units of Z[w] are 60-degree hue rotations that act as
       ISOMETRIES of the loss (a global hue spin cannot lower the loss).
 
@@ -21,6 +23,9 @@ Description : EXPLORATION (NOT WIRED, base-only, runghc). Discrete geometry + al
   sublattice from V2-SKI-PONDER-DIGEST.md. Base-only, runghc-checkable, NOT wired.
 -}
 module V2TrainingLattice where
+
+import Data.List (minimumBy)
+import Data.Ord (comparing)
 
 -- ===========================================================================
 -- (1) Eisenstein integers Z[w], w^2 = -1 - w  (the A2 chroma lattice)
@@ -72,10 +77,49 @@ snapToLambda l c@(Eisen ca cb) = (l - ((l - ca - cb) `mod` 3), c)
 -- (3) The training loss in discrete geometry
 -- ===========================================================================
 
--- | TRAINING LOSS = L1 on luma + the Eisenstein (hexagonal A2) norm of the chroma residual.
---   NOT Euclidean RGB, NOT Lab.
+-- | TRAINING LOSS = the SQUARED-EUCLIDEAN distance in the (luma) (+) (A2 chroma) embedding:
+--   the squared luma residual + the Eisenstein (hexagonal A2) squared-norm of the chroma residual.
+--   This is a positive-definite quadratic form in the residual (so sqrt . trainLoss is a genuine
+--   metric); the standard L2 loss shape, NOT plain RGB Euclidean, NOT Lab.
 trainLoss :: RGB -> RGB -> Int
-trainLoss p t = abs (luma p - luma t) + enorm (esub (chroma p) (chroma t))
+trainLoss p t = (luma p - luma t) ^ (2 :: Int) + enorm (esub (chroma p) (chroma t))
+
+-- ===========================================================================
+-- (3b) The byte-exact training-target snapper: true A2 closest-point onto Lambda
+-- ===========================================================================
+
+-- | A (luma, chroma) lattice point, the coordinate the trainer snaps targets in.
+type Pt = (Int, Eisen)
+
+-- | The snapping cost: the SAME squared-Euclidean geometry as 'trainLoss', in (luma, chroma) coords.
+metricCost :: Pt -> Pt -> Int
+metricCost (l0, c0) (l1, c1) = (l1 - l0) ^ (2 :: Int) + enorm (esub c1 c0)
+
+-- | Is a (luma, chroma) point ON the index-3 sublattice Lambda (does it invert to integer sRGB)?
+inLambda :: Pt -> Bool
+inLambda (l, c) = maybe False (const True) (lumaChromaToRgb l c)
+
+-- | Candidate destinations: luma moves |dl| <= 2 (covering snapToLambda's down-by-2) and the 6 unit
+--   chroma shifts. This finite set CONTAINS the global minimum: the true minimal cost is <= 1 (a
+--   single luma +-1 step always re-enters Lambda when the residual /= 0), and every cost-<=1 move is here.
+candidatesFor :: Pt -> [Pt]
+candidatesFor (l, c) =
+     [ (l + dl, c)   | dl <- [-2 .. 2] ]
+  ++ [ (l, eadd c u) | u  <- units ]
+
+-- | THE CANONICAL byte-exact target snapper (supersedes 'snapToLambda'): the true nearest Lambda
+--   point under the training geometry. Deterministic tie-break prefers smaller luma displacement,
+--   then smaller chroma L1, so equal-cost chroma moves are preferred over a same-cost luma move.
+closestLambda :: Pt -> Pt
+closestLambda tgt = minimumBy (comparing rank) (filter inLambda (candidatesFor tgt))
+  where
+    rank cand = (metricCost tgt cand, abs (fst cand - fst tgt), normL1 (snd cand))
+    normL1 (Eisen a b) = abs a + abs b
+
+-- | The byte-exact (collapse-safe) training-target projection onto Lambda: the closest-point.
+--   This is the wired snapper; 'snapToLambda' is the older luma-only version it supersedes.
+trainingTarget :: Pt -> Pt
+trainingTarget = closestLambda
 
 -- ===========================================================================
 -- (4) Laws
@@ -121,17 +165,28 @@ lawSnapToLambdaByteExact =
            Just rgb -> chroma rgb == c && luma rgb == l'            -- integer RGB, chroma + luma exact
            Nothing  -> False
 
--- | The loss IS lumaL1 + the hexagonal A2 norm. N(a,b)=a^2-ab+b^2 is the TRUE squared Euclidean
---   length in the hex embedding, and is SHEARED away from the naive square-coordinate L2 (a^2+b^2):
---   chroma deltas (2,1) and (2,-1) have equal naive L2 (5) but A2 norms 3 and 7.
---   So the discrete geometry does real work in the loss.
+-- | The WIRED snapper 'trainingTarget' (= closestLambda) always produces a byte-exact (collapse-safe)
+--   target and is idempotent on Lambda. Optimality vs snapToLambda is proven in V2A2ClosestPoint;
+--   here we pin the wiring. Tooth: it does NOT make snapToLambda's suboptimal down-by-2 move.
+lawTrainingTargetByteExact :: Bool
+lawTrainingTargetByteExact =
+     all (inLambda . trainingTarget) targets                       -- always byte-exact
+  && all (\t -> trainingTarget t == t) (filter inLambda targets)   -- idempotent on Lambda
+  && trainingTarget (2, Eisen 0 0) /= (0, Eisen 0 0)               -- tooth: differs from snapToLambda's (0,0)
+  where targets = [ (l, Eisen a b) | l <- [-3 .. 6], a <- [-2 .. 2], b <- [-2 .. 2] ]
+
+-- | The loss IS squared luma + the hexagonal A2 norm. N(a,b)=a^2-ab+b^2 is the TRUE squared
+--   Euclidean length in the hex embedding, and is SHEARED away from the naive square-coordinate L2
+--   (a^2+b^2): chroma deltas (2,1) and (2,-1) have equal naive L2 (5) but A2 norms 3 and 7. So the
+--   discrete geometry does real work in the loss; it is positive-definite (zero only on equality).
 lawTrainingLossIsLatticeNorm :: Bool
 lawTrainingLossIsLatticeNorm =
      trainLoss c c == 0                                                       -- zero on equality
   && all (\(p, t) -> trainLoss p t >= 0) pairs                               -- non-negative
-  && trainLoss (3, 1, 0) (0, 0, 0) == abs (luma (3, 1, 0)) + enorm (chroma (3, 1, 0))
+  && all (\(p, t) -> (trainLoss p t == 0) == (p == t)) pairs                 -- positive-definite (zero iff equal)
+  && trainLoss (3, 1, 0) (0, 0, 0) == (luma (3, 1, 0)) ^ (2 :: Int) + enorm (chroma (3, 1, 0))
   && enorm (Eisen 2 1) == 3 && enorm (Eisen 2 (-1)) == 7                     -- hexagonal: sheared
-  && ((2 * 2 + 1 * 1) :: Int) == (2 * 2 + (-1) * (-1))                       -- Euclidean: equal (tooth)
+  && ((2 * 2 + 1 * 1) :: Int) == (2 * 2 + (-1) * (-1))                       -- naive square-coord L2: equal (tooth)
   where
     c     = (4, 2, 1)
     pairs = [((r, g, b), (0, 0, 0)) | r <- [0 .. 3], g <- [0 .. 3], b <- [0 .. 3]]
@@ -159,7 +214,8 @@ laws =
   , ("lawNormPositiveDefinite     (N>=0, =0 iff gray : loss vanishes on luma)", lawNormPositiveDefinite)
   , ("lawUnitsAreSixHueRotations  (6 units = 60deg isometries)",               lawUnitsAreSixHueRotations)
   , ("lawSnapToLambdaByteExact    (L target inverts to integer sRGB)",         lawSnapToLambdaByteExact)
-  , ("lawTrainingLossIsLatticeNorm(lumaL1 + hexnorm, sheared /= Euclidean)",   lawTrainingLossIsLatticeNorm)
+  , ("lawTrainingTargetByteExact  (wired closestLambda snapper is byte-exact)", lawTrainingTargetByteExact)
+  , ("lawTrainingLossIsLatticeNorm(luma^2 + hexnorm, sheared, pos-definite)",  lawTrainingLossIsLatticeNorm)
   , ("lawHueRotationInvariantLoss (units are loss isometries : bias)",         lawHueRotationInvariantLoss)
   ]
 
@@ -183,8 +239,8 @@ main = do
   putStrLn "HONEST NOTE: training in discrete geometry = the loss is the A2 hexagonal norm"
   putStrLn "(sheared away from Euclidean, proven), the target snaps to the index-3 sublattice L"
   putStrLn "so it stays byte-exact (the /3 guard), and the 6 units are hue-rotation isometries"
-  putStrLn "of the loss. snapToLambda snaps LUMA (by 0..2, NOT minimized), not a true nearest"
-  putStrLn "lattice point; V2A2ClosestPoint.closestLambda is the genuine closest-point routine."
+  putStrLn "of the loss. The wired snapper trainingTarget = closestLambda is the TRUE nearest"
+  putStrLn "Lambda point (snapToLambda, luma-only by 0..2, is the superseded version)."
   where
     verdict True  = "PASS"
     verdict False = "FAIL"

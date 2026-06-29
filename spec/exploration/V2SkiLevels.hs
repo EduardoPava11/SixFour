@@ -24,7 +24,7 @@ Description : EXPLORATION - NOT WIRED. "SKI nested-function stack, explored by l
     * S = invent UP = contraction (the full-SKI structural rule). levelFn DUPLICATES: a
       single coarse cell is used TWICE (kept as anchor, and fed to the inventor that
       manufactures detail), so the output cardinality grows. Referent: @liftKeyed book
-      coarse@ where @coarse@ appears twice (PairedResidual.hs:90). S is the ONLY role that
+      coarse@ where @coarse@ appears twice (PairedResidual.hs:83). S is the ONLY role that
       can increase the distinct-output count, and is barred on the byte-exact floor because
       the floor is a bijection (BCI excludes contraction).
 
@@ -372,7 +372,7 @@ lawLevelRolesMatchExpandContract = and (iIsId ++ kLoses ++ sInvents ++ onlySincr
     --    and K never grows the band.
     kLoses =
       [ levelFn kLevel [1,2,3,4] == levelFn kLevel [1,9,3,8]   -- detail 2/9 and 4/8 discarded
-      , [1,2,3,4] /= [1,9,3,8] ]
+      , ([1,2,3,4] :: [Int]) /= [1,9,3,8] ]
       ++ [ length (levelFn kLevel x) <= length x | x <- samples ]
     -- S: strictly increases both raw length and distinct-cell count (genuine invention).
     sInvents =
@@ -452,7 +452,7 @@ lawLzwReuseIsSharingCount =
     shareIffCompress = [ (length (enc x) < length x) == (reuseCount x > 0) | x <- corpus ]
     -- (c) TOOTH: a repeated SYMBOL is not phrase sharing. [3,3] repeats yet shares nothing;
     --     nub [3,3] /= [3,3] confirms the repeat is real, so reuseCount==0 is discriminating.
-    repeatNoShare = [ reuseCount [3,3] == 0, nub [3,3] /= [3,3] ]
+    repeatNoShare = [ reuseCount [3,3] == 0, nub ([3,3] :: [Int]) /= [3,3] ]
     -- (d) anchors: distinct => no share; an obviously reused phrase => share.
     anchors = [ reuseCount [0,1,2,3] == 0, reuseCount [0,1,0,1,0,1] > 0 ]
     -- (d') non-decreasing under more repetition, and unbounded (rep 5 > rep 2).

@@ -204,7 +204,7 @@ lawCodesNeverExceedSlots :: Bool
 lawCodesNeverExceedSlots =
   and [ length (encode xs) <= length xs | xs <- sampleStreams ]
   && length (encode flatStream) < length flatStream    -- strict where structure exists
-  && length (encode [0,1,2,3]) == length [0,1,2,3]      -- equality at the incompressible end
+  && length (encode [0,1,2,3]) == length ([0,1,2,3] :: [Slot])  -- equality at the incompressible end
 
 -- | DICTIONARY REFERENCE IS SHARING (the reuse count is REAL; the S/contraction gloss is
 --   DECORATIVE <>). On a repetitive stream the encoder emits single codes that STAND FOR
