@@ -32,6 +32,7 @@ module SixFour.Spec.Export
   , packSides
   , replicate2D
   , downsample2D
+  , decimate2D
     -- * Laws
   , lawReplicateLength
   , lawReplicatePreservesUsedSet
@@ -39,6 +40,8 @@ module SixFour.Spec.Export
   , lawDownsampleLength
   , lawDownsampleGamutClosed
   , lawDownsampleConstantBlock
+  , lawDecimateLength
+  , lawDecimateInvertsReplicate
   , lawCubeLadder
   ) where
 
@@ -147,6 +150,38 @@ lawDownsampleConstantBlock factor side v =
   factor <= 0 || side <= 0 || side `mod` factor /= 0
     || downsample2D factor side (replicate (side * side) v)
          == replicate ((side `div` factor) * (side `div` factor)) v
+
+-- ---------------------------------------------------------------------------
+-- Import decimate (256² → 64²): the EXACT left inverse of 'replicate2D'
+-- ---------------------------------------------------------------------------
+
+-- | Decimate a @bigSide×bigSide@ row-major grid to @(bigSide\`div\`factor)×(bigSide\`div\`factor)@ by
+-- keeping, for each @factor×factor@ block, its TOP-LEFT cell @(bx·factor, by·factor)@. This is the
+-- canonical capture import: on a 'replicate2D' output every block is constant, so taking the corner
+-- recovers the source index byte-exact (it is a left inverse of replication). Unlike 'downsample2D'
+-- (block __mode__, the gamut-safe rule for arbitrary input), decimation assumes the constant-block
+-- structure replication guarantees and is the cheaper exact inverse.
+decimate2D :: Int -> Int -> [a] -> [a]
+decimate2D factor bigSide cells =
+  [ cells !! ((by * factor) * bigSide + (bx * factor))
+  | by <- [0 .. bigSide `div` factor - 1]
+  , bx <- [0 .. bigSide `div` factor - 1]
+  ]
+
+-- | Decimating a full @bigSide²@ grid yields exactly @(bigSide\`div\`factor)²@ cells.
+lawDecimateLength :: Int -> Int -> [a] -> Bool
+lawDecimateLength factor bigSide cells =
+  factor <= 0 || bigSide `mod` factor /= 0 || length cells /= bigSide * bigSide
+    || length (decimate2D factor bigSide cells) == (bigSide `div` factor) * (bigSide `div` factor)
+
+-- | THE capture round-trip keystone: @decimate2D ∘ replicate2D == id@ on a full @side²@ index plane.
+-- Export replicates 64²→256² (the shipped GIF), import decimates 256²→64² (the encoder input), and the
+-- two are byte-exact inverses in the index domain — so the artifact the app ships IS the capture the
+-- encoder ingests after this deterministic reduction. (Tier-1 of @Spec.CaptureFormat@.)
+lawDecimateInvertsReplicate :: Eq a => Int -> Int -> [a] -> Bool
+lawDecimateInvertsReplicate factor side cells =
+  length cells /= side * side
+    || decimate2D factor (factor * side) (replicate2D factor side cells) == cells
 
 -- | The ×4 cube ladder is exact: @previewSide·factor = sourceSide@ and @sourceSide·factor = outputSide@,
 -- so the pack is @[16, 64, 256]@.

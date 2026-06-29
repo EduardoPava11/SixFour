@@ -38,7 +38,24 @@ def lab_volume(seed: int, kind: str) -> np.ndarray:
     STEP 2: the corpus DOES carry real chroma -- palettes_q16 channels 1 (a) and 2 (b) reach
     abs ~17k on high-lab. The old l_volume kept only channel 0 (L), which discarded all chroma
     before it could ever reach the value-head target. We now keep all three channels.
+
+    SCENE KINDS (scene_corpus.py): for a `scene-*` kind the burst is a COHERENT structured volume
+    (drifting gradients / moving blobs / soft edges / low-freq waves) instead of the Zig `synth_burst`
+    noise -- the un-flooring training set whose within-octant detail is learnable. It is routed through
+    the SAME `quantize_frame` (256 colours/frame) as a real capture, so a scene clip is structurally a
+    real capture; only the content differs. (See the flooring diagnosis: smoothness-proportional gain.)
     """
+    if kind.startswith("scene-"):
+        import zig_native as zn                          # the shared Zig codec (quantize_frame)
+        from scene_corpus import scene_burst
+        oklab = scene_burst(seed, kind)                 # (F, 4096, 3) int32 Q16 -- synth_burst's twin
+        f, s = oklab.shape[0], 64
+        vol = np.empty((f, s, s, 3), dtype=np.int64)
+        for fr in range(f):
+            cen, idx = zn.quantize_frame(oklab[fr], 256, 3)   # SAME 256-palette quantization as a capture
+            vol[fr] = cen[idx].reshape(s, s, 3)
+        return vol
+
     cap = synthetic_capture(seed, kind)
     f, s = cap.indices.shape[0], 64
     # (L, a, b) per voxel = palette (L, a, b) at that voxel's index; reshape flat 4096 -> (64, 64, 3).

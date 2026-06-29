@@ -106,6 +106,13 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/synth_corpus_64.py"
   run "Synthetic corpus 64³ (encode round-trip + entropy vectors responsive)" "( cd '$root/trainer' && python3 synth_corpus_64.py )"
 fi
 
+# The capture-format round-trip (Spec.CaptureFormat Test A): an app-shaped 256²×64 GIF reduces to the
+# exact 64³ encoder capture, byte-exact at the (index + sRGB8) level. Proves the app's export IS the
+# encoder's input via decimate4x ∘ replicate4x == id, deferring to the spec-emitted generated/capture_format.py.
+if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/gif_to_capture.py" ]; then
+  run "Capture round-trip (app GIF 256²×64 == 64³ encoder input, index+sRGB8 byte-exact)" "( cd '$root/trainer' && python3 gif_to_capture.py )"
+fi
+
 echo ""
 if [ "$fail" -ne 0 ]; then
   echo "GATE: FAIL"

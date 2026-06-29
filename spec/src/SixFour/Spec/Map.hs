@@ -1014,7 +1014,9 @@ GIF89a Application-Extension, CRC32-checked, total Absent\/Corrupt\/VersionMisma
 == 5. The authoring STORY (Acts I–IV) — the user-facing pipeline the NN lives in
 "SixFour.Spec.StageA" (Act I, @16²@ per-frame) · "SixFour.Spec.QuartetDelta" (Act II, @4⁴@ quartet core) ·
 "SixFour.Spec.HaarRibbon" (Act III, @2⁸@ Haar abstraction) · "SixFour.Spec.Export" (Act IV, the global pack
-@{16³,64³,256³}@) · "SixFour.Spec.Upscale256" (Act IV, the residual-seeded @256³@ super-res of the export pack — a SEPARATE DETERMINISTIC ENDGAME consuming the @64³@ policy+value, zero learned trunk params; rungs labelled in @SynthesisPolicyValue.lawHeadsLiveAtLabeledRungs@)
+@{16³,64³,256³}@) · "SixFour.Spec.CaptureFormat" (Act IV, the ONE capture-wire contract: the app's exported GIF
+@256²×64@ = the encoder's @64³@ input via @decimate2D ∘ replicate2D == id@; time UNSCALED at the wire — NOT
+@upscale256@; sRGB8+index canonical, Q16 internal-only — @lawCaptureFormatSound@) · "SixFour.Spec.Upscale256" (Act IV, the residual-seeded @256³@ super-res of the export pack — a SEPARATE DETERMINISTIC ENDGAME consuming the @64³@ policy+value, zero learned trunk params; rungs labelled in @SynthesisPolicyValue.lawHeadsLiveAtLabeledRungs@)
 · "SixFour.Spec.AtlasCascade" (Act IV, the two-cube cascade @ExitState@ — QUAD-literal carry/reset for the @64³ → 256³@ warm start).
 
 == 6. Dither & index encoding

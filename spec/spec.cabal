@@ -190,6 +190,7 @@ library
         SixFour.Spec.Order
         SixFour.Spec.GridScript
         SixFour.Spec.Export
+        SixFour.Spec.CaptureFormat
         SixFour.Spec.Lattice
         SixFour.Spec.Boundary
         SixFour.Spec.InfluenceField
@@ -217,6 +218,7 @@ library
         SixFour.Spec.AtlasCascade
         SixFour.Spec.Upscale256
         SixFour.Codegen.Swift
+        SixFour.Codegen.CaptureFormat
         SixFour.Codegen.Shapes
         SixFour.Codegen.JepaData
         SixFour.Codegen.JepaHead
@@ -504,6 +506,7 @@ test-suite spec-tests
         Properties.Order
         Properties.GridScript
         Properties.Export
+        Properties.CaptureFormat
         Properties.TemporalLoop
         Properties.Lattice
         Properties.Boundary
