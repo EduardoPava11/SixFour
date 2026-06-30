@@ -24,16 +24,19 @@ struct FieldMetalView: UIViewRepresentable {
     let placement: [ColorIdentity: (col: Int, row: Int)]
     let tick: Int
 
-    /// GPU field on iff Metal initialised. The CPU bake (`InfluenceField`) is the no-Metal
-    /// fallback; `-cpuField` (DEBUG) forces it so the two can still be A/B-compared.
-    static let enabled: Bool = {
-        guard FieldMetalCore.shared != nil else { return false }
+    /// GPU field on iff the off-main core build has landed (`.ready`). A computed var (NOT a
+    /// cached static let) so it flips true once the background build finishes — StageGround is
+    /// re-evaluated every clock.tick, so the switch re-runs within one 20 fps tick (~50 ms) of
+    /// readiness. The CPU bake (`InfluenceField`) is the no-Metal fallback; `-cpuField` (DEBUG)
+    /// forces it so the two can still be A/B-compared.
+    static var enabled: Bool {
+        guard FieldMetalCore.state == .ready else { return false }
         #if DEBUG
         return !ProcessInfo.processInfo.arguments.contains("-cpuField")
         #else
         return true
         #endif
-    }()
+    }
 
     func makeUIView(context: Context) -> FieldUIView {
         let v = FieldUIView()
@@ -116,11 +119,22 @@ struct StageGround: View {
     let placement: [ColorIdentity: (col: Int, row: Int)]
     let tick: Int
     var body: some View {
-        if FieldMetalView.enabled {
-            FieldMetalView(surface: surface, placement: placement, tick: tick)
-                .ignoresSafeArea()
-        } else {
+        // Tri-state on the off-main build so the FIRST-PAINT window paints nothing (the Color.black
+        // base in SurfaceView shows through as the intended black) instead of running the InfluenceField
+        // CPU StageField bake on the main thread. InfluenceField is reserved strictly for the genuine
+        // no-Metal device, reached only after the off-main build DEFINITIVELY resolves to `.failed`.
+        switch FieldMetalCore.state {
+        case .ready:
+            if FieldMetalView.enabled {
+                FieldMetalView(surface: surface, placement: placement, tick: tick)
+                    .ignoresSafeArea()
+            } else {
+                InfluenceField(surface: surface, placement: placement, tick: tick)
+            }
+        case .failed:
             InfluenceField(surface: surface, placement: placement, tick: tick)
+        case .pending:
+            Color.clear
         }
     }
 }
@@ -157,7 +171,49 @@ final class FieldMetalCore: @unchecked Sendable {
     let pipeline: any MTLRenderPipelineState
 
     static let log = Logger(subsystem: "com.sixfour.SixFour", category: "metal.ground")
-    static let shared: FieldMetalCore? = FieldMetalCore()
+
+    /// Build lifecycle for the off-main PSO compile. `.pending` while the background build runs
+    /// (StageGround paints nothing → the Color.black base shows as the intended black), `.ready`
+    /// once the core lands, `.failed` only when Metal is genuinely unavailable (→ CPU fallback).
+    enum BuildState { case pending, ready, failed }
+
+    /// nonisolated(unsafe) statics guarded by an NSLock — satisfies SWIFT_STRICT_CONCURRENCY=complete.
+    /// FieldMetalCore is @unchecked Sendable, so handing the built instance across the queue boundary
+    /// is data-race-safe. The core is built OFF the main thread (the makeRenderPipelineState compile is
+    /// the device first-paint stall) and published once ready.
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var _shared: FieldMetalCore?
+    nonisolated(unsafe) private static var _state: BuildState = .pending
+    nonisolated(unsafe) private static var primed = false
+
+    /// The built core, or nil until the background build lands (`configure`/`draw` already
+    /// `guard let core = FieldMetalCore.shared else { return }`, so they no-op-to-black meanwhile).
+    static var shared: FieldMetalCore? {
+        lock.lock(); defer { lock.unlock() }; return _shared
+    }
+
+    /// The current build state (StageGround/`enabled` branch on this; it flips within one κ tick of
+    /// readiness because StageGround is re-evaluated every clock.tick).
+    static var state: BuildState {
+        lock.lock(); defer { lock.unlock() }; return _state
+    }
+
+    /// Kick the off-main PSO compile exactly once. Called from `SixFourApp.init` so the heavy
+    /// makeDefaultLibrary + makeFunction + makeRenderPipelineState run in parallel with the rest of
+    /// launch instead of stalling the first CATransaction on the main thread.
+    static func prime() {
+        lock.lock()
+        if primed { lock.unlock(); return }
+        primed = true
+        lock.unlock()
+        DispatchQueue.global(qos: .userInitiated).async {
+            let core = FieldMetalCore()
+            lock.lock()
+            _shared = core
+            _state = core != nil ? .ready : .failed
+            lock.unlock()
+        }
+    }
 
     // Each failure is logged individually: this is the persistent StageGround. If it returns nil the
     // app has no opaque Metal background and the window shows white, so on a white-screen launch the

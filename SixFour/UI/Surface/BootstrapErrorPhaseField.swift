@@ -39,7 +39,10 @@ struct BootstrapPhaseField: View {
     }
 
     var body: some View {
-        let lo = 10.0, hi = 26.0
+        // Floor/ceiling raised so the breathing square is a clearly-visible mid-gray the moment the
+        // bootstrap field paints (at tick 0 breath=0, so lo IS the launch value) — an unmistakable
+        // non-white "alive launch" indicator on the black ground, not the near-black 10..26 it was.
+        let lo = 40.0, hi = 64.0
         let v = UInt8(lo + (hi - lo) * breath)
         ZStack {
             Color.black.ignoresSafeArea()

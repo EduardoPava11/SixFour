@@ -61,7 +61,10 @@ struct SurfaceView: View {
                 await engine.bootstrap()
             }
             .onAppear {
-                Surface.assertSpecParity()
+                // DEBUG-only golden self-checks: defer OFF the first-paint path (utility task) so the
+                // synchronous MoveContract/CellMechanics/Boundary folds never add main-thread latency at
+                // appear. Compiled out of release entirely (the whole assert is #if DEBUG internally).
+                Task.detached(priority: .utility) { await Surface.assertSpecParity() }
                 normalizePlacement()   // re-home any widget stranded outside the boundary
                 clock.reduceMotion = reduceMotion
                 // The ONE per-tick action: advance the Z₆₄ playback cursor. Per-phase
