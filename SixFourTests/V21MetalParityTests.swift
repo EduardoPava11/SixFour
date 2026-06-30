@@ -40,13 +40,14 @@ struct V21MetalParityTests {
     /// Dispatch the kernel once at slice `coarseFrame` into `outBuf`. Mirrors `encodeV21Hist` bindings.
     private func dispatch(_ pipe: MetalPipeline, luma: any MTLTexture, chroma: any MTLTexture,
                           outBuf: any MTLBuffer, scale: Int, nLevels: Int, coarse: Int, coarseFrame: Int) throws {
+        let pso = try #require(pipe.v21HistPSO)   // V2.1 PSO is optional on the pipeline; required here
         let cmd = try #require(pipe.queue.makeCommandBuffer())
         let enc = try #require(cmd.makeComputeCommandEncoder())
         var offset = SIMD2<Int32>(0, 0)
         var sc = Int32(scale), tag = UInt8(0), lv = Int32(nLevels)
         var cd = SIMD2<Int32>(Int32(coarse), Int32(coarse))
         var cf = Int32(coarseFrame)
-        enc.setComputePipelineState(pipe.v21HistPSO)
+        enc.setComputePipelineState(pso)
         enc.setTexture(luma, index: 0)
         enc.setTexture(chroma, index: 1)
         enc.setBuffer(outBuf, offset: 0, index: 0)
@@ -56,8 +57,8 @@ struct V21MetalParityTests {
         enc.setBytes(&lv, length: MemoryLayout<Int32>.size, index: 4)
         enc.setBytes(&cd, length: MemoryLayout<SIMD2<Int32>>.size, index: 5)
         enc.setBytes(&cf, length: MemoryLayout<Int32>.size, index: 6)
-        let w = pipe.v21HistPSO.threadExecutionWidth
-        let h = max(1, pipe.v21HistPSO.maxTotalThreadsPerThreadgroup / w)
+        let w = pso.threadExecutionWidth
+        let h = max(1, pso.maxTotalThreadsPerThreadgroup / w)
         enc.dispatchThreads(MTLSize(width: coarse, height: coarse, depth: 1),
                             threadsPerThreadgroup: MTLSize(width: w, height: h, depth: 1))
         enc.endEncoding()

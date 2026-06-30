@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import Metal
 import QuartzCore
+import os
 import simd
 
 /// THE GPU INFLUENCE FIELD (S3) — a `CAMetalLayer`-backed SwiftUI host that runs `field.metal`,
@@ -155,20 +156,46 @@ final class FieldMetalCore: @unchecked Sendable {
     let queue: any MTLCommandQueue
     let pipeline: any MTLRenderPipelineState
 
+    static let log = Logger(subsystem: "com.sixfour.SixFour", category: "metal.ground")
     static let shared: FieldMetalCore? = FieldMetalCore()
 
+    // Each failure is logged individually: this is the persistent StageGround. If it returns nil the
+    // app has no opaque Metal background and the window shows white, so on a white-screen launch the
+    // device console (subsystem com.sixfour.SixFour, category metal.ground) names the exact failing step.
     private init?() {
-        guard let dev = MTLCreateSystemDefaultDevice(),
-              let q = dev.makeCommandQueue(),
-              let lib = dev.makeDefaultLibrary(),
-              let vfn = lib.makeFunction(name: "fieldVertex"),
-              let ffn = lib.makeFunction(name: "fieldFragment") else { return nil }
+        guard let dev = MTLCreateSystemDefaultDevice() else {
+            Self.log.error("StageGround OFF: MTLCreateSystemDefaultDevice nil (no GPU)")
+            return nil
+        }
+        guard let q = dev.makeCommandQueue() else {
+            Self.log.error("StageGround OFF: makeCommandQueue nil (device=\(dev.name, privacy: .public))")
+            return nil
+        }
+        guard let lib = dev.makeDefaultLibrary() else {
+            Self.log.error("StageGround OFF: makeDefaultLibrary nil (default.metallib missing or unsigned on device?)")
+            return nil
+        }
+        guard let vfn = lib.makeFunction(name: "fieldVertex") else {
+            Self.log.error("StageGround OFF: makeFunction(fieldVertex) nil (metallib stale?)")
+            return nil
+        }
+        guard let ffn = lib.makeFunction(name: "fieldFragment") else {
+            Self.log.error("StageGround OFF: makeFunction(fieldFragment) nil (metallib stale?)")
+            return nil
+        }
         let desc = MTLRenderPipelineDescriptor()
         desc.vertexFunction = vfn
         desc.fragmentFunction = ffn
         desc.colorAttachments[0].pixelFormat = .bgra8Unorm
-        guard let pso = try? dev.makeRenderPipelineState(descriptor: desc) else { return nil }
+        let pso: any MTLRenderPipelineState
+        do {
+            pso = try dev.makeRenderPipelineState(descriptor: desc)
+        } catch {
+            Self.log.error("StageGround OFF: makeRenderPipelineState failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
         device = dev; queue = q; pipeline = pso
+        Self.log.log("StageGround ready: device=\(dev.name, privacy: .public)")
     }
 }
 

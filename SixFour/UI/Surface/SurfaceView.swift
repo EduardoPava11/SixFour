@@ -34,6 +34,10 @@ struct SurfaceView: View {
 
     var body: some View {
         ZStack {
+            // OPAQUE BLACK BASE: SixFour is a black-background app. This guarantees the screen is
+            // black even if StageGround's Metal layer is unavailable (e.g. the default.metallib fails
+            // to load on a device), instead of the window's default WHITE. Defensive, costs nothing.
+            Color.black.ignoresSafeArea()
             // THE ONE PERSISTENT GROUND, hoisted ABOVE the phase router so it is created ONCE for
             // the whole app lifetime — the GPU CAMetalLayer is never torn down/rebuilt per phase
             // (the act1→act2 transition flash). Every phase field renders its widgets + chrome on a

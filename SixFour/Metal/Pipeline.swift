@@ -53,15 +53,27 @@ final class MetalPipeline: @unchecked Sendable {
     /// The V2.1 probability-field accumulator (`v21AccumulateHistKernel`): the device twin of Zig
     /// `s4_v21_accumulate_hist`. Dispatched additively per frame only when a `V21HistDispatch` is
     /// passed to `submitAsync` (gated by `Feature.v21Capture`), so the shipped path is unaffected.
-    let v21HistPSO: any MTLComputePipelineState
+    /// OPTIONAL: V2.1 is experimental and must never fail the whole capture pipeline, so a device that
+    /// can't build this PSO runs without it (export falls back to the temporal-proxy field).
+    let v21HistPSO: (any MTLComputePipelineState)?
 
     init(tileSide: Int = 64) throws {
-        guard let dev = MTLCreateSystemDefaultDevice() else { throw MetalPipelineError.noDevice }
-        guard let q = dev.makeCommandQueue() else { throw MetalPipelineError.noQueue }
-        guard let lib = dev.makeDefaultLibrary() else { throw MetalPipelineError.noLibrary }
+        guard let dev = MTLCreateSystemDefaultDevice() else {
+            Self.logger.error("MetalPipeline init FAILED: MTLCreateSystemDefaultDevice returned nil")
+            throw MetalPipelineError.noDevice
+        }
+        guard let q = dev.makeCommandQueue() else {
+            Self.logger.error("MetalPipeline init FAILED: makeCommandQueue nil (device=\(dev.name, privacy: .public))")
+            throw MetalPipelineError.noQueue
+        }
+        guard let lib = dev.makeDefaultLibrary() else {
+            Self.logger.error("MetalPipeline init FAILED: makeDefaultLibrary nil (default.metallib missing or unsigned?)")
+            throw MetalPipelineError.noLibrary
+        }
         q.label = "capture"
         func pso(_ name: String) throws -> any MTLComputePipelineState {
             guard let fn = lib.makeFunction(name: name) else {
+                Self.logger.error("MetalPipeline init FAILED: kernel '\(name, privacy: .public)' not in default.metallib")
                 throw MetalPipelineError.missingKernel(name)
             }
             return try dev.makeComputePipelineState(function: fn)
@@ -74,8 +86,15 @@ final class MetalPipeline: @unchecked Sendable {
         self.cropDownsampleLinearizePSO = try pso("cropDownsampleLinearizeKernel")
         self.linearToOklabPSO = try pso("linearToOklabKernel")
         self.unsharpPSO = try pso("unsharpMaskLKernel")
-        self.v21HistPSO = try pso("v21AccumulateHistKernel")
-        Self.logger.debug("MetalPipeline (capture) init: tileSide=\(tileSide) device=\(dev.name)")
+        // V2.1 (gated, experimental): NEVER fatal. If the kernel PSO can't be built on this device,
+        // log it and run without the live field; the shipped capture path is unaffected.
+        do {
+            self.v21HistPSO = try pso("v21AccumulateHistKernel")
+        } catch {
+            Self.logger.error("MetalPipeline: v21AccumulateHistKernel unavailable, V2.1 live field OFF: \(String(describing: error), privacy: .public)")
+            self.v21HistPSO = nil
+        }
+        Self.logger.log("MetalPipeline (capture) init OK: tileSide=\(tileSide) device=\(dev.name, privacy: .public) v21=\(self.v21HistPSO != nil)")
     }
 
     enum MetalPipelineError: Error {
@@ -258,6 +277,8 @@ final class MetalPipeline: @unchecked Sendable {
         coarseFrame: Int,
         nLevels: Int
     ) throws {
+        // V2.1 disabled on this device (PSO unavailable): skip silently, shipped path unaffected.
+        guard let pso = v21HistPSO else { return }
         guard let enc = cmd.makeComputeCommandEncoder() else {
             throw MetalPipelineError.commandFailed
         }
@@ -271,7 +292,7 @@ final class MetalPipeline: @unchecked Sendable {
         var levels = Int32(nLevels)
         var coarseDims = SIMD2<Int32>(Int32(tileSide), Int32(tileSide))
         var frame = Int32(coarseFrame)
-        enc.setComputePipelineState(v21HistPSO)
+        enc.setComputePipelineState(pso)
         enc.setTexture(pair.luma, index: 0)
         enc.setTexture(pair.chroma, index: 1)
         enc.setBuffer(histBuffer, offset: 0, index: 0)
@@ -281,7 +302,7 @@ final class MetalPipeline: @unchecked Sendable {
         enc.setBytes(&levels, length: MemoryLayout<Int32>.size, index: 4)
         enc.setBytes(&coarseDims, length: MemoryLayout<SIMD2<Int32>>.size, index: 5)
         enc.setBytes(&frame, length: MemoryLayout<Int32>.size, index: 6)
-        dispatch2D(enc, width: tileSide, height: tileSide, pso: v21HistPSO)
+        dispatch2D(enc, width: tileSide, height: tileSide, pso: pso)
     }
 
     private func encodeLinearToOKLab(
