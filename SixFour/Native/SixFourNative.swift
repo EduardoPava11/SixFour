@@ -669,4 +669,55 @@ enum SixFourNative {
         guard rc == S4_RC_OK else { log.error("s4_v21_accumulate_hist rc=\(rc)"); return nil }
         return out
     }
+
+    /// Ground-state centering (`s4_v21_centered_energy`): subtract each curve's
+    /// minimum, so the GIF byte (argmin) sits at energy 0. `curves` is `p·3·nLevels`
+    /// Q16 energies; returns `p·3·nLevels` centered energies. The kernel refuses on
+    /// i32-envelope overflow.
+    static func centeredEnergyV21(curves: [Int32], p: Int, nLevels: Int) -> [Int32]? {
+        guard p > 0, nLevels > 0, curves.count == p * 3 * nLevels else { return nil }
+        var out = [Int32](repeating: 0, count: p * 3 * nLevels)
+        let rc = curves.withUnsafeBufferPointer { c in
+            out.withUnsafeMutableBufferPointer { o in
+                s4_v21_centered_energy(c.baseAddress, Int32(p), Int32(nLevels), o.baseAddress)
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_v21_centered_energy rc=\(rc)"); return nil }
+        return out
+    }
+
+    /// The mode-relative ENCODER INPUT (`s4_v21_mode_relative`): each curve centered
+    /// and reindexed about its own mode, so the argmin is pinned to relative-0 and the
+    /// absolute mode is WITHHELD (the GIF supplies it via `anchorAtV21`). `curves` is
+    /// `p·3·nLevels`; returns `p·3·nLevels`. The kernel refuses on i32-envelope overflow.
+    static func modeRelativeV21(curves: [Int32], p: Int, nLevels: Int) -> [Int32]? {
+        guard p > 0, nLevels > 0, curves.count == p * 3 * nLevels else { return nil }
+        var out = [Int32](repeating: 0, count: p * 3 * nLevels)
+        let rc = curves.withUnsafeBufferPointer { c in
+            out.withUnsafeMutableBufferPointer { o in
+                s4_v21_mode_relative(c.baseAddress, Int32(p), Int32(nLevels), o.baseAddress)
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_v21_mode_relative rc=\(rc)"); return nil }
+        return out
+    }
+
+    /// Anchor (`s4_v21_anchor_at`), the left inverse of `modeRelativeV21` given the GIF
+    /// byte: `out[l] = rel[(l - mode) mod n]`, so `anchorAtV21` of `modeRelativeV21(e)` at
+    /// the curve's modes reproduces the centered curve (field + GIF reconstruct the field).
+    /// `rel` is `p·3·nLevels`; `modes` is `p·3` (the per-curve GIF level, e.g. from
+    /// `collapseV21`). Returns `p·3·nLevels`.
+    static func anchorAtV21(rel: [Int32], modes: [Int32], p: Int, nLevels: Int) -> [Int32]? {
+        guard p > 0, nLevels > 0, rel.count == p * 3 * nLevels, modes.count == p * 3 else { return nil }
+        var out = [Int32](repeating: 0, count: p * 3 * nLevels)
+        let rc = rel.withUnsafeBufferPointer { r in
+            modes.withUnsafeBufferPointer { m in
+                out.withUnsafeMutableBufferPointer { o in
+                    s4_v21_anchor_at(r.baseAddress, m.baseAddress, Int32(p), Int32(nLevels), o.baseAddress)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_v21_anchor_at rc=\(rc)"); return nil }
+        return out
+    }
 }

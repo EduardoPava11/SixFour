@@ -2993,3 +2993,93 @@ pub export fn s4_v21_accumulate_hist(
     }
     return RC_OK;
 }
+
+/// V2.1 GROUND-STATE CENTERING (SixFour.Spec.V21Field.centeredEnergy): subtract each curve's MINIMUM
+/// so the energy is the excess above the ground state and the GIF byte (argmin) sits at energy 0. A
+/// monotone shift, so s4_v21_collapse is unchanged. `curves` is [p*3*n_levels] (pixel-major, R,G,B,
+/// then level); writes [p*3*n_levels] centered energies. Centering in i64; refuses (RC_OUT_OF_RANGE)
+/// if a centered value leaves the i32 envelope rather than wrapping.
+pub export fn s4_v21_centered_energy(curves: [*c]const i32, p: i32, n_levels: i32, out_centered: [*c]i32) i32 {
+    if (curves == null or out_centered == null) return RC_NULL_PTR;
+    if (p <= 0 or n_levels <= 0) return RC_BAD_SHAPE;
+    const nl: usize = @intCast(n_levels);
+    const ncurves: usize = @as(usize, @intCast(p)) * 3;
+    const i32max: i64 = 2147483647;
+    const i32min: i64 = -2147483648;
+    var c: usize = 0;
+    while (c < ncurves) : (c += 1) {
+        const base = c * nl;
+        var mn: i32 = curves[base];
+        var l: usize = 1;
+        while (l < nl) : (l += 1) {
+            if (curves[base + l] < mn) mn = curves[base + l];
+        }
+        l = 0;
+        while (l < nl) : (l += 1) {
+            const e: i64 = @as(i64, curves[base + l]) - @as(i64, mn);
+            if (e > i32max or e < i32min) return RC_OUT_OF_RANGE;
+            out_centered[base + l] = @intCast(e);
+        }
+    }
+    return RC_OK;
+}
+
+/// V2.1 MODE-RELATIVE PRESENTATION (the encoder input; SixFour.Spec.V21Field.modeRelative): the
+/// centered curve reindexed about its own mode (left-rotated by the argmin index), so the argmin is
+/// pinned to relative-0 and the ABSOLUTE mode is WITHHELD (the GIF supplies it via s4_v21_anchor_at).
+/// out[k] = curves[mode + k (mod n)] - min. `curves` is [p*3*n_levels]; writes [p*3*n_levels].
+/// Refuses (RC_OUT_OF_RANGE) on a centering overflow, as s4_v21_centered_energy does.
+pub export fn s4_v21_mode_relative(curves: [*c]const i32, p: i32, n_levels: i32, out_rel: [*c]i32) i32 {
+    if (curves == null or out_rel == null) return RC_NULL_PTR;
+    if (p <= 0 or n_levels <= 0) return RC_BAD_SHAPE;
+    const nl: usize = @intCast(n_levels);
+    const ncurves: usize = @as(usize, @intCast(p)) * 3;
+    const i32max: i64 = 2147483647;
+    const i32min: i64 = -2147483648;
+    var c: usize = 0;
+    while (c < ncurves) : (c += 1) {
+        const base = c * nl;
+        // argmin (lowest-index tie-break) = the mode; mn = the minimum value (the ground state).
+        var best_i: usize = 0;
+        var mn: i32 = curves[base];
+        var l: usize = 1;
+        while (l < nl) : (l += 1) {
+            if (curves[base + l] < mn) {
+                mn = curves[base + l];
+                best_i = l;
+            }
+        }
+        var k: usize = 0;
+        while (k < nl) : (k += 1) {
+            const src = (best_i + k) % nl;
+            const e: i64 = @as(i64, curves[base + src]) - @as(i64, mn);
+            if (e > i32max or e < i32min) return RC_OUT_OF_RANGE;
+            out_rel[base + k] = @intCast(e);
+        }
+    }
+    return RC_OK;
+}
+
+/// V2.1 ANCHOR (the left inverse of s4_v21_mode_relative GIVEN the GIF byte;
+/// SixFour.Spec.V21Field.anchorAt): re-attach a mode-relative curve at its absolute mode level, so
+/// anchor(mode, modeRelative(e)) == centeredEnergy(e) -- field + GIF reconstruct the field. `rel` is
+/// [p*3*n_levels]; `modes` is [p*3] (the per-curve GIF level, e.g. from s4_v21_collapse); writes
+/// [p*3*n_levels]. A pure permutation: out[l] = rel[(l - mode) mod n] (mode reduced into [0,n)).
+pub export fn s4_v21_anchor_at(rel: [*c]const i32, modes: [*c]const i32, p: i32, n_levels: i32, out_centered: [*c]i32) i32 {
+    if (rel == null or modes == null or out_centered == null) return RC_NULL_PTR;
+    if (p <= 0 or n_levels <= 0) return RC_BAD_SHAPE;
+    const nl: usize = @intCast(n_levels);
+    const ncurves: usize = @as(usize, @intCast(p)) * 3;
+    const inl: i64 = @intCast(nl);
+    var c: usize = 0;
+    while (c < ncurves) : (c += 1) {
+        const base = c * nl;
+        const m: i64 = @mod(@as(i64, modes[c]), inl); // mode reduced into [0, n)
+        var l: usize = 0;
+        while (l < nl) : (l += 1) {
+            const src: usize = @intCast(@mod(@as(i64, @intCast(l)) - m, inl)); // (l - mode) mod n
+            out_centered[base + l] = rel[base + src];
+        }
+    }
+    return RC_OK;
+}

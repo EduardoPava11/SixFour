@@ -334,4 +334,22 @@ int32_t s4_v21_accumulate_hist(const uint8_t *fine, int32_t fx, int32_t fy, int3
                                int32_t dx, int32_t dy, int32_t dt, int32_t n_levels,
                                int32_t *out_counts);
 
+// Ground-state centering: subtract each curve's minimum, so the GIF byte (argmin)
+// sits at energy 0. `curves` is [p*3*n_levels]; writes [p*3*n_levels] centered
+// energies. Centering in i64; refuses on i32-envelope overflow.
+int32_t s4_v21_centered_energy(const int32_t *curves, int32_t p, int32_t n_levels,
+                               int32_t *out_centered);
+
+// Mode-relative ENCODER INPUT: the centered curve reindexed about its own mode
+// (left-rotated by the argmin), so the argmin is pinned to relative-0 and the
+// absolute mode is WITHHELD. `curves` is [p*3*n_levels]; writes [p*3*n_levels].
+int32_t s4_v21_mode_relative(const int32_t *curves, int32_t p, int32_t n_levels,
+                             int32_t *out_rel);
+
+// Anchor (the left inverse of mode_relative GIVEN the GIF byte): out[l] =
+// rel[(l - mode) mod n], so anchor(mode, mode_relative(e)) == centered(e). `rel`
+// is [p*3*n_levels], `modes` is [p*3] (the per-curve GIF level); writes [p*3*n_levels].
+int32_t s4_v21_anchor_at(const int32_t *rel, const int32_t *modes, int32_t p,
+                         int32_t n_levels, int32_t *out_centered);
+
 #endif // SIXFOUR_NATIVE_H
