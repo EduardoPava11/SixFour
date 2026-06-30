@@ -3,10 +3,12 @@ Module      : SixFour.Spec.V21Field
 Description : V2.1 pre-collapse field: colour curves collapse to the GIF89a byte; the byte-exact core (collapse, opponent delta, octant spine, metric).
 
 V2.1 is the PRE-COLLAPSE distributional lift of the V2 latent. Per voxel a colour channel is
-a probability curve, stored ENERGY-FIRST as a Q16 fixed-point vector over the 256 value levels
-(@'Curve'@); the byte the user sees in the GIF89a is the energy-MINIMISING level
-(@'collapseQ16'@ = @argmin@). This module promotes ONLY the byte-exact, colour-ring-INDEPENDENT
-core of that design:
+a probability curve, stored ENERGY-FIRST as an INTEGER vector over the 256 value levels
+(@'Curve'@); energy is the count-complement @E = N - count@ and is NOT @2^16@-scaled (the "Q16" in
+@'EnergyQ16'@ is legacy naming, only the mass twin 'massFromCount' is Q16-scaled). The byte the
+user sees in the GIF89a is the energy-MINIMISING level (@'collapseQ16'@ = @argmin@), and because
+collapse is order-only it is exact under any monotone recode. This module promotes ONLY the
+byte-exact, colour-ring-INDEPENDENT core of that design:
 
   * 'collapseQ16', the seam to the existing byte path (@collapse@ of a curve == the sRGB byte the
     V2 boundary already consumes). Lowest-index tie-break, like @nearestCentroidQ16@.
@@ -18,6 +20,13 @@ core of that design:
     children are the @±1@ neighbourhood; the coarse is the floored-mean lineage (bounded).
   * 'axisWeight', the metric: @x@ and @y@ share one linear weight; @t@ is weighted by the
     per-frame palette delta.
+  * 'centeredEnergy' \/ 'modeRelative' \/ 'anchorAt', the CANONICAL ENCODER-INPUT presentation
+    (the design is @spec\/exploration\/V2.1-ENCODER-INPUT.md@): the learnable input is ENERGY (not
+    counts\/mass\/surprisal), presented referred to the ground state and reindexed about its own
+    mode, so the encoder input WITHHOLDS the absolute mode and the GIF (the mode) supplies it. Field
+    and GIF are then non-redundant by construction ('lawModeIsNotAFunctionOfField',
+    'lawFieldPlusGifReconstructs'). 'liftOctCurves' \/ 'detailAt' lift the curves level-wise for the
+    I-JEPA target band ('lawTargetNotDeterminedByGifModes', the vector no-leak guarantee).
   * 'kContract' \/ 'onFloor' \/ 'bandLength' \/ 'readDepth', the S\/K two-level reading (S barred on
     the reversible floor) and the well-founded PonderNet read-depth.
 
@@ -28,7 +37,8 @@ REAL-valued training diagnostic OFF the byte-exact path; it stays in the explora
 @spec\/exploration\/V21Definitions.hs@. No colour-ring choice (Eisenstein vs opponent storage, the
 \/3 substrate) is introduced here, so the V2 colour-substrate gate-wall (the locked M1→M2→M3
 sequence) is untouched: this module is additive and reuses the gated 'SixFour.Spec.OctreeCell'
-spine. Energy is Q16 throughout; 'collapseQ16' is order-only, so it is exact under any monotone code.
+spine. Energy is the plain-integer count-complement (NOT @2^16@-scaled); 'collapseQ16' is order-only,
+so it is exact under any monotone code.
 -}
 -- COMPARTMENT: ZIG-FLOOR | tag:DeviceTag
 module SixFour.Spec.V21Field
@@ -49,6 +59,12 @@ module SixFour.Spec.V21Field
     -- * The metric (x,y linear; t weighted)
   , PaletteDelta
   , axisWeight
+    -- * The canonical encoder-input presentation (mode-relative energy; field + GIF non-redundant)
+  , centeredEnergy
+  , modeRelative
+  , anchorAt
+  , liftOctCurves
+  , detailAt
     -- * The reversible octant spine (reuses "SixFour.Spec.OctreeCell")
   , octantVoxels
   , liftOctList
@@ -80,6 +96,11 @@ module SixFour.Spec.V21Field
   , lawHistTotalPreserved
   , lawHistCellSumsToCellSize
   , lawHistUniformIsSpike
+  , lawCenteredEnergyDeployRoundTrips
+  , lawModeRelativeWithholdsMode
+  , lawModeIsNotAFunctionOfField
+  , lawFieldPlusGifReconstructs
+  , lawTargetNotDeterminedByGifModes
   ) where
 
 import SixFour.Spec.OctreeCell (V8(..), OctBand(..), liftOct, unliftOct)
@@ -249,9 +270,9 @@ modeOfCounts counts = collapseQ16 (map negate counts)
 --   layout @((coarseVoxel*3 + ch)*nLevels + value)@ over @ct*cy*cx@ coarse voxels. The per-axis
 --   dimensions must be divisible by the decimation factors.
 accumulateHist :: (Int, Int, Int) -> (Int, Int, Int) -> Int -> [Int] -> [Int]
-accumulateHist (fx, fy, ft) (dx, dy, dt) nLevels fine =
+accumulateHist (fx, fy, ft) (dx, dy, dt) levels fine =
   [ length [ () | (s, v) <- tagged, s == (cvi, ch), v == lvl ]
-  | cvi <- [0 .. cVox - 1], ch <- [0 .. 2], lvl <- [0 .. nLevels - 1] ]
+  | cvi <- [0 .. cVox - 1], ch <- [0 .. 2], lvl <- [0 .. levels - 1] ]
   where
     cx = fx `div` dx
     cy = fy `div` dy
@@ -274,6 +295,58 @@ accumulateHist (fx, fy, ft) (dx, dy, dt) nLevels fine =
 chunksOf :: Int -> [a] -> [[a]]
 chunksOf _ [] = []
 chunksOf n xs = take n xs : chunksOf n (drop n xs)
+
+-- ---------------------------------------------------------------------------
+-- The canonical ENCODER-INPUT presentation (design: spec/exploration/V2.1-ENCODER-INPUT.md).
+-- The learnable input is ENERGY (not counts/mass/surprisal): integer, linear (commutes with the
+-- opponent transform), order-correct (so the byte re-enters via argmin). It is presented
+-- GROUND-STATE-CENTERED and MODE-RELATIVE so the absolute mode is withheld from the field and the
+-- GIF supplies it -- field and GIF are then complementary, not redundant.
+-- ---------------------------------------------------------------------------
+
+-- | Left-rotate a list cyclically by @k@ (reduced mod the length). The cyclic group @Z/n@ acts on
+--   the value fibre; rotations compose additively, the algebra behind 'modeRelative' \/ 'anchorAt'.
+rotateLeft :: Int -> [a] -> [a]
+rotateLeft _ [] = []
+rotateLeft k xs = let n = length xs; k' = k `mod` n in drop k' xs ++ take k' xs
+
+-- | GROUND-STATE CENTERING: subtract the curve's minimum, so the energy is the excess above the
+--   ground state and the GIF byte (the @argmin@) sits at energy 0. A monotone shift, so it leaves
+--   'collapseQ16' (and its lowest-index tie-break) unchanged: the byte re-enters byte-exactly.
+centeredEnergy :: Curve -> Curve
+centeredEnergy [] = []
+centeredEnergy c  = let m = minimum c in map (subtract m) c
+
+-- | THE ENCODER INPUT: the centered curve reindexed about its own mode (left-rotated by the mode
+--   index), so the @argmin@ is pinned to relative-0 and the ABSOLUTE mode coordinate is withheld.
+--   Two histograms differing only in WHERE the mode sits map to the SAME 'modeRelative' input
+--   ('lawModeIsNotAFunctionOfField'); the GIF supplies the missing absolute mode (see 'anchorAt').
+--   The reindex convention is cyclic, the simplest exact length-preserving bijection; the windowed
+--   convention is an open question in the design doc.
+modeRelative :: Curve -> Curve
+modeRelative c = rotateLeft (collapseQ16 c) (centeredEnergy c)
+
+-- | The left inverse of 'modeRelative' GIVEN the absolute mode (the GIF byte): re-attach the
+--   mode-relative curve at its absolute level. @anchorAt (collapseQ16 e) (modeRelative e) ==
+--   centeredEnergy e@ ('lawFieldPlusGifReconstructs'): field + GIF reconstruct the field.
+anchorAt :: Int -> Curve -> Curve
+anchorAt _ [] = []
+anchorAt i v  = rotateLeft (negate i `mod` length v) v
+
+-- | Lift eight equal-length curves LEVEL-WISE through the gated octant spine, returning the coarse
+--   curve and the seven detail curves. The colour-agnostic per-level reuse of 'liftOctList'; the
+--   held detail band is the I-JEPA target (see 'detailAt', 'lawTargetNotDeterminedByGifModes').
+liftOctCurves :: [Curve] -> (Curve, [Curve])
+liftOctCurves children =
+  let n      = if null children then 0 else minimum (map length children)
+      cols   = [ liftOctList [ ch !! l | ch <- children ] | l <- [0 .. n - 1] ]
+      coarse = map fst cols
+      detail = [ map ((!! k) . snd) cols | k <- [0 .. 6] ]
+  in (coarse, detail)
+
+-- | Select detail band @m@ (0..6) of a 'liftOctCurves' result; @[]@ if out of range.
+detailAt :: Int -> [Curve] -> Curve
+detailAt m bands = if m >= 0 && m < length bands then bands !! m else []
 
 -- | THE COLLAPSE PICKS THE ENERGY MINIMUM AT THE LOWEST INDEX: for any non-empty curve, the chosen
 --   level attains the minimum energy and no earlier level ties it.
@@ -387,3 +460,53 @@ lawHistUniformIsSpike =
       h     = accumulateHist (4, 2, 2) (2, 2, 2) 4 fine
       cells = chunksOf 4 h
   in all (== [0, 0, 8, 0]) cells
+
+-- | DEPLOY ROUND-TRIP: ground-state centering is a monotone recode, so the GIF byte is the zero of
+--   the centered curve, 'collapseQ16' is unchanged, and the integer<->float seam round-trips exactly
+--   (@round . fromIntegral@ is its left inverse) on the observation-count regime.
+lawCenteredEnergyDeployRoundTrips :: [Int] -> Bool
+lawCenteredEnergyDeployRoundTrips cs =
+  null cs ||
+    let e  = countsToEnergy cs
+        ce = centeredEnergy e
+        i  = collapseQ16 e
+    in  ce !! i == 0
+        && collapseQ16 ce == i
+        && map (round . (fromIntegral :: Int -> Double)) ce == ce
+
+-- | NON-REDUNDANCY, the field WITHHOLDS the mode: the encoder input's own @argmin@ is pinned to
+--   relative-0 for EVERY curve, so the field carries no absolute-mode bit. The GIF (the mode) is
+--   therefore independent information, not a copy of the field.
+lawModeRelativeWithholdsMode :: [Int] -> Bool
+lawModeRelativeWithholdsMode cs =
+  null cs || collapseQ16 (modeRelative (countsToEnergy cs)) == 0
+
+-- | NON-REDUNDANCY, witnessed: two histograms of the SAME shape but DIFFERENT modes map to the
+--   identical 'modeRelative' field input, while their GIF bytes ('collapseQ16') differ. The absolute
+--   mode is provably NOT a function of the field, so feeding both field and GIF is not redundant.
+lawModeIsNotAFunctionOfField :: Bool
+lawModeIsNotAFunctionOfField =
+  let e1 = countsToEnergy [9, 0, 0, 0]      -- a spike whose mode is level 0
+      e2 = countsToEnergy [0, 9, 0, 0]      -- the same spike, relocated to level 1
+  in  modeRelative e1 == modeRelative e2
+      && collapseQ16 e1 /= collapseQ16 e2
+
+-- | RECONSTRUCTION (field + GIF recover the field): anchoring the mode-relative input at the
+--   GIF-given mode reproduces the centered curve. The witness that the two streams are complementary.
+lawFieldPlusGifReconstructs :: [Int] -> Bool
+lawFieldPlusGifReconstructs cs =
+  null cs ||
+    let e = countsToEnergy cs
+    in  anchorAt (collapseQ16 e) (modeRelative e) == centeredEnergy e
+
+-- | VECTOR NO-LEAK: the held detail band is NOT determined by the context modes (the GIF). Two
+--   octants of curves with IDENTICAL per-child modes (hence identical GIF) have DIFFERENT lifted
+--   detail bands, so a context that saw every mode still could not copy the vector target -- the
+--   JEPA prediction is real work. This replaces the old scalar-@disagree@ argument with the true
+--   (vector) object.
+lawTargetNotDeterminedByGifModes :: Bool
+lawTargetNotDeterminedByGifModes =
+  let base  = replicate 8 [0, 5, 5, 5]                          -- every child: mode at level 0
+      moved = [0, 5, 5, 4] : replicate 7 [0, 5, 5, 5]           -- child 0 perturbed OFF its mode
+  in  map collapseQ16 base == map collapseQ16 moved             -- GIF (all modes) identical
+      && snd (liftOctCurves base) /= snd (liftOctCurves moved)  -- but the detail bands differ

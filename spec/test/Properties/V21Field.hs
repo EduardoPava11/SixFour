@@ -85,4 +85,19 @@ tests = testGroup "V21Field (pre-collapse curves -> GIF89a byte; byte-exact core
 
   , testProperty "make_bins accumulate: a uniform fine cell collapses to a spike histogram" $
       once lawHistUniformIsSpike
+
+  , testProperty "deploy round-trip: centering monotone (collapse unchanged) + int<->float seam exact" $
+      forAll genCounts lawCenteredEnergyDeployRoundTrips
+
+  , testProperty "encoder input withholds the mode: modeRelative pins argmin to relative-0" $
+      forAll genCounts lawModeRelativeWithholdsMode
+
+  , testProperty "non-redundant (witnessed): distinct GIF modes share one field input" $
+      once lawModeIsNotAFunctionOfField
+
+  , testProperty "field + GIF reconstruct the field: anchorAt mode (modeRelative e) = centeredEnergy e" $
+      forAll genCounts lawFieldPlusGifReconstructs
+
+  , testProperty "vector no-leak: held detail band not determined by the context modes (the GIF)" $
+      once lawTargetNotDeterminedByGifModes
   ]
