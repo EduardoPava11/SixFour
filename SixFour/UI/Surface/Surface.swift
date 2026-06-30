@@ -53,6 +53,12 @@ final class Surface {
     /// the engine's `CaptureOutput.gifURL`; `nil` until a GIFA is rendered.
     var gifURL: URL?
 
+    /// V2.1 (Feature.v21Capture only): the time-pooled camera-box probability field `[y,x,3,256]`
+    /// Int32 counts from the last burst (the GPU `v21AccumulateHistKernel` pooled). Set by
+    /// `SurfaceView.commit` from the engine; the review bench's FIELD / AIRDROP prefer it over the
+    /// index-cube proxy. `nil` when the flag is off or the GPU field was unavailable.
+    var v21Counts: [Int32]?
+
     /// The LIVE camera tile as 64×64 indexed cells (row-major `y·64 + x`) + its paired
     /// sRGB palette — the live hero paints the REAL camera through these (the cube law:
     /// 1 GIF pixel per cell). Distinct from `palette` (the throttled shutter/ground palette)

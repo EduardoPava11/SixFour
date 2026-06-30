@@ -41,6 +41,11 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// Only mutated on `delegateQueue`.
     private var droppedFrameCount = 0
     private var pipelineRef: MetalPipeline?
+    /// V2.1 (Feature.v21Capture only): the persistent burst histogram buffer the GPU accumulates the
+    /// camera-box probability field into, one slice per frame. Allocated at burst start, pooled and
+    /// released in `finishBurst`. nil keeps the shipped path untouched.
+    private var v21HistBuffer: (any MTLBuffer)?
+    private let v21Levels = 256
     private var continuation: CheckedContinuation<BurstResult, Error>?
     /// Per-burst latch — the first delivered sample buffer's
     /// `CMFormatDescription` is checked against x420; subsequent frames
@@ -85,6 +90,10 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     struct BurstResult: Sendable {
         let tiles: [OKLabTile]
         let timing: BurstTiming
+        /// V2.1 (Feature.v21Capture only): the time-pooled camera-box probability field
+        /// `[y, x, 3, 256]` Int32 counts (the GPU `v21AccumulateHistKernel` pooled over the burst).
+        /// nil when the flag is off or the buffer could not be allocated.
+        let v21Counts: [Int32]?
     }
 
     /// Aggregate statistics over the 63 inter-frame intervals (in ms).
@@ -574,6 +583,12 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 self.submittedCount = 0
                 self.droppedFrameCount = 0
                 self.pipelineRef = pipeline
+                // V2.1 (gated): allocate the per-burst camera-box histogram buffer. If the allocation
+                // fails (memory pressure), v21HistBuffer stays nil and the export falls back to the
+                // index-cube proxy field, so capture is never blocked by it.
+                self.v21HistBuffer = Feature.v21Capture
+                    ? pipeline.makeV21HistBuffer(frames: self.targetFrameCount, nLevels: self.v21Levels)
+                    : nil
                 self.continuation = cont
                 self.firstFrameVerified = false
                 self.collecting = true
@@ -676,6 +691,15 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             droppedFrameCount: droppedFrameCount
         )
         Self.log.debug("Burst complete: \(timing.summary)")
+        // V2.1 (gated): pool the camera-box histogram over t into [y,x,3,256]. Safe to read here: the
+        // last frame's command buffer (which carried the 64th hist pass) has completed, and a single
+        // queue runs command buffers in order, so all 64 slices are written.
+        var v21Counts: [Int32]?
+        if let buf = v21HistBuffer, let pipe = pipelineRef {
+            v21Counts = MetalPipeline.poolV21Counts(buffer: buf, frames: targetFrameCount,
+                                                    tileSide: pipe.tileSide, nLevels: v21Levels)
+        }
+        v21HistBuffer = nil
         let snapshot = collected
         let cont = continuation
         collected.removeAll(keepingCapacity: true)
@@ -685,7 +709,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         pipelineRef = nil
         continuation = nil
         collecting = false
-        cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing))
+        cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing, v21Counts: v21Counts))
     }
 
     /// Pure aggregation of inter-frame timing — `static` and side-effect-free so
@@ -766,6 +790,7 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
                 let cont = continuation
                 continuation = nil
                 pipelineRef = nil
+                v21HistBuffer = nil
                 collecting = false
                 cont?.resume(throwing: CaptureError.firstFramePixelFormatMismatch(
                     expected: want10Bit,
@@ -792,7 +817,13 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
         submittedCount += 1
 
         do {
-            try pipeline.submitAsync(pixelBuffer: pixelBuffer, captureNanos: nanos) { [weak self] tile in
+            // V2.1 (gated): this frame's slice of the camera-box accumulation rides the same command
+            // buffer. coarseFrame = submittedCount - 1 (0-based; submittedCount was just incremented),
+            // always in 0..<targetFrameCount thanks to the guard above.
+            let v21: MetalPipeline.V21HistDispatch? = v21HistBuffer.map {
+                MetalPipeline.V21HistDispatch(buffer: $0, coarseFrame: submittedCount - 1, nLevels: v21Levels)
+            }
+            try pipeline.submitAsync(pixelBuffer: pixelBuffer, captureNanos: nanos, v21Hist: v21) { [weak self] tile in
                 guard let self else { return }
                 self.delegateQueue.async {
                     guard self.collecting else { return }
@@ -811,6 +842,7 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
             let cont = continuation
             continuation = nil
             pipelineRef = nil
+            v21HistBuffer = nil
             collecting = false
             cont?.resume(throwing: error)
         }

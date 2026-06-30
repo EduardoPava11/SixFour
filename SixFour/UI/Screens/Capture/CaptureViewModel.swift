@@ -140,6 +140,10 @@ final class CaptureViewModel {
 
     var phase: Phase = .configuring
     var lastTimingSummary: String? = nil
+    /// V2.1 (Feature.v21Capture only): the last burst's time-pooled camera-box probability field
+    /// `[y,x,3,256]` Int32 counts. Folded into `Surface.v21Counts` at commit so the review bench's
+    /// FIELD / AIRDROP use the true camera histogram instead of the index-cube proxy. nil otherwise.
+    var v21Counts: [Int32]? = nil
 
     /// The current deterministic-core stage banner (quantize → dither →
     /// significance → palette → encode), or nil when not rendering deterministically.
@@ -455,6 +459,7 @@ final class CaptureViewModel {
             }
             let result = try await session.captureBurst(into: pipeline)
             lastTimingSummary = result.timing.summary
+            v21Counts = result.v21Counts   // camera-box field (gated); nil keeps the proxy path
             Self.logger.debug("[viewmodel] burst complete: \(result.timing.summary, privacy: .public)")
 
             let tiles = result.tiles

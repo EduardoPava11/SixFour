@@ -156,11 +156,17 @@ struct CapturedReviewPhaseField: View {
         }
     }
 
-    /// Build the per-bin temporal probability field from the committed burst (real capture data).
+    /// Build the probability field for the widgets / AirDrop. Prefer the GPU camera-box field
+    /// (`surface.v21Counts`, the true fine-grid histogram pooled over the burst); fall back to the
+    /// index-cube temporal proxy when the GPU field is unavailable (flag off or allocation failed).
     private func builtField() -> V21FieldData? {
-        V21FieldData.fromCapture(indexCube: surface.indexCube,
-                                 palettesPerFrame: surface.palettesPerFrame,
-                                 side: surface.cubeSide)
+        let side = surface.cubeSide
+        if let counts = surface.v21Counts, counts.count == side * side * 3 * 256 {
+            return V21FieldData(side: side, nLevels: 256, counts: counts)
+        }
+        return V21FieldData.fromCapture(indexCube: surface.indexCube,
+                                        palettesPerFrame: surface.palettesPerFrame,
+                                        side: side)
     }
 
     private func openField() {

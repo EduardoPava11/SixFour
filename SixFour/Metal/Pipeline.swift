@@ -50,6 +50,10 @@ final class MetalPipeline: @unchecked Sendable {
     private let cropDownsampleLinearizePSO: any MTLComputePipelineState
     private let linearToOklabPSO: any MTLComputePipelineState
     private let unsharpPSO: any MTLComputePipelineState
+    /// The V2.1 probability-field accumulator (`v21AccumulateHistKernel`): the device twin of Zig
+    /// `s4_v21_accumulate_hist`. Dispatched additively per frame only when a `V21HistDispatch` is
+    /// passed to `submitAsync` (gated by `Feature.v21Capture`), so the shipped path is unaffected.
+    let v21HistPSO: any MTLComputePipelineState
 
     init(tileSide: Int = 64) throws {
         guard let dev = MTLCreateSystemDefaultDevice() else { throw MetalPipelineError.noDevice }
@@ -70,6 +74,7 @@ final class MetalPipeline: @unchecked Sendable {
         self.cropDownsampleLinearizePSO = try pso("cropDownsampleLinearizeKernel")
         self.linearToOklabPSO = try pso("linearToOklabKernel")
         self.unsharpPSO = try pso("unsharpMaskLKernel")
+        self.v21HistPSO = try pso("v21AccumulateHistKernel")
         Self.logger.debug("MetalPipeline (capture) init: tileSide=\(tileSide) device=\(dev.name)")
     }
 
@@ -90,9 +95,19 @@ final class MetalPipeline: @unchecked Sendable {
     /// GPU finishes. Builds a 3-pass command buffer (crop+linearize → OKLab →
     /// unsharp), then reads back the OKLab tile. Palette extraction runs later
     /// on all tiles via a `PalettePipeline`.
+    /// One frame's slice of a V2.1 probability-field accumulation: the persistent burst histogram
+    /// buffer (from `makeV21HistBuffer`), this frame's `coarseFrame` index along `t`, and the level
+    /// alphabet. Passed to `submitAsync` so the hist pass rides the SAME per-frame command buffer.
+    struct V21HistDispatch {
+        let buffer: any MTLBuffer
+        let coarseFrame: Int
+        let nLevels: Int
+    }
+
     func submitAsync(
         pixelBuffer: CVPixelBuffer,
         captureNanos: UInt64,
+        v21Hist: V21HistDispatch? = nil,
         completion: @escaping @Sendable (OKLabTile) -> Void
     ) throws {
         let geom = pixelBufferGeometry(pixelBuffer)
@@ -108,6 +123,14 @@ final class MetalPipeline: @unchecked Sendable {
                                 destination: intermediates.lab)
         try encodeUnsharpL(cmd: cmd, source: intermediates.lab,
                            destination: intermediates.output)
+
+        // V2.1 (gated): additively accumulate this frame's camera-box histogram into the burst buffer
+        // at slice `coarseFrame`. Same source textures, crop offset, and scale as the box-average pass,
+        // so the field is the box-average's distributional sibling. Off the shipped path when nil.
+        if let v21 = v21Hist {
+            try encodeV21Hist(cmd: cmd, pixelBuffer: pixelBuffer, geom: geom,
+                              histBuffer: v21.buffer, coarseFrame: v21.coarseFrame, nLevels: v21.nLevels)
+        }
 
         let tileSide = self.tileSide
         let outBox = TextureBox(intermediates.output)
@@ -201,6 +224,64 @@ final class MetalPipeline: @unchecked Sendable {
         enc.setBytes(&scaleVal, length: MemoryLayout<Int32>.size, index: 1)
         enc.setBytes(&tag, length: MemoryLayout<UInt8>.size, index: 2)
         dispatch2D(enc, width: tileSide, height: tileSide, pso: cropDownsampleLinearizePSO)
+    }
+
+    /// Allocate the persistent burst histogram buffer for a V2.1 capture: `frames · tileSide² · 3 ·
+    /// nLevels` `Int32`s, `.storageModeShared` so the CPU can read it after the burst. Layout matches
+    /// the Zig `s4_v21_accumulate_hist` / Metal kernel: `((coarseFrame·cy + y)·cx + x)·3·nLevels`.
+    /// Returns nil if the allocation fails (the caller falls back to the index-cube proxy field).
+    func makeV21HistBuffer(frames: Int, nLevels: Int) -> (any MTLBuffer)? {
+        let count = frames * tileSide * tileSide * 3 * nLevels
+        let bytes = count * MemoryLayout<Int32>.stride
+        return device.makeBuffer(length: bytes, options: [.storageModeShared])
+    }
+
+    /// Pool a burst histogram buffer over the `t` axis into the time-pooled field the V2.1 export uses:
+    /// `[y, x, 3, nLevels]` (`tileSide² · 3 · nLevels` `Int32`s), summing each spatial bin's per-frame
+    /// histograms. This is the camera-box twin of `V21FieldData.fromCapture`'s index-cube histogram.
+    static func poolV21Counts(buffer: any MTLBuffer, frames: Int, tileSide: Int, nLevels: Int) -> [Int32] {
+        let spatial = tileSide * tileSide * 3 * nLevels
+        var out = [Int32](repeating: 0, count: spatial)
+        let ptr = buffer.contents().bindMemory(to: Int32.self, capacity: frames * spatial)
+        for t in 0 ..< frames {
+            let base = t * spatial
+            for i in 0 ..< spatial { out[i] &+= ptr[base + i] }
+        }
+        return out
+    }
+
+    private func encodeV21Hist(
+        cmd: any MTLCommandBuffer,
+        pixelBuffer: CVPixelBuffer,
+        geom: PixelBufferGeometry,
+        histBuffer: any MTLBuffer,
+        coarseFrame: Int,
+        nLevels: Int
+    ) throws {
+        guard let enc = cmd.makeComputeCommandEncoder() else {
+            throw MetalPipelineError.commandFailed
+        }
+        defer { enc.endEncoding() }
+        guard let pair = textureCache.texturesYCbCr10(from: pixelBuffer) else {
+            throw MetalPipelineError.textureCreationFailed
+        }
+        var offset = SIMD2<Int32>(Int32(geom.offsetX), Int32(geom.offsetY))
+        var scaleVal = Int32(geom.scale)
+        var tag = colorSpaceTag
+        var levels = Int32(nLevels)
+        var coarseDims = SIMD2<Int32>(Int32(tileSide), Int32(tileSide))
+        var frame = Int32(coarseFrame)
+        enc.setComputePipelineState(v21HistPSO)
+        enc.setTexture(pair.luma, index: 0)
+        enc.setTexture(pair.chroma, index: 1)
+        enc.setBuffer(histBuffer, offset: 0, index: 0)
+        enc.setBytes(&offset, length: MemoryLayout<SIMD2<Int32>>.size, index: 1)
+        enc.setBytes(&scaleVal, length: MemoryLayout<Int32>.size, index: 2)
+        enc.setBytes(&tag, length: MemoryLayout<UInt8>.size, index: 3)
+        enc.setBytes(&levels, length: MemoryLayout<Int32>.size, index: 4)
+        enc.setBytes(&coarseDims, length: MemoryLayout<SIMD2<Int32>>.size, index: 5)
+        enc.setBytes(&frame, length: MemoryLayout<Int32>.size, index: 6)
+        dispatch2D(enc, width: tileSide, height: tileSide, pso: v21HistPSO)
     }
 
     private func encodeLinearToOKLab(
