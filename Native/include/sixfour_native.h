@@ -288,4 +288,50 @@ int32_t s4_gif_decode(const uint8_t *gif, size_t gif_len,
                       int32_t *out_frame_count, int32_t *out_side, int32_t *out_k,
                       void *scratch, size_t scratch_cap);
 
+// ─────────────────────────────────────────────────────────────────────────
+// V2.1 (pre-collapse field)
+//
+// The V2.1 pre-collapse field kernels (Native/src/kernels.zig, ports of
+// SixFour.Spec.V21Field). A "curve" carries one channel's per-level energy or
+// count; collapse of a curve is the sRGB byte the V2 boundary consumes. These
+// are ADDITIVE: no MVP1 path calls them. Memory rule unchanged: caller owns all
+// memory. All return S4_RC_* (S4_RC_OUT_OF_RANGE on a domain/envelope refusal).
+// ─────────────────────────────────────────────────────────────────────────
+
+// Per channel-curve, the energy-MINIMISING level (argmin, lowest index wins
+// ties) written as an sRGB byte. `curves` is [p*3*n_levels] Q16 energies
+// (pixel-major: pixel, channel R,G,B, then level); writes p*3 bytes to
+// out_rgb. n_levels <= 256 (the level is the byte).
+int32_t s4_v21_collapse(const int32_t *curves, int32_t p, int32_t n_levels,
+                        uint8_t *out_rgb);
+
+// Per-level octant-lift driver: drives the gated byte-exact s4_octant_lift over
+// each of n_levels curve levels. `octant_curves` is [8*n_levels] (cell-major,
+// level-contiguous); writes the coarse curve [n_levels] and 7 residual curves
+// [7*n_levels] (residual-major).
+int32_t s4_v21_octant_lift_curve(const int32_t *octant_curves, int32_t n_levels,
+                                 int32_t *out_coarse, int32_t *out_residuals);
+
+// Per-level integer opponent transform of the neighbour delta. `bin1`/`bin2`
+// are [3*n_levels] (R,G,B curves, level-contiguous) Q16; writes [3*n_levels]
+// (L,a,b) delta curves. Computed in i64; refuses on i32-envelope overflow.
+int32_t s4_v21_opponent_delta(const int32_t *bin1, const int32_t *bin2,
+                              int32_t n_levels, int32_t *out_lab);
+
+// Captured-bin energy curve: E(level) = total - count(level), total = sum of a
+// curve's counts (argmin E = the mode). `counts` is [p*3*n_levels] (pixel-major,
+// R,G,B, then level), non-negative; writes [p*3*n_levels] energies. Per-curve
+// total in i64; refuses on i32-envelope overflow.
+int32_t s4_v21_counts_to_energy(const int32_t *counts, int32_t p, int32_t n_levels,
+                                int32_t *out_energy);
+
+// Histogram accumulation: box-decimate a FINE grid into coarse voxels and, per
+// voxel per channel, count fine samples at each value level. `fine` is
+// [ft*fy*fx*3] u8, layout (((ft*fy + y)*fx + x)*3 + ch); `out_counts` (zeroed
+// here) is [ct*cy*cx*3*n_levels], layout ((coarseVoxel*3 + ch)*n_levels + value).
+// Dimensions must be divisible by the decimation factors; refuses a value >= n_levels.
+int32_t s4_v21_accumulate_hist(const uint8_t *fine, int32_t fx, int32_t fy, int32_t ft,
+                               int32_t dx, int32_t dy, int32_t dt, int32_t n_levels,
+                               int32_t *out_counts);
+
 #endif // SIXFOUR_NATIVE_H

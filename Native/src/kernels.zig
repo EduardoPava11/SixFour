@@ -2811,3 +2811,185 @@ pub export fn s4_build_cube_q16(
     s4log("build_cube n={d} nz={d}", .{ cube_size, num_zones });
     return RC_OK;
 }
+
+/// V2.1 COLLAPSE (SixFour.Spec.V21Field.collapseQ16): per channel-curve, the energy-MINIMISING
+/// level (argmin), with the LOWEST index winning ties (strict `<`, the same discipline as
+/// nearestCentroidQ16). `curves` is [p*3*n_levels] Q16 energies in pixel-major order (pixel,
+/// then channel R,G,B, then level); writes the p*3 collapsed levels as sRGB bytes into `out_rgb`.
+/// This is the SEAM from the V2.1 pre-collapse field to the existing byte path: collapse of a
+/// curve is the sRGB byte the V2 boundary consumes. Energy is order-only, so the result is exact
+/// under any monotone code. n_levels must be <= 256 (the level is the byte).
+pub export fn s4_v21_collapse(curves: [*c]const i32, p: i32, n_levels: i32, out_rgb: [*c]u8) i32 {
+    if (curves == null or out_rgb == null) return RC_NULL_PTR;
+    if (p <= 0 or n_levels <= 0) return RC_BAD_SHAPE;
+    if (n_levels > 256) return RC_OUT_OF_RANGE; // the level is written as a byte
+    const nl: usize = @intCast(n_levels);
+    const total: usize = @as(usize, @intCast(p)) * 3;
+    var ch: usize = 0;
+    while (ch < total) : (ch += 1) {
+        const base = ch * nl;
+        var best_i: usize = 0;
+        var best_v: i32 = curves[base];
+        var l: usize = 1;
+        while (l < nl) : (l += 1) {
+            const v = curves[base + l];
+            if (v < best_v) { // strict: first (lowest-index) minimum wins ties
+                best_v = v;
+                best_i = l;
+            }
+        }
+        out_rgb[ch] = @intCast(best_i);
+    }
+    return RC_OK;
+}
+
+/// V2.1 per-level OCTANT LIFT DRIVER (SixFour.Spec.V21Field.liftOctList): drives the gated,
+/// byte-exact s4_octant_lift over each of the n_levels curve levels. `octant_curves` is
+/// [8*n_levels], cell-major (the 8 octant cells' one-channel curves, level-contiguous); writes the
+/// coarse curve [n_levels] and the 7 residual curves [7*n_levels] (residual-major). NO new spine
+/// math: the reversible edge is s4_octant_lift; this is only the per-level loop, in Zig. Refuses
+/// (propagates RC_OUT_OF_RANGE) when a level's octant is out of the substrate domain.
+pub export fn s4_v21_octant_lift_curve(
+    octant_curves: [*c]const i32,
+    n_levels: i32,
+    out_coarse: [*c]i32,
+    out_residuals: [*c]i32,
+) i32 {
+    if (octant_curves == null or out_coarse == null or out_residuals == null) return RC_NULL_PTR;
+    if (n_levels <= 0) return RC_BAD_SHAPE;
+    const nl: usize = @intCast(n_levels);
+    var l: usize = 0;
+    while (l < nl) : (l += 1) {
+        var in8: [8]i32 = undefined;
+        var w: usize = 0;
+        while (w < 8) : (w += 1) in8[w] = octant_curves[w * nl + l];
+        var out8: [8]i32 = undefined;
+        const rc = s4_octant_lift(&in8, &out8);
+        if (rc != RC_OK) return rc;
+        out_coarse[l] = out8[0];
+        var r: usize = 0;
+        while (r < 7) : (r += 1) out_residuals[r * nl + l] = out8[1 + r];
+    }
+    return RC_OK;
+}
+
+/// V2.1 OPPONENT DELTA (SixFour.Spec.V21Field.labDeltaAt): per level, the integer opponent
+/// transform of the per-channel NEIGHBOUR DELTA. `bin1`/`bin2` are [3*n_levels] (R,G,B curves,
+/// level-contiguous) Q16; writes [3*n_levels] (L,a,b) delta curves. By linearity, opponent of the
+/// delta == delta of the opponent (lawOpponentCommutesWithDelta), so this is the encode target.
+/// Computed in i64; refuses (RC_OUT_OF_RANGE) if any L,a,b leaves the i32 envelope rather than wrapping.
+pub export fn s4_v21_opponent_delta(
+    bin1: [*c]const i32,
+    bin2: [*c]const i32,
+    n_levels: i32,
+    out_lab: [*c]i32,
+) i32 {
+    if (bin1 == null or bin2 == null or out_lab == null) return RC_NULL_PTR;
+    if (n_levels <= 0) return RC_BAD_SHAPE;
+    const nl: usize = @intCast(n_levels);
+    const i32max: i64 = 2147483647;
+    const i32min: i64 = -2147483648;
+    var l: usize = 0;
+    while (l < nl) : (l += 1) {
+        const dr: i64 = @as(i64, bin1[l]) - @as(i64, bin2[l]);
+        const dg: i64 = @as(i64, bin1[nl + l]) - @as(i64, bin2[nl + l]);
+        const db: i64 = @as(i64, bin1[2 * nl + l]) - @as(i64, bin2[2 * nl + l]);
+        const ll: i64 = dr + dg + db; // L = R + G + B
+        const aa: i64 = dr - dg; // a = R - G
+        const bb: i64 = dr + dg - 2 * db; // b = R + G - 2B
+        if (ll > i32max or ll < i32min or aa > i32max or aa < i32min or bb > i32max or bb < i32min)
+            return RC_OUT_OF_RANGE;
+        out_lab[l] = @intCast(ll);
+        out_lab[nl + l] = @intCast(aa);
+        out_lab[2 * nl + l] = @intCast(bb);
+    }
+    return RC_OK;
+}
+
+/// V2.1 CAPTURED-BIN ENERGY CURVE (make_bins core; SixFour.Spec.V21Field.countsToEnergy): the
+/// empirical-histogram energy E(level) = total - count(level), total = the sum of that curve's
+/// counts. argmin E = argmax count = the MODE (the most-observed value), so s4_v21_collapse of this
+/// energy is the captured byte. The PROBABILITY face is the existing s4_board_counts_to_mass_q16
+/// (boardMassFromCount); this is its order-dual ENERGY face, the same empirical-histogram algorithm
+/// generalised to the per-channel value alphabet. `counts` is [p*3*n_levels] (pixel-major, R,G,B,
+/// then level), non-negative; writes [p*3*n_levels] energies. Per-curve total in i64; refuses
+/// (RC_OUT_OF_RANGE) if a total or an energy leaves the i32 envelope rather than wrapping.
+pub export fn s4_v21_counts_to_energy(counts: [*c]const i32, p: i32, n_levels: i32, out_energy: [*c]i32) i32 {
+    if (counts == null or out_energy == null) return RC_NULL_PTR;
+    if (p <= 0 or n_levels <= 0) return RC_BAD_SHAPE;
+    const nl: usize = @intCast(n_levels);
+    const ncurves: usize = @as(usize, @intCast(p)) * 3;
+    const i32max: i64 = 2147483647;
+    const i32min: i64 = -2147483648;
+    var c: usize = 0;
+    while (c < ncurves) : (c += 1) {
+        const base = c * nl;
+        var total: i64 = 0;
+        var l: usize = 0;
+        while (l < nl) : (l += 1) total += @as(i64, counts[base + l]);
+        if (total > i32max or total < i32min) return RC_OUT_OF_RANGE;
+        l = 0;
+        while (l < nl) : (l += 1) {
+            const e: i64 = total - @as(i64, counts[base + l]); // E = total - count
+            if (e > i32max or e < i32min) return RC_OUT_OF_RANGE;
+            out_energy[base + l] = @intCast(e);
+        }
+    }
+    return RC_OK;
+}
+
+/// V2.1 HISTOGRAM ACCUMULATION (the other half of make_bins; SixFour.Spec.V21Field.accumulateHist):
+/// box-decimate a FINE grid into coarse output voxels and, per voxel per channel, count the fine
+/// samples at each value level. A fine sample's coarse voxel is its integer floor-division by the
+/// decimation factor (the SAME box grouping the cube-ladder reduction uses; V2.1 keeps the per-cell
+/// value DISTRIBUTION instead of the reversible Haar detail). `fine` is [ft*fy*fx*3] u8, layout
+/// (((ft*fy + y)*fx + x)*3 + ch); `out_counts` (zeroed here) is [ct*cy*cx*3*n_levels], layout
+/// ((coarseVoxel*3 + ch)*n_levels + value). Dimensions must be divisible by the decimation factors.
+/// Feeds s4_v21_counts_to_energy. TOTAL: refuses (RC_OUT_OF_RANGE) a value >= n_levels.
+pub export fn s4_v21_accumulate_hist(
+    fine: [*c]const u8,
+    fx: i32,
+    fy: i32,
+    ft: i32,
+    dx: i32,
+    dy: i32,
+    dt: i32,
+    n_levels: i32,
+    out_counts: [*c]i32,
+) i32 {
+    if (fine == null or out_counts == null) return RC_NULL_PTR;
+    if (fx <= 0 or fy <= 0 or ft <= 0 or dx <= 0 or dy <= 0 or dt <= 0) return RC_BAD_SHAPE;
+    if (n_levels <= 0 or n_levels > 256) return RC_OUT_OF_RANGE;
+    if (@rem(fx, dx) != 0 or @rem(fy, dy) != 0 or @rem(ft, dt) != 0) return RC_BAD_SHAPE;
+    const ufx: usize = @intCast(fx);
+    const ufy: usize = @intCast(fy);
+    const uft: usize = @intCast(ft);
+    const udx: usize = @intCast(dx);
+    const udy: usize = @intCast(dy);
+    const udt: usize = @intCast(dt);
+    const cx: usize = ufx / udx;
+    const cy: usize = ufy / udy;
+    const ct: usize = uft / udt;
+    const nl: usize = @intCast(n_levels);
+    const out_len: usize = ct * cy * cx * 3 * nl;
+    var z: usize = 0;
+    while (z < out_len) : (z += 1) out_counts[z] = 0;
+    var fti: usize = 0;
+    while (fti < uft) : (fti += 1) {
+        var fyi: usize = 0;
+        while (fyi < ufy) : (fyi += 1) {
+            var fxi: usize = 0;
+            while (fxi < ufx) : (fxi += 1) {
+                const cvi = ((fti / udt) * cy + (fyi / udy)) * cx + (fxi / udx);
+                var ch: usize = 0;
+                while (ch < 3) : (ch += 1) {
+                    const fine_idx = ((fti * ufy + fyi) * ufx + fxi) * 3 + ch;
+                    const v: usize = fine[fine_idx];
+                    if (v >= nl) return RC_OUT_OF_RANGE;
+                    out_counts[(cvi * 3 + ch) * nl + v] += 1;
+                }
+            }
+        }
+    }
+    return RC_OK;
+}

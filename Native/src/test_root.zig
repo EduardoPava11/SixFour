@@ -16,6 +16,11 @@ test {
     _ = @import("dither_fixture_test.zig"); // cross-language spatial-dither golden
     _ = @import("quant_fixture_test.zig"); // cross-language quantizer golden
     _ = @import("collapse_fixture_test.zig"); // cross-language global-collapse golden (GIFA→GIFB)
+    _ = @import("v21_collapse_fixture_test.zig"); // cross-language V2.1 collapse golden (curve argmin → byte)
+    _ = @import("v21_octant_fixture_test.zig"); // cross-language V2.1 per-level octant-lift driver golden
+    _ = @import("v21_opponent_fixture_test.zig"); // cross-language V2.1 opponent-delta golden (encode target)
+    _ = @import("v21_counts_fixture_test.zig"); // cross-language V2.1 captured-bin energy golden (make_bins core + duality)
+    _ = @import("v21_hist_fixture_test.zig"); // cross-language V2.1 histogram accumulation golden (make_bins half 1)
     _ = @import("haar_fixture_test.zig"); // cross-language integer-Haar golden (reversible lifting)
     _ = @import("haar_barrier_hazard_test.zig"); // adversarial: dropped inter-level barrier (untracked hazard mode) breaks reconstruct∘analyze
     _ = @import("haar_barrier_race_test.zig"); // adversarial: level-sequential stale-read race (missing global barrier) breaks reconstruct∘analyze

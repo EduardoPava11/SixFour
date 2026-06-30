@@ -564,4 +564,109 @@ enum SixFourNative {
         guard rc == S4_RC_OK else { log.error("s4_gif_assemble rc=\(rc)"); return nil }
         return Data(out[0..<outLen])
     }
+
+    // MARK: - V2.1 pre-collapse field
+    //
+    // Thin Swift surfaces over the V2.1 pre-collapse-field kernels (ports of
+    // SixFour.Spec.V21Field). A "curve" carries one channel's per-level energy or
+    // count; collapse of a curve is the sRGB byte the V2 boundary consumes. These
+    // are ADDITIVE: no MVP1 path calls them. Each returns nil on rc != S4_RC_OK.
+
+    /// Per channel-curve, the energy-MINIMISING level (argmin, lowest index wins
+    /// ties) as an sRGB byte (`s4_v21_collapse`). `curves` is `p·3·nLevels` Q16
+    /// energies (pixel-major: pixel, channel R,G,B, then level). Returns `p·3`
+    /// sRGB bytes. `nLevels <= 256` (the level is the byte).
+    static func collapseV21(curves: [Int32], p: Int, nLevels: Int) -> [UInt8]? {
+        guard p > 0, nLevels > 0, curves.count == p * 3 * nLevels else { return nil }
+        var out = [UInt8](repeating: 0, count: p * 3)
+        let rc = curves.withUnsafeBufferPointer { c in
+            out.withUnsafeMutableBufferPointer { o in
+                s4_v21_collapse(c.baseAddress, Int32(p), Int32(nLevels), o.baseAddress)
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_v21_collapse rc=\(rc)"); return nil }
+        return out
+    }
+
+    struct OctantLiftCurveResult { let coarse: [Int32]; let residuals: [Int32] }
+
+    /// Per-level octant-lift driver (`s4_v21_octant_lift_curve`): drives the gated
+    /// byte-exact `s4_octant_lift` over each of `nLevels` curve levels.
+    /// `octantCurves` is `8·nLevels` (cell-major, level-contiguous). Returns the
+    /// coarse curve (`nLevels`) and 7 residual curves (`7·nLevels`, residual-major).
+    static func octantLiftCurveV21(octantCurves: [Int32], nLevels: Int) -> OctantLiftCurveResult? {
+        guard nLevels > 0, octantCurves.count == 8 * nLevels else { return nil }
+        var coarse = [Int32](repeating: 0, count: nLevels)
+        var residuals = [Int32](repeating: 0, count: 7 * nLevels)
+        let rc = octantCurves.withUnsafeBufferPointer { oc in
+            coarse.withUnsafeMutableBufferPointer { co in
+                residuals.withUnsafeMutableBufferPointer { re in
+                    s4_v21_octant_lift_curve(oc.baseAddress, Int32(nLevels),
+                                             co.baseAddress, re.baseAddress)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_v21_octant_lift_curve rc=\(rc)"); return nil }
+        return OctantLiftCurveResult(coarse: coarse, residuals: residuals)
+    }
+
+    /// Per-level integer opponent transform of the neighbour delta
+    /// (`s4_v21_opponent_delta`). `bin1`/`bin2` are `3·nLevels` (R,G,B curves,
+    /// level-contiguous) Q16. Returns `3·nLevels` (L,a,b) delta curves. Computed
+    /// in i64; the kernel refuses on i32-envelope overflow.
+    static func opponentDeltaV21(bin1: [Int32], bin2: [Int32], nLevels: Int) -> [Int32]? {
+        guard nLevels > 0, bin1.count == 3 * nLevels, bin2.count == 3 * nLevels else { return nil }
+        var out = [Int32](repeating: 0, count: 3 * nLevels)
+        let rc = bin1.withUnsafeBufferPointer { b1 in
+            bin2.withUnsafeBufferPointer { b2 in
+                out.withUnsafeMutableBufferPointer { o in
+                    s4_v21_opponent_delta(b1.baseAddress, b2.baseAddress, Int32(nLevels), o.baseAddress)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_v21_opponent_delta rc=\(rc)"); return nil }
+        return out
+    }
+
+    /// Captured-bin energy curve (`s4_v21_counts_to_energy`): `E(level) = total -
+    /// count(level)`, `total` = sum of a curve's counts (argmin E = the mode).
+    /// `counts` is `p·3·nLevels` (pixel-major, R,G,B, then level), non-negative.
+    /// Returns `p·3·nLevels` energies. Per-curve total in i64; the kernel refuses
+    /// on i32-envelope overflow.
+    static func countsToEnergyV21(counts: [Int32], p: Int, nLevels: Int) -> [Int32]? {
+        guard p > 0, nLevels > 0, counts.count == p * 3 * nLevels else { return nil }
+        var out = [Int32](repeating: 0, count: p * 3 * nLevels)
+        let rc = counts.withUnsafeBufferPointer { c in
+            out.withUnsafeMutableBufferPointer { o in
+                s4_v21_counts_to_energy(c.baseAddress, Int32(p), Int32(nLevels), o.baseAddress)
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_v21_counts_to_energy rc=\(rc)"); return nil }
+        return out
+    }
+
+    /// Histogram accumulation (`s4_v21_accumulate_hist`): box-decimate a FINE grid
+    /// into coarse voxels and, per voxel per channel, count fine samples at each
+    /// value level. `fine` is `ft·fy·fx·3` u8, layout `(((ft·fy + y)·fx + x)·3 +
+    /// ch)`. Returns the zeroed-and-filled counts `ct·cy·cx·3·nLevels`, layout
+    /// `((coarseVoxel·3 + ch)·nLevels + value)` where `ct = ft/dt`, `cy = fy/dy`,
+    /// `cx = fx/dx`. Dimensions must be divisible by the decimation factors; the
+    /// kernel refuses a value >= nLevels.
+    static func accumulateHistV21(fine: [UInt8], fx: Int, fy: Int, ft: Int,
+                                  dx: Int, dy: Int, dt: Int, nLevels: Int) -> [Int32]? {
+        guard fx > 0, fy > 0, ft > 0, dx > 0, dy > 0, dt > 0, nLevels > 0,
+              fx % dx == 0, fy % dy == 0, ft % dt == 0,
+              fine.count == ft * fy * fx * 3 else { return nil }
+        let count = (ft / dt) * (fy / dy) * (fx / dx) * 3 * nLevels
+        var out = [Int32](repeating: 0, count: count)
+        let rc = fine.withUnsafeBufferPointer { f in
+            out.withUnsafeMutableBufferPointer { o in
+                s4_v21_accumulate_hist(f.baseAddress, Int32(fx), Int32(fy), Int32(ft),
+                                       Int32(dx), Int32(dy), Int32(dt), Int32(nLevels),
+                                       o.baseAddress)
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_v21_accumulate_hist rc=\(rc)"); return nil }
+        return out
+    }
 }

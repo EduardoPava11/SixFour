@@ -216,6 +216,116 @@ kernel void cropDownsampleLinearizeKernel(
     destination.write(float4(lin, 1.0f), gid);
 }
 
+// MARK: - V2.1 histogram accumulation (the distributional sibling of the box average)
+//
+// Same fused crop + linearize as `cropDownsampleLinearizeKernel`, same box
+// iteration, same chroma subsampling. The ONLY difference is the reduction:
+// instead of AVERAGING the scale*scale linear-sRGB box into one output pixel,
+// this kernel KEEPS the per-channel HISTOGRAM of that box, the probability
+// curve V2.1 trains on. The GIF89a byte is the energy-minimising collapse of
+// that curve (see SixFour.Spec.V21Field.collapseQ16); this kernel produces the
+// counts that feed it (the make_bins first half).
+//
+// This is the device twin of Zig `s4_v21_accumulate_hist` and Haskell
+// `SixFour.Spec.V21Field.accumulateHist`, written so a future device golden can
+// assert Metal == Zig == Haskell. The output layout is byte-for-byte the Zig
+// layout `((coarseVoxel*3 + ch)*nLevels + value)`.
+//
+// Quantization (V2.1 is sRGB-native, NO OKLab)
+// --------------------------------------------
+// Each output box delivers a linear-sRGB triple in [0,1] (exactly the `lin`
+// value `cropDownsampleLinearizeKernel` would average). Each channel is mapped
+// to a value level by round-to-nearest over the level alphabet:
+//
+//     level = clamp(int(round(channel * float(nLevels - 1))), 0, nLevels - 1)
+//
+// i.e. for nLevels = 256 the standard 8-bit quantization round(channel * 255).
+// The `round()` idiom matches the fixed-point rounding used by the k-means
+// accumulation kernels in this file.
+//
+// Ownership / no atomics
+// ----------------------
+// One thread owns one coarse voxel and iterates its entire (disjoint) box, so
+// it is the sole writer of that voxel's 3*nLevels output cells. Unlike the
+// k-means bins (many pixels racing into shared clusters) there is no sharing
+// here, so plain integer increments suffice, no atomics. The thread zeroes its
+// own cells first (the Zig zeroes the whole buffer up front; equivalent because
+// the boxes partition the coarse grid).
+//
+// Coarse voxel index
+// ------------------
+// `coarseDims` is (cx, cy), the per-frame coarse grid (the 64x64 destination).
+// `coarseFrame` is the coarse frame index cti along t. The flat coarse voxel is
+//   coarseVoxel = (coarseFrame * cy + gid.y) * cx + gid.x
+// matching the Zig `(cti*cy + cyi)*cx + cxi`. A single-frame dispatch passes
+// coarseFrame = 0; a burst dispatches once per frame with cti advancing, so the
+// histogram buffer is filled across the full ct*cy*cx coarse box.
+//
+// In-bounds boxes count exactly scale*scale samples per (voxel, channel),
+// matching lawHistCellSumsToCellSize. Out-of-bounds box samples are skipped
+// (the same bounds discipline as `cropDownsampleLinearizeKernel`), which only
+// arises at the crop margin; the Zig assumes divisible, fully-in-bounds boxes.
+
+kernel void v21AccumulateHistKernel(
+    texture2d<float, access::read> luma   [[texture(0)]],
+    texture2d<float, access::read> chroma [[texture(1)]],
+    device int*    outCounts        [[buffer(0)]],
+    constant int2  &srcOffset       [[buffer(1)]],
+    constant int   &scale           [[buffer(2)]],
+    constant uchar &colorSpaceTag   [[buffer(3)]],
+    constant int   &nLevels         [[buffer(4)]],
+    constant int2  &coarseDims      [[buffer(5)]],
+    constant int   &coarseFrame     [[buffer(6)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    int cx = coarseDims.x;
+    int cy = coarseDims.y;
+    if ((int)gid.x >= cx || (int)gid.y >= cy) return;
+
+    // Flat coarse voxel index, identical to the Zig `(cti*cy + cyi)*cx + cxi`.
+    int coarseVoxel = (coarseFrame * cy + (int)gid.y) * cx + (int)gid.x;
+    int cellBase = coarseVoxel * 3 * nLevels;
+
+    // Zero this voxel's three histograms (this thread owns them exclusively).
+    for (int ch = 0; ch < 3; ++ch) {
+        int chBase = cellBase + ch * nLevels;
+        for (int v = 0; v < nLevels; ++v) {
+            outCounts[chBase + v] = 0;
+        }
+    }
+
+    // Same box, same crop offset, same linearization as the box-average kernel.
+    int sx0 = srcOffset.x + (int)gid.x * scale;
+    int sy0 = srcOffset.y + (int)gid.y * scale;
+    int yw = (int)luma.get_width();
+    int yh = (int)luma.get_height();
+    int cw = (int)chroma.get_width();
+    int chh = (int)chroma.get_height();
+
+    float scaleLevels = float(nLevels - 1);
+    for (int dy = 0; dy < scale; ++dy) {
+        int sy = sy0 + dy;
+        if (sy < 0 || sy >= yh) continue;
+        int cyc = clamp(sy / 2, 0, chh - 1);
+        for (int dx = 0; dx < scale; ++dx) {
+            int sx = sx0 + dx;
+            if (sx < 0 || sx >= yw) continue;
+            int cxc = clamp(sx / 2, 0, cw - 1);
+            float Y  = luma.read(uint2((uint)sx, (uint)sy)).r;
+            float2 CC = chroma.read(uint2((uint)cxc, (uint)cyc)).rg;
+            float3 lin = ycbcr10VideoRangeToLinearSRGB(Y, CC.x, CC.y, colorSpaceTag);
+            // Quantize each linear-sRGB channel to a value level, then increment
+            // this voxel's per-channel histogram. Channel order R, G, B == 0, 1, 2.
+            int lr = clamp(int(round(lin.r * scaleLevels)), 0, nLevels - 1);
+            int lg = clamp(int(round(lin.g * scaleLevels)), 0, nLevels - 1);
+            int lb = clamp(int(round(lin.b * scaleLevels)), 0, nLevels - 1);
+            outCounts[cellBase + 0 * nLevels + lr] += 1;
+            outCounts[cellBase + 1 * nLevels + lg] += 1;
+            outCounts[cellBase + 2 * nLevels + lb] += 1;
+        }
+    }
+}
+
 // MARK: - Linear RGB → OKLab
 //
 // Expects RGBA16F linear input; writes RGBA16F OKLab. Channel mapping:
