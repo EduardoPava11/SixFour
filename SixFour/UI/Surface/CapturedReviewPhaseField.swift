@@ -20,6 +20,13 @@ struct CapturedReviewPhaseField: View {
     private let ghost = SIMD3<UInt8>(20, 20, 24)
     private let labelInk = Color(srgb8: SIMD3<UInt8>(190, 190, 190))
 
+    // V2.1 review extras (gated by Feature.v21Capture): inspect the probability field through the two
+    // widgets, and AirDrop the GIF + the field tensor. Off in MVP1, so these never mount.
+    @State private var showField = false
+    @State private var fieldData: V21FieldData?
+    @State private var shareItems: [Any] = []
+    @State private var showShare = false
+
     // Centred footprints (lattice is 100 cols wide; centre col = 50), growing downward into a
     // pyramid, with even 6-cell gaps between blocks. Each tile's GridRegion `w == h == footprint`.
     private enum Layout {
@@ -47,11 +54,23 @@ struct CapturedReviewPhaseField: View {
                                       col: Layout.controlsCol, row: Layout.controlsRow,
                                       w: Layout.controlsW, h: Layout.controlsH,
                                       widget: 9, priority: 9, interactive: true))
+
+            if Feature.v21Capture {
+                v21Controls.place(GridRegion(name: "v21Controls",
+                                             col: Layout.controlsCol, row: Layout.controlsRow + 12,
+                                             w: Layout.controlsW, h: Layout.controlsH,
+                                             widget: 9, priority: 9, interactive: true))
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Review the captured GIF across scales")
+        // V2.1: inspect the two widgets full-screen, or AirDrop the GIF + field tensor.
+        .fullScreenCover(isPresented: $showField) {
+            if let f = fieldData { V21WidgetSurface(field: f) } else { Color.black }
+        }
+        .sheet(isPresented: $showShare) { ActivityView(items: shareItems) }
     }
 
     // MARK: - Tiles (each a bitmap in a footprint; pixel density is independent of the atom)
@@ -117,6 +136,42 @@ struct CapturedReviewPhaseField: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Export the reviewed GIF")
         }
+    }
+
+    /// V2.1 controls (gated): FIELD opens the two probability widgets full-screen; AIRDROP shares the
+    /// GIF and the field tensor (`.npy`). Both build the field from the committed burst.
+    private var v21Controls: some View {
+        HStack(spacing: GlobalLattice.pt(6)) {
+            Button { openField() } label: {
+                CellActionButton(icon: .none, title: "FIELD", prominent: false, fillWidth: false)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Inspect the V2.1 probability widgets")
+
+            Button { airdrop() } label: {
+                CellActionButton(icon: .none, title: "AIRDROP", prominent: false, fillWidth: false)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("AirDrop the GIF and the probability field tensor")
+        }
+    }
+
+    /// Build the per-bin temporal probability field from the committed burst (real capture data).
+    private func builtField() -> V21FieldData? {
+        V21FieldData.fromCapture(indexCube: surface.indexCube,
+                                 palettesPerFrame: surface.palettesPerFrame,
+                                 side: surface.cubeSide)
+    }
+
+    private func openField() {
+        fieldData = builtField()
+        if fieldData != nil { showField = true }
+    }
+
+    private func airdrop() {
+        guard let f = builtField() else { return }
+        shareItems = V21Export.shareItems(field: f, gifURL: surface.gifURL)
+        if !shareItems.isEmpty { showShare = true }
     }
 
     /// Forward to export. With A/B retired, accepting the capture is the single modeled edge out

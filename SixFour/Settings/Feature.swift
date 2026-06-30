@@ -30,5 +30,7 @@ enum Feature {
     /// The view is compiled and golden-able, but every entry point is guarded by this flag, so
     /// with it `false` the V2.1 surface is statically unreachable and MVP1 is untouched. Flip to
     /// `true` to wire it into the post-capture surface in V2.1. Mirrors `globalPaletteV2`.
-    static let v21Capture = false
+    /// ON: the review bench shows FIELD (the two probability widgets) and AIRDROP (GIF + field tensor),
+    /// both built from the committed burst. Not read by the capture engine, so it only lights the UI.
+    static let v21Capture = true
 }

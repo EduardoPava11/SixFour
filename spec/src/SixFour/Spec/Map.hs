@@ -526,6 +526,15 @@ cell-aggregate is rank 3 (@lawNineHonestAtCell@ via NudgeRankTheorem) while the 
 ChannelProduct pairs), @lawLossIsCellAggregate@ (MatrixTarget must score the aggregate, not per-voxel),
 @lawGaugeExplicit@ (which 9 is a φ6 gauge toggle). Brush unchanged: one 16³ cell governs a 4096-leaf 256³
 subtree (@lawCellGovernsSuperResSubtree@ = twicenessSpan², two rungs 16→64→256). Additive),
+"SixFour.Spec.V21FieldUI" (★ the V2.1 UI as FUNCTIONS over the probability field: the deterministic
+CELL-COUNT layer. @budgetCells@ apportions a cell budget over a Morton-aligned quadtree\/octree by region
+uncertainty (@disagree@ = non-mode mass, @0@ on a spike, the saliency twin of V21Field
+@lawHistUniformIsSpike@) via exact-integer Hamilton @apportion@; @allocateWidgets@ forces a widget set onto
+pairwise-DISTINCT counts (the OPPOSITION law: two widgets never claim the same number of cells) with a
+staircase repulsion, feasible iff @total ≥ k(k-1)\/2@ (@lawWidgetOppositionFloor@). @lawBudgetConserves@\/
+@lawWidgetBudgetPartitions@ are the UI twins of @lawHistTotalPreserved@; @lawWidgetsOpposeEqualCounts@\/
+@lawWidgetSalienceOrders@ are the repulsion. Bleed (the render layer where splats overlap) is a separate
+METAL-GPU module on top. Ships hand-written Swift, golden-gated. Additive),
 "SixFour.Spec.PonderHaltDistribution" (★ the STRONG PonderNet: a proper geometric HALTING DISTRIBUTION
 over refinement steps (Σ p_halt = 1, @lawHaltIsProperDistribution@), the EXPECTED matrix-loss objective
 @Σ p_n L_n@ (@lawExpectedLossIsConvex@), a truncated-geometric prior (@lawGeometricPriorSumsToOne@) the run

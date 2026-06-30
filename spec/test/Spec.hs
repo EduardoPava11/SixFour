@@ -38,6 +38,7 @@ import qualified Properties.PairTreeFixed as PairTreeFixed
 import qualified Properties.RGBTLift     as RGBTLift
 import qualified Properties.OctreeCell   as OctreeCell
 import qualified Properties.V21Field     as V21Field
+import qualified Properties.V21FieldUI   as V21FieldUI
 import qualified Properties.Recursion    as Recursion
 import qualified Properties.LadderIdentity as LadderIdentity
 import qualified Properties.PerScaleWeights as PerScaleWeights
@@ -397,4 +398,5 @@ main = defaultMain $ testGroup "sixfour-spec"
   , AtlasCascade.tests
   , Upscale256.tests
   , V21Field.tests
+  , V21FieldUI.tests
   ]
