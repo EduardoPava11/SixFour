@@ -287,17 +287,27 @@ final class CaptureViewModel {
     private(set) var store: GeneStore?
 
     func bootstrap() async {
+        // Launch trace via NSLog (device-visible, unlike os_log .debug). The FFI probe (expect 42)
+        // proves the native Zig lib loaded + the C ABI works BEFORE anything else, killing or
+        // confirming the native-lib hypothesis in one line. Each step is bracketed so the LAST
+        // "SF-" line printed on a crashed launch localizes the fault.
+        NSLog("SF-B: bootstrap start; ffi probe(41)=\(SixFourNative.probe(41)) (expect 42)")
         // Route the Zig core's pushed log lines into Console (category native.zig)
         // so every deterministic kernel call leaves visible evidence it ran.
         SixFourNative.installLogging()
+        NSLog("SF-C: installLogging done")
         do {
             let authorized = await CaptureSession.requestAuthorization()
+            NSLog("SF-D: camera authorized=\(authorized)")
             guard authorized else {
                 phase = .unauthorized
                 return
             }
+            NSLog("SF-E: creating MetalPipeline")
             let pipeline = try MetalPipeline(tileSide: 64)
+            NSLog("SF-F: MetalPipeline OK; creating CaptureSession (runs configure + selectHDRFormat)")
             let session = try CaptureSession(targetFps: 20, targetFrameCount: 64)
+            NSLog("SF-G: CaptureSession OK")
             let store = try GeneStore()
 
             // CaptureSession.init -> configure() -> selectHDRFormatAndEnable
@@ -375,9 +385,12 @@ final class CaptureViewModel {
                 Self.logger.warning("[viewmodel] CaptureBundle restore failed (ignored): \(String(describing: error), privacy: .public)")
             }
 
+            NSLog("SF-H: starting preview")
             session.startPreview()
+            NSLog("SF-I: bootstrap complete -> idle")
             phase = .idle
         } catch {
+            NSLog("SF-X: bootstrap THREW (handled): \(String(describing: error))")
             phase = .failed(String(describing: error))
         }
     }

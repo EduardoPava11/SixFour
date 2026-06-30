@@ -186,6 +186,7 @@ targets:
         HEADER_SEARCH_PATHS:
           - $(inherited)
           - $(SRCROOT)/Native
+          - $(SRCROOT)/SixFour/Native    # SFObjC.h (ObjC exception shim) for the bridging header
         LIBRARY_SEARCH_PATHS:
           - $(inherited)
           - $(SRCROOT)/Native/lib/$(PLATFORM_NAME)

@@ -163,6 +163,7 @@ final class FieldMetalCore: @unchecked Sendable {
     // app has no opaque Metal background and the window shows white, so on a white-screen launch the
     // device console (subsystem com.sixfour.SixFour, category metal.ground) names the exact failing step.
     private init?() {
+        NSLog("SF-mg0: StageGround FieldMetalCore init")
         guard let dev = MTLCreateSystemDefaultDevice() else {
             Self.log.error("StageGround OFF: MTLCreateSystemDefaultDevice nil (no GPU)")
             return nil
@@ -195,6 +196,7 @@ final class FieldMetalCore: @unchecked Sendable {
             return nil
         }
         device = dev; queue = q; pipeline = pso
+        NSLog("SF-mg-ready: StageGround ready device=\(dev.name)")
         Self.log.log("StageGround ready: device=\(dev.name, privacy: .public)")
     }
 }
@@ -227,7 +229,10 @@ final class FieldUIView: UIView {
         metalLayer.device = core.device
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
-        metalLayer.isOpaque = true
+        // NOT opaque: until the first GPU present, an opaque CAMetalLayer shows undefined/white over
+        // the Color.black base. Transparent lets the black base show through, so a launch fault reads
+        // as the app's intended black, not a bare white window (keeps "white" from masking the cause).
+        metalLayer.isOpaque = false
         metalLayer.maximumDrawableCount = 3   // triple-buffer so a draw never starves on the pool
     }
 

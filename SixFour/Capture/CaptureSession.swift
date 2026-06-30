@@ -210,6 +210,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// pick an HDR-capable activeFormat + activeColorSpace and the system
     /// delivers HDR.
     private func configure() throws {
+        NSLog("SF-cfg1: configure begin (DEVICE-ONLY path; sim throws at noCamera below)")
         session.beginConfiguration()
         defer { session.commitConfiguration() }
 
@@ -217,6 +218,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             Self.log.error("[capture] No back wide-angle camera available")
             throw CaptureError.noCamera
         }
+        NSLog("SF-cfg2: device=\(device.localizedName)")
         self.device = device
         Self.log.debug("[capture] Device: \(device.localizedName, privacy: .public) modelID=\(device.modelID, privacy: .public)")
 
@@ -244,7 +246,9 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         // Select HDR format + color space AFTER the output is in the
         // session. AVCam-canonical order; the output's negotiation sees
         // the activeFormat change at the right moment.
+        NSLog("SF-cfg3: -> selectHDRFormat")
         try selectHDRFormat(on: device)
+        NSLog("SF-cfg4: selectHDRFormat returned; wiring connection + frame rate")
 
         if let conn = dataOutput.connection(with: .video) {
             if conn.isVideoRotationAngleSupported(90) {
@@ -357,12 +361,27 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         //    set activeFormat + activeColorSpace, query
         //    availableVideoCVPixelFormatTypes; accept first that
         //    lists x420. Track excluded count for diagnostic.
+        NSLog("SF-hdr1: \(x420Candidates.count) x420 formats, \(candidates.count) candidates; locking + probing")
         try device.lockForConfiguration()
         var accepted: Candidate? = nil
         var excludedCount = 0
         for cand in candidates {
-            device.activeFormat = cand.format
-            device.activeColorSpace = cand.colorSpace
+            // The prime device-only suspects: ObjC property setters that can raise
+            // NSInvalidArgumentException (uncatchable by Swift `try`) for a format/colour-space
+            // combo this physical device rejects. Run them through the ObjC @try/@catch shim so an
+            // exception becomes a thrown Swift error instead of aborting the process. Unlock on throw
+            // (the lock is held here; later throw sites unlock manually too).
+            NSLog("SF-hdr2: set activeFormat \(cand.label)")
+            do {
+                try SFObjC.catching {
+                    device.activeFormat = cand.format
+                    device.activeColorSpace = cand.colorSpace
+                }
+            } catch {
+                device.unlockForConfiguration()
+                Self.log.error("[capture] activeFormat/colorSpace setter raised: \(String(describing: error), privacy: .public)")
+                throw error
+            }
             // Swift maps ObjC `availableVideoCVPixelFormatTypes` to
             // `availableVideoPixelFormatTypes` (the `CV` is stripped
             // by AVFoundation.apinotes rename). Same underlying
@@ -459,8 +478,12 @@ final class CaptureSession: NSObject, @unchecked Sendable {
 
         try device.lockForConfiguration()
         defer { device.unlockForConfiguration() }
-        device.activeVideoMinFrameDuration = duration
-        device.activeVideoMaxFrameDuration = duration
+        // Frame-duration setters can also raise NSException for an unsupported value; shim them.
+        // The defer above releases the lock on the thrown path.
+        try SFObjC.catching {
+            device.activeVideoMinFrameDuration = duration
+            device.activeVideoMaxFrameDuration = duration
+        }
     }
 
     // MARK: - Run / stop
