@@ -156,27 +156,31 @@ struct CapturedReviewPhaseField: View {
         }
     }
 
-    /// Build the probability field for the widgets / AirDrop. Prefer the GPU camera-box field
-    /// (`surface.v21Counts`, the true fine-grid histogram pooled over the burst); fall back to the
-    /// index-cube temporal proxy when the GPU field is unavailable (flag off or allocation failed).
-    private func builtField() -> V21FieldData? {
+    /// Build the probability field for the widgets / AirDrop, tagged with its provenance. Prefer the GPU
+    /// camera-box field (`surface.v21Counts`, the true fine-grid histogram pooled over the burst); fall
+    /// back to the index-cube temporal proxy when the GPU field is unavailable (flag off or allocation
+    /// failed). The source travels into the AirDrop manifest so the receiver knows which field it got.
+    private func builtField() -> (field: V21FieldData, source: V21FieldSource)? {
         let side = surface.cubeSide
         if let counts = surface.v21Counts, counts.count == side * side * 3 * 256 {
-            return V21FieldData(side: side, nLevels: 256, counts: counts)
+            return (V21FieldData(side: side, nLevels: 256, counts: counts), .cameraBox)
         }
-        return V21FieldData.fromCapture(indexCube: surface.indexCube,
-                                        palettesPerFrame: surface.palettesPerFrame,
-                                        side: side)
+        if let f = V21FieldData.fromCapture(indexCube: surface.indexCube,
+                                            palettesPerFrame: surface.palettesPerFrame,
+                                            side: side) {
+            return (f, .temporalProxy)
+        }
+        return nil
     }
 
     private func openField() {
-        fieldData = builtField()
+        fieldData = builtField()?.field
         if fieldData != nil { showField = true }
     }
 
     private func airdrop() {
-        guard let f = builtField() else { return }
-        shareItems = V21Export.shareItems(field: f, gifURL: surface.gifURL)
+        guard let built = builtField() else { return }
+        shareItems = V21Export.shareItems(field: built.field, source: built.source, gifURL: surface.gifURL)
         if !shareItems.isEmpty { showShare = true }
     }
 
