@@ -287,8 +287,12 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// candidate that lists x420. Throw `noHLGOrP3FormatAvailable` if
     /// all candidates are output-excluded (btp2-trapped or worse).
     ///
-    /// Per-candidate probe cost is sub-millisecond — set+query inside
-    /// the lock; we probe up to ~9 candidates total on iPhone 17 Pro.
+    /// Per-candidate probe is NOT cheap: each `device.activeFormat =` /
+    /// `device.activeColorSpace =` assignment is a real ISP reconfiguration
+    /// (tens-to-hundreds of ms total across the ~9 candidates on iPhone 17 Pro).
+    /// This is why `CaptureSession.init` must NOT run on the main actor — the
+    /// caller (`CaptureViewModel.buildCaptureStack`) now constructs the session
+    /// off-main so this loop can't block the first SwiftUI frame.
     ///
     /// Sources:
     ///   - Flutter issue #175828 + PR #11106 — same btp2 bug on

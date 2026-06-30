@@ -286,6 +286,55 @@ final class CaptureViewModel {
     private(set) var engines: PaletteEngines?
     private(set) var store: GeneStore?
 
+    /// The fully-built capture stack, returned across the actor hop from the
+    /// off-main builder. Every member is already `Sendable` (MetalPipeline /
+    /// CaptureSession are `@unchecked Sendable`, PaletteEngines is `Sendable`,
+    /// GeneStore is an actor, CaptureBundle is a `Sendable` value), so the
+    /// value crosses back to the `@MainActor` with compiler-checked race safety —
+    /// no `nonisolated(unsafe)`, no warnings.
+    private struct BuiltStack: Sendable {
+        let pipeline: MetalPipeline
+        let session: CaptureSession
+        let engines: PaletteEngines
+        let store: GeneStore
+        let restoredBundle: CaptureBundle?
+    }
+
+    /// Build the entire heavy capture stack OFF the main actor. Because this is a
+    /// `nonisolated async` function (SE-0338), it runs on the cooperative
+    /// background executor even though it has no internal suspension point — so the
+    /// `await` from `bootstrap()` frees the main thread, letting SwiftUI commit the
+    /// first frame (StageGround + the bootstrap phase field) while the camera's ISP
+    /// negotiation (`MetalPipeline` shader compiles + `CaptureSession.configure()` →
+    /// `selectHDRFormat` probe loop) runs here. This is THE launch-stall fix: none
+    /// of this blocking work touches the main thread anymore.
+    private nonisolated static func buildCaptureStack(
+        tileSide: Int, fps: Int, frameCount: Int
+    ) async throws -> BuiltStack {
+        let pipeline = try MetalPipeline(tileSide: tileSide)
+        let session  = try CaptureSession(targetFps: fps, targetFrameCount: frameCount)
+        // CaptureSession.init -> configure() -> selectHDRFormat settles
+        // activeColorSpaceTag synchronously on THIS (builder) thread before
+        // returning, establishing happens-before; this write runs in the builder's
+        // sole-ownership window (the object is not yet published to the main actor),
+        // so it is race-free without locking. Copy it to the pipeline so the Metal
+        // kernel decodes YCbCr10 against the right OETF + RGB primaries instead of
+        // always assuming Rec.709.
+        pipeline.colorSpaceTag = session.activeColorSpaceTag.rawValue
+
+        let store = try GeneStore()
+        let engines = PaletteEngines(
+            kMeans:   try KMeansPalettePipeline(tileSide: tileSide),
+            blueNoise: try? BlueNoisePalettePipeline()
+        )
+        // Best-effort restore of the most-recent CaptureBundle, off-main (a
+        // multi-MB JSON parse that must NOT block the launch). Failure is ignored —
+        // persistence is a nice-to-have, not a critical path.
+        let bundle = (try? CaptureBundle.load()) ?? nil
+        return BuiltStack(pipeline: pipeline, session: session,
+                          engines: engines, store: store, restoredBundle: bundle)
+    }
+
     func bootstrap() async {
         // Launch trace via NSLog (device-visible, unlike os_log .debug). The FFI probe (expect 42)
         // proves the native Zig lib loaded + the C ABI works BEFORE anything else, killing or
@@ -303,18 +352,29 @@ final class CaptureViewModel {
                 phase = .unauthorized
                 return
             }
-            NSLog("SF-E: creating MetalPipeline")
-            let pipeline = try MetalPipeline(tileSide: 64)
-            NSLog("SF-F: MetalPipeline OK; creating CaptureSession (runs configure + selectHDRFormat)")
-            let session = try CaptureSession(targetFps: 20, targetFrameCount: 64)
-            NSLog("SF-G: CaptureSession OK")
-            let store = try GeneStore()
+            // STRUCTURAL suspension: `buildCaptureStack` is `nonisolated async`, so
+            // awaiting it hops OFF the main actor (even though camera auth above did
+            // not suspend when already authorized). The main thread is freed here →
+            // SwiftUI commits the first frame while the camera spins up.
+            NSLog("SF-E: building capture stack OFF-MAIN")
+            let built = try await Self.buildCaptureStack(tileSide: 64, fps: 20, frameCount: 64)
+            NSLog("SF-G: capture stack built; publishing on MainActor")
 
-            // CaptureSession.init -> configure() -> selectHDRFormatAndEnable
-            // settles activeColorSpaceTag before returning; copy it to the
-            // pipeline so the Metal kernel decodes YCbCr10 against the
-            // right OETF + RGB primaries instead of always assuming Rec.709.
-            pipeline.colorSpaceTag = session.activeColorSpaceTag.rawValue
+            // ---- back on @MainActor: publish the finished objects + wire preview ----
+            let pipeline = built.pipeline
+            let session  = built.session
+            self.pipeline = pipeline
+            self.engines  = built.engines
+            self.session  = session
+            self.store    = built.store
+            // Restored CaptureBundle (loaded off-main). Populates `currentBundle`
+            // only — no GIF is rendered automatically; the rendered GIF for an old
+            // bundle is gone, and re-running the full render on bootstrap would be a
+            // surprising hidden cost. Future "open old captures" UI will surface this.
+            if let loaded = built.restoredBundle {
+                self.currentBundle = loaded
+                Self.logger.debug("[viewmodel] restored CaptureBundle id=\(loaded.id, privacy: .public)")
+            }
             Self.logger.debug(
                 "[viewmodel] propagated colorSpaceTag=\(session.activeColorSpaceTag.label, privacy: .public) to MetalPipeline"
             )
@@ -322,7 +382,9 @@ final class CaptureViewModel {
             // Wire the live 64×64 preview path. The callback runs on
             // the session's delegateQueue; we marshal the OKLab→UIImage
             // conversion + assignment to the MainActor here so the
-            // SwiftUI binding fires cleanly.
+            // SwiftUI binding fires cleanly. This wiring stays on the main
+            // actor (it captures `@MainActor self`); only the heavy
+            // construction above moved off-main.
             session.previewPipeline = pipeline
             syncPreviewDither()
             session.previewCallback = { [weak self] tile in
@@ -362,31 +424,8 @@ final class CaptureViewModel {
                 }
             }
 
-            self.pipeline = pipeline
-            self.engines = PaletteEngines(
-                kMeans: try KMeansPalettePipeline(tileSide: 64),
-                blueNoise: try? BlueNoisePalettePipeline()
-            )
-            self.session = session
-            self.store = store
-
-            // Restore the most-recent CaptureBundle from disk (if
-            // any). Populates `currentBundle` only — no GIF is
-            // rendered automatically; the rendered GIF for an old
-            // bundle is gone, and re-running the full render on
-            // bootstrap would be a surprising hidden cost. Future
-            // "open old captures" UI will surface this.
-            do {
-                if let loaded = try CaptureBundle.load() {
-                    self.currentBundle = loaded
-                    Self.logger.debug("[viewmodel] restored CaptureBundle id=\(loaded.id, privacy: .public)")
-                }
-            } catch {
-                Self.logger.warning("[viewmodel] CaptureBundle restore failed (ignored): \(String(describing: error), privacy: .public)")
-            }
-
             NSLog("SF-H: starting preview")
-            session.startPreview()
+            session.startPreview()                  // already Task.detached internally
             NSLog("SF-I: bootstrap complete -> idle")
             phase = .idle
         } catch {
