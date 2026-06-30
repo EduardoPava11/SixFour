@@ -31,6 +31,13 @@ settings:
     # Opt into the modern CBLAS interface so ClusterStatisticsOps' cblas_dgemm /
     # cblas_dgemv calls don't emit macOS 13.3 deprecation warnings.
     GCC_PREPROCESSOR_DEFINITIONS: "$(inherited) ACCELERATE_NEW_LAPACK=1"
+    # The owned native Zig lib (Native/lib/) is arm64-only by design, so the iOS
+    # Simulator must build arm64-only too. Without this, a generic simulator
+    # destination (or a Release / archive build) also requests the x86_64 slice and
+    # fails at link ("ignoring file ... found arm64, required x86_64; Undefined
+    # symbols for architecture x86_64"). Apple-Silicon simulators run arm64
+    # natively, so excluding x86_64 loses nothing. Device (iphoneos) is unaffected.
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
   configs:
     Debug:
       SWIFT_OPTIMIZATION_LEVEL: -Onone
