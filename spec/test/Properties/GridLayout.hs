@@ -28,6 +28,9 @@ tests = testGroup "GridLayout (the capture-scene contention proof — every widg
   , testProperty "TOTAL: disjoint claims + complement partition the 100×218 lattice (cover groundwork)" $
       once (lawCoverPartitions captureScene)
 
+  , testProperty "WIDGET SIZING: every widget cell is on the rounded display (clears the corners)" $
+      once (lawWidgetsClearCorners captureScene)
+
   -- The laws are robust on arbitrary scenes too: an overlapping pair is BOTH
   -- contested and AABB-overlapping (the bridge holds off the canonical scene).
   , testProperty "bridge holds on an overlapping 2-region scene" $

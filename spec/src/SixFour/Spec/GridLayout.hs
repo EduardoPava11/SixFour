@@ -53,6 +53,7 @@ module SixFour.Spec.GridLayout
   , lawPriorityDistinct
   , lawDisjointMatchesRects
   , lawCoverPartitions
+  , lawWidgetsClearCorners
   ) where
 
 import           Data.List       (nub)
@@ -62,7 +63,8 @@ import qualified Data.Set        as Set
 
 import SixFour.Spec.CellFiber (Color(..), Cell, singletonCell, join, isContested)
 import SixFour.Spec.Lattice
-  ( cols, rows, gifPx, touchFloorCells, screenHeightPt, safeTopPt, safeBottomPt )
+  ( cols, rows, gifPx, touchFloorCells, screenHeightPt, safeTopPt, safeBottomPt
+  , cellOnScreen )
 
 -- | A widget's rectangular claim on the screen lattice (top-left origin, atoms).
 -- @lrWidget@ is the owner id (distinct per widget); @lrPriority@ is the deterministic
@@ -212,3 +214,12 @@ lawCoverPartitions scene =
     claimed       = [ cell | (_, r) <- scene, cell <- regionCells r ]
     claimedSet    = Set.fromList claimed
     complementSet = Set.fromList (coverComplement scene)
+
+-- | WIDGET SIZING vs the rounded display: every cell every widget claims lies on
+-- the physical (rounded) screen, no widget pokes into a clipped corner. This is
+-- the first-alignment law that ties widget SIZE and PLACEMENT to the rounded
+-- iPhone 17 Pro display ('SixFour.Spec.Lattice.cellOnScreen'): a region sized or
+-- moved so a corner cell falls off the arc fails the build here, before any port.
+lawWidgetsClearCorners :: Scene -> Bool
+lawWidgetsClearCorners scene =
+  all cellOnScreen [ cell | (_, r) <- scene, cell <- regionCells r ]

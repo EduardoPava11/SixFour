@@ -1,0 +1,5 @@
+# generated render artifacts (regenerate with render_grid.py)
+*.png
+# python bytecode
+__pycache__/
+*.pyc
