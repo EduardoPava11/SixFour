@@ -22,6 +22,9 @@ test {
     _ = @import("v21_counts_fixture_test.zig"); // cross-language V2.1 captured-bin energy golden (make_bins core + duality)
     _ = @import("v21_hist_fixture_test.zig"); // cross-language V2.1 histogram accumulation golden (make_bins half 1)
     _ = @import("v21_mode_relative_fixture_test.zig"); // cross-language V2.1 encoder-input golden (centered/mode-relative/anchor reconstruction)
+    _ = @import("v21_palette_delta_fixture_test.zig"); // cross-language V2.1 palette-delta golden (temporal metric weight + symmetry + gauge invariance)
+    _ = @import("v21_soft_hist_fixture_test.zig"); // cross-language V2.1 soft-splat golden (sub-LSB construction + mass + exact centroid)
+    _ = @import("v21_wdist1d_fixture_test.zig"); // cross-language V2.1 Wasserstein-1 palette metric golden (L1 of CDFs + charges distance)
     _ = @import("haar_fixture_test.zig"); // cross-language integer-Haar golden (reversible lifting)
     _ = @import("haar_barrier_hazard_test.zig"); // adversarial: dropped inter-level barrier (untracked hazard mode) breaks reconstruct∘analyze
     _ = @import("haar_barrier_race_test.zig"); // adversarial: level-sequential stale-read race (missing global barrier) breaks reconstruct∘analyze

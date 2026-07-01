@@ -326,6 +326,92 @@ kernel void v21AccumulateHistKernel(
     }
 }
 
+// MARK: - V2.1 SOFT-SPLAT histogram (the sub-LSB construction)
+//
+// The distributional sibling of `v21AccumulateHistKernel` that USES the 10-bit
+// sensor bits the hard round() throws away. Same box, same crop, same
+// linearization. The ONLY difference is the deposit: instead of rounding a linear
+// channel to ONE 8-bit level and adding 1, it maps the channel to a
+// HIGH-PRECISION position `hi` over the scale (nLevels-1)*wBudget and SPLATS a
+// unit of integer mass `wBudget` across the two adjacent value levels,
+//   hi   = round(channel * (nLevels-1) * wBudget)      (the only float step)
+//   vlo  = hi / wBudget,   frac = hi % wBudget
+//   +=(wBudget - frac) at vlo,   +=frac at vlo+1
+// a partition of unity in integers whose mass-weighted mean is EXACTLY hi
+// (SixFour.Spec.V21Field.lawSoftSplatCentroidExact). The sub-LSB fraction round()
+// discarded survives as the histogram's first moment. This is the device twin of
+// Zig `s4_v21_accumulate_hist_soft`; the splat arithmetic is pure integer, so
+// Metal == Zig == Haskell given the same `hi`. Each (voxel,channel) cell totals
+// scale*scale*wBudget. The shipped GIF is a SEPARATE pipeline (k-means palette),
+// so this enriches only the V2.1 field the model trains on.
+kernel void v21AccumulateHistSoftKernel(
+    texture2d<float, access::read> luma   [[texture(0)]],
+    texture2d<float, access::read> chroma [[texture(1)]],
+    device int*    outCounts        [[buffer(0)]],
+    constant int2  &srcOffset       [[buffer(1)]],
+    constant int   &scale           [[buffer(2)]],
+    constant uchar &colorSpaceTag   [[buffer(3)]],
+    constant int   &nLevels         [[buffer(4)]],
+    constant int2  &coarseDims      [[buffer(5)]],
+    constant int   &coarseFrame     [[buffer(6)]],
+    constant int   &wBudget         [[buffer(7)]],
+    uint2 gid [[thread_position_in_grid]]
+) {
+    int cx = coarseDims.x;
+    int cy = coarseDims.y;
+    if ((int)gid.x >= cx || (int)gid.y >= cy) return;
+
+    int coarseVoxel = (coarseFrame * cy + (int)gid.y) * cx + (int)gid.x;
+    int cellBase = coarseVoxel * 3 * nLevels;
+
+    // Zero this voxel's three histograms (this thread owns them exclusively).
+    for (int ch = 0; ch < 3; ++ch) {
+        int chBase = cellBase + ch * nLevels;
+        for (int v = 0; v < nLevels; ++v) {
+            outCounts[chBase + v] = 0;
+        }
+    }
+
+    int sx0 = srcOffset.x + (int)gid.x * scale;
+    int sy0 = srcOffset.y + (int)gid.y * scale;
+    int yw = (int)luma.get_width();
+    int yh = (int)luma.get_height();
+    int cw = (int)chroma.get_width();
+    int chh = (int)chroma.get_height();
+
+    // The high-precision full-scale: (nLevels-1) value LSBs, each subdivided into wBudget sub-steps.
+    float hiScale = float((nLevels - 1) * wBudget);
+    int hiMax = (nLevels - 1) * wBudget;
+    for (int dy = 0; dy < scale; ++dy) {
+        int sy = sy0 + dy;
+        if (sy < 0 || sy >= yh) continue;
+        int cyc = clamp(sy / 2, 0, chh - 1);
+        for (int dx = 0; dx < scale; ++dx) {
+            int sx = sx0 + dx;
+            if (sx < 0 || sx >= yw) continue;
+            int cxc = clamp(sx / 2, 0, cw - 1);
+            float Y  = luma.read(uint2((uint)sx, (uint)sy)).r;
+            float2 CC = chroma.read(uint2((uint)cxc, (uint)cyc)).rg;
+            float3 lin = ycbcr10VideoRangeToLinearSRGB(Y, CC.x, CC.y, colorSpaceTag);
+            // Per channel: quantize to a high-precision position, then splat mass wBudget across the
+            // two adjacent levels. Pure integer after the single round(), matching the Zig kernel.
+            int hi[3];
+            hi[0] = clamp(int(round(lin.r * hiScale)), 0, hiMax);
+            hi[1] = clamp(int(round(lin.g * hiScale)), 0, hiMax);
+            hi[2] = clamp(int(round(lin.b * hiScale)), 0, hiMax);
+            for (int ch = 0; ch < 3; ++ch) {
+                int vlo  = hi[ch] / wBudget;
+                int frac = hi[ch] % wBudget;
+                int chBase = cellBase + ch * nLevels;
+                outCounts[chBase + vlo] += (wBudget - frac);
+                if (frac != 0 && vlo + 1 < nLevels) {
+                    outCounts[chBase + vlo + 1] += frac;
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Linear RGB → OKLab
 //
 // Expects RGBA16F linear input; writes RGBA16F OKLab. Channel mapping:

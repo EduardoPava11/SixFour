@@ -58,6 +58,10 @@ module SixFour.Spec.V21Field
   , labDeltaAt
     -- * The metric (x,y linear; t weighted)
   , PaletteDelta
+  , Palette
+  , paletteChannelHist
+  , paletteDelta
+  , paletteW1
   , axisWeight
     -- * The canonical encoder-input presentation (mode-relative energy; field + GIF non-redundant)
   , centeredEnergy
@@ -82,6 +86,9 @@ module SixFour.Spec.V21Field
   , countsToEnergy
   , modeOfCounts
   , accumulateHist
+    -- * The sub-LSB soft-splat construction (uses the discarded 10-bit sensor bits)
+  , splatContribAt
+  , accumulateHistSoft
     -- * Laws (QuickCheck'd in @Properties.V21Field@)
   , lawCollapseIsArgmin
   , lawOpponentCommutesWithDelta
@@ -101,6 +108,19 @@ module SixFour.Spec.V21Field
   , lawModeIsNotAFunctionOfField
   , lawFieldPlusGifReconstructs
   , lawTargetNotDeterminedByGifModes
+  , lawPaletteDeltaZeroOnEqual
+  , lawPaletteDeltaSymmetric
+  , lawPaletteDeltaGaugeInvariant
+  , lawPaletteDeltaStaticTimeFree
+  , lawSoftSplatMassConserved
+  , lawSoftSplatCentroidExact
+  , lawSoftSplatIsLocal
+  , lawSoftHistTotalPreserved
+  , lawWDistZeroOnEqual
+  , lawWDistSymmetric
+  , lawWDistGaugeInvariant
+  , lawWDistStaticTimeFree
+  , lawWDistChargesDistance
   ) where
 
 import SixFour.Spec.OctreeCell (V8(..), OctBand(..), liftOct, unliftOct)
@@ -173,6 +193,53 @@ axisWeight :: PaletteDelta -> Axis -> Int
 axisWeight _  X = 1
 axisWeight _  Y = 1
 axisWeight pd T = pd
+
+-- | A palette: colours as a flat SLOT-MAJOR integer list, layout @(slot*3 + channel)@, each channel a
+--   value level in @0..levels-1@. For GIF89a there are up to 256 slots. This is the data a
+--   'PaletteDelta' is computed FROM (per frame).
+type Palette = [Int]
+
+-- | The per-channel VALUE HISTOGRAM of a palette: for each channel (R, G, B) and each value level, the
+--   number of slots whose value in that channel is that level. Layout @(ch*levels + value)@, length
+--   @3*levels@. It counts VALUES, not slots, so it is invariant to the palette index gauge (reordering
+--   slots leaves it unchanged) -- the invariance 'paletteDelta' inherits.
+paletteChannelHist :: Int -> Palette -> [Int]
+paletteChannelHist levels pal =
+  [ length [ () | (i, v) <- zip [0 :: Int ..] pal, i `mod` 3 == ch, v == lvl ]
+  | ch <- [0 .. 2 :: Int], lvl <- [0 .. levels - 1] ]
+
+-- | THE PER-FRAME PALETTE DELTA (the temporal metric weight; @axisWeight T = pd@): the L1 \/ total
+--   variation between two palettes' per-channel value histograms,
+--   @sum_{ch,v} |hist1(ch,v) - hist2(ch,v)|@. Byte-exact integer and PERMUTATION-INVARIANT (reordering
+--   a palette's slots -- the palette index gauge -- does not change it), so it charges only a genuine
+--   change in the colour DISTRIBUTION from one frame to the next, never the gauge. A static palette
+--   gives 0, which makes a temporal step free ('lawPaletteDeltaStaticTimeFree'), the design's
+--   "flat palette =\> free time". This is the cheapest byte-exact metric; a joint-3D \/ earth-mover
+--   refinement is deferred (open Q3 in @spec\/exploration\/V2.1-PROBABILISTIC-FIELD.md@).
+paletteDelta :: Int -> Palette -> Palette -> PaletteDelta
+paletteDelta levels p1 p2 =
+  sum (zipWith (\a b -> abs (a - b))
+               (paletteChannelHist levels p1)
+               (paletteChannelHist levels p2))
+
+-- | TRUE 1-D WASSERSTEIN-1 between two palettes' per-channel value histograms: the L1 distance between
+--   their CDFs, @sum_{ch,v} |CDF1(ch,v) - CDF2(ch,v)|@, where the CDF is the running cumulative sum of
+--   the histogram over the ordered value levels. Where 'paletteDelta' (total variation, L1 of the
+--   HISTOGRAMS) is horizontal-blind (a one-level colour drift and a far colour jump of equal mass score
+--   identically), this charges the GROUND DISTANCE mass must travel: a 1-level drift costs 1 per unit
+--   mass, a 200-level jump costs 200 ('lawWDistChargesDistance'). Byte-exact integer (cumsum is linear,
+--   no division) and permutation-invariant, like 'paletteDelta'. REQUIRES equal per-channel total mass
+--   (true for two k-slot palettes, whose channels each total k); it does NOT normalize (that would
+--   leave the ring). This is the 1-D optimal-transport metric (the deferred open Q3 "EMD" richer
+--   metric) discharged on the byte-exact path, with no Sinkhorn and no float.
+paletteW1 :: Int -> Palette -> Palette -> PaletteDelta
+paletteW1 levels p1 p2 =
+  let h1   = paletteChannelHist levels p1
+      h2   = paletteChannelHist levels p2
+      diff = zipWith (-) h1 h2
+      -- per channel: cumulative sum of the signed diff, then sum the absolute running totals.
+      channelW1 ch = sum (map abs (scanl1 (+) (take levels (drop (ch * levels) diff))))
+  in sum (map channelW1 [0, 1, 2 :: Int])
 
 -- | The eight @2×2×2@ octant corner voxels of a base voxel (Morton-style corner order). These ARE the
 --   voxels reachable within a single @±1@ step on each axis, so the octant spine and the neighbour
@@ -291,6 +358,62 @@ accumulateHist (fx, fy, ft) (dx, dy, dt) levels fine =
           cti = fti `div` dt
       in ((cti * cy + cyi) * cx + cxi, chn)
 
+-- ---------------------------------------------------------------------------
+-- The sub-LSB SOFT-SPLAT construction: use the 10-bit sensor bits the hard
+-- round() throws away. A fine sample is a HIGH-PRECISION position hi over the
+-- scale (nLevels-1)*W (its linear value scaled by the sub-level budget W, so
+-- hi = level*W + subfraction). Instead of a hard +1 at round(hi/W), a UNIT of
+-- integer mass W is split between the two adjacent value levels in proportion to
+-- the sub-LSB fraction. This is the unique 2-point integer distribution on
+-- adjacent levels whose weighted mean is EXACTLY hi (lawSoftSplatCentroidExact),
+-- so the discarded bits survive as the histogram's first moment. All integer, no
+-- non-unit division, so it stays on the byte-exact ring Z.
+-- ---------------------------------------------------------------------------
+
+-- | The contribution of one fine sample at high-precision position @hi@ (over budget @w@) to value
+--   level @lvl@: @w - (hi \`mod\` w)@ at the floor level @hi \`div\` w@, @hi \`mod\` w@ at the next
+--   level, and 0 everywhere else. A partition of unity in integers (the two weights sum to @w@), so
+--   the per-sample mass is exactly conserved with no division by a non-unit. @w@ must be positive and
+--   @hi@ non-negative; @hi <= (nLevels-1)*w@ keeps the upper level in range (at @hi@ a multiple of @w@
+--   the fraction is 0, so no mass lands on the next level).
+splatContribAt :: Int -> Int -> Int -> Int
+splatContribAt w hi lvl =
+  let vlo  = hi `div` w
+      frac = hi `mod` w
+  in if lvl == vlo then w - frac
+     else if lvl == vlo + 1 then frac
+     else 0
+
+-- | ACCUMULATE the SOFT captured histogram (the sub-LSB construction; the trainer's field face). Same
+--   box-decimation and layout as 'accumulateHist', but each fine sample is a HIGH-PRECISION position
+--   @hi@ in @0 .. (levels-1)*w@ and instead of a hard @+1@ at @round(hi\/w)@ it SPLATS a unit of
+--   integer mass @w@ across the two adjacent levels ('splatContribAt'). Each @(voxel, channel)@ cell
+--   therefore totals @box * w@ instead of @box@; the energy face @E = total - count@ is unchanged in
+--   form. The shipped GIF byte does NOT come from here (V2.1 is a separate pipeline from the k-means
+--   palette that ships the GIF); this face enriches the model input with the sensor bits @round@
+--   discards. Fine layout @(((ft*fy + y)*fx + x)*3 + ch)@, output @((coarseVoxel*3 + ch)*levels + v)@.
+accumulateHistSoft :: Int -> (Int, Int, Int) -> (Int, Int, Int) -> Int -> [Int] -> [Int]
+accumulateHistSoft w (fx, fy, ft) (dx, dy, dt) levels fine =
+  [ sum [ splatContribAt w v lvl | (s, v) <- tagged, s == (cvi, ch) ]
+  | cvi <- [0 .. cVox - 1], ch <- [0 .. 2], lvl <- [0 .. levels - 1] ]
+  where
+    cx = fx `div` dx
+    cy = fy `div` dy
+    ct = ft `div` dt
+    cVox = cx * cy * ct
+    tagged = [ (slotOf i, v) | (i, v) <- zip [0 :: Int ..] fine ]
+    slotOf i =
+      let chn = i `mod` 3
+          pp  = i `div` 3
+          fxi = pp `mod` fx
+          qq  = pp `div` fx
+          fyi = qq `mod` fy
+          fti = qq `div` fy
+          cxi = fxi `div` dx
+          cyi = fyi `div` dy
+          cti = fti `div` dt
+      in ((cti * cy + cyi) * cx + cxi, chn)
+
 -- | Split a list into consecutive chunks of @n@ (the per-cell histograms of an 'accumulateHist' output).
 chunksOf :: Int -> [a] -> [[a]]
 chunksOf _ [] = []
@@ -376,6 +499,144 @@ lawXyLinearTimeWeighted pd =
      axisWeight pd X == axisWeight pd Y
   && axisWeight 0 T == 0
   && axisWeight pd T == pd
+
+-- Coerce an arbitrary int list into a legal palette for @levels@ (values in range, length a multiple
+-- of 3). Not exported; drives the palette-delta laws from QuickCheck's raw generators.
+clampPalette :: Int -> [Int] -> Palette
+clampPalette levels xs =
+  let n = length xs - (length xs `mod` 3)
+  in [ abs x `mod` max 1 levels | x <- take n xs ]
+
+-- Reverse the SLOT order of a palette (keeping each RGB triple intact): a non-trivial permutation
+-- witness for the gauge-invariance law. Not exported.
+reverseSlots :: Palette -> Palette
+reverseSlots = concat . reverse . chunksOf 3
+
+-- | THE DELTA VANISHES ON AN IDENTICAL PALETTE: a palette has zero delta to itself, so an unchanging
+--   palette costs nothing on the temporal axis.
+lawPaletteDeltaZeroOnEqual :: Int -> [Int] -> Bool
+lawPaletteDeltaZeroOnEqual lraw xs =
+  let levels = 1 + abs lraw `mod` 8
+      p      = clampPalette levels xs
+  in paletteDelta levels p p == 0
+
+-- | THE DELTA IS SYMMETRIC (L1 is a metric): @paletteDelta a b == paletteDelta b a@.
+lawPaletteDeltaSymmetric :: Int -> [Int] -> [Int] -> Bool
+lawPaletteDeltaSymmetric lraw a b =
+  let levels = 1 + abs lraw `mod` 8
+      pa     = clampPalette levels a
+      pb     = clampPalette levels b
+  in paletteDelta levels pa pb == paletteDelta levels pb pa
+
+-- | GAUGE INVARIANCE (the key property): reordering a palette's SLOTS (the palette index gauge) leaves
+--   the delta unchanged, because the per-channel histogram counts values, not positions. Reversing the
+--   slot order is the permutation witness. This is why the temporal weight charges only genuine colour
+--   change, not a re-indexing of the same colours.
+lawPaletteDeltaGaugeInvariant :: Int -> [Int] -> [Int] -> Bool
+lawPaletteDeltaGaugeInvariant lraw a b =
+  let levels = 1 + abs lraw `mod` 8
+      pa     = clampPalette levels a
+      pb     = clampPalette levels b
+  in paletteDelta levels pa pb == paletteDelta levels (reverseSlots pa) pb
+
+-- | A STATIC PALETTE MAKES TIME FREE: an unchanging palette has delta 0, and 'axisWeight' then charges
+--   nothing on the @T@ axis -- the design's "flat palette =\> temporal step free", closing the loop
+--   with 'lawXyLinearTimeWeighted' (which pins @axisWeight 0 T == 0@).
+lawPaletteDeltaStaticTimeFree :: Int -> [Int] -> Bool
+lawPaletteDeltaStaticTimeFree lraw xs =
+  let levels = 1 + abs lraw `mod` 8
+      p      = clampPalette levels xs
+  in axisWeight (paletteDelta levels p p) T == 0
+
+-- | W1 VANISHES ON AN IDENTICAL PALETTE (the CDFs coincide), so an unchanging palette costs nothing.
+lawWDistZeroOnEqual :: Int -> [Int] -> Bool
+lawWDistZeroOnEqual lraw xs =
+  let levels = 1 + abs lraw `mod` 8
+      p      = clampPalette levels xs
+  in paletteW1 levels p p == 0
+
+-- | W1 IS SYMMETRIC (the CDF difference is negated when the arguments swap; the absolute value is even).
+lawWDistSymmetric :: Int -> [Int] -> [Int] -> Bool
+lawWDistSymmetric lraw a b =
+  let levels = 1 + abs lraw `mod` 8
+      pa     = clampPalette levels a
+      pb     = clampPalette levels b
+  in paletteW1 levels pa pb == paletteW1 levels pb pa
+
+-- | W1 IS GAUGE-INVARIANT: reordering a palette's slots leaves it unchanged, because the per-channel
+--   histogram (hence its cumulative sum, the CDF) counts values, not slot positions.
+lawWDistGaugeInvariant :: Int -> [Int] -> [Int] -> Bool
+lawWDistGaugeInvariant lraw a b =
+  let levels = 1 + abs lraw `mod` 8
+      pa     = clampPalette levels a
+      pb     = clampPalette levels b
+  in paletteW1 levels pa pb == paletteW1 levels (reverseSlots pa) pb
+
+-- | A STATIC PALETTE MAKES TIME FREE under the W1 weight too (delta 0, 'axisWeight' charges nothing).
+lawWDistStaticTimeFree :: Int -> [Int] -> Bool
+lawWDistStaticTimeFree lraw xs =
+  let levels = 1 + abs lraw `mod` 8
+      p      = clampPalette levels xs
+  in axisWeight (paletteW1 levels p p) T == 0
+
+-- | THE LOAD-BEARING DISCRIMINATOR, why W1 beats total variation: a ONE-LEVEL colour drift costs
+--   strictly LESS than a FAR jump of equal mass, the exact ground-distance information TV cannot see.
+--   Three single-slot palettes: at level 0, at level 1 (a 1-level drift), and at the top level (a far
+--   jump). W1 charges the drift 1 and the jump @levels-1@ (strictly more), while 'paletteDelta' (TV)
+--   scores BOTH the same (2, "one slot moved"), blind to the distance.
+lawWDistChargesDistance :: Int -> Bool
+lawWDistChargesDistance lraw =
+  let levels = 3 + abs lraw `mod` 200        -- at least 3 levels so drift and jump differ
+      p0     = [0, 0, 0]                      -- one slot, all channels at level 0
+      pNear  = [1, 0, 0]                      -- red drifts one level
+      pFar   = [levels - 1, 0, 0]             -- red jumps to the top level
+  in  paletteW1 levels p0 pNear < paletteW1 levels p0 pFar          -- W1 SEES the distance
+   && paletteW1 levels p0 pNear == 1                                -- drift costs exactly 1
+   && paletteW1 levels p0 pFar  == levels - 1                       -- jump costs the full distance
+   && paletteDelta levels p0 pNear == paletteDelta levels p0 pFar   -- TV is BLIND to it (both 2)
+
+-- | THE SOFT SPLAT CONSERVES MASS (partition of unity in integers): the contributions of one sample
+--   over all value levels sum to the budget @w@, so no observation is created or destroyed and no
+--   non-unit division is needed. This is what keeps the sub-LSB construction on the byte-exact ring.
+lawSoftSplatMassConserved :: Int -> Int -> Bool
+lawSoftSplatMassConserved wRaw hiRaw =
+  let w   = 1 + abs wRaw `mod` 256
+      hi  = abs hiRaw `mod` 100000
+      vlo = hi `div` w
+  in sum [ splatContribAt w hi lvl | lvl <- [0 .. vlo + 2] ] == w
+
+-- | THE DISCARDED BITS ARE RECOVERABLE, the headline theorem: the mass-weighted MEAN (first moment) of
+--   a sample's splat is EXACTLY its high-precision position @hi@, not the rounded level. So the field's
+--   centroid reconstructs the full 10-bit value that @round@ would have thrown away: the soft splat is
+--   the unique 2-point integer distribution on adjacent levels with mean @hi@.
+lawSoftSplatCentroidExact :: Int -> Int -> Bool
+lawSoftSplatCentroidExact wRaw hiRaw =
+  let w   = 1 + abs wRaw `mod` 256
+      hi  = abs hiRaw `mod` 100000
+      vlo = hi `div` w
+  in sum [ lvl * splatContribAt w hi lvl | lvl <- [vlo, vlo + 1] ] == hi
+
+-- | THE SPLAT IS LOCAL: a sample deposits mass ONLY on its two adjacent levels @vlo@ and @vlo+1@, never
+--   elsewhere. So the soft curve differs from the hard spike by at most one level, and its collapse
+--   ('collapseQ16') drifts at most one LSB from the hard bin: the construction refines the field
+--   without relocating a colour.
+lawSoftSplatIsLocal :: Int -> Int -> Int -> Bool
+lawSoftSplatIsLocal wRaw hiRaw lvlRaw =
+  let w   = 1 + abs wRaw `mod` 256
+      hi  = abs hiRaw `mod` 100000
+      vlo = hi `div` w
+      lvl = abs lvlRaw `mod` 1000
+  in lvl == vlo || lvl == vlo + 1 || splatContribAt w hi lvl == 0
+
+-- | EVERY FINE SAMPLE CONTRIBUTES ITS FULL BUDGET: the soft-accumulated histogram totals
+--   @(number of fine samples) * w@, the box-count times the budget. The 'accumulateHist' total law
+--   lifted to the soft face.
+lawSoftHistTotalPreserved :: Bool
+lawSoftHistTotalPreserved =
+  let w    = 4
+      fine = [ i `mod` 13 | i <- [0 .. 47] ]   -- hi in 0..12 = (levels-1)*w for levels=4
+      h    = accumulateHistSoft w (4, 2, 2) (2, 2, 2) 4 fine
+  in sum h == length fine * w
 
 -- | THE OCTANT SPINE ROUND-TRIPS EXACTLY (reuses the gated 'SixFour.Spec.OctreeCell' edge): for any
 --   eight cells, @unliftOctList . liftOctList == id@.

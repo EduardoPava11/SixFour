@@ -37,6 +37,17 @@ genCounts = do
   n <- choose (1, 12)
   vectorOf n (choose (0, 200))
 
+-- A raw alphabet size (the palette-delta laws clamp it to 1 + (abs l `mod` 8)) and a raw int list
+-- (clamped into a legal palette internally). Out-of-range values exercise the clamp; the length need
+-- not be a multiple of 3 (clampPalette truncates).
+genLevelsRaw :: Gen Int
+genLevelsRaw = choose (0, 64)
+
+genRawPalette :: Gen [Int]
+genRawPalette = do
+  n <- choose (0, 24)
+  vectorOf n (choose (-8, 300))
+
 tests :: TestTree
 tests = testGroup "V21Field (pre-collapse curves -> GIF89a byte; byte-exact core)"
   [ testProperty "collapse is argmin energy at the lowest index" $
@@ -100,4 +111,64 @@ tests = testGroup "V21Field (pre-collapse curves -> GIF89a byte; byte-exact core
 
   , testProperty "vector no-leak: held detail band not determined by the context modes (the GIF)" $
       once lawTargetNotDeterminedByGifModes
+
+  , testProperty "palette delta vanishes on an identical palette (unchanging palette is free)" $
+      forAll genLevelsRaw $ \l -> forAll genRawPalette $ \p ->
+        lawPaletteDeltaZeroOnEqual l p
+
+  , testProperty "palette delta is symmetric (L1 / total-variation metric)" $
+      forAll genLevelsRaw $ \l -> forAll genRawPalette $ \a -> forAll genRawPalette $ \b ->
+        lawPaletteDeltaSymmetric l a b
+
+  , testProperty "palette delta is gauge-invariant (reordering slots does not change it)" $
+      forAll genLevelsRaw $ \l -> forAll genRawPalette $ \a -> forAll genRawPalette $ \b ->
+        lawPaletteDeltaGaugeInvariant l a b
+
+  , testProperty "static palette makes a temporal step free (axisWeight pd T = 0)" $
+      forAll genLevelsRaw $ \l -> forAll genRawPalette $ \p ->
+        lawPaletteDeltaStaticTimeFree l p
+
+  , -- golden pin: the exact palette-delta the Zig fixture (v21_palette_delta_golden.json) reproduces.
+    testProperty "golden: paletteDelta 6 palA palB = 6 (per-channel histogram L1)" $
+      once (paletteDelta 6 [0,1,2, 3,4,5, 1,1,1, 5,0,3]
+                           [3,4,5, 0,1,2, 1,1,1, 2,2,2] == 6)
+
+  , testProperty "soft splat conserves mass (partition of unity, sums to the budget w)" $
+      forAll (choose (0, 512)) $ \w -> forAll (choose (0, 200000)) $ \hi ->
+        lawSoftSplatMassConserved w hi
+
+  , testProperty "soft splat centroid is EXACT: weighted mean = the high-precision value hi" $
+      forAll (choose (0, 512)) $ \w -> forAll (choose (0, 200000)) $ \hi ->
+        lawSoftSplatCentroidExact w hi
+
+  , testProperty "soft splat is local: mass only on the two adjacent levels (byte drift <= 1 LSB)" $
+      forAll (choose (0, 512)) $ \w -> forAll (choose (0, 200000)) $ \hi -> forAll (choose (0, 2000)) $ \lvl ->
+        lawSoftSplatIsLocal w hi lvl
+
+  , testProperty "soft accumulate total = box-count * budget (every sample's full budget landed)" $
+      once lawSoftHistTotalPreserved
+
+  , testProperty "W1 vanishes on an identical palette (CDFs coincide)" $
+      forAll genLevelsRaw $ \l -> forAll genRawPalette $ \p ->
+        lawWDistZeroOnEqual l p
+
+  , testProperty "W1 is symmetric (L1 of CDFs)" $
+      forAll genLevelsRaw $ \l -> forAll genRawPalette $ \a -> forAll genRawPalette $ \b ->
+        lawWDistSymmetric l a b
+
+  , testProperty "W1 is gauge-invariant (slot reorder leaves the value CDF unchanged)" $
+      forAll genLevelsRaw $ \l -> forAll genRawPalette $ \a -> forAll genRawPalette $ \b ->
+        lawWDistGaugeInvariant l a b
+
+  , testProperty "W1 static palette makes a temporal step free" $
+      forAll genLevelsRaw $ \l -> forAll genRawPalette $ \p ->
+        lawWDistStaticTimeFree l p
+
+  , testProperty "W1 CHARGES DISTANCE: 1-level drift < far jump (TV is blind, W1 is not)" $
+      forAll (choose (0, 400)) lawWDistChargesDistance
+
+  , -- golden pin: W1 of the palette-delta fixture (v21_wdist1d_golden.json). Happens to also be 6 here.
+    testProperty "golden: paletteW1 6 palA palB = 6 (L1 of the per-channel CDFs)" $
+      once (paletteW1 6 [0,1,2, 3,4,5, 1,1,1, 5,0,3]
+                        [3,4,5, 0,1,2, 1,1,1, 2,2,2] == 6)
   ]

@@ -3083,3 +3083,169 @@ pub export fn s4_v21_anchor_at(rel: [*c]const i32, modes: [*c]const i32, p: i32,
     }
     return RC_OK;
 }
+
+/// V2.1 PALETTE DELTA (the temporal metric weight; SixFour.Spec.V21Field.paletteDelta): the L1 /
+/// total variation between two palettes' per-channel value histograms,
+/// sum_{ch,v} |hist1(ch,v) - hist2(ch,v)|. PERMUTATION-INVARIANT (a palette's slot order is the index
+/// gauge and does not change the count) and byte-exact, so it charges only a genuine change in the
+/// colour DISTRIBUTION frame-to-frame, never the gauge. `pal1`/`pal2` are [k*3] u8 SLOT-MAJOR
+/// (slot*3 + channel), each value in 0..n_levels-1; k is the slot count; writes the scalar delta to
+/// out_pd[0]. A single signed accumulator carries the running difference (+1 per pal1 value, -1 per
+/// pal2 value), then sums absolute values. Refuses (RC_OUT_OF_RANGE) n_levels>256 or a value>=n_levels.
+pub export fn s4_v21_palette_delta(
+    pal1: [*c]const u8,
+    pal2: [*c]const u8,
+    k: i32,
+    n_levels: i32,
+    out_pd: [*c]i32,
+) i32 {
+    if (pal1 == null or pal2 == null or out_pd == null) return RC_NULL_PTR;
+    if (k <= 0) return RC_BAD_SHAPE;
+    if (n_levels <= 0 or n_levels > 256) return RC_OUT_OF_RANGE;
+    const nl: usize = @intCast(n_levels);
+    const uk: usize = @intCast(k);
+    // Signed per-(channel,value) difference histogram, layout (ch*nl + value). Fixed 3*256 stack
+    // buffer (n_levels is bounded by 256 above); only the first 3*nl entries are used.
+    var diff: [3 * 256]i32 = [_]i32{0} ** (3 * 256);
+    var s: usize = 0;
+    while (s < uk) : (s += 1) {
+        var ch: usize = 0;
+        while (ch < 3) : (ch += 1) {
+            const v1: usize = @as(usize, pal1[s * 3 + ch]);
+            const v2: usize = @as(usize, pal2[s * 3 + ch]);
+            if (v1 >= nl or v2 >= nl) return RC_OUT_OF_RANGE;
+            diff[ch * nl + v1] += 1;
+            diff[ch * nl + v2] -= 1;
+        }
+    }
+    var pd: i64 = 0;
+    var i: usize = 0;
+    while (i < 3 * nl) : (i += 1) {
+        const d: i64 = @as(i64, diff[i]);
+        pd += if (d < 0) -d else d;
+    }
+    if (pd > 2147483647) return RC_OUT_OF_RANGE;
+    out_pd[0] = @intCast(pd);
+    return RC_OK;
+}
+
+/// V2.1 SOFT-SPLAT HISTOGRAM ACCUMULATION (the sub-LSB construction; SixFour.Spec.V21Field.accumulateHistSoft).
+/// The distributional sibling of s4_v21_accumulate_hist that USES the 10-bit sensor bits the hard
+/// round() throws away. Each `fine` sample is a HIGH-PRECISION position hi in 0 .. (n_levels-1)*w (its
+/// linear value scaled by the sub-level budget w, so hi = level*w + subfraction). Instead of a hard +1
+/// at round(hi/w), it SPLATS a unit of integer mass w across the two adjacent value levels: (w - hi%w)
+/// at hi/w and hi%w at hi/w + 1. This is a partition of unity in integers (the two weights sum to w),
+/// and the mass-weighted mean of the splat is EXACTLY hi (lawSoftSplatCentroidExact), so the discarded
+/// sub-LSB fraction survives as the histogram's first moment. Each (voxel,channel) cell totals box*w.
+/// `fine` is [ft*fy*fx*3] i32, layout (((ft*fy + y)*fx + x)*3 + ch); `out_counts` (zeroed here) is
+/// [ct*cy*cx*3*n_levels], layout ((coarseVoxel*3 + ch)*n_levels + value). Dimensions must divide the
+/// decimation factors. TOTAL: refuses (RC_OUT_OF_RANGE) w<=0, n_levels>256, or a hi outside
+/// 0 .. (n_levels-1)*w. Feeds s4_v21_counts_to_energy exactly like the hard face.
+pub export fn s4_v21_accumulate_hist_soft(
+    fine: [*c]const i32,
+    fx: i32,
+    fy: i32,
+    ft: i32,
+    dx: i32,
+    dy: i32,
+    dt: i32,
+    n_levels: i32,
+    w: i32,
+    out_counts: [*c]i32,
+) i32 {
+    if (fine == null or out_counts == null) return RC_NULL_PTR;
+    if (fx <= 0 or fy <= 0 or ft <= 0 or dx <= 0 or dy <= 0 or dt <= 0) return RC_BAD_SHAPE;
+    if (n_levels <= 0 or n_levels > 256) return RC_OUT_OF_RANGE;
+    if (w <= 0) return RC_OUT_OF_RANGE;
+    if (@rem(fx, dx) != 0 or @rem(fy, dy) != 0 or @rem(ft, dt) != 0) return RC_BAD_SHAPE;
+    const ufx: usize = @intCast(fx);
+    const ufy: usize = @intCast(fy);
+    const uft: usize = @intCast(ft);
+    const udx: usize = @intCast(dx);
+    const udy: usize = @intCast(dy);
+    const udt: usize = @intCast(dt);
+    const cx: usize = ufx / udx;
+    const cy: usize = ufy / udy;
+    const ct: usize = uft / udt;
+    const nl: usize = @intCast(n_levels);
+    const uw: i64 = @intCast(w);
+    const hi_max: i64 = (@as(i64, n_levels) - 1) * uw; // the top in-range position
+    const out_len: usize = ct * cy * cx * 3 * nl;
+    var z: usize = 0;
+    while (z < out_len) : (z += 1) out_counts[z] = 0;
+    var fti: usize = 0;
+    while (fti < uft) : (fti += 1) {
+        var fyi: usize = 0;
+        while (fyi < ufy) : (fyi += 1) {
+            var fxi: usize = 0;
+            while (fxi < ufx) : (fxi += 1) {
+                const cvi = ((fti / udt) * cy + (fyi / udy)) * cx + (fxi / udx);
+                var ch: usize = 0;
+                while (ch < 3) : (ch += 1) {
+                    const fine_idx = ((fti * ufy + fyi) * ufx + fxi) * 3 + ch;
+                    const hi: i64 = @as(i64, fine[fine_idx]);
+                    if (hi < 0 or hi > hi_max) return RC_OUT_OF_RANGE;
+                    const vlo: usize = @intCast(@divTrunc(hi, uw));
+                    const frac: i32 = @intCast(@mod(hi, uw));
+                    const cell = (cvi * 3 + ch) * nl;
+                    out_counts[cell + vlo] += w - frac; // mass at the floor level
+                    if (frac != 0 and vlo + 1 < nl) {
+                        out_counts[cell + vlo + 1] += frac; // remainder at the next level
+                    }
+                }
+            }
+        }
+    }
+    return RC_OK;
+}
+
+/// V2.1 1-D WASSERSTEIN-1 PALETTE METRIC (SixFour.Spec.V21Field.paletteW1): the L1 distance between the
+/// two palettes' per-channel value CDFs, sum_{ch,v} |CDF1(ch,v) - CDF2(ch,v)|. Where s4_v21_palette_delta
+/// is the total variation (L1 of the HISTOGRAMS, horizontal-blind), this inserts a per-channel running
+/// cumulative sum before the abs-sum, so it charges the GROUND DISTANCE mass must travel: a 1-level
+/// drift costs 1 per unit mass, a far jump costs the full span. Byte-exact integer (cumsum is linear,
+/// no division), permutation-invariant. `pal1`/`pal2` are [k*3] u8 SLOT-MAJOR (slot*3 + channel), each
+/// value in 0..n_levels-1; writes the scalar to out_wd. REQUIRES equal per-channel total mass (both are
+/// k-slot palettes, so each channel totals k); the running CDF difference returns to 0 at the last
+/// level. Refuses (RC_OUT_OF_RANGE) n_levels>256 or a value >= n_levels.
+pub export fn s4_v21_wdist1d(
+    pal1: [*c]const u8,
+    pal2: [*c]const u8,
+    k: i32,
+    n_levels: i32,
+    out_wd: [*c]i32,
+) i32 {
+    if (pal1 == null or pal2 == null or out_wd == null) return RC_NULL_PTR;
+    if (k <= 0) return RC_BAD_SHAPE;
+    if (n_levels <= 0 or n_levels > 256) return RC_OUT_OF_RANGE;
+    const nl: usize = @intCast(n_levels);
+    const uk: usize = @intCast(k);
+    // Signed per-(channel,value) difference histogram, layout (ch*nl + value). Same build as
+    // s4_v21_palette_delta; the only difference is the reduction below (cumsum then abs-sum).
+    var diff: [3 * 256]i32 = [_]i32{0} ** (3 * 256);
+    var s: usize = 0;
+    while (s < uk) : (s += 1) {
+        var ch: usize = 0;
+        while (ch < 3) : (ch += 1) {
+            const v1: usize = @as(usize, pal1[s * 3 + ch]);
+            const v2: usize = @as(usize, pal2[s * 3 + ch]);
+            if (v1 >= nl or v2 >= nl) return RC_OUT_OF_RANGE;
+            diff[ch * nl + v1] += 1;
+            diff[ch * nl + v2] -= 1;
+        }
+    }
+    // W1 = sum over channels of sum_v |running cumulative diff up to v| (the L1 between the CDFs).
+    var wd: i64 = 0;
+    var ch: usize = 0;
+    while (ch < 3) : (ch += 1) {
+        var run: i64 = 0; // the CDF difference, reset per channel
+        var v: usize = 0;
+        while (v < nl) : (v += 1) {
+            run += @as(i64, diff[ch * nl + v]);
+            wd += if (run < 0) -run else run;
+        }
+    }
+    if (wd > 2147483647) return RC_OUT_OF_RANGE;
+    out_wd[0] = @intCast(wd);
+    return RC_OK;
+}

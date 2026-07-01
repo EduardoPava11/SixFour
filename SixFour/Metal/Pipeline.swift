@@ -56,6 +56,15 @@ final class MetalPipeline: @unchecked Sendable {
     /// OPTIONAL: V2.1 is experimental and must never fail the whole capture pipeline, so a device that
     /// can't build this PSO runs without it (export falls back to the temporal-proxy field).
     let v21HistPSO: (any MTLComputePipelineState)?
+    /// The V2.1 SOFT-SPLAT accumulator (`v21AccumulateHistSoftKernel`): the sub-LSB construction that
+    /// uses the 10-bit sensor bits the hard round() discards, twin of Zig `s4_v21_accumulate_hist_soft`.
+    /// Preferred over `v21HistPSO` for building the field when available (same output layout, richer
+    /// counts). OPTIONAL for the same never-fatal reason.
+    let v21HistSoftPSO: (any MTLComputePipelineState)?
+    /// The sub-level weight budget for the soft splat: each value LSB is subdivided into this many
+    /// integer sub-steps (16 = 4 extra bits, ample for the 10-bit sensor plus the box average). Bound so
+    /// the per-bin total (scale²·budget·frames) stays inside the Int32 count envelope.
+    static let v21SoftBudget: Int32 = 16
 
     init(tileSide: Int = 64) throws {
         guard let dev = MTLCreateSystemDefaultDevice() else {
@@ -94,7 +103,13 @@ final class MetalPipeline: @unchecked Sendable {
             Self.logger.error("MetalPipeline: v21AccumulateHistKernel unavailable, V2.1 live field OFF: \(String(describing: error), privacy: .public)")
             self.v21HistPSO = nil
         }
-        Self.logger.log("MetalPipeline (capture) init OK: tileSide=\(tileSide) device=\(dev.name, privacy: .public) v21=\(self.v21HistPSO != nil)")
+        do {
+            self.v21HistSoftPSO = try pso("v21AccumulateHistSoftKernel")
+        } catch {
+            Self.logger.error("MetalPipeline: v21AccumulateHistSoftKernel unavailable, V2.1 sub-LSB field OFF (hard fallback): \(String(describing: error), privacy: .public)")
+            self.v21HistSoftPSO = nil
+        }
+        Self.logger.log("MetalPipeline (capture) init OK: tileSide=\(tileSide) device=\(dev.name, privacy: .public) v21=\(self.v21HistPSO != nil) v21soft=\(self.v21HistSoftPSO != nil)")
     }
 
     enum MetalPipelineError: Error {
@@ -277,8 +292,10 @@ final class MetalPipeline: @unchecked Sendable {
         coarseFrame: Int,
         nLevels: Int
     ) throws {
-        // V2.1 disabled on this device (PSO unavailable): skip silently, shipped path unaffected.
-        guard let pso = v21HistPSO else { return }
+        // Prefer the SOFT-SPLAT kernel (the sub-LSB construction) when its PSO built; fall back to the
+        // hard accumulator, then skip silently if neither is available (shipped path unaffected).
+        let soft = v21HistSoftPSO != nil
+        guard let pso = v21HistSoftPSO ?? v21HistPSO else { return }
         guard let enc = cmd.makeComputeCommandEncoder() else {
             throw MetalPipelineError.commandFailed
         }
@@ -292,6 +309,7 @@ final class MetalPipeline: @unchecked Sendable {
         var levels = Int32(nLevels)
         var coarseDims = SIMD2<Int32>(Int32(tileSide), Int32(tileSide))
         var frame = Int32(coarseFrame)
+        var budget = Self.v21SoftBudget
         enc.setComputePipelineState(pso)
         enc.setTexture(pair.luma, index: 0)
         enc.setTexture(pair.chroma, index: 1)
@@ -302,6 +320,7 @@ final class MetalPipeline: @unchecked Sendable {
         enc.setBytes(&levels, length: MemoryLayout<Int32>.size, index: 4)
         enc.setBytes(&coarseDims, length: MemoryLayout<SIMD2<Int32>>.size, index: 5)
         enc.setBytes(&frame, length: MemoryLayout<Int32>.size, index: 6)
+        if soft { enc.setBytes(&budget, length: MemoryLayout<Int32>.size, index: 7) }
         dispatch2D(enc, width: tileSide, height: tileSide, pso: pso)
     }
 

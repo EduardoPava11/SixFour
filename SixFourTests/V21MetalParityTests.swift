@@ -96,6 +96,76 @@ struct V21MetalParityTests {
         #expect(total == coarse * coarse * 3 * scale * scale)   // lawHistTotalPreserved
     }
 
+    /// Dispatch the SOFT-splat kernel once. Mirrors `encodeV21Hist`'s soft path (budget at index 7).
+    private func dispatchSoft(_ pipe: MetalPipeline, luma: any MTLTexture, chroma: any MTLTexture,
+                              outBuf: any MTLBuffer, scale: Int, nLevels: Int, coarse: Int,
+                              coarseFrame: Int, budget: Int32) throws {
+        let pso = try #require(pipe.v21HistSoftPSO)   // soft PSO is optional; required for this test
+        let cmd = try #require(pipe.queue.makeCommandBuffer())
+        let enc = try #require(cmd.makeComputeCommandEncoder())
+        var offset = SIMD2<Int32>(0, 0)
+        var sc = Int32(scale), tag = UInt8(0), lv = Int32(nLevels)
+        var cd = SIMD2<Int32>(Int32(coarse), Int32(coarse))
+        var cf = Int32(coarseFrame)
+        var wb = budget
+        enc.setComputePipelineState(pso)
+        enc.setTexture(luma, index: 0)
+        enc.setTexture(chroma, index: 1)
+        enc.setBuffer(outBuf, offset: 0, index: 0)
+        enc.setBytes(&offset, length: MemoryLayout<SIMD2<Int32>>.size, index: 1)
+        enc.setBytes(&sc, length: MemoryLayout<Int32>.size, index: 2)
+        enc.setBytes(&tag, length: MemoryLayout<UInt8>.size, index: 3)
+        enc.setBytes(&lv, length: MemoryLayout<Int32>.size, index: 4)
+        enc.setBytes(&cd, length: MemoryLayout<SIMD2<Int32>>.size, index: 5)
+        enc.setBytes(&cf, length: MemoryLayout<Int32>.size, index: 6)
+        enc.setBytes(&wb, length: MemoryLayout<Int32>.size, index: 7)
+        let w = pso.threadExecutionWidth
+        let h = max(1, pso.maxTotalThreadsPerThreadgroup / w)
+        enc.dispatchThreads(MTLSize(width: coarse, height: coarse, depth: 1),
+                            threadsPerThreadgroup: MTLSize(width: w, height: h, depth: 1))
+        enc.endEncoding()
+        cmd.commit()
+        cmd.waitUntilCompleted()
+    }
+
+    /// Soft splat, uniform input: each voxel/channel totals scale²·budget (mass conserved), and the
+    /// mass lands on AT MOST two ADJACENT levels (lawSoftSplatIsLocal). This closes the runtime
+    /// Metal==spec gap for the sub-LSB construction's value-independent laws.
+    @Test func softKernelConservesMassAndIsLocal() throws {
+        let pipe = try MetalPipeline()
+        let coarse = 4, scale = 2, nLevels = 8, src = coarse * scale
+        let budget: Int32 = 16
+        let luma = try uniformLuma(pipe.device, side: src, value: 0x5000)     // mid-ish, likely between levels
+        let chroma = try uniformChroma(pipe.device, side: src / 2, cb: 0x8000, cr: 0x8000)
+        let count = coarse * coarse * 3 * nLevels
+        let outBuf = try #require(pipe.device.makeBuffer(length: count * 4, options: [.storageModeShared]))
+
+        try dispatchSoft(pipe, luma: luma, chroma: chroma, outBuf: outBuf,
+                         scale: scale, nLevels: nLevels, coarse: coarse, coarseFrame: 0, budget: budget)
+
+        let ptr = outBuf.contents().bindMemory(to: Int32.self, capacity: count)
+        var total = 0
+        let cellMass = scale * scale * Int(budget)
+        for v in 0 ..< coarse * coarse {
+            for ch in 0 ..< 3 {
+                let base = (v * 3 + ch) * nLevels
+                var sum = 0
+                var nonzero: [Int] = []
+                for l in 0 ..< nLevels {
+                    let c = Int(ptr[base + l]); sum += c
+                    if c != 0 { nonzero.append(l) }
+                }
+                #expect(sum == cellMass)                       // partition of unity: box·budget
+                #expect(nonzero.count <= 2)                    // locality: at most two levels
+                if nonzero.count == 2 {
+                    #expect(nonzero[1] == nonzero[0] + 1)      // ...and they are adjacent
+                }
+            }
+        }
+        for i in 0 ..< count { total += Int(ptr[i]) }
+        #expect(total == coarse * coarse * 3 * cellMass)       // lawSoftHistTotalPreserved (box·budget)
+    }
+
     /// Two frames into a 2-slice buffer, then pooled over t: each voxel/channel sums to 2·scale².
     @Test func burstPoolsOverTime() throws {
         let pipe = try MetalPipeline()
