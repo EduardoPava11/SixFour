@@ -70,6 +70,13 @@ final class Surface {
     /// The Z₆₄ playback cursor — the current frame `0..<64`. Advanced by κ each tick.
     var cursor: Int = 0
 
+    /// OUT-OF-BAND diagnostic (NOT in the FSM alphabet): the human-readable reason the surface
+    /// last entered `.error` — i.e. WHICH engine/bootstrap step failed. Set by `SurfaceView`
+    /// alongside the `.fault` event so `ErrorPhaseField` shows the failing step instead of a blind
+    /// "something went wrong" (turning a future white/black death into a readable on-screen fault).
+    /// Transient; never persisted; never a δ event (mirrors the out-of-band UI-state discipline).
+    var faultMessage: String? = nil
+
     /// OUT-OF-BAND UI state (NOT in the FSM alphabet): which ColorWidget is currently LIFTED for
     /// a move, or `nil`. The influence-field ground reads this to CALM the radiation while a
     /// widget is being lifted out of the field (order is being rearranged → the chaos recedes).

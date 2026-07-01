@@ -281,6 +281,16 @@ final class FieldUIView: UIView {
 
     func configure() {
         isUserInteractionEnabled = false
+        // GUARDRAIL (first-frame black): set the view + layer to a NON-opaque BLACK base BEFORE the
+        // `guard` below. If `FieldMetalCore.shared` is nil (default.metallib missing/unsigned on a
+        // device) — or a future path ever mounts this view before `.ready` — an opaque, never-presented
+        // CAMetalLayer paints undefined/WHITE over the Color.black base. Doing this before the guard
+        // makes a nil core degrade to the app's intended black instead of a bare white window, so a
+        // launch/Metal fault is never masked as "white screen". Zero behavioural change on the live path.
+        isOpaque = false
+        backgroundColor = .black
+        metalLayer.isOpaque = false
+        metalLayer.backgroundColor = UIColor.black.cgColor
         guard let core = FieldMetalCore.shared else { return }
         metalLayer.device = core.device
         metalLayer.pixelFormat = .bgra8Unorm

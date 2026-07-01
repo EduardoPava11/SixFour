@@ -129,8 +129,14 @@ struct ErrorPhaseField: View {
                 CellSymbol(systemName: "exclamationmark.triangle",
                            box: 24, ink: Color(srgb8: SIMD3(225, 200, 70)))
                 CellText("SOMETHING WENT WRONG", rows: 11, ink: .white)
-                CellText("THE SURFACE HIT A FAULT.", rows: 8,
-                         ink: Color(srgb8: SIMD3(190, 190, 190)))
+                // Show WHICH step faulted (σ.faultMessage, set by SurfaceView from the engine's
+                // .failed(reason)) as fixed-width cell lines — a readable on-screen diagnostic
+                // instead of a blind fault. Falls back to the generic line when no token is set.
+                VStack(spacing: GlobalLattice.pt(2)) {
+                    ForEach(Array(Self.faultLines(surface.faultMessage).enumerated()), id: \.offset) { _, line in
+                        CellText(line, rows: 8, ink: Color(srgb8: SIMD3(190, 190, 190)))
+                    }
+                }
 
                 Button { surface.step(.sessionReady) } label: {
                     CellActionButton(icon: .none, title: "TRY AGAIN",
@@ -142,5 +148,26 @@ struct ErrorPhaseField: View {
             .padding(.horizontal, GlobalLattice.pt(8))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Turn the raw fault token (σ.faultMessage) into fixed-width UPPERCASE cell lines the
+    /// CellText raster can draw without overflowing the screen. Collapses whitespace, caps the
+    /// total length, and hard-wraps at `width` chars into at most `maxLines`. Falls back to the
+    /// generic line when there is no token. Pure — a function of the message only.
+    static func faultLines(_ message: String?, width: Int = 22, maxLines: Int = 3) -> [String] {
+        let raw = (message ?? "").uppercased()
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+        let collapsed = raw.split(whereSeparator: { $0 == " " }).joined(separator: " ")
+        guard !collapsed.isEmpty else { return ["THE SURFACE HIT A FAULT."] }
+        let capped = String(collapsed.prefix(width * maxLines))
+        var lines: [String] = []
+        var i = capped.startIndex
+        while i < capped.endIndex && lines.count < maxLines {
+            let j = capped.index(i, offsetBy: width, limitedBy: capped.endIndex) ?? capped.endIndex
+            lines.append(String(capped[i..<j]))
+            i = j
+        }
+        return lines
     }
 }

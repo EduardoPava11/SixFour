@@ -386,6 +386,10 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 Self.log.error("[capture] activeFormat/colorSpace setter raised: \(String(describing: error), privacy: .public)")
                 throw error
             }
+            // Post-assignment bracket: a device-only EXC_BAD_ACCESS inside the AVFoundation setter
+            // is a Mach null-deref the ObjC @try/@catch shim CANNOT catch, so it prints SF-hdr2 with
+            // NO following SF-hdr2b — localizing the exact probe step from the device Console.
+            NSLog("SF-hdr2b: activeFormat/colorSpace set OK \(cand.label)")
             // Swift maps ObjC `availableVideoCVPixelFormatTypes` to
             // `availableVideoPixelFormatTypes` (the `CV` is stripped
             // by AVFoundation.apinotes rename). Same underlying

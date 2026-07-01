@@ -29,10 +29,17 @@ PLATFORM="${PLATFORM_NAME:-iphonesimulator}"
 ARCH="${ARCHS:-arm64}"
 ARCH="${ARCH%% *}"  # first arch if several
 
-# Map (platform, arch) -> zig target triple.
+# Pin the native object's minimum-OS to the app's deployment target so its
+# LC_BUILD_VERSION matches the main binary (no "object built for older iOS"
+# mismatch). Xcode exports IPHONEOS_DEPLOYMENT_TARGET (e.g. 26.0). zig needs a
+# full X.Y(.Z) version — a bare "26" fails to parse — so normalize "26" -> "26.0".
+MIN="${IPHONEOS_DEPLOYMENT_TARGET:-26.0}"
+case "$MIN" in *.*) ;; *) MIN="${MIN}.0" ;; esac
+
+# Map (platform, arch) -> zig target triple, carrying the min-OS version.
 case "$PLATFORM" in
-  iphoneos)        ZIG_TARGET="${ARCH}-ios" ;;
-  iphonesimulator) ZIG_TARGET="${ARCH}-ios-simulator" ;;
+  iphoneos)        ZIG_TARGET="${ARCH}-ios.${MIN}" ;;
+  iphonesimulator) ZIG_TARGET="${ARCH}-ios.${MIN}-simulator" ;;
   *) echo "error: unsupported PLATFORM_NAME='$PLATFORM'" >&2; exit 1 ;;
 esac
 # zig uses aarch64, Xcode says arm64.

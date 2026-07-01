@@ -172,6 +172,21 @@ for m in SixFour.Spec.Lattice SixFour.Spec.CellShapes SixFour.Spec.GridLayout; d
   if grep -q "$m" spec/spec.cabal; then ok "exposed: $m"; else note "NOT in spec.cabal: $m"; fi
 done
 
+# ── LINT-LAUNCH-PLIST ──────────────────────────────────────────────────────
+# The pre-main null-deref keys. An EMPTY `UILaunchStoryboardName: ""` makes UIKit call
+# -[UIStoryboard storyboardWithName:@"" bundle:] during launch and null-derefs deep in UIKit
+# (EXC_BAD_ACCESS at a system PC) BEFORE any app code runs — a persistent WHITE screen with no
+# "SF-" trace. The modern launch is an EMPTY `UILaunchScreen: {}` dict (no storyboard file). Ban
+# both keys from project.yml so the crash config can never be reintroduced. Comment lines that
+# merely MENTION the keys (the warning next to UILaunchScreen) are excluded.
+echo "GRID lint — launch-plist (no pre-main UILaunchStoryboardName/UIColorName)"
+launch_bad=$(grep -nE 'UILaunchStoryboardName|UIColorName' project.yml 2>/dev/null \
+  | grep -vE '^[0-9]+:[[:space:]]*#')
+if [ -n "$launch_bad" ]; then
+  note "launch-plist regression (UILaunchStoryboardName/UIColorName reintroduced in project.yml):"
+  printf '%s\n' "$launch_bad" | sed 's/^/      /'
+else ok "launch-plist clean (modern UILaunchScreen:{}, no storyboard/colorname keys)"; fi
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "GRID lint: PASS — UI conformant (grid-following placement, one pitch)."

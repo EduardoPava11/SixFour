@@ -148,6 +148,19 @@ struct SurfaceView: View {
             .overlay(alignment: .topLeading) {
                 if engine.settings.debugOwnershipOverlay { CellOwnershipOverlay() }
             }
+            #if DEBUG
+            // STALE-BUILD DETECTOR: paint the committed short SHA on glass so the user can verify
+            // in one glance that the phone is running THIS tree (on-glass SHA == `git rev-parse
+            // --short HEAD`). BuildStamp is generated code — read only, never hand-edited. DEBUG-only,
+            // hit-testing off, so it is compiled out of release and never intercepts a tap.
+            .overlay(alignment: .bottomTrailing) {
+                Text(BuildStamp.gitSHA)
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.25))
+                    .padding(GlobalLattice.pt(1))
+                    .allowsHitTesting(false)
+            }
+            #endif
             .preferredColorScheme(.dark)
             .statusBarHidden()
     }
@@ -193,7 +206,10 @@ struct SurfaceView: View {
             // The GIFA is finished: fold it into σ, THEN advance to the A/B game.
             if let out = engine.primaryOutput { commit(out) }
             surface.step(.burstComplete)
-        case .failed:
+        case .failed(let reason):
+            // Surface WHICH step failed on screen (ErrorPhaseField reads σ.faultMessage) instead of
+            // dropping the reason — a bootstrap/capture fault becomes a readable on-screen diagnostic.
+            surface.faultMessage = reason
             surface.step(.fault)
         }
     }

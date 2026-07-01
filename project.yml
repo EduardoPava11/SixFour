@@ -151,9 +151,24 @@ targets:
         CFBundleDisplayName: SixFour
         CFBundleShortVersionString: "0.1"
         CFBundleVersion: "1"
-        UILaunchStoryboardName: ""
-        UILaunchScreen:
-          UIColorName: ""
+        # Launch screen: an EMPTY UILaunchScreen dict opts into the modern
+        # system launch screen (full-screen, no storyboard file needed). The
+        # background is the system background, which UIUserInterfaceStyle=Dark
+        # forces BLACK — matching the app's forced-dark surface, so there is no
+        # white flash on launch. Do NOT add UILaunchStoryboardName: it names a
+        # storyboard that is not in the bundle (there is no .storyboard/.xcassets
+        # here), so the system tries to instantiate an empty-named storyboard
+        # during launch — a crash inside UIKit BEFORE the app's own code runs.
+        UILaunchScreen: {}
+        UIUserInterfaceStyle: Dark
+        # Scene manifest: SwiftUI's App/WindowGroup lifecycle is scene-based and
+        # normally synthesizes this, but the iOS 27 SDK asserts at launch when an
+        # app has no scene declaration. Declare the minimal single-scene manifest
+        # explicitly (no scene-delegate class — SwiftUI provides it) so the app is
+        # unambiguously scene-conformant on iOS 27. UISceneMinimumRoleParticipation
+        # off keeps it single-window. Removes one iOS-27 launch unknown.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
         # Total-pixelation: the iOS system status bar is system-font/AA chrome we can't
         # cellularize, so hide it app-wide. The plist keys are belt-and-suspenders for
         # the SwiftUI `.statusBarHidden()` modifier — they kill the first-frame flash on
