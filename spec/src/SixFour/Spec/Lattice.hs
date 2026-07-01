@@ -62,6 +62,9 @@ module SixFour.Spec.Lattice
   , gifPx, gifDevicePx, subPt, cols, rows, bleedPt, hBleedPt, reviewPitchPt
     -- * Verified OS safe-area insets (iPhone 17 Pro portrait, iOS 26+)
   , safeTopPt, safeBottomPt
+    -- * The rounded display corner (approximation)
+  , cornerRadiusPt, cornerRadiusCells, cornerExponent
+  , cellOnScreen, onScreenCells
     -- * Fibonacci size ladder
   , fibLadder
     -- * Widget gifPx-counts
@@ -82,6 +85,10 @@ module SixFour.Spec.Lattice
   , lawShutterRatio
   , lawWordmarkAdvance
   , lawEveryGovernedDimIsCells
+  , lawCornerRadiusIsCells
+  , lawCornersSymmetric
+  , lawCornerMonotone
+  , lawGridSpansScreen
   ) where
 
 -- The reference anchor ------------------------------------------------------
@@ -155,6 +162,54 @@ safeTopPt = 62
 -- Web-verified 2026-06-04. Absorbs the 'bleedPt'.
 safeBottomPt :: Int
 safeBottomPt = 34
+
+-- The rounded display corner (approximation) --------------------------------
+
+-- | The iPhone 17 Pro DISPLAY CORNER RADIUS in points, snapped to an exact atom
+-- count. The physical continuous-corner radius is ~55 pt (the 14/15/16 Pro
+-- lineage, iPhone 14 Pro is a measured 55.0 pt; Apple does not publish this and
+-- 17 Pro is not in the public tables, so it is DEVICE-VERIFY PENDING). We snap it
+-- UP to @14·4 = 56 pt@ so the radius is an integer atom count (Law #6), one atom
+-- of head-room over 55. Apple's corners are a CONTINUOUS curve (superellipse),
+-- not a circle; 'cornerExponent' selects how faithfully we approximate it.
+cornerRadiusPt :: Int
+cornerRadiusPt = 56
+
+-- | The corner radius in atoms: @56 \`div\` 4 = 14@.
+cornerRadiusCells :: Int
+cornerRadiusCells = cornerRadiusPt `div` gifPx
+
+-- | The superellipse exponent for the corner approximation. @2@ = a true circular
+-- quarter-disc (v1: provable and simple, coarse on a 14-atom radius); @~5@
+-- approximates Apple's continuous "squircle" corner. Raise it to trade fidelity
+-- for arithmetic size WITHOUT changing the shape of any law below.
+cornerExponent :: Int
+cornerExponent = 2
+
+-- | Does the cell @(col,row)@ fall on the physical (rounded) display? A cell in a
+-- corner box that lies OUTSIDE the corner arc is clipped (off-screen); everything
+-- else on the @100×218@ lattice is on-screen. Measured at cell CENTRES against a
+-- superellipse of exponent 'cornerExponent' (n=2 ⇒ circular quarter-disc). All
+-- integer, in doubled half-cell units, so no float ever enters the geometry.
+cellOnScreen :: (Int, Int) -> Bool
+cellOnScreen (c, r)
+  | not inBounds = False
+  | otherwise    = dc == 0 || dr == 0 || (dc ^ n + dr ^ n) <= radHalf ^ n
+  where
+    inBounds = c >= 0 && c < cols && r >= 0 && r < rows
+    n        = cornerExponent
+    radHalf  = 2 * cornerRadiusCells                     -- radius in half-cells
+    -- half-cell offset of this cell PAST the arc centre toward the nearest edge;
+    -- clamped to 0 means the cell sits in the straight band on that axis (the
+    -- corner does not constrain it).
+    dc       = max 0 (radHalf - (2 * min c (cols - 1 - c) + 1))
+    dr       = max 0 (radHalf - (2 * min r (rows - 1 - r) + 1))
+
+-- | Every cell that falls on the rounded display: the full-screen span MINUS the
+-- four clipped corner arcs. This is the substrate a full-bleed background owner
+-- covers (the rounded-rect analogue of 'SixFour.Spec.GridLayout.screenCells').
+onScreenCells :: [(Int, Int)]
+onScreenCells = filter cellOnScreen [ (c, r) | r <- [0 .. rows - 1], c <- [0 .. cols - 1] ]
 
 -- The Fibonacci size ladder -------------------------------------------------
 
@@ -309,3 +364,48 @@ lawEveryGovernedDimIsCells =
     governedDimsPt = map cellsToPt
       [ previewCells, shutterCells, controlCells, ringCells
       , touchFloorCells, segmentCells, wordmarkRows, wordmarkCols ]
+
+-- | The corner radius is an integer atom count (Law #6), snapped UP from the ~55 pt
+-- physical radius by less than one atom, and small enough that the two arcs on an
+-- axis never meet (@2·radius ≤ the short screen dimension@).
+lawCornerRadiusIsCells :: Bool
+lawCornerRadiusIsCells =
+     cornerRadiusPt == cornerRadiusCells * gifPx        -- integer atoms
+  && cornerRadiusCells == 14
+  && cornerRadiusPt >= 55                                -- covers the physical radius
+  && cornerRadiusPt - 55 < gifPx                         -- snapped up by < one atom
+  && 2 * cornerRadiusCells <= min cols rows              -- both arcs fit, never meet
+
+-- | The four corners are identical: 'cellOnScreen' is invariant under horizontal
+-- and vertical mirror, so the approximation is symmetric on all four corners.
+lawCornersSymmetric :: Bool
+lawCornersSymmetric =
+  and [ cellOnScreen (c, r) == cellOnScreen (cols - 1 - c, r)
+     && cellOnScreen (c, r) == cellOnScreen (c, rows - 1 - r)
+      | r <- [0 .. rows - 1], c <- [0 .. cols - 1] ]
+
+-- | The corner is a CLEAN monotone arc, no holes or islands: inside the top-left
+-- corner box, if a cell is on-screen then the cells one step toward the interior
+-- (right and down) are on-screen too. With 'lawCornersSymmetric' this governs all
+-- four corners, the clipped region of each corner is one contiguous blob.
+lawCornerMonotone :: Bool
+lawCornerMonotone =
+  and [ (not on || cellOnScreen (c + 1, r)) && (not on || cellOnScreen (c, r + 1))
+      | c <- [0 .. cornerRadiusCells - 1], r <- [0 .. cornerRadiusCells - 1]
+      , let on = cellOnScreen (c, r) ]
+
+-- | SPANS THE WHOLE SCREEN: the on-screen region reaches all four physical edges,
+-- and clipping is confined to the four corner boxes, every cell that is NOT in a
+-- corner box is on-screen. So the grid is full-bleed, with only the rounded
+-- corners removed.
+lawGridSpansScreen :: Bool
+lawGridSpansScreen =
+     any (\r -> cellOnScreen (0, r))         [0 .. rows - 1]   -- touches left edge
+  && any (\r -> cellOnScreen (cols - 1, r))  [0 .. rows - 1]   -- touches right edge
+  && any (\c -> cellOnScreen (c, 0))         [0 .. cols - 1]   -- touches top edge
+  && any (\c -> cellOnScreen (c, rows - 1))  [0 .. cols - 1]   -- touches bottom edge
+  && all cellOnScreen
+       [ (c, r) | r <- [0 .. rows - 1], c <- [0 .. cols - 1], not (inCornerBox c r) ]
+  where
+    inCornerBox c r =
+      min c (cols - 1 - c) < cornerRadiusCells && min r (rows - 1 - r) < cornerRadiusCells

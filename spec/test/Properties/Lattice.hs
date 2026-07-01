@@ -37,6 +37,18 @@ tests = testGroup "Lattice (GRID geometry — GlobalLattice source of truth, v3.
   , testProperty "every governed dimension is an integer atom count" $
       once lawEveryGovernedDimIsCells
 
+  , testProperty "corner radius is an integer atom count (14 = 56 pt ≈ 55 pt physical)" $
+      once lawCornerRadiusIsCells
+
+  , testProperty "rounded corners symmetric under H and V mirror (all four identical)" $
+      once lawCornersSymmetric
+
+  , testProperty "corner is a clean monotone arc (no holes/islands)" $
+      once lawCornerMonotone
+
+  , testProperty "grid spans the whole screen: all four edges reached, clipping only in corners" $
+      once lawGridSpansScreen
+
   , testProperty "lattice arithmetic golden: the pinned constants" $
       once $    (gifPx === 4) .&&. (gifDevicePx === 12) .&&. (subPt === 2)
            .&&. (reviewPitchPt === 4)
@@ -46,4 +58,6 @@ tests = testGroup "Lattice (GRID geometry — GlobalLattice source of truth, v3.
            .&&. (controlCells === 12) .&&. (touchFloorCells === 11)
            .&&. (ringCells === 20)   .&&. (ringTicks === 64)
            .&&. (safeTopPt === 62)   .&&. (safeBottomPt === 34)
+           .&&. (cornerRadiusPt === 56) .&&. (cornerRadiusCells === 14)
+           .&&. (cornerExponent === 2)
   ]
