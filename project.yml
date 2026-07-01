@@ -193,7 +193,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.sixfour.SixFour
         # Apple Development team (Daniel Mosquera) — REQUIRED to sign for a real iPhone.
         # Kept here (not just in Xcode) so `xcodegen generate` can't wipe it on regen.
-        DEVELOPMENT_TEAM: QFTX3897B7
+        # 9WANULVN2G is the personal team this machine is provisioned for (the valid
+        # "iOS Team Provisioning Profile" on disk, TeamName Daniel Mosquera). The old
+        # QFTX3897B7 had no signed-in account here ("No Account for Team QFTX3897B7").
+        DEVELOPMENT_TEAM: 9WANULVN2G
         # Owned native Zig core (Native/). The bridging header surfaces the C
         # ABI (sixfour_native.h) to Swift; the static lib is produced per-slice
         # by the "compile native Zig kernels" preBuildScript above.
