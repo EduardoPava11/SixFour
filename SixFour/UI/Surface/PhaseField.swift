@@ -82,6 +82,10 @@ struct DonePhaseField: View {
     /// of the retired `ReviewPhaseField`: the .cube LUT export now lives on the Done screen,
     /// beside the GIF Share, so the only worked LUT path survives the Review deletion.
     @State private var lutShare: LUTShareItem?
+    /// The training-data bundle awaiting the share sheet (GIF + probability-field `.npy` + contested
+    /// sidecar + manifest), built from the committed burst when EXPORT is tapped.
+    @State private var shareItems: [Any] = []
+    @State private var showShare = false
     /// The colours the LUT grades toward: ALL frames' palettes pooled into one cloud (a
     /// clip-wide profile), falling back to the single review palette. (Ported from Review.)
     private var lutPalette: [SIMD3<UInt8>] {
@@ -94,9 +98,18 @@ struct DonePhaseField: View {
             Color.clear
             VStack(spacing: GlobalLattice.pt(9)) {
                 CellText("EXPORTED", rows: 13, ink: .white)
-                // The rendered GIF is the shippable artifact (the genome-faithful cube-ladder
-                // is P3). Surface it for Share when present; otherwise just offer a new shot.
-                if let url = surface.gifURL {
+                // EXPORT the training data: the GIF (the collapse) AND the probability-field `.npy`
+                // bin (the functions) as ONE AirDrop/Files bundle. We need both, so one action ships
+                // both. The bundle is built once in `.task` (it writes the .npy to tmp); if it could
+                // not be built, fall back to a plain GIF share.
+                if !shareItems.isEmpty {
+                    Button { showShare = true } label: {
+                        CellActionButton(icon: .none, title: "EXPORT",
+                                         prominent: false, fillWidth: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Export the GIF and the probability-field training data")
+                } else if let url = surface.gifURL {
                     ShareLink(item: url) {
                         CellActionButton(icon: .none, title: "SHARE GIF",
                                          prominent: false, fillWidth: false)
@@ -126,8 +139,34 @@ struct DonePhaseField: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task { if shareItems.isEmpty { shareItems = exportItems() } }
         .sheet(item: $lutShare) { item in
             ActivityView(items: [item.url])
         }
+        .sheet(isPresented: $showShare) { ActivityView(items: shareItems) }
+    }
+
+    /// Build the EXPORT bundle once: the GIF plus the probability-field `.npy` (the functions the
+    /// model trains on), the contested sidecar, and the manifest. Empty when V2.1 is off or the field
+    /// cannot be built (then the body offers a plain GIF share instead).
+    private func exportItems() -> [Any] {
+        guard Feature.v21Capture, let built = builtField() else { return [] }
+        return V21Export.shareItems(field: built.field, source: built.source, gifURL: surface.gifURL)
+    }
+
+    /// The probability field from the committed burst, tagged with its provenance. Prefer the GPU
+    /// camera-box field (`surface.v21Counts`, the true fine-grid histogram pooled over the burst);
+    /// fall back to the index-cube temporal proxy. The source travels into the AirDrop manifest.
+    private func builtField() -> (field: V21FieldData, source: V21FieldSource)? {
+        let side = surface.cubeSide
+        if let counts = surface.v21Counts, counts.count == side * side * 3 * 256 {
+            return (V21FieldData(side: side, nLevels: 256, counts: counts), .cameraBox)
+        }
+        if let f = V21FieldData.fromCapture(indexCube: surface.indexCube,
+                                            palettesPerFrame: surface.palettesPerFrame,
+                                            side: side) {
+            return (f, .temporalProxy)
+        }
+        return nil
     }
 }
