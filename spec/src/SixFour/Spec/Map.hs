@@ -29,12 +29,17 @@ index cross-cut; physically the modules stay where they are, gated by golden vec
     "SixFour.Spec.RGBTLift", "SixFour.Spec.CubeLadder", "SixFour.Spec.OctreeCell",
     "SixFour.Spec.V21Field" (V2.1 pre-collapse field: curves collapse to the GIF89a byte; byte-exact
     core = collapse\/opponent-delta\/metric, REUSING the OctreeCell octant spine; colour-ring-agnostic),
+    "SixFour.Spec.V21Transport" (the RECOVERED TIME axis: a byte-exact 1-D optimal-transport
+    displacement flow @T = F⁻¹∘F@ on the equal-mass per-frame value histograms; anchor + per-frame maps
+    reconstruct all 64 slices, restoring the time↔value coupling the pooled field marginalises away),
     "SixFour.Spec.ByteCarrier", "SixFour.Spec.QuantFixed", "SixFour.Spec.ColorFixed",
     "SixFour.Spec.LeafOverride", + the @safeNudge@/domain half of "SixFour.Spec.RelationalResidual" and
     the Held rung of "SixFour.Spec.SelfSimilarReconstruct". @liftOct@ (the @2x2x2->1@ octant edge, the
     learned-token substrate) HAS its floor kernel @s4_octant_lift@\/@s4_octant_unlift@ (kernels.zig:857,
     built from the two quad kernels). __V2.1 GAP:__ "SixFour.Spec.V21Field" @collapseQ16@ has its floor
     kernel @s4_v21_collapse@; the bin-creation, opponent-delta and palette-delta kernels are still to add.
+    "SixFour.Spec.V21Transport" is spec-green (@transportDisp@\/@pushforward@\/@reconstructFlow@) but its
+    floor kernel @s4_v21_transport@ is still to add.
 
   * __PYTHON/MLX MODEL + TRAINER__ (tag: @MacTag@ — float latent, Mac-side, NOT shipped). Mechanism:
     a @Codegen.MLX@-style emitter (today emits the ABANDONED look-net). Modules: "SixFour.Spec.LargeJepaHead",

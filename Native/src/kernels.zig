@@ -2843,6 +2843,179 @@ pub export fn s4_v21_collapse(curves: [*c]const i32, p: i32, n_levels: i32, out_
     return RC_OK;
 }
 
+/// V2.1 TRANSPORT (SixFour.Spec.V21Transport.transportDisp): the monotone 1-D optimal-transport map
+/// T = F⁻¹∘F between two EQUAL-MASS count histograms, as a per-RANK integer displacement
+/// d[k] = q_dst[k] - q_src[k] on the sorted-quantile (mass) line. `src`/`dst` are [p*3*n_levels] count
+/// histograms (pixel-major: pixel, then channel R,G,B, then level), each per-(cell,channel) curve
+/// summing to `mass`; writes [p*3*mass] displacements (same cell/channel major order, rank-contiguous).
+/// This is the byte-exact seam that RESTORES the time axis the pooled field marginalises away: an
+/// anchor curve plus this map reconstructs a frame's curve (s4_v21_pushforward). Computed allocation-
+/// free by a two-pointer walk over the two CDFs; the rank matching is optimal for any convex ground
+/// cost in 1-D. TOTAL: refuses (RC_OUT_OF_RANGE) n_levels>256, mass<=0, a negative count, or any
+/// per-(cell,channel) curve whose counts do not sum to `mass` (the equal-mass precondition, guaranteed
+/// on the soft-splat field where every cell totals box*w).
+pub export fn s4_v21_transport(src: [*c]const i32, dst: [*c]const i32, p: i32, n_levels: i32, mass: i32, out_disp: [*c]i32) i32 {
+    if (src == null or dst == null or out_disp == null) return RC_NULL_PTR;
+    if (p <= 0 or n_levels <= 0) return RC_BAD_SHAPE;
+    if (n_levels > 256 or mass <= 0) return RC_OUT_OF_RANGE;
+    const nl: usize = @intCast(n_levels);
+    const m: usize = @intCast(mass);
+    const total: usize = @as(usize, @intCast(p)) * 3;
+    var ch: usize = 0;
+    while (ch < total) : (ch += 1) {
+        const cbase = ch * nl;
+        const obase = ch * m;
+        // Equal-mass precondition: both curves must sum to exactly `mass`, no negative counts.
+        var ssum: i32 = 0;
+        var dsum: i32 = 0;
+        var q: usize = 0;
+        while (q < nl) : (q += 1) {
+            if (src[cbase + q] < 0 or dst[cbase + q] < 0) return RC_OUT_OF_RANGE;
+            ssum += src[cbase + q];
+            dsum += dst[cbase + q];
+        }
+        if (ssum != mass or dsum != mass) return RC_OUT_OF_RANGE;
+        // Two-pointer walk over the source/dest levels along the mass line: each unit of mass at src
+        // level i is carried to dst level j, emitting the displacement j - i for that rank.
+        var i: usize = 0;
+        var j: usize = 0;
+        var rem_i: i32 = src[cbase + 0];
+        var rem_j: i32 = dst[cbase + 0];
+        var k: usize = 0;
+        while (k < m) {
+            while (rem_i == 0) {
+                i += 1;
+                rem_i = src[cbase + i];
+            }
+            while (rem_j == 0) {
+                j += 1;
+                rem_j = dst[cbase + j];
+            }
+            const take: i32 = if (rem_i < rem_j) rem_i else rem_j;
+            const d: i32 = @as(i32, @intCast(j)) - @as(i32, @intCast(i));
+            var t: i32 = 0;
+            while (t < take) : (t += 1) {
+                out_disp[obase + k] = d;
+                k += 1;
+            }
+            rem_i -= take;
+            rem_j -= take;
+        }
+    }
+    return RC_OK;
+}
+
+/// V2.1 PUSHFORWARD (SixFour.Spec.V21Transport.pushforward): apply a per-rank displacement to a source
+/// curve and re-bin, reproducing the transported curve. `src` is [p*3*n_levels] counts (each
+/// per-(cell,channel) curve summing to `mass`); `disp` is [p*3*mass] rank displacements; writes `out`
+/// [p*3*n_levels] counts. With `disp` = s4_v21_transport(src, dst) this yields `dst` byte-exact; with
+/// the negated displacement it inverts back to the source (reversible, no data lost). TOTAL: refuses
+/// (RC_OUT_OF_RANGE) n_levels>256, mass<=0, a curve not summing to `mass`, or a landing level
+/// src_level+disp outside [0, n_levels).
+pub export fn s4_v21_pushforward(src: [*c]const i32, disp: [*c]const i32, p: i32, n_levels: i32, mass: i32, out: [*c]i32) i32 {
+    if (src == null or disp == null or out == null) return RC_NULL_PTR;
+    if (p <= 0 or n_levels <= 0) return RC_BAD_SHAPE;
+    if (n_levels > 256 or mass <= 0) return RC_OUT_OF_RANGE;
+    const nl: usize = @intCast(n_levels);
+    const m: usize = @intCast(mass);
+    const total: usize = @as(usize, @intCast(p)) * 3;
+    const out_len: usize = total * nl;
+    var z: usize = 0;
+    while (z < out_len) : (z += 1) out[z] = 0;
+    var ch: usize = 0;
+    while (ch < total) : (ch += 1) {
+        const cbase = ch * nl;
+        const obase = ch * m;
+        // Equal-mass precondition on the source curve.
+        var ssum: i32 = 0;
+        var q: usize = 0;
+        while (q < nl) : (q += 1) {
+            if (src[cbase + q] < 0) return RC_OUT_OF_RANGE;
+            ssum += src[cbase + q];
+        }
+        if (ssum != mass) return RC_OUT_OF_RANGE;
+        // Walk the source quantiles in rank order (level i repeated src[i] times); land each at i+disp.
+        var i: usize = 0;
+        var k: usize = 0;
+        while (i < nl) : (i += 1) {
+            var c: i32 = src[cbase + i];
+            while (c > 0) : (c -= 1) {
+                const land: i32 = @as(i32, @intCast(i)) + disp[obase + k];
+                if (land < 0 or land >= n_levels) return RC_OUT_OF_RANGE;
+                out[cbase + @as(usize, @intCast(land))] += 1;
+                k += 1;
+            }
+        }
+    }
+    return RC_OK;
+}
+
+test "s4_v21_transport / s4_v21_pushforward: golden + round-trip + guards (Spec.V21Transport)" {
+    // The kernel processes p*3 curves (RGB), so p=1 lays out THREE per-channel curves. Each golden
+    // repeats one curve across the 3 channels (comptime `++`) and checks the displacement replicated.
+    // Golden 1 (rigid +1 drift): dst is src shifted by one level, so the transport is the constant
+    // displacement 1 at every rank (lawTranslateIsConstantShift) and the pushforward reproduces dst
+    // byte-exact. Same witness verified in the Haskell harness.
+    {
+        const p: i32 = 1;
+        const nl: i32 = 6;
+        const mass: i32 = 6;
+        const oneS = [_]i32{ 2, 0, 3, 0, 1, 0 }; // quantiles 0,0,2,2,2,4
+        const oneD = [_]i32{ 0, 2, 0, 3, 0, 1 }; // quantiles 1,1,3,3,3,5  (= src + 1)
+        const src = oneS ++ oneS ++ oneS;
+        const dst = oneD ++ oneD ++ oneD;
+        var disp = [_]i32{0} ** 18;
+        try std.testing.expectEqual(RC_OK, s4_v21_transport(&src, &dst, p, nl, mass, &disp));
+        try std.testing.expectEqualSlices(i32, &([_]i32{ 1, 1, 1, 1, 1, 1 } ** 3), &disp);
+        var got = [_]i32{0} ** 18;
+        try std.testing.expectEqual(RC_OK, s4_v21_pushforward(&src, &disp, p, nl, mass, &got));
+        try std.testing.expectEqualSlices(i32, &dst, &got);
+    }
+    // Golden 2 (crossing / non-rigid): mass moves in BOTH directions; the map has mixed signs and its
+    // total absolute displacement equals the CDF-L1 Wasserstein-1 cost (lawTransportCostIsW1 = 6/curve).
+    {
+        const p: i32 = 1;
+        const nl: i32 = 4;
+        const mass: i32 = 6;
+        const oneS = [_]i32{ 3, 0, 0, 3 }; // quantiles 0,0,0,3,3,3
+        const oneD = [_]i32{ 0, 3, 3, 0 }; // quantiles 1,1,1,2,2,2
+        const src = oneS ++ oneS ++ oneS;
+        const dst = oneD ++ oneD ++ oneD;
+        var disp = [_]i32{0} ** 18;
+        try std.testing.expectEqual(RC_OK, s4_v21_transport(&src, &dst, p, nl, mass, &disp));
+        try std.testing.expectEqualSlices(i32, &([_]i32{ 1, 1, 1, -1, -1, -1 } ** 3), &disp);
+        var w1: i32 = 0;
+        for (disp) |d| w1 += if (d < 0) -d else d;
+        try std.testing.expectEqual(@as(i32, 18), w1); // 6 per curve x 3 channels
+        // forward reproduces dst
+        var got = [_]i32{0} ** 12;
+        try std.testing.expectEqual(RC_OK, s4_v21_pushforward(&src, &disp, p, nl, mass, &got));
+        try std.testing.expectEqualSlices(i32, &dst, &got);
+        // REVERSIBILITY: the negated displacement carries dst back to src exactly.
+        var ndisp = [_]i32{0} ** 18;
+        for (disp, 0..) |d, idx| ndisp[idx] = -d;
+        var back = [_]i32{0} ** 12;
+        try std.testing.expectEqual(RC_OK, s4_v21_pushforward(&dst, &ndisp, p, nl, mass, &back));
+        try std.testing.expectEqualSlices(i32, &src, &back);
+    }
+    // Guards: unequal mass is refused; a null pointer is refused; a displacement off the alphabet is refused.
+    {
+        const p: i32 = 1;
+        const nl: i32 = 4;
+        const oneS = [_]i32{ 3, 0, 0, 3 }; // mass 6
+        const oneD = [_]i32{ 0, 2, 2, 0 }; // mass 4 != 6
+        const src = oneS ++ oneS ++ oneS;
+        const dst = oneD ++ oneD ++ oneD;
+        var disp = [_]i32{0} ** 18;
+        try std.testing.expectEqual(RC_OUT_OF_RANGE, s4_v21_transport(&src, &dst, p, nl, 6, &disp));
+        try std.testing.expectEqual(RC_NULL_PTR, s4_v21_transport(null, &dst, p, nl, 6, &disp));
+        // a displacement that pushes level 3 up to level 4 (off the 0..3 alphabet) is refused.
+        const bad = [_]i32{ 0, 0, 0, 1, 1, 1 } ** 3;
+        var out = [_]i32{0} ** 12;
+        try std.testing.expectEqual(RC_OUT_OF_RANGE, s4_v21_pushforward(&src, &bad, p, nl, 6, &out));
+    }
+}
+
 /// V2.1 per-level OCTANT LIFT DRIVER (SixFour.Spec.V21Field.liftOctList): drives the gated,
 /// byte-exact s4_octant_lift over each of the n_levels curve levels. `octant_curves` is
 /// [8*n_levels], cell-major (the 8 octant cells' one-channel curves, level-contiguous); writes the

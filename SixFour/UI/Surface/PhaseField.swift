@@ -151,7 +151,8 @@ struct DonePhaseField: View {
     /// cannot be built (then the body offers a plain GIF share instead).
     private func exportItems() -> [Any] {
         guard Feature.v21Capture, let built = builtField() else { return [] }
-        return V21Export.shareItems(field: built.field, source: built.source, gifURL: surface.gifURL)
+        return V21Export.shareItems(field: built.field, source: built.source, gifURL: surface.gifURL,
+                                    flow: surface.v21Flow)
     }
 
     /// The probability field from the committed burst, tagged with its provenance. Prefer the GPU

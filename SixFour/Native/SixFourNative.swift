@@ -645,6 +645,51 @@ enum SixFourNative {
         return out
     }
 
+    /// The monotone 1-D optimal-transport map `T = F⁻¹∘F` between two EQUAL-MASS
+    /// count histograms (`s4_v21_transport`): the per-rank displacement
+    /// `d[k] = q_dst[k] − q_src[k]` on the sorted-quantile mass line. `src`/`dst`
+    /// are `p·3·nLevels` counts (pixel-major, R,G,B, then level), each per-(cell,
+    /// channel) curve summing to `mass`. Returns `p·3·mass` displacements. Restores
+    /// the V2.1 time axis: an anchor curve + this map reconstructs a frame's curve
+    /// (`pushforwardV21`). Returns nil on a shape/mass violation.
+    static func transportV21(src: [Int32], dst: [Int32], p: Int, nLevels: Int, mass: Int) -> [Int32]? {
+        guard p > 0, nLevels > 0, mass > 0,
+              src.count == p * 3 * nLevels, dst.count == p * 3 * nLevels else { return nil }
+        var out = [Int32](repeating: 0, count: p * 3 * mass)
+        let rc = src.withUnsafeBufferPointer { s in
+            dst.withUnsafeBufferPointer { d in
+                out.withUnsafeMutableBufferPointer { o in
+                    s4_v21_transport(s.baseAddress, d.baseAddress, Int32(p), Int32(nLevels),
+                                     Int32(mass), o.baseAddress)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_v21_transport rc=\(rc)"); return nil }
+        return out
+    }
+
+    /// Apply a per-rank displacement to a source curve and re-bin (`s4_v21_pushforward`),
+    /// reproducing the transported curve. `src` is `p·3·nLevels` counts (each curve
+    /// summing to `mass`); `disp` is `p·3·mass` rank displacements. Returns
+    /// `p·3·nLevels` counts. With `disp = transportV21(src, dst)` yields `dst`
+    /// byte-exact; with the negated displacement it inverts back to `src`. Returns nil
+    /// on a shape/mass violation or a landing level outside `0..<nLevels`.
+    static func pushforwardV21(src: [Int32], disp: [Int32], p: Int, nLevels: Int, mass: Int) -> [Int32]? {
+        guard p > 0, nLevels > 0, mass > 0,
+              src.count == p * 3 * nLevels, disp.count == p * 3 * mass else { return nil }
+        var out = [Int32](repeating: 0, count: p * 3 * nLevels)
+        let rc = src.withUnsafeBufferPointer { s in
+            disp.withUnsafeBufferPointer { d in
+                out.withUnsafeMutableBufferPointer { o in
+                    s4_v21_pushforward(s.baseAddress, d.baseAddress, Int32(p), Int32(nLevels),
+                                       Int32(mass), o.baseAddress)
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_v21_pushforward rc=\(rc)"); return nil }
+        return out
+    }
+
     /// Histogram accumulation (`s4_v21_accumulate_hist`): box-decimate a FINE grid
     /// into coarse voxels and, per voxel per channel, count fine samples at each
     /// value level. `fine` is `ft·fy·fx·3` u8, layout `(((ft·fy + y)·fx + x)·3 +

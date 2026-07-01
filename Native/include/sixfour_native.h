@@ -325,6 +325,26 @@ int32_t s4_v21_opponent_delta(const int32_t *bin1, const int32_t *bin2,
 int32_t s4_v21_counts_to_energy(const int32_t *counts, int32_t p, int32_t n_levels,
                                 int32_t *out_energy);
 
+// The monotone 1-D optimal-transport map T = F^-1 . F between two EQUAL-MASS count
+// histograms, as a per-RANK integer displacement d[k] = q_dst[k] - q_src[k] on the
+// sorted-quantile mass line. `src`/`dst` are [p*3*n_levels] counts (pixel-major:
+// pixel, channel R,G,B, then level), each per-(cell,channel) curve summing to `mass`;
+// writes [p*3*mass] displacements (same cell/channel major order, rank-contiguous).
+// Restores the V2.1 time axis: anchor curve + this map reconstructs a frame's curve
+// (s4_v21_pushforward). Refuses (RC_OUT_OF_RANGE) n_levels>256, mass<=0, a negative
+// count, or a curve not summing to `mass`.
+int32_t s4_v21_transport(const int32_t *src, const int32_t *dst, int32_t p,
+                         int32_t n_levels, int32_t mass, int32_t *out_disp);
+
+// Apply a per-rank displacement to a source curve and re-bin, reproducing the
+// transported curve. `src` is [p*3*n_levels] counts (each curve summing to `mass`);
+// `disp` is [p*3*mass] rank displacements; writes [p*3*n_levels] counts to `out`.
+// With disp = s4_v21_transport(src,dst) yields dst byte-exact; with the negated disp
+// it inverts back to src. Refuses (RC_OUT_OF_RANGE) n_levels>256, mass<=0, a curve not
+// summing to `mass`, or a landing level src_level+disp outside [0, n_levels).
+int32_t s4_v21_pushforward(const int32_t *src, const int32_t *disp, int32_t p,
+                           int32_t n_levels, int32_t mass, int32_t *out);
+
 // Histogram accumulation: box-decimate a FINE grid into coarse voxels and, per
 // voxel per channel, count fine samples at each value level. `fine` is
 // [ft*fy*fx*3] u8, layout (((ft*fy + y)*fx + x)*3 + ch); `out_counts` (zeroed

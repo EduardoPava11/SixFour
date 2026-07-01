@@ -284,6 +284,51 @@ final class MetalPipeline: @unchecked Sendable {
         return out
     }
 
+    /// Encode a burst histogram buffer as a `V21Flow` (the recovered time axis): a FRAME-0 anchor plus,
+    /// per frame, the RLE-compressed transport map `anchor -> frame` (mirroring `Spec.V21Transport`;
+    /// `lawFlowRecoversAllSlices` holds for the frame-0 anchor — the barycenter is a later quality
+    /// refinement). Reads the buffer IN PLACE (only a transient anchor + one frame's slice + one
+    /// displacement are live), so it is safe at the burst-end seam before the buffer is freed. Returns
+    /// nil on a shape/mass fault. Heavily LOGGED (subsystem `com.sixfour.SixFour`, category `metal`) so
+    /// a device test reports timing and the real compression. Runs OFF the main thread (capture context).
+    static func encodeV21Flow(buffer: any MTLBuffer, frames: Int, tileSide side: Int, nLevels: Int) -> V21Flow? {
+        let t0 = DispatchTime.now()
+        let total = side * side * 3
+        let spatial = total * nLevels
+        guard frames > 0, side > 0, nLevels > 0 else {
+            logger.error("v21flow: bad shape frames=\(frames) side=\(side) nLevels=\(nLevels)")
+            return nil
+        }
+        let ptr = buffer.contents().bindMemory(to: Int32.self, capacity: frames * spatial)
+
+        // Anchor = frame 0's histogram field (cheap; the transport of every other frame is FROM it).
+        let anchor = Array(UnsafeBufferPointer(start: ptr, count: spatial))
+        let mass = Int(anchor[0 ..< nLevels].reduce(Int32(0), +))
+        guard mass > 0 else { logger.error("v21flow: mass<=0 (frame-0 first curve empty)"); return nil }
+        logger.log("v21flow: start frames=\(frames) side=\(side) nLevels=\(nLevels) mass=\(mass)")
+
+        var maps: [[V21Run]] = []
+        maps.reserveCapacity(frames)
+        var totalRuns = 0
+        for t in 0 ..< frames {
+            let frame = Array(UnsafeBufferPointer(start: ptr + t * spatial, count: spatial))
+            guard let disp = SixFourNative.transportV21(src: anchor, dst: frame, p: side * side,
+                                                        nLevels: nLevels, mass: mass) else {
+                logger.error("v21flow: transportV21 returned nil at frame \(t)")
+                return nil
+            }
+            let runs = V21FlowCodec.rleEncode(disp)
+            totalRuns += runs.count
+            maps.append(runs)
+        }
+        let ms = Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds) / 1e6
+        let rawInts = frames * side * side * 3 * mass                 // raw per-rank disp, no compression
+        let bytes = 8 + totalRuns * 8                                  // maps.bin = header + 2 i32 / run
+        let ratio = totalRuns > 0 ? Double(rawInts) / Double(totalRuns) : 0
+        logger.log("v21flow: DONE in \(String(format: "%.0f", ms)) ms — \(totalRuns) runs, maps≈\(bytes/1024) KiB, RLE ratio \(String(format: "%.1f", ratio))x vs raw")
+        return V21Flow(side: side, nLevels: nLevels, mass: mass, anchor: anchor, maps: maps)
+    }
+
     private func encodeV21Hist(
         cmd: any MTLCommandBuffer,
         pixelBuffer: CVPixelBuffer,

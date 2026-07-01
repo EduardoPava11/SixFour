@@ -1,5 +1,6 @@
 import Foundation
 import simd
+import os
 
 /// Build the V2.1 probability field from a committed capture, and export it (with the GIF) as tensors
 /// the user can AirDrop.
@@ -141,6 +142,139 @@ enum V21Contested {
     }
 }
 
+// MARK: - The V2.1 transport FLOW (the recovered time axis; mirrors SixFour.Spec.V21Transport)
+
+/// A run-length pair `(value, length)` of a transport displacement map. A rigid drift is one run.
+struct V21Run: Equatable, Sendable { let value: Int32; let length: Int32 }
+
+/// The airdrop flow: a barycenter anchor plus, per frame, the RLE-compressed transport map carrying
+/// the anchor to that frame's value histogram. Reconstructs every per-frame slice byte-exact
+/// (`Spec.V21Transport.lawBarycenterFlowRecovers`), and the shipped GIF is the per-frame collapse of
+/// those slices (`lawGifDerivesFromFlow`) — so the model's one visible surface is a projection of the
+/// stored data. This is the full `[t × value]` joint the pooled field marginalises away.
+struct V21Flow: Sendable {
+    let side: Int
+    let nLevels: Int
+    let mass: Int
+    let anchor: [Int32]        // side·side·3·nLevels — the barycenter histogram
+    let maps: [[V21Run]]       // per frame: RLE of the p·3·mass rank displacement
+}
+
+/// The byte-exact flow codec. All integer, dependency-free; the transport/pushforward steps route
+/// through the gated Zig kernels (`transportV21`/`pushforwardV21`), so device == Zig == Haskell.
+enum V21FlowCodec {
+
+    /// The sampled inverse-CDF of one count curve (`Spec.V21Transport.quantiles`): level `l` repeated
+    /// `count(l)` times, ascending. Length = the curve's mass.
+    static func quantiles(_ counts: ArraySlice<Int32>) -> [Int32] {
+        var out: [Int32] = []
+        // `enumerated()` restarts at 0, so `level` is the value level within this curve.
+        for (level, c) in counts.enumerated() where c > 0 {
+            out.append(contentsOf: repeatElement(Int32(level), count: Int(c)))
+        }
+        return out
+    }
+
+    /// The 1-D Wasserstein-2 barycenter (`Spec.V21Transport.barycenter`): per (bin, channel) curve, the
+    /// per-rank MEAN of the frames' quantiles (truncating division), rebinned. The consensus anchor.
+    /// Requires every frame's per-curve mass to match. Returns nil on a shape/mass violation.
+    static func barycenter(perFrame: [[Int32]], side: Int, nLevels: Int) -> [Int32]? {
+        let total = side * side * 3
+        let frames = perFrame.count
+        guard frames > 0, perFrame.allSatisfy({ $0.count == total * nLevels }) else { return nil }
+        var out = [Int32](repeating: 0, count: total * nLevels)
+        for ch in 0 ..< total {
+            let base = ch * nLevels
+            var qsum: [Int64] = []
+            var mass = -1
+            for f in perFrame {
+                let q = quantiles(f[base ..< base + nLevels])
+                if mass < 0 { mass = q.count; qsum = [Int64](repeating: 0, count: mass) }
+                guard q.count == mass else { return nil }   // equal-mass precondition
+                for k in 0 ..< mass { qsum[k] += Int64(q[k]) }
+            }
+            for k in 0 ..< mass {
+                let lvl = Int(qsum[k] / Int64(frames))
+                if lvl >= 0 && lvl < nLevels { out[base + lvl] += 1 }
+            }
+        }
+        return out
+    }
+
+    /// Run-length encode a displacement (`Spec.V21Transport.rleEncode`).
+    static func rleEncode(_ d: [Int32]) -> [V21Run] {
+        var runs: [V21Run] = []
+        var i = 0
+        while i < d.count {
+            let v = d[i]
+            var n = 1
+            while i + n < d.count && d[i + n] == v { n += 1 }
+            runs.append(V21Run(value: v, length: Int32(n)))
+            i += n
+        }
+        return runs
+    }
+
+    /// Run-length decode (`Spec.V21Transport.rleDecode`), the exact inverse of `rleEncode`.
+    static func rleDecode(_ runs: [V21Run]) -> [Int32] {
+        var out: [Int32] = []
+        for r in runs { out.append(contentsOf: repeatElement(r.value, count: Int(r.length))) }
+        return out
+    }
+
+    /// ENCODE a burst (per-frame count fields `[frames][side·side·3·nLevels]`) as a `V21Flow`: the
+    /// barycenter anchor plus, per frame, `RLE(transport(anchor → frame))`. Streams frame-by-frame, so
+    /// only one frame's displacement (`p·3·mass`) is live at a time. Returns nil on any shape/mass fault.
+    static func encode(perFrame: [[Int32]], side: Int, nLevels: Int) -> V21Flow? {
+        let p = side * side
+        let total = p * 3
+        guard !perFrame.isEmpty, perFrame.allSatisfy({ $0.count == total * nLevels }),
+              let anchor = barycenter(perFrame: perFrame, side: side, nLevels: nLevels) else { return nil }
+        let mass = Int(anchor[0 ..< nLevels].reduce(Int32(0), +))
+        guard mass > 0 else { return nil }
+        var maps: [[V21Run]] = []
+        maps.reserveCapacity(perFrame.count)
+        for frame in perFrame {
+            guard let disp = SixFourNative.transportV21(src: anchor, dst: frame, p: p, nLevels: nLevels, mass: mass)
+            else { return nil }
+            maps.append(rleEncode(disp))
+        }
+        return V21Flow(side: side, nLevels: nLevels, mass: mass, anchor: anchor, maps: maps)
+    }
+
+    /// Reconstruct every per-frame slice from a flow (the trainer's parity path; `lawBarycenterFlowRecovers`).
+    static func reconstruct(_ flow: V21Flow) -> [[Int32]]? {
+        let p = flow.side * flow.side
+        var slices: [[Int32]] = []
+        slices.reserveCapacity(flow.maps.count)
+        for runs in flow.maps {
+            let disp = rleDecode(runs)
+            guard let slice = SixFourNative.pushforwardV21(src: flow.anchor, disp: disp, p: p,
+                                                           nLevels: flow.nLevels, mass: flow.mass)
+            else { return nil }
+            slices.append(slice)
+        }
+        return slices
+    }
+
+    /// The shipped GIF frames DERIVED FROM THE FLOW (`lawGifDerivesFromFlow`): per frame, the per-channel
+    /// mode of the reconstructed slice (`collapseV21` of its energy). This is the ONE image the model
+    /// sees — what is shown IS what the model takes as input. Returns per-frame `p·3` sRGB bytes.
+    static func gifFrames(_ flow: V21Flow) -> [[UInt8]]? {
+        guard let slices = reconstruct(flow) else { return nil }
+        let p = flow.side * flow.side
+        var frames: [[UInt8]] = []
+        frames.reserveCapacity(slices.count)
+        for slice in slices {
+            guard let energy = SixFourNative.countsToEnergyV21(counts: slice, p: p, nLevels: flow.nLevels),
+                  let rgb = SixFourNative.collapseV21(curves: energy, p: p, nLevels: flow.nLevels)
+            else { return nil }
+            frames.append(rgb)
+        }
+        return frames
+    }
+}
+
 // MARK: - The bundle manifest (self-describing, hand-written JSON, zero-dependency)
 
 /// A single JSON file that makes the AirDropped bundle self-describing: it records which field the tensor
@@ -150,14 +284,34 @@ enum V21Contested {
 enum V21Manifest {
 
     static func json(field f: V21FieldData, source: V21FieldSource, stem: String,
-                     artifacts: [String: String]) -> Data {
+                     artifacts: [String: String], flow: V21Flow?) -> Data {
         func q(_ s: String) -> String { "\"\(s)\"" }
-        let arts = ["gif", "field", "contested"].compactMap { key -> String? in
+        let arts = ["gif", "field", "contested", "anchor", "maps"].compactMap { key -> String? in
             artifacts[key].map { "    \(q(key)): \(q($0))" }
         }.joined(separator: ",\n")
+        // With a flow, the bundle is a superset (schema /2) and the GIF is TRUTHFULLY the flow collapse.
+        let schema = flow == nil ? "sixfour.v21.capture/1" : "sixfour.v21.capture/2"
+        let collapse = flow == nil
+            ? "the shipped GIF is argmin-energy = argmax-count per bin and channel of the field (s4_v21_collapse)"
+            : "the shipped .gif is a per-frame k-means PREVIEW; the model's GIF is DERIVED FROM THE FLOW as the per-channel mode (collapse) of pushforward(anchor, map_t) per frame (SixFour.Spec.V21Transport.gifFromFlow), and the field is the pooled sum of those reconstructed frames"
+        var flowBlock = ""
+        if let fl = flow {
+            flowBlock = """
+            ,
+              "flow": {
+                "anchor_dtype": "<i4",
+                "anchor_shape": [\(fl.side), \(fl.side), 3, \(fl.nLevels)],
+                "frames": \(fl.maps.count),
+                "mass": \(fl.mass),
+                "maps_format": "little-endian i32: [frames][mass], then per frame [nRuns] then nRuns*(value,length); RLE of the p*3*mass rank displacement anchor->frame",
+                "anchor": "frame 0's histogram field (the barycenter anchor is a later quality refinement)",
+                "meaning": "the recovered TIME AXIS: frame-0 anchor + per-frame monotone transport maps T=Finv.F; pushforward(anchor, map_t) reconstructs frame t's [y,x,3,level] histogram, and the field is their pooled sum (SixFour.Spec.V21Transport)"
+              }
+            """
+        }
         let json = """
         {
-          "schema": "sixfour.v21.capture/1",
+          "schema": "\(schema)",
           "stem": \(q(stem)),
           "side": \(f.side),
           "n_levels": \(f.nLevels),
@@ -177,10 +331,36 @@ enum V21Manifest {
             "axes": ["y", "x", "channel"],
             "meaning": "mode margin = peak count - runner-up count over levels; 0 = the collapse is a near-tie (the GIF byte is arbitrary here), large = a confident mode"
           },
-          "collapse": "the shipped GIF is argmin-energy = argmax-count per bin and channel of the field (s4_v21_collapse)"
+          "collapse": "\(collapse)"\(flowBlock)
         }
         """
         return Data(json.utf8)
+    }
+}
+
+// MARK: - The transport flow serialization (anchor .npy + RLE maps binary)
+
+/// Serializes a `V21Flow` for the AirDrop bundle: the anchor as a standard `.npy`, the RLE maps as a
+/// compact little-endian `int32` binary the trainer parses.
+enum V21FlowExport {
+
+    /// The barycenter anchor as a standard `.npy` (`int32 [side, side, 3, nLevels]`), same encoder the
+    /// field uses so it loads with a single `numpy.load`.
+    static func anchorData(_ flow: V21Flow) -> Data {
+        V21Npy.encode(flow.anchor, shape: "(\(flow.side), \(flow.side), 3, \(flow.nLevels))")
+    }
+
+    /// The RLE maps as little-endian `int32`: `[frames][mass]`, then per frame `[nRuns]` followed by
+    /// `nRuns × (value, length)`. `rleDecode` of a frame's runs is its `p·3·mass` rank displacement.
+    static func mapsData(_ flow: V21Flow) -> Data {
+        var d = Data()
+        func put(_ v: Int32) { var x = v.littleEndian; withUnsafeBytes(of: &x) { d.append(contentsOf: $0) } }
+        put(Int32(flow.maps.count)); put(Int32(flow.mass))
+        for runs in flow.maps {
+            put(Int32(runs.count))
+            for r in runs { put(r.value); put(r.length) }
+        }
+        return d
     }
 }
 
@@ -196,10 +376,12 @@ enum V21Manifest {
 ///   * `<stem>_manifest.json`                describes all of the above, incl. `field_source`.
 enum V21Export {
 
+    static let logger = Logger(subsystem: "com.sixfour.SixFour", category: "v21export")
+
     /// `[gifURL?, fieldURL, contestedURL, manifestURL]`, suitable for `ActivityView(items:)`. Each
     /// artifact is written independently and best-effort: a failed write drops only that one item, and
     /// the manifest (written last) lists exactly the artifacts that actually shipped.
-    static func shareItems(field: V21FieldData, source: V21FieldSource, gifURL: URL?) -> [Any] {
+    static func shareItems(field: V21FieldData, source: V21FieldSource, gifURL: URL?, flow: V21Flow?) -> [Any] {
         let stem = "sixfour_\(UUID().uuidString.prefix(8).lowercased())"
         let tmp = FileManager.default.temporaryDirectory
         var items: [Any] = []
@@ -233,9 +415,26 @@ enum V21Export {
             items.append(url); artifacts["contested"] = contName
         }
 
+        // The transport FLOW (the recovered time axis): barycenter anchor .npy + RLE maps binary. This
+        // is the artifact that keeps a MOVING capture trainable; the field/GIF derive from it.
+        if let fl = flow {
+            let anchorName = "\(stem)_anchor_\(fl.side)x\(fl.side)x3x\(fl.nLevels).npy"
+            if let url = write(V21FlowExport.anchorData(fl), to: tmp.appendingPathComponent(anchorName)) {
+                items.append(url); artifacts["anchor"] = anchorName
+            }
+            let mapsName = "\(stem)_maps.bin"
+            let mapsData = V21FlowExport.mapsData(fl)
+            if let url = write(mapsData, to: tmp.appendingPathComponent(mapsName)) {
+                items.append(url); artifacts["maps"] = mapsName
+            }
+            logger.log("export: stem=\(stem) FLOW shipped — anchor + maps.bin (\(mapsData.count/1024) KiB, \(fl.maps.count) frames, mass \(fl.mass))")
+        } else {
+            logger.log("export: stem=\(stem) NO flow (nil) — shipping pooled field only")
+        }
+
         // The manifest LAST: it names exactly what shipped above.
         let manName = "\(stem)_manifest.json"
-        let manData = V21Manifest.json(field: field, source: source, stem: stem, artifacts: artifacts)
+        let manData = V21Manifest.json(field: field, source: source, stem: stem, artifacts: artifacts, flow: flow)
         if let url = write(manData, to: tmp.appendingPathComponent(manName)) {
             items.append(url)
         }

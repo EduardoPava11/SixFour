@@ -236,6 +236,7 @@ struct SurfaceView: View {
         // V2.1 (gated): fold the engine's time-pooled camera-box field into σ so the review bench's
         // FIELD / AIRDROP read the true camera histogram (nil keeps the index-cube proxy path).
         surface.v21Counts = engine.v21Counts
+        surface.v21Flow = engine.v21Flow   // the recovered time axis; the export ships this
         // Build the 16³ octree-coarse substrate once, post-capture, for the review bench's
         // coarse tile (byte-exact VoxelReduce of the committed 64³ cube).
         surface.buildCoarseSubstrate()

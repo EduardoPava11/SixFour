@@ -117,7 +117,8 @@ struct V21CaptureFieldTests {
         let data = V21Manifest.json(field: f, source: .cameraBox, stem: "sixfour_abcd1234",
                                     artifacts: ["gif": "sixfour_abcd1234.gif",
                                                 "field": "sixfour_abcd1234_field_64x64x3x256.npy",
-                                                "contested": "sixfour_abcd1234_contested_64x64x3.npy"])
+                                                "contested": "sixfour_abcd1234_contested_64x64x3.npy"],
+                                    flow: nil)
         let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         #expect(obj?["field_source"] as? String == "camera_box")
         #expect(obj?["schema"] as? String == "sixfour.v21.capture/1")
@@ -130,7 +131,7 @@ struct V21CaptureFieldTests {
     /// camera-box field).
     @Test func manifestRecordsTemporalProxy() throws {
         let f = V21FieldData(side: 2, nLevels: 4, counts: [Int32](repeating: 0, count: 2 * 2 * 3 * 4))
-        let data = V21Manifest.json(field: f, source: .temporalProxy, stem: "s", artifacts: [:])
+        let data = V21Manifest.json(field: f, source: .temporalProxy, stem: "s", artifacts: [:], flow: nil)
         let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         #expect(obj?["field_source"] as? String == "temporal_proxy")
     }
@@ -138,7 +139,7 @@ struct V21CaptureFieldTests {
     /// The share bundle includes the field tensor, the contestedness sidecar, and the manifest.
     @Test func shareItemsIncludeTensorContestedAndManifest() {
         let field = V21FieldData(side: 2, nLevels: 4, counts: [Int32](repeating: 1, count: 2 * 2 * 3 * 4))
-        let items = V21Export.shareItems(field: field, source: .cameraBox, gifURL: nil)
+        let items = V21Export.shareItems(field: field, source: .cameraBox, gifURL: nil, flow: nil)
         let names = items.compactMap { ($0 as? URL)?.lastPathComponent }
         #expect(names.contains { $0.contains("_field_") && $0.hasSuffix(".npy") })
         #expect(names.contains { $0.contains("_contested_") && $0.hasSuffix(".npy") })

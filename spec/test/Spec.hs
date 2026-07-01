@@ -39,6 +39,7 @@ import qualified Properties.RGBTLift     as RGBTLift
 import qualified Properties.OctreeCell   as OctreeCell
 import qualified Properties.V21Field     as V21Field
 import qualified Properties.V21FieldUI   as V21FieldUI
+import qualified Properties.V21Transport as V21Transport
 import qualified Properties.Recursion    as Recursion
 import qualified Properties.LadderIdentity as LadderIdentity
 import qualified Properties.PerScaleWeights as PerScaleWeights
@@ -399,4 +400,5 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Upscale256.tests
   , V21Field.tests
   , V21FieldUI.tests
+  , V21Transport.tests
   ]

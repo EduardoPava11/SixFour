@@ -59,6 +59,11 @@ final class Surface {
     /// index-cube proxy. `nil` when the flag is off or the GPU field was unavailable.
     var v21Counts: [Int32]?
 
+    /// The last burst's transport FLOW (barycenter anchor + per-frame RLE maps): the recovered time
+    /// axis. Set by `SurfaceView.commit` from the engine; the export ships this instead of the pooled
+    /// field, so a moving capture stays trainable. `nil` when off or the GPU field was unavailable.
+    var v21Flow: V21Flow?
+
     /// The LIVE camera tile as 64×64 indexed cells (row-major `y·64 + x`) + its paired
     /// sRGB palette — the live hero paints the REAL camera through these (the cube law:
     /// 1 GIF pixel per cell). Distinct from `palette` (the throttled shutter/ground palette)

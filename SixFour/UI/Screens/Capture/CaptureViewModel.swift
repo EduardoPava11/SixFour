@@ -145,6 +145,11 @@ final class CaptureViewModel {
     /// FIELD / AIRDROP use the true camera histogram instead of the index-cube proxy. nil otherwise.
     var v21Counts: [Int32]? = nil
 
+    /// V2.1 (Feature.v21Capture only): the last burst's transport FLOW (barycenter anchor + per-frame
+    /// RLE maps) — the recovered time axis, from which every frame slice and the model's GIF derive.
+    /// Folded into `Surface.v21Flow` at commit so the export ships the flow instead of the pooled field.
+    var v21Flow: V21Flow? = nil
+
     /// The current deterministic-core stage banner (quantize → dither →
     /// significance → palette → encode), or nil when not rendering deterministically.
     /// Surfaces the verified Zig pipeline as the thing the user watches run.
@@ -512,6 +517,7 @@ final class CaptureViewModel {
             let result = try await session.captureBurst(into: pipeline)
             lastTimingSummary = result.timing.summary
             v21Counts = result.v21Counts   // camera-box field (gated); nil keeps the proxy path
+            v21Flow = result.flow          // recovered time axis (gated); the export ships this
             Self.logger.debug("[viewmodel] burst complete: \(result.timing.summary, privacy: .public)")
 
             let tiles = result.tiles

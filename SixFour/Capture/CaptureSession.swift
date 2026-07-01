@@ -94,6 +94,11 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         /// `[y, x, 3, 256]` Int32 counts (the GPU `v21AccumulateHistKernel` pooled over the burst).
         /// nil when the flag is off or the buffer could not be allocated.
         let v21Counts: [Int32]?
+        /// V2.1 (Feature.v21Capture only): the recovered TIME AXIS — a barycenter anchor plus per-frame
+        /// RLE transport maps (`MetalPipeline.encodeV21Flow`), from which every per-frame slice and the
+        /// model's GIF derive. Unlike `v21Counts` (pooled, time destroyed) this keeps the full
+        /// `[t × value]` joint, so a MOVING capture stays trainable. nil when off/unavailable.
+        let flow: V21Flow?
     }
 
     /// Aggregate statistics over the 63 inter-frame intervals (in ms).
@@ -726,9 +731,15 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         // last frame's command buffer (which carried the 64th hist pass) has completed, and a single
         // queue runs command buffers in order, so all 64 slices are written.
         var v21Counts: [Int32]?
+        var v21Flow: V21Flow?
         if let buf = v21HistBuffer, let pipe = pipelineRef {
             v21Counts = MetalPipeline.poolV21Counts(buffer: buf, frames: targetFrameCount,
                                                     tileSide: pipe.tileSide, nLevels: v21Levels)
+            // Recover the time axis while the per-frame buffer is still alive (it is freed just below).
+            // Heavy compute at the seam; runs on the capture actor, not main. Device perf unvalidated.
+            v21Flow = MetalPipeline.encodeV21Flow(buffer: buf, frames: targetFrameCount,
+                                                  tileSide: pipe.tileSide, nLevels: v21Levels)
+            Self.log.log("V2.1 flow: \(v21Flow == nil ? "nil (encode failed)" : "encoded \(v21Flow!.maps.count) frames") ; pooled field \(v21Counts == nil ? "nil" : "ok")")
         }
         v21HistBuffer = nil
         let snapshot = collected
@@ -740,7 +751,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         pipelineRef = nil
         continuation = nil
         collecting = false
-        cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing, v21Counts: v21Counts))
+        cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing, v21Counts: v21Counts, flow: v21Flow))
     }
 
     /// Pure aggregation of inter-frame timing — `static` and side-effect-free so

@@ -58,6 +58,7 @@ library
         SixFour.Spec.OctreeCell
         SixFour.Spec.V21Field
         SixFour.Spec.V21FieldUI
+        SixFour.Spec.V21Transport
         SixFour.Spec.NudgeRankTheorem
         SixFour.Spec.LadderIdentity
         SixFour.Spec.LargeJepaHead
@@ -380,6 +381,7 @@ test-suite spec-tests
         Properties.OctreeCell
         Properties.V21Field
         Properties.V21FieldUI
+        Properties.V21Transport
         Properties.Recursion
         Properties.NudgeRankTheorem
         Properties.LadderIdentity
