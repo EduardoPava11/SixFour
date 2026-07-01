@@ -1,18 +1,20 @@
 import SwiftUI
 import simd
 
-/// Π for the post-capture REVIEW phases (`.captured` / `.picked`) — the tri-scale review
-/// PYRAMID that replaced the retired A/B game. The three octree tiers grow downward and are
-/// evenly spaced, centred on the one 4 pt lattice:
+/// Π for the post-capture REVIEW phases (`.captured` / `.picked`): the SINGLE honest artifact,
+/// the captured 64³ GIF, plus the controls to EXPORT it, RETAKE, or (V2.1) AirDrop the training
+/// data.
 ///
-///        16   ·  the byte-exact octree coarse  (VoxelReduce substrate)
-///       64    ·  the captured cube              (indexCube × per-frame palette)
-///     256     ·  the super-res rung             (floor today; the model's invented 256³ later)
+/// The tri-scale 16 / 64 / 256 review PYRAMID was DEPRECATED (2026-06-30): the 256³ tier only
+/// nearest-neighbour-upscaled the same 64³ data and labelled it "256" as if a model had invented
+/// detail. The learned head is NOT ported yet, so that tier was a lie, and its footprint pushed the
+/// AIRDROP control off the bottom of the screen. Until a real `gifCell256` exists, this screen shows
+/// exactly what was captured and nothing it cannot back up. (The old `gifCell16` coarse and the model
+/// super-res slot live in git history / `SixFour.Spec.Upscale256` for when the head deploys.)
 ///
-/// All three play on the shared Z₆₄ cursor (`SurfaceView` advances it every κ tick), with
-/// EXPORT / RETAKE controls. The cell grid is a PLACEMENT lattice, not a per-pixel canvas: a
-/// tile is a bitmap placed in a cell region, so a finer rung lives in a larger footprint at
-/// sub-atom pixels without ever breaking the 4 pt atom.
+/// The GIF plays on the shared Z₆₄ cursor (`SurfaceView` advances it every κ tick). The cell grid is a
+/// PLACEMENT lattice, not a per-pixel canvas: the tile is a bitmap placed in a cell region, so it lives
+/// in a large footprint at sub-atom pixels without ever breaking the 4 pt atom.
 struct CapturedReviewPhaseField: View {
     let surface: Surface
     let clock: SurfaceClock
@@ -27,28 +29,20 @@ struct CapturedReviewPhaseField: View {
     @State private var shareItems: [Any] = []
     @State private var showShare = false
 
-    // Centred footprints (lattice is 100 cols wide; centre col = 50), growing downward into a
-    // pyramid, with even 6-cell gaps between blocks. Each tile's GridRegion `w == h == footprint`.
+    // Single centred capture tile (lattice is 100 cols wide; centre col = 50) with the controls
+    // stacked below it, on-screen. The tile's GridRegion `w == h == captureFoot`.
     private enum Layout {
-        static let coarseCol = 42, coarseRow = 14, coarseFoot = 16   // 16³ apex  (64 pt)
-        static let captureCol = 18, captureRow = 42, captureFoot = 64 // 64³ middle (256 pt)
-        static let superCol = 8, superRow = 118, superFoot = 84       // 256³ base  (336 pt)
+        static let captureCol = 8, captureRow = 26, captureFoot = 84  // 64³ capture (336 pt), centred
         static let labelH = 5
-        static let controlsCol = 22, controlsRow = 208, controlsW = 56, controlsH = 10
+        static let controlsCol = 22, controlsRow = 122, controlsW = 56, controlsH = 10
     }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.clear
 
-            label("16", col: Layout.coarseCol, row: Layout.coarseRow - 6, w: Layout.coarseFoot)
-            coarseTile.place(region("coarse16", Layout.coarseCol, Layout.coarseRow, Layout.coarseFoot))
-
-            label("64", col: Layout.captureCol, row: Layout.captureRow - 6, w: Layout.captureFoot)
+            label("CAPTURE", col: Layout.captureCol, row: Layout.captureRow - 6, w: Layout.captureFoot)
             captureTile.place(region("capture64", Layout.captureCol, Layout.captureRow, Layout.captureFoot))
-
-            label("256", col: Layout.superCol, row: Layout.superRow - 6, w: Layout.superFoot)
-            superTile.place(region("super256", Layout.superCol, Layout.superRow, Layout.superFoot))
 
             controls.place(GridRegion(name: "reviewControls",
                                       col: Layout.controlsCol, row: Layout.controlsRow,
@@ -65,7 +59,7 @@ struct CapturedReviewPhaseField: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Review the captured GIF across scales")
+        .accessibilityLabel("Review the captured GIF")
         // V2.1: inspect the two widgets full-screen, or AirDrop the GIF + field tensor.
         .fullScreenCover(isPresented: $showField) {
             if let f = fieldData { V21WidgetSurface(field: f) } else { Color.black }
@@ -73,30 +67,14 @@ struct CapturedReviewPhaseField: View {
         .sheet(isPresented: $showShare) { ActivityView(items: shareItems) }
     }
 
-    // MARK: - Tiles (each a bitmap in a footprint; pixel density is independent of the atom)
-
-    /// The 16³ octree coarse: 16 source voxels in a 16-cell footprint (4 pt/cell), the byte-exact
-    /// `VoxelReduce` substrate at the coarse cursor (`cursor / 4`, the ×4 temporal reduction).
-    private var coarseTile: some View {
-        let t16 = surface.cursor / 4
-        return scaleTile(source: 16, footprint: Layout.coarseFoot) { c, r in surface.gifCell16(c, r, t16) }
-    }
+    // MARK: - Tile (a bitmap in a footprint; pixel density is independent of the atom)
 
     /// The 64³ capture: 64 source voxels in a 64-cell footprint (4 pt/cell), the committed index
-    /// cube read through its per-frame palette at the live cursor.
+    /// cube read through its per-frame palette at the live cursor. The one honest artifact: exactly
+    /// what the camera captured and collapsed, with no invented super-resolution rung above it.
     private var captureTile: some View {
         let t = surface.cursor
         return scaleTile(source: 64, footprint: Layout.captureFoot) { c, r in surface.gifCell(c, r, t) }
-    }
-
-    /// The 256³ rung. TODAY it is the deterministic FLOOR: the 64³ source rendered into the larger
-    /// footprint with no interpolation, which is pixel-identical to a true 256³ nearest-neighbour
-    /// floor (4×4 block replication = zero invented detail). MODEL SLOT: when the learned head
-    /// deploys, swap `source: 64` + `gifCell` for `source: 256` + a `gifCell256` reading the
-    /// invented 256³, and this tile shows the model's added detail in the same footprint.
-    private var superTile: some View {
-        let t = surface.cursor
-        return scaleTile(source: 64, footprint: Layout.superFoot) { c, r in surface.gifCell(c, r, t) }
     }
 
     /// Render `source × source` voxels into a `footprint`-cell box. `cellPt = footprintPt / source`,
@@ -149,10 +127,10 @@ struct CapturedReviewPhaseField: View {
             .accessibilityLabel("Inspect the V2.1 probability widgets")
 
             Button { airdrop() } label: {
-                CellActionButton(icon: .none, title: "AIRDROP", prominent: false, fillWidth: false)
+                CellActionButton(icon: .none, title: "AIRDROP", prominent: true, fillWidth: false)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("AirDrop the GIF and the probability field tensor")
+            .accessibilityLabel("AirDrop the GIF and the probability field tensor as training data")
         }
     }
 
