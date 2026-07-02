@@ -23,6 +23,12 @@ library
         SixFour.Spec.Trade
         SixFour.Spec.Governance
         SixFour.Spec.Lineage
+        SixFour.Spec.GeneHash
+        SixFour.Spec.DerivationLog
+        SixFour.Spec.LedgerCRDT
+        SixFour.Spec.SigChain
+        SixFour.Spec.Sha512
+        SixFour.Spec.Ed25519
         SixFour.Spec.Affiliation
         SixFour.Spec.Role
         SixFour.Codegen.Governance
@@ -245,6 +251,7 @@ library
         SixFour.Codegen.VoxelReduce
         SixFour.Codegen.GenomeCarrier
         SixFour.Codegen.SwapCarrier
+        SixFour.Codegen.GeneHash
         SixFour.Codegen.MaskedBand
         SixFour.Codegen.DeviceTrain
         SixFour.Codegen.PairTree
@@ -363,6 +370,12 @@ test-suite spec-tests
         Properties.Trade
         Properties.Governance
         Properties.Lineage
+        Properties.GeneHash
+        Properties.DerivationLog
+        Properties.LedgerCRDT
+        Properties.SigChain
+        Properties.Sha512
+        Properties.Ed25519
         Properties.Affiliation
         Properties.Role
         Properties.Color

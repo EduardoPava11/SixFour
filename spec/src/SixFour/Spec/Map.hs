@@ -1125,6 +1125,29 @@ app-social layer (destined for Swift + CloudKit public DB + Game Center), still 
     lattice (real @predictDetail@, Q16 commit inside) into a P6 cloud and @cloudDistance@ is pulled
     back (pseudometric by theorem; gauge quotient: identical expression ⇒ distance 0; the
     int→float→int sandwich is the port map).
+  * "SixFour.Spec.GeneHash" — the CONTENT-ADDRESS itself: a 'GeneId' is FNV-1a over a canonical
+    preimage that INCLUDES the parents, so the address commits to ancestry. 'mint'\/'buildFrom' can
+    only remix pre-existing genes, which turns Lineage's "acyclic by construction" into a THEOREM
+    ('lawBuiltGenealogyAcyclic'). Injective serialisation ('lawCanonicalRoundTrip'); byte-exact to
+    hand-port.
+  * "SixFour.Spec.DerivationLog" — genealogy as a FOLD of an append-only derivation log (the lineage
+    sibling of the trade ledger). Self-verifying content-addressed events; the fold is
+    ORDER-INDEPENDENT + IDEMPOTENT + MONOTONE (a Merkle-CRDT in miniature), so concurrent creators
+    converge to the same DAG with no coordination. 'logFromOps' bridges GeneHash transcripts to a
+    gossip-able log that folds back acyclic ('lawReconstructedGenealogyAcyclic').
+  * "SixFour.Spec.LedgerCRDT" — PROOF that the trade ledger is a Grow-only-Set CvRDT: the grant set is
+    a join-semilattice (union merge, commutative\/associative\/idempotent), the fold a monotone
+    homomorphism, so it earns STRONG EVENTUAL CONSISTENCY (Shapiro et al.) — same trades ⇒ same
+    holdings regardless of gossip order. 'lawHoldingsFromState' pins it to the shipped 'Trade.holdings'.
+  * "SixFour.Spec.SigChain" — TAMPER-EVIDENT authorship: a per-creator append-only, hash-linked chain
+    of __Ed25519__-SIGNED authorship attestations, so Lineage's @gtCreator@ becomes public-key-verifiable.
+    The hash chain and the signatures each do load-bearing work (a re-signed interior splice is still
+    caught by the successor's back-pointer).
+  * "SixFour.Spec.Sha512" — SHA-512 (FIPS 180-4), hand-written & byte-exact (NIST known-answer vectors),
+    the hash Ed25519 is built on.
+  * "SixFour.Spec.Ed25519" — Ed25519 (RFC 8032), hand-written & byte-exact on the twisted-Edwards curve
+    over @2^255-19@, gated against RFC 8032 + OpenSSL known-answer vectors. Real public-key signatures,
+    zero third-party dependency — the signing primitive under SigChain.
   * "SixFour.Spec.Affiliation" — GUILDS as connected components of the trade graph (affiliation is
     behavioural — who you swap with); the partition is exact, oversize components schism at 'guildCap'.
   * "SixFour.Spec.Role" — the specialist↔generalist spectrum = @effectiveGenomeDim@ (participation
