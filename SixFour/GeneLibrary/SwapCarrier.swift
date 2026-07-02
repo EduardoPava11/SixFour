@@ -21,7 +21,7 @@ enum SwapCarrier {
     }
 
     /// The lineage tag riding with the gene (mirrors `SixFour.Spec.Lineage.GeneTag`;
-    /// ids are Int32-width content-address stand-ins).
+    /// gene/creator/parents are the full 64-bit GeneHash content-addresses (i64 on the wire).
     struct Tag: Equatable {
         var gene: Int
         var creator: Int
@@ -42,22 +42,22 @@ enum SwapCarrier {
     /// The body magic `"S4GX"`.
     static let magic: [UInt8] = Array("S4GX".utf8)
     /// Current wire versions.
-    static let currentMajor: UInt8 = 1
+    static let currentMajor: UInt8 = 2   // v2 (R2): gene/creator/parents are i64 (the 64-bit GeneHash id)
     static let currentMinor: UInt8 = 0
 
     private static var marker: [UInt8] { CarrierWire.appExtIntroducer + [0x0B] + identifier }
 
     /// The canonical wire form (mirrors the spec's `normalizePayload`): name ≤255
-    /// latin-1 bytes, ids/weights at Int32 width, ≤255 parents, ≤65535 weight words —
+    /// latin-1 bytes, ids at Int64 width, weights/minted at Int32, ≤255 parents, ≤65535 weight words —
     /// and the load-bearing clause: a `.showcase` has NO weights.
     static func normalize(_ p: Payload) -> Payload {
         var q = p
         q.geneName = String(String.UnicodeScalarView(
             p.geneName.unicodeScalars.prefix(255).map { Unicode.Scalar(UInt8($0.value % 256)) }))
-        q.tag.gene = wrap32(p.tag.gene)
-        q.tag.creator = wrap32(p.tag.creator)
-        q.tag.minted = wrap32(p.tag.minted)
-        q.tag.parents = p.tag.parents.prefix(255).map(wrap32)
+        q.tag.gene = p.tag.gene            // full 64-bit content-address (no truncation)
+        q.tag.creator = p.tag.creator
+        q.tag.minted = wrap32(p.tag.minted)   // epoch stays i32
+        q.tag.parents = Array(p.tag.parents.prefix(255))
         q.weights = p.profile == .showcase ? [] : p.weights.prefix(65535).map(wrap32)
         return q
     }
@@ -75,11 +75,11 @@ enum SwapCarrier {
         var body = magic
         body += [major, minor, p.profile.rawValue]
         body += [UInt8(name.count)] + name
-        body += CarrierWire.i32LE(p.tag.gene)
-        body += CarrierWire.i32LE(p.tag.creator)
+        body += CarrierWire.i64LE(p.tag.gene)
+        body += CarrierWire.i64LE(p.tag.creator)
         body += CarrierWire.i32LE(p.tag.minted)
         body += [UInt8(p.tag.parents.count)]
-        for g in p.tag.parents { body += CarrierWire.i32LE(g) }
+        for g in p.tag.parents { body += CarrierWire.i64LE(g) }
         body += CarrierWire.u16LE(UInt16(p.weights.count))
         for w in p.weights { body += CarrierWire.i32LE(w) }
         return CarrierWire.wrapBody(body, identifier: identifier)
@@ -112,17 +112,17 @@ enum SwapCarrier {
         guard let hdr = take(3) else { return nil }
         guard let profile = Profile(rawValue: hdr[2]) else { return nil }
         guard let nl = take(1), let nameB = take(Int(nl[0])) else { return nil }
-        guard let ids = take(12) else { return nil }
-        guard let pc = take(1), let parB = take(4 * Int(pc[0])) else { return nil }
+        guard let ids = take(20) else { return nil }   // gene(8) + creator(8) + minted(4)
+        guard let pc = take(1), let parB = take(8 * Int(pc[0])) else { return nil }
         guard let wc = take(2) else { return nil }
         let weightCount = Int(CarrierWire.readU16LE(wc, at: 0))
         guard let wB = take(4 * weightCount), i == body.count else { return nil }
 
         let tag = Tag(
-            gene: CarrierWire.readI32LE(ids, at: 0),
-            creator: CarrierWire.readI32LE(ids, at: 4),
-            parents: stride(from: 0, to: parB.count, by: 4).map { CarrierWire.readI32LE(parB, at: $0) },
-            minted: CarrierWire.readI32LE(ids, at: 8))
+            gene: CarrierWire.readI64LE(ids, at: 0),
+            creator: CarrierWire.readI64LE(ids, at: 8),
+            parents: stride(from: 0, to: parB.count, by: 8).map { CarrierWire.readI64LE(parB, at: $0) },
+            minted: CarrierWire.readI32LE(ids, at: 16))
         let name = String(String.UnicodeScalarView(nameB.map { Unicode.Scalar($0) }))
         let weights = stride(from: 0, to: wB.count, by: 4).map { CarrierWire.readI32LE(wB, at: $0) }
         return (hdr[0], Payload(profile: profile, geneName: name, tag: tag, weights: weights))

@@ -94,6 +94,20 @@ enum CarrierWire {
         [UInt8(w & 0xFF), UInt8(w >> 8)]
     }
 
+    /// An Int as 8 LE bytes at Int64 width — the wire width of a content-address
+    /// (the 64-bit GeneHash id; S4GX v2 widened gene/creator/parents to this).
+    static func i64LE(_ v: Int) -> [UInt8] {
+        let w = UInt64(bitPattern: Int64(truncatingIfNeeded: v))
+        return (0..<8).map { UInt8((w >> (8 * $0)) & 0xFF) }
+    }
+
+    /// Sign-extending read of 8 LE bytes (total: missing bytes read as 0).
+    static func readI64LE(_ bytes: [UInt8], at i: Int) -> Int {
+        var w: UInt64 = 0
+        for k in 0..<8 { w |= (i + k < bytes.count ? UInt64(bytes[i + k]) : 0) << (8 * k) }
+        return Int(Int64(bitPattern: w))
+    }
+
     /// Sign-extending read of 4 LE bytes (total: missing bytes read as 0).
     static func readI32LE(_ bytes: [UInt8], at i: Int) -> Int {
         Int(Int32(bitPattern: readU32LE(bytes, at: i)))

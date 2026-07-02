@@ -50,10 +50,11 @@ ORIGIN in the lineage DAG, exactly as "SixFour.Spec.Lineage" defines one.
   0x00                       -- block terminator
 @
 
-Body = @\"S4GX\" major minor profile nameLen name gene(i32) creator(i32)
-minted(i32) parentCount parents(4·k) weightCount(u16) weights(4·m) crc32@.
-All multi-byte integers little-endian; ids are the Int stand-ins for content
-addresses, wrapped to Int32 ('normalizePayload'). CRC32 is shared with the S4GN
+Body = @\"S4GX\" major minor profile nameLen name gene(i64) creator(i64)
+minted(i32) parentCount parents(8·k) weightCount(u16) weights(4·m) crc32@.
+All multi-byte integers little-endian; @gene@\/@creator@\/@parents@ are the
+full 64-bit "SixFour.Spec.GeneHash" content-addresses (v2 widened these from
+i32 — v1 truncated the hash), @minted@ is the i32 epoch, @weights@ are Int32 Q16. CRC32 is shared with the S4GN
 block (imported, one definition). Weight sizes are not free-form:
 'grantWeightCountValid' derives the legal count from the gene registry
 ('lawWireSizesFromRegistry'), so the carrier cannot smuggle a mis-shaped blob.
@@ -98,11 +99,12 @@ module SixFour.Spec.SwapCarrier
   , lawBlocksCoexist
   , lawCRCRejectsCorruption
   , lawVersionTolerance
+  , lawWideIdSurvivesRoundTrip
   ) where
 
 import           Control.Monad (guard)
 import           Data.Bits     (shiftL, shiftR, xor, (.&.), (.|.))
-import           Data.Int      (Int32)
+import           Data.Int      (Int32, Int64)
 import           Data.List     (isPrefixOf, tails)
 import           Data.Maybe    (isJust, isNothing)
 import qualified Data.Set      as Set
@@ -154,7 +156,7 @@ swapBlockIdentifier = map (fromIntegral . fromEnum) "SIXFOUR1X10"
 
 -- | Current MAJOR schema version (incompatible layout changes bump it).
 swapMajor :: Word8
-swapMajor = 1
+swapMajor = 2   -- v2 (R2): gene/creator/parents widened to i64 to carry the 64-bit GeneHash id
 
 -- | Current MINOR schema version (forward-compatible additions).
 swapMinor :: Word8
@@ -199,14 +201,38 @@ readU16LE bs = case bs of
   [a]         -> fromIntegral a
   []          -> 0
 
--- | An Int wrapped to Int32 range — the canonical width of every carried id.
+-- | An Int wrapped to Int32 range — the width of a weight word and the epoch.
 wrap32 :: Int -> Int
 wrap32 n = fromIntegral (fromIntegral n :: Int32)
+
+-- | An Int wrapped to Int64 range — the width of a content-address (gene\/parent)
+-- and creator id. Identity on a 64-bit platform; explicit so the wire is canonical.
+wrap64 :: Int -> Int
+wrap64 n = fromIntegral (fromIntegral n :: Int64)
 
 -- | Group into 4-byte words.
 chunk4 :: [Word8] -> [[Word8]]
 chunk4 [] = []
 chunk4 xs = take 4 xs : chunk4 (drop 4 xs)
+
+-- | Group into 8-byte words (the i64 content-address stride).
+chunk8 :: [Word8] -> [[Word8]]
+chunk8 [] = []
+chunk8 xs = take 8 xs : chunk8 (drop 8 xs)
+
+-- | An Int as 8 little-endian bytes at Int64 width — the wire width of a
+-- content-address ("SixFour.Spec.GeneHash" 'geneHash' is a full 64-bit id).
+i64LE :: Int -> [Word8]
+i64LE n = [ fromIntegral (w `shiftR` (8 * i)) | i <- [0 .. 7] ]
+  where w = fromIntegral (fromIntegral n :: Int64) :: Word
+
+-- | Inverse of 'i64LE' (total: missing bytes read as 0). On a 64-bit platform
+-- this round-trips every 'GeneHash' id exactly (the truncation v1 caused is gone).
+readI64LE :: [Word8] -> Int
+readI64LE bs = fromIntegral (fromIntegral u :: Int64)
+  where
+    u = foldr (\(k, b) acc -> acc .|. (fromIntegral b `shiftL` (8 * k))) 0
+              (zip [0 .. 7] (take 8 (bs ++ replicate 8 0))) :: Word
 
 -- | Exactly-k split, or Nothing — keeps the parser honest about truncation.
 takeExact :: Int -> [Word8] -> Maybe ([Word8], [Word8])
@@ -218,10 +244,10 @@ takeExact k xs =
 -- Normalization
 -- ---------------------------------------------------------------------------
 
--- | The canonical form the wire can represent: name ≤255 latin-1 chars, ids and
--- weights at Int32 width, ≤255 parents, ≤65535 weight words — and, the load-
--- bearing clause, a 'Showcase' has NO weights. @extract . encode ≡ Right .
--- normalizePayload@.
+-- | The canonical form the wire can represent: name ≤255 latin-1 chars, ids
+-- (gene\/creator\/parents) at Int64 width, weights at Int32 width, minted at
+-- Int32 (epoch), ≤255 parents, ≤65535 weight words — and, the load-bearing
+-- clause, a 'Showcase' has NO weights. @extract . encode ≡ Right . normalizePayload@.
 normalizePayload :: SwapPayload -> SwapPayload
 normalizePayload p = p
   { spGeneName = take 255 (map (toEnum . (`mod` 256) . fromEnum) (spGeneName p))
@@ -237,8 +263,8 @@ normalizePayload p = p
       , gtParents = map wrapGene (take 255 (gtParents t))
       , gtMinted  = wrap32 (gtMinted t)
       }
-    wrapGene (GeneId g)       = GeneId (wrap32 g)
-    wrapCreator (CreatorId c) = CreatorId (wrap32 c)
+    wrapGene (GeneId g)       = GeneId (wrap64 g)
+    wrapCreator (CreatorId c) = CreatorId (wrap64 c)
 
 -- ---------------------------------------------------------------------------
 -- Codec
@@ -250,8 +276,8 @@ bodyBytes mj mn p =
   swapMagic
     ++ [mj, mn, profileByte (spProfile p)]
     ++ [fromIntegral (length name)] ++ name
-    ++ i32LE gene ++ i32LE creator ++ i32LE (gtMinted tag)
-    ++ [fromIntegral (length parents)] ++ concatMap i32LE parents
+    ++ i64LE gene ++ i64LE creator ++ i32LE (gtMinted tag)
+    ++ [fromIntegral (length parents)] ++ concatMap i64LE parents
     ++ u16LE (fromIntegral (length (spWeights p)))
     ++ concatMap i32LE (spWeights p)
   where
@@ -329,17 +355,17 @@ parseBody bs0 = do
     _ -> Nothing
   (nl, bs3)    <- takeExact 1 bs2
   (nameB, bs4) <- takeExact (fromIntegral (head nl)) bs3
-  (idsB, bs5)  <- takeExact 12 bs4
+  (idsB, bs5)  <- takeExact 20 bs4   -- gene(8) + creator(8) + minted(4)
   (pc, bs6)    <- takeExact 1 bs5
-  (parB, bs7)  <- takeExact (4 * fromIntegral (head pc)) bs6
+  (parB, bs7)  <- takeExact (8 * fromIntegral (head pc)) bs6
   (wcB, bs8)   <- takeExact 2 bs7
   (wB, rest)   <- takeExact (4 * fromIntegral (readU16LE wcB)) bs8
   guard (null rest)
   let tag = GeneTag
-        { gtGene    = GeneId (readI32LE idsB)
-        , gtCreator = CreatorId (readI32LE (drop 4 idsB))
-        , gtParents = map (GeneId . readI32LE) (chunk4 parB)
-        , gtMinted  = readI32LE (drop 8 idsB)
+        { gtGene    = GeneId (readI64LE idsB)
+        , gtCreator = CreatorId (readI64LE (drop 8 idsB))
+        , gtParents = map (GeneId . readI64LE) (chunk8 parB)
+        , gtMinted  = readI32LE (drop 16 idsB)
         }
   pure ( mj
        , SwapPayload prof (map (toEnum . fromIntegral) nameB) tag
@@ -538,3 +564,16 @@ lawVersionTolerance p =
      && extractSwapBlock (encodeSwapBlockVersioned swapMajor (swapMinor + 1) q) == Right q
      && extractSwapBlock (encodeSwapBlockVersioned (swapMajor + 1) swapMinor q)
           == Left VersionMismatch
+
+-- | A genuinely 64-bit content-address survives the round-trip byte-exact — the
+-- property v1 BROKE by truncating @gene@\/@parents@ to i32. Uses a hash id well
+-- above @2^32@ and a 64-bit parent: extraction recovers them exactly, so the
+-- S4GX v2 wire carries the full "SixFour.Spec.GeneHash" id (R2).
+lawWideIdSurvivesRoundTrip :: Bool
+lawWideIdSurvivesRoundTrip =
+  let wide = SwapPayload Grant "theta-up"
+               (GeneTag (GeneId 0x0BADF00DCAFEBABE) (CreatorId 4242)
+                        [GeneId 0x1122334455667788, GeneId (-0x00FF00FF00FF00FF)] 77)
+               (replicate 21 0)
+  in extractSwapBlock (encodeSwapBlock wide) == Right (normalizePayload wide)
+     && normalizePayload wide == wide   -- no field is altered: id > 2^32 is NOT truncated

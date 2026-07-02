@@ -38,9 +38,9 @@ goldenGrant = SwapPayload
   { spProfile  = Grant
   , spGeneName = "theta-up"
   , spTag      = GeneTag
-      { gtGene    = GeneId 987654
+      { gtGene    = GeneId 0x0BADF00DCAFEBABE   -- a real 64-bit content-address (> 2^32: v1 would truncate)
       , gtCreator = CreatorId 4242
-      , gtParents = [GeneId 111, GeneId (-222)]
+      , gtParents = [GeneId 0x1122334455667788, GeneId (-0x00FF00FF00FF00FF)]  -- 64-bit, order significant
       , gtMinted  = 77
       }
   , spWeights  = [ i * 6553 - 65536 | i <- [0 .. 20] ]

@@ -7,11 +7,12 @@ import SixFour.Spec.Lineage     (GeneTag (..))
 import SixFour.Spec.SwapCarrier
 import SixFour.Spec.Trade       (CreatorId (..), GeneId (..))
 
+-- gene/creator/parents span the FULL i64 range (the 64-bit GeneHash id); minted is the i32 epoch.
 genTag :: Gen GeneTag
 genTag = GeneTag
-  <$> (GeneId <$> choose (-2147483648, 2147483647))
-  <*> (CreatorId <$> choose (-2147483648, 2147483647))
-  <*> (fmap GeneId <$> listOf (choose (-2147483648, 2147483647)))
+  <$> (GeneId <$> choose (-9223372036854775808, 9223372036854775807))
+  <*> (CreatorId <$> choose (-9223372036854775808, 9223372036854775807))
+  <*> (fmap GeneId <$> listOf (choose (-9223372036854775808, 9223372036854775807)))
   <*> choose (0, 2147483647)
 
 genPayload :: Gen SwapPayload
@@ -49,4 +50,7 @@ tests = testGroup "SwapCarrier (S4GX gene-in-GIF codec — the governance-swap w
 
   , testProperty "version: minor forward-compatible, future major refused (never a partial parse)" $
       forAll genPayload lawVersionTolerance
+
+  , testProperty "a 64-bit GeneHash id survives the round-trip (v1 truncated it — the R2 fix)" $
+      once lawWideIdSurvivesRoundTrip
   ]
