@@ -283,6 +283,60 @@ bands, S₂₅₆ orbits, the Q16 ℤ[1/2] window) and do the work there — dis
 geometry + algebraic number theory is the house frame, and every stage boundary
 is a lattice re-entry.
 
+## R — incorporating the research line (merged 2026-07-02, `f68c28f`)
+
+The genealogy/crypto session (research/ corpus + `GeneHash`/`Ed25519`/`Sha512`/
+`SigChain`/`DerivationLog`/`LedgerCRDT`, all spec-green) closes launch gaps and
+forces one wire change. Reconciled rulings (5-agent map, full detail in the
+session transcript):
+
+**Contradiction rulings**
+1. **S4GX → MAJOR 2**: `GeneId` is a genuine 64-bit FNV-1a content-address
+   (parents IN the preimage); the v1 wire's i32 `gene`/`parents` truncate it —
+   collision risk exactly where L2.8 wants dedup. Widen to i64 LE; `minted`
+   stays i32; v1 readers get a clean `VersionMismatch`. Never a 32-bit prefix.
+2. **Parents feed the hash, not a side field**: L4.5's `ThetaUp.parents`
+   becomes `[Int64]` and enters the `geneHash` preimage (remix id =
+   `geneHash(payload, [adopted])`). Closes the "unpinned GeneId" honest gap.
+3. **Creator identity = enrolled per-device Ed25519 pubkey**; `gamePlayerID`
+   is display/query only. `keyFor(Int)` in SigChain is a law fixture — deriving
+   a key from the public gamePlayerID would be forgeable. Supersedes L2.8's
+   "CreatorID String→Int32 hash".
+4. **CRDT scope is grants/holdings only** (G-Set union, SEC proven);
+   Proposed→Accepted settlement still needs an explicit settle-once/LWW design
+   at the CloudKit layer.
+5. **Derivation events only at KEPT genes**: bind `DerivationEvent` emission to
+   the L4.6 loss-gated mint / σ-accept seams, never per warm-start (DAG
+   explosion otherwise). Aligns with the existing B3 gate.
+6. **Showcase ids are claims**: the hash is recomputable from a Grant (weights
+   present) but not a Showcase — Grant imports recompute-and-verify at
+   `GeneStore.addOrgan`; Showcases defer to the cloud record/sigchain.
+7. **The signature joins the wire**: S4GX v2 gains
+   `{creatorPubKey, sig, epoch}` (or a coexisting `SIXFOUR1S10` block —
+   `lawBlocksCoexist` proves the pattern); sign at `publish`, verify at import.
+
+**Ordered steps** (R1–R9, each gate named): R1 emit the missing codegen wire
+contracts (Sha512/Ed25519/SigChain/DerivationLog goldens — the session doc
+mandates goldens precede any port) → R2 S4GX MAJOR 2 (i64 gene+parents,
+reversed-parents fixture) → R3 GeneHash as the GeneId source of truth
+(GeneStore + GeneCloudSchema recordName on the full 64-bit id) → R4 hand-written
+Swift crypto ports (GeneHash/Sha512/Ed25519, Foundation-only, golden-gated) →
+R5 key enrolment (per-device keypair in Keychain; L3.1 routes through it) →
+R6 signature into the carrier + publish/import call sites → R7 `Trade.swift` as
+the LedgerCRDT grants-set fold (+ separate settle-once path) → R8
+`Lineage.swift` = DerivationLog's order-independent `genealogyOf` fold (+
+DerivationEvent/SigChainLink CloudKit records in L3.3) → R9 DEFER
+reputation/EigenTrust (blocked on the concave-frontier + seed-set product
+decision; demand stays a raw adoption count, labeled as such).
+
+**Hard don'ts** (each golden- or theorem-backed): never sort `parents[]` before
+hashing (order is committed — the reversed-parents fixture must differ); never
+extend S4GX as a MINOR (exact-consumption makes every layout change MAJOR);
+never truncate the 64-bit id; never derive keys from gamePlayerID; never put
+creator/epoch in the content-address (dedup dies); never swap FNV-1a for a
+crypto hash after the wire ships; the rejected dead ends stay rejected
+(L-systems/GRNs; raw self-referential demand counts in the UI).
+
 ## Dependency order
 
 ```
@@ -307,7 +361,8 @@ CloudKit, jetsam).
   anything in the trade UI (L4.6 gates the remix mint on it).
 - Paint→pixels conditioning awaits the D1 field encoder; the curate preview is
   honest about it until then.
-- The GeneId/CreatorId content-hash (and Swift agreement) is unpinned — blocks
-  CloudKit record-id dedup (L2.8).
+- ~~The GeneId/CreatorId content-hash is unpinned~~ **CLOSED by the research
+  merge**: `Spec.GeneHash` (64-bit FNV-1a, parents in the preimage,
+  `GeneHashGolden.swift` emitted) — see §R rulings 1–3.
 - App Review 1.2 moderation surface (L3.5) is designed nowhere; it is a launch
   requirement for a public trading economy, not polish.
