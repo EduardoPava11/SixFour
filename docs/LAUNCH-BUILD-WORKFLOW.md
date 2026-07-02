@@ -315,9 +315,10 @@ session transcript):
    `{creatorPubKey, sig, epoch}` (or a coexisting `SIXFOUR1S10` block —
    `lawBlocksCoexist` proves the pattern); sign at `publish`, verify at import.
 
-**Ordered steps** (R1–R9, each gate named): R1 emit the missing codegen wire
-contracts (Sha512/Ed25519/SigChain/DerivationLog goldens — the session doc
-mandates goldens precede any port) → R2 S4GX MAJOR 2 (i64 gene+parents,
+**Ordered steps** (R1–R9, each gate named): R1 **DONE 2026-07-02 (1430752)** —
+`Codegen.{Sha512,Ed25519,SigChain,DerivationLog}` emit byte-exact goldens
+(SHA-512 empty digest MATCHES NIST; SigChain genuineVerifies=true/tampered=false;
+DerivationLog convergesUnderReorder=true — all pinned at emit time; spec 1474) → R2 S4GX MAJOR 2 (i64 gene+parents,
 reversed-parents fixture) → R3 GeneHash as the GeneId source of truth
 (GeneStore + GeneCloudSchema recordName on the full 64-bit id) → R4 hand-written
 Swift crypto ports (GeneHash/Sha512/Ed25519, Foundation-only, golden-gated) →
