@@ -318,8 +318,7 @@ session transcript):
 **Ordered steps** (R1–R9, each gate named): R1 **DONE 2026-07-02 (1430752)** —
 `Codegen.{Sha512,Ed25519,SigChain,DerivationLog}` emit byte-exact goldens
 (SHA-512 empty digest MATCHES NIST; SigChain genuineVerifies=true/tampered=false;
-DerivationLog convergesUnderReorder=true — all pinned at emit time; spec 1474) → R2 S4GX MAJOR 2 (i64 gene+parents,
-reversed-parents fixture) → R3 GeneHash as the GeneId source of truth
+DerivationLog convergesUnderReorder=true — all pinned at emit time; spec 1474) → R2 **DONE (6fb033b)** S4GX MAJOR 2 (i64 gene/creator/parents; lawWideIdSurvivesRoundTrip proves a >2^32 id survives; v1→VersionMismatch; Swift golden 8/8) → R3 GeneHash as the GeneId source of truth
 (GeneStore + GeneCloudSchema recordName on the full 64-bit id) → R4 hand-written
 Swift crypto ports (GeneHash/Sha512/Ed25519, Foundation-only, golden-gated) →
 R5 key enrolment (per-device keypair in Keychain; L3.1 routes through it) →
