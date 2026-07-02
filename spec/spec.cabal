@@ -23,6 +23,7 @@ library
         SixFour.Spec.Trade
         SixFour.Spec.Governance
         SixFour.Spec.Lineage
+        SixFour.Spec.GeneHash
         SixFour.Spec.Affiliation
         SixFour.Spec.Role
         SixFour.Codegen.Governance
@@ -359,6 +360,7 @@ test-suite spec-tests
         Properties.Trade
         Properties.Governance
         Properties.Lineage
+        Properties.GeneHash
         Properties.Affiliation
         Properties.Role
         Properties.Color

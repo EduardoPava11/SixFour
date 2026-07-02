@@ -1109,6 +1109,11 @@ app-social layer (destined for Swift + CloudKit public DB + Game Center), still 
     council is the top 'councilSize'. Default majority judgment ties only on equal grade multisets.
   * "SixFour.Spec.Lineage" — the content-addressed gene GENEALOGY DAG (creator + parents per gene);
     @influence = |descendants|@ is the lineage rank scalar, acyclic by construction.
+  * "SixFour.Spec.GeneHash" — the CONTENT-ADDRESS itself: a 'GeneId' is FNV-1a over a canonical
+    preimage that INCLUDES the parents, so the address commits to ancestry. 'mint'\/'buildFrom' can
+    only remix pre-existing genes, which turns Lineage's "acyclic by construction" into a THEOREM
+    ('lawBuiltGenealogyAcyclic'). Injective serialisation ('lawCanonicalRoundTrip'); byte-exact to
+    hand-port.
   * "SixFour.Spec.Affiliation" — GUILDS as connected components of the trade graph (affiliation is
     behavioural — who you swap with); the partition is exact, oversize components schism at 'guildCap'.
   * "SixFour.Spec.Role" — the specialist↔generalist spectrum = @effectiveGenomeDim@ (participation
