@@ -48,6 +48,10 @@ import SixFour.Codegen.VoxelReduce (emitVoxelReduceGolden)
 import SixFour.Codegen.GenomeCarrier (emitGenomeCarrierGolden)
 import SixFour.Codegen.SwapCarrier (emitSwapCarrierGolden)
 import SixFour.Codegen.GeneHash (emitGeneHashGolden)
+import SixFour.Codegen.Sha512 (emitSha512Golden)
+import SixFour.Codegen.Ed25519 (emitEd25519Golden)
+import SixFour.Codegen.SigChain (emitSigChainGolden)
+import SixFour.Codegen.DerivationLog (emitDerivationLogGolden)
 import SixFour.Codegen.MaskedBand (emitMaskedBandGolden)
 import SixFour.Codegen.DeviceTrain (emitDeviceTrainGolden)
 import SixFour.Codegen.PairTree (emitPairTreeGolden)
@@ -97,6 +101,10 @@ main = do
   writeUtf8 (swiftOutDir   </> "GenomeCarrierGolden.swift")  emitGenomeCarrierGolden
   writeUtf8 (swiftOutDir   </> "SwapCarrierGolden.swift")    emitSwapCarrierGolden
   writeUtf8 (swiftOutDir   </> "GeneHashGolden.swift")       emitGeneHashGolden
+  writeUtf8 (swiftOutDir   </> "Sha512Golden.swift")         emitSha512Golden
+  writeUtf8 (swiftOutDir   </> "Ed25519Golden.swift")        emitEd25519Golden
+  writeUtf8 (swiftOutDir   </> "SigChainGolden.swift")       emitSigChainGolden
+  writeUtf8 (swiftOutDir   </> "DerivationLogGolden.swift")  emitDerivationLogGolden
   writeUtf8 (swiftOutDir   </> "PairTreeGolden.swift")       emitPairTreeGolden
   writeUtf8 (swiftOutDir   </> "MaskedBandGolden.swift")     emitMaskedBandGolden
   writeUtf8 (swiftOutDir   </> "DeviceTrainGolden.swift")    emitDeviceTrainGolden

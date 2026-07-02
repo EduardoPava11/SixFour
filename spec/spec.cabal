@@ -252,6 +252,10 @@ library
         SixFour.Codegen.GenomeCarrier
         SixFour.Codegen.SwapCarrier
         SixFour.Codegen.GeneHash
+        SixFour.Codegen.Sha512
+        SixFour.Codegen.Ed25519
+        SixFour.Codegen.SigChain
+        SixFour.Codegen.DerivationLog
         SixFour.Codegen.MaskedBand
         SixFour.Codegen.DeviceTrain
         SixFour.Codegen.PairTree
