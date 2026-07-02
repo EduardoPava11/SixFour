@@ -244,6 +244,7 @@ library
         SixFour.Codegen.RGBT4D
         SixFour.Codegen.VoxelReduce
         SixFour.Codegen.GenomeCarrier
+        SixFour.Codegen.GeneHash
         SixFour.Codegen.MaskedBand
         SixFour.Codegen.DeviceTrain
         SixFour.Codegen.PairTree
