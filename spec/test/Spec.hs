@@ -10,6 +10,8 @@ import qualified Properties.GeneHash     as GeneHash
 import qualified Properties.DerivationLog as DerivationLog
 import qualified Properties.LedgerCRDT    as LedgerCRDT
 import qualified Properties.SigChain      as SigChain
+import qualified Properties.Sha512        as Sha512
+import qualified Properties.Ed25519       as Ed25519
 import qualified Properties.Affiliation  as Affiliation
 import qualified Properties.Role         as Role
 import qualified Properties.Color        as Color
@@ -424,6 +426,8 @@ main = defaultMain $ testGroup "sixfour-spec"
   , DerivationLog.tests
   , LedgerCRDT.tests
   , SigChain.tests
+  , Sha512.tests
+  , Ed25519.tests
   , Affiliation.tests
   , Role.tests
   , V21Pyramid.tests

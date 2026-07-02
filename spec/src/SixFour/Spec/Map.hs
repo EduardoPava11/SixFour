@@ -1124,10 +1124,14 @@ app-social layer (destined for Swift + CloudKit public DB + Game Center), still 
     homomorphism, so it earns STRONG EVENTUAL CONSISTENCY (Shapiro et al.) — same trades ⇒ same
     holdings regardless of gossip order. 'lawHoldingsFromState' pins it to the shipped 'Trade.holdings'.
   * "SixFour.Spec.SigChain" — TAMPER-EVIDENT authorship: a per-creator append-only, hash-linked chain
-    of SIGNED authorship attestations, so Lineage's @gtCreator@ becomes public-key-verifiable. The hash
-    chain and the signatures each do load-bearing work (a re-signed interior splice is still caught by
-    the successor's back-pointer). The sign\/verify primitive is a byte-exact RSA STAND-IN for a
-    production Ed25519 (same interface; the tamper laws are scheme-agnostic).
+    of __Ed25519__-SIGNED authorship attestations, so Lineage's @gtCreator@ becomes public-key-verifiable.
+    The hash chain and the signatures each do load-bearing work (a re-signed interior splice is still
+    caught by the successor's back-pointer).
+  * "SixFour.Spec.Sha512" — SHA-512 (FIPS 180-4), hand-written & byte-exact (NIST known-answer vectors),
+    the hash Ed25519 is built on.
+  * "SixFour.Spec.Ed25519" — Ed25519 (RFC 8032), hand-written & byte-exact on the twisted-Edwards curve
+    over @2^255-19@, gated against RFC 8032 + OpenSSL known-answer vectors. Real public-key signatures,
+    zero third-party dependency — the signing primitive under SigChain.
   * "SixFour.Spec.Affiliation" — GUILDS as connected components of the trade graph (affiliation is
     behavioural — who you swap with); the partition is exact, oversize components schism at 'guildCap'.
   * "SixFour.Spec.Role" — the specialist↔generalist spectrum = @effectiveGenomeDim@ (participation
