@@ -37,6 +37,11 @@ final class Surface {
     var thetaUp: CaptureGene.ThetaUp?
     var acceptedInput: SixFourModelInput?
     var acceptedUseGene: Bool = false
+    /// The curate excursion's verdict (LAUNCH L1.3): which detail source the user
+    /// accepted at the 256³ curation surface (nil = never curated). Recorded by
+    /// `Curating256PhaseField` on `.curateDone`; the export step's future input.
+    /// Cleared on `.live` like every per-capture stash.
+    var curatedUseGene: Bool?
     /// Mirrors the engine's flow version so late/invalidated flow arrivals are
     /// observable by VALUE change, not nil-ness (the Done bundle rebuild trigger).
     var v21FlowVersion: Int = 0
@@ -113,7 +118,7 @@ final class Surface {
     /// `abStep` (`ABSurfaceMachine.swift`) and is the only writer of `phase`.
     func step(_ event: ABEvent) {
         phase = abStep(phase, event)
-        if phase == .live { coarseSubstrate = [] }   // retake drops the reviewed coarse cube
+        if phase == .live { coarseSubstrate = []; curatedUseGene = nil }   // retake drops the per-capture stashes
     }
 
     // MARK: κ-fed cursor advance (Z₆₄)

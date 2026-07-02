@@ -7,7 +7,10 @@
 #   native  → zig build test (host fixtures cross-check Haskell goldens) + device static lib.
 #   lint    → lint-grid.sh; READS Generated/, so must run AFTER codegen.
 #   gen     → xcodegen + pbxproj patch; produces the .xcodeproj Swift will build.
-#   build   → xcodebuild; Swift imports the generated contracts, so it runs LAST.
+#   build   → xcodebuild; Swift imports the generated contracts, so it builds after gen.
+#   test    → xcodebuild test; SixFourTests are the Swift golden gates (spec parity,
+#             carrier/train goldens, RungDispatch bitwise) — the ONLY place they run
+#             (CI is grid-lint + drift only), so the gate is not green without them.
 codegen
 doc
 verify
@@ -15,3 +18,4 @@ native
 lint
 gen
 build
+test

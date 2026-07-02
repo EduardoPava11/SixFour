@@ -838,6 +838,11 @@ emitABSurfaceContract = T.unlines
   , "    public static let goldenDecidePathEvents: [String] = " <> strList (map AB.abEventName AB.goldenDecideHappyPath)
   , "    public static let goldenDecidePathTrace: [String] = " <> strList (map AB.abPhaseName AB.goldenDecidePhaseTrace)
   , ""
+  , "    /// The LAUNCH CURATE golden (decide-accept -> the 256^3 curate excursion -> export):"
+  , "    /// the third cross-language pin, folded by `ABPhase.assertSpecParity()` too."
+  , "    public static let goldenCuratePathEvents: [String] = " <> strList (map AB.abEventName AB.goldenCurateHappyPath)
+  , "    public static let goldenCuratePathTrace: [String] = " <> strList (map AB.abPhaseName AB.goldenCuratePhaseTrace)
+  , ""
   , "    /// Candidate A's 16x16 tile rectangle (col, row, width, height) on the lattice."
   , "    public static let candidateRegionA: [Int] = " <> intListLiteral [c, r, w, h]
   , "    /// Candidate B's 16x16 tile rectangle (col, row, width, height), symmetric to A."
@@ -857,6 +862,11 @@ emitABSurfaceContract = T.unlines
   , "        guard goldenDecidePathTrace.count == goldenDecidePathEvents.count + 1 else { return false }"
   , "        if !goldenDecidePathTrace.contains(\"deciding\") { return false }"
   , "        if goldenDecidePathTrace.last != \"live\" { return false }"
+  , "        // The curate golden has the same shape, visits curating, and returns to picked"
+  , "        // before export (the Picked self-excursion that keeps the export gate intact)."
+  , "        guard goldenCuratePathTrace.count == goldenCuratePathEvents.count + 1 else { return false }"
+  , "        if !goldenCuratePathTrace.contains(\"curating\") { return false }"
+  , "        if goldenCuratePathTrace.last != \"live\" { return false }"
   , "        // The two candidate tiles are disjoint (A is left of B with a gutter)."
   , "        let ax = candidateRegionA[0], aw = candidateRegionA[2]"
   , "        let bx = candidateRegionB[0]"
@@ -1444,6 +1454,14 @@ emitGridLayoutContract = T.unlines $
   ++ map regionLine GL.decisionScene
   ++ [ "    ]"
   , ""
+  , "    /// The LAUNCH CURATE-scene layout, mirrored from `SixFour.Spec.GridLayout.curateScene`:"
+  , "    /// the 256^3 curation loop (hero inspection + t-slab rail + source/repaint/rebuild"
+  , "    /// knobs + accept), shown while the FSM is in the Curating phase."
+  , "    public static let curateScene: [GridRegion] = ["
+  ]
+  ++ map regionLine GL.curateScene
+  ++ [ "    ]"
+  , ""
   , "    /// Look up a region by name (the composer asks for \"preview\", \"palette\", …)."
   , "    public static func region(_ name: String, in scene: [GridRegion] = captureScene) -> GridRegion? {"
   , "        scene.first { $0.name == name }"
@@ -1468,7 +1486,7 @@ emitGridLayoutContract = T.unlines $
   , "    /// Re-asserts the Haskell laws at runtime (defense-in-depth): disjoint,"
   , "    /// in-bounds, interactive regions clear the touch floor, priorities distinct."
   , "    public static func selfCheck() -> Bool {"
-  , "        [captureScene, decisionScene].allSatisfy { s in"
+  , "        [captureScene, decisionScene, curateScene].allSatisfy { s in"
   , "            let touch = SixFourLattice.touchFloorCells"
   , "            let inBounds = s.allSatisfy {"
   , "                $0.col >= 0 && $0.col + $0.w <= cols && $0.row >= 0 && $0.row + $0.h <= rows"

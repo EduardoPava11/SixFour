@@ -909,6 +909,62 @@ pub export fn s4_octant_unlift(in_q16: [*c]const i32, out_q16: [*c]i32) i32 {
     return RC_OK;
 }
 
+/// ONE up-rung of a scalar cube in the DEVICE volume layout ((t*side + r)*side + c,
+/// col fastest): every coarse voxel becomes its 2x2x2 block via the gated
+/// s4_octant_unlift; output cell (2t+dt, 2r+dr, 2c+dc) = octant lane dt*4+dr*2+dc
+/// (near-t face first, so the octant z axis IS the time axis — the B2.3 pin).
+/// `details` may be null (the zero-detail deterministic floor; zero-gene == floor)
+/// or [side^3 * 7] i32 voxel-major COMMITTED bands (a somatic theta_up's Q16-committed
+/// invention — the float layer stays OUTSIDE this operator: a pure integer stage of
+/// the cascade sandwich). Byte-exact against
+/// SixFour.Spec.SelfSimilarReconstruct.expandRungVolume (cube_expand fixture test).
+/// This is the export rung's CPU oracle: 16^3 -> 32^3 -> 64^3 -> ... -> 256^3 is this
+/// operator iterated. TOTAL: refuses (propagating s4_octant_unlift's checks) rather
+/// than wrap.
+pub export fn s4_cube_expand_rung(
+    vol: [*c]const i32,
+    side: i32,
+    details: [*c]const i32,
+    out: [*c]i32,
+) i32 {
+    if (vol == null or out == null) return RC_NULL_PTR;
+    if (side <= 0) return RC_BAD_SHAPE;
+    const s: usize = @intCast(side);
+    const s2 = 2 * s;
+    var t: usize = 0;
+    while (t < s) : (t += 1) {
+        var r: usize = 0;
+        while (r < s) : (r += 1) {
+            var c: usize = 0;
+            while (c < s) : (c += 1) {
+                const i = (t * s + r) * s + c;
+                var bands: [8]i32 = [_]i32{0} ** 8;
+                bands[0] = vol[i];
+                if (details != null) {
+                    var k: usize = 0;
+                    while (k < 7) : (k += 1) bands[k + 1] = details[i * 7 + k];
+                }
+                var block: [8]i32 = undefined;
+                const rc = s4_octant_unlift(&bands, &block);
+                if (rc != RC_OK) return rc;
+                var lane: usize = 0;
+                var dt: usize = 0;
+                while (dt < 2) : (dt += 1) {
+                    var dr: usize = 0;
+                    while (dr < 2) : (dr += 1) {
+                        var dc: usize = 0;
+                        while (dc < 2) : (dc += 1) {
+                            out[((2 * t + dt) * s2 + (2 * r + dr)) * s2 + (2 * c + dc)] = block[lane];
+                            lane += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return RC_OK;
+}
+
 /// One 2-D-Haar level over a side×side row-major grid (side even): tile into 2×2
 /// blocks, lift each → coarse (side/2)² plane + (side/2)² detail triples (G,B,T).
 /// The TILING is where Metal (2-D threads) and Zig (loops) could diverge — pinned here.

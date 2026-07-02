@@ -42,6 +42,18 @@ tests = testGroup "GridLayout (the capture-scene contention proof — every widg
   , testProperty "decisionScene: cover partitions the lattice" $ once (lawCoverPartitions decisionScene)
   , testProperty "decisionScene: widgets clear the rounded corners" $ once (lawWidgetsClearCorners decisionScene)
 
+  -- The LAUNCH CURATE scene (the 256³ curation loop surface) passes the same
+  -- eight laws: the hero inspection pane, the t-slab rail, and the three
+  -- iterate knobs are proven, contention-free claims.
+  , testProperty "curateScene: disjoint" $ once (lawSceneDisjoint curateScene)
+  , testProperty "curateScene: in-bounds" $ once (lawSceneInBounds curateScene)
+  , testProperty "curateScene: interactive touch floor" $ once (lawInteractiveTouchFloor curateScene)
+  , testProperty "curateScene: safe-area clearance" $ once (lawSafeAreaClearance curateScene)
+  , testProperty "curateScene: priorities distinct" $ once (lawPriorityDistinct curateScene)
+  , testProperty "curateScene: algebraic == geometric disjointness" $ once (lawDisjointMatchesRects curateScene)
+  , testProperty "curateScene: cover partitions the lattice" $ once (lawCoverPartitions curateScene)
+  , testProperty "curateScene: widgets clear the rounded corners" $ once (lawWidgetsClearCorners curateScene)
+
   -- The laws are robust on arbitrary scenes too: an overlapping pair is BOTH
   -- contested and AABB-overlapping (the bridge holds off the canonical scene).
   , testProperty "bridge holds on an overlapping 2-region scene" $

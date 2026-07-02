@@ -10,7 +10,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"   # spec/
 specdir="$here/src/SixFour/Spec"
 
-valid='ZIG-FLOOR|MLX-MODEL|METAL-GPU|SWIFT-COREAI|PURE-SPEC-WALL'
+valid='ZIG-FLOOR|MLX-MODEL|METAL-GPU|SWIFT-COREAI|SWIFT-APP-SOCIAL|PURE-SPEC-WALL'
 missing=0
 badval=0
 

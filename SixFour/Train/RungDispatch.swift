@@ -36,6 +36,7 @@ final class RungDispatch {
     private let fusedPSO: any MTLComputePipelineState
     private let simtPSO: any MTLComputePipelineState
     private let gatherPSO: any MTLComputePipelineState
+    private let expandPSO: any MTLComputePipelineState
 
     /// Fails (nil) where Metal compute is unavailable — the failable-hook
     /// house pattern.
@@ -48,6 +49,7 @@ final class RungDispatch {
             self.fusedPSO = try ctx.pso("deviceTrainFusedKernel")
             self.simtPSO = try ctx.pso("deviceTrainSimtKernel")
             self.gatherPSO = try ctx.pso("captureOctantsKernel")
+            self.expandPSO = try ctx.pso("cubeExpandRungKernel")
         } catch {
             return nil
         }
@@ -63,6 +65,49 @@ final class RungDispatch {
     /// N octant unlifts on-GPU (the exact inverse; the reversibility twin).
     func unliftOctants(bands: [Int32]) -> [Int32]? {
         runTwin(pso: unliftPSO, input: bands)
+    }
+
+    /// Must mirror `CubeExpandParams` in DeviceTrainShaders.metal.
+    private struct CubeExpandParams {
+        var side: UInt32
+        var hasDetails: UInt32
+    }
+
+    /// ONE volume up-rung on-GPU (the export-rung operator, L1.2): `volume` is a
+    /// side³ scalar cube in the device layout ((t·side + r)·side + c); `details`
+    /// nil = the zero-detail deterministic floor, else side³×7 voxel-major
+    /// COMMITTED Q16 bands (the θ float layer stays outside — the sandwich).
+    /// Returns the (2·side)³ fine cube — byte-exact to the Zig oracle
+    /// `SixFourNative.cubeExpandRung` (gated in `RungDispatchTests`).
+    func expandRung(volume: [Int32], side: Int, details: [Int32]?) -> [Int32]? {
+        let n = side * side * side
+        guard side > 0, volume.count == n,
+              details.map({ $0.count == n * 7 }) ?? true else { return nil }
+        let device = ctx.device
+        let fineCount = 8 * n
+        guard
+            let volBuf = makeBuffer(device, volume),
+            let detBuf = makeBuffer(device, details ?? [0]),   // dummy when floor
+            let outBuf = device.makeBuffer(length: fineCount * 4, options: .storageModeShared),
+            let cmd = ctx.queue.makeCommandBuffer(),
+            let enc = cmd.makeComputeCommandEncoder()
+        else { return nil }
+
+        var params = CubeExpandParams(side: UInt32(side),
+                                      hasDetails: details == nil ? 0 : 1)
+        enc.setComputePipelineState(expandPSO)
+        enc.setBuffer(volBuf, offset: 0, index: 0)
+        enc.setBuffer(detBuf, offset: 0, index: 1)
+        enc.setBuffer(outBuf, offset: 0, index: 2)
+        enc.setBytes(&params, length: MemoryLayout<CubeExpandParams>.stride, index: 3)
+        let w = min(expandPSO.maxTotalThreadsPerThreadgroup, 256)
+        enc.dispatchThreads(MTLSize(width: n, height: 1, depth: 1),
+                            threadsPerThreadgroup: MTLSize(width: w, height: 1, depth: 1))
+        enc.endEncoding()
+        cmd.commit()
+        cmd.waitUntilCompleted()
+        guard cmd.status == .completed else { return nil }
+        return readInts(outBuf, count: fineCount)
     }
 
     /// THE FUSED RUNG DISPATCH: manufacture the pairs from `blocks` (int lift),

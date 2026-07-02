@@ -39,6 +39,9 @@ import qualified Properties.CubeLadder   as CubeLadder
 import qualified Properties.VoxelReduce  as VoxelReduce
 import qualified Properties.ABSurface    as ABSurface
 import qualified Properties.GenomeCarrier as GenomeCarrier
+import qualified Properties.SwapCarrier as SwapCarrier
+import qualified Properties.GeneSimilarity as GeneSimilarity
+import qualified Properties.CurateRealize as CurateRealize
 import qualified Properties.PairTree     as PairTree
 import qualified Properties.PairTreeFixed as PairTreeFixed
 import qualified Properties.RGBTLift     as RGBTLift
@@ -243,6 +246,9 @@ main = defaultMain $ testGroup "sixfour-spec"
   , VoxelReduce.tests
   , ABSurface.tests
   , GenomeCarrier.tests
+  , SwapCarrier.tests
+  , GeneSimilarity.tests
+  , CurateRealize.tests
   , PairTree.tests
   , PairTreeFixed.tests
   , RGBTLift.tests

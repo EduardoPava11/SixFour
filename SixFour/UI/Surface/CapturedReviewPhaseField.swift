@@ -93,6 +93,16 @@ struct CapturedReviewPhaseField: View {
                 .accessibilityLabel("Iterate the 16³ proposal before export")
             }
 
+            // LAUNCH L1.3: the curate excursion is offered once a decide-accept
+            // stashed its input (entry gated Picked-only, lawCurateEntryGated).
+            if Feature.v3SomaticTrain, surface.phase == .picked, surface.acceptedInput != nil {
+                Button { surface.step(.beginCurate) } label: {
+                    CellActionButton(icon: .none, title: "CURATE", prominent: false, fillWidth: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Inspect and iterate the build before export")
+            }
+
             HStack(spacing: GlobalLattice.pt(6)) {
                 Button { retake() } label: {
                     CellActionButton(icon: .none, title: "RETAKE", prominent: false, fillWidth: false)

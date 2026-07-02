@@ -11,9 +11,10 @@ phase machine; the CLOCK half of 'SixFour.Spec.Display' (the 20 fps κ, the proj
 == Phases and events
 
 @
-Phase  = Bootstrap | Unauthorized | Live | Captured | Deciding | Picked | Exporting | Done | Error
+Phase  = Bootstrap | Unauthorized | Live | Captured | Deciding | Picked | Curating | Exporting | Done | Error
 Event  = SessionReady | AuthDenied | ShutterTap | LockComplete | BurstComplete
        | BeginDecide | DecideAccept | DecideAgain
+       | BeginCurate | CurateDone
        | PickA | PickB | ExportFamily | ExportDone | Retake | Fault
 @
 
@@ -21,6 +22,15 @@ V3.0 adds the DECIDING phase (the 16³ iterate surface, 'SixFour.Spec.GridLayout
 @decisionScene@): Captured —BeginDecide→ Deciding; DecideAccept lands in Picked (a
 decide-accept IS a committed pick, so 'lawExportGatedOnPick' is untouched);
 DecideAgain (and Retake) bail to Live. Entry is gated ('lawDecideEntryGated').
+
+The LAUNCH plan adds CURATING (the 256³ curation loop) as a __Picked
+self-excursion__: Picked —BeginCurate→ Curating —CurateDone→ Picked. Curation
+consumes the accepted decide result (σ's @acceptedInput@\/@acceptedUseGene@) to
+build and iterate the true 256³ before export; because it re-enters Picked,
+Exporting is still entered ONLY from Picked and 'lawExportGatedOnPick' holds
+with ZERO edits (both gate laws quantify over 'allABPhases', so the new phase
+is auto-covered). Entry is gated ('lawCurateEntryGated'); CurateDone returns to
+Picked, Retake bails to Live, Fault lands in Error ('lawCurateResolves').
 
 Lock + burst are INTERNAL to Live (camera freezes; not visible sub-phases). PickA and
 PickB are BOTH live edges out of Captured, both landing in Picked (the user "plays the game":
@@ -58,6 +68,8 @@ module SixFour.Spec.ABSurface
   , goldenABPhaseTrace
   , goldenDecideHappyPath
   , goldenDecidePhaseTrace
+  , goldenCurateHappyPath
+  , goldenCuratePhaseTrace
     -- * Laws (QuickCheck'd in Properties.ABSurface)
   , lawABPhaseTotal
   , lawABNoOrphan
@@ -69,20 +81,25 @@ module SixFour.Spec.ABSurface
   , lawDecideEntryGated
   , lawDecideVerdictsResolve
   , lawDecideGoldenTrace
+  , lawCurateEntryGated
+  , lawCurateResolves
+  , lawCurateGoldenTrace
   ) where
 
 import Data.List (scanl', sort, nub)
 
--- | The 9 UI-lifecycle phases (one surface, no screens). 'Deciding' is the V3.0
--- 16³ iterate surface.
+-- | The 10 UI-lifecycle phases (one surface, no screens). 'Deciding' is the V3.0
+-- 16³ iterate surface; 'Curating' is the 256³ curation loop (a Picked self-excursion).
 data ABPhase
-  = Bootstrap | Unauthorized | Live | Captured | Deciding | Picked | Exporting | Done | Error
+  = Bootstrap | Unauthorized | Live | Captured | Deciding | Picked | Curating | Exporting | Done | Error
   deriving (Eq, Ord, Show, Enum, Bounded)
 
--- | The 14 events ('BeginDecide' \/ 'DecideAccept' \/ 'DecideAgain' are the V3.0 decide loop).
+-- | The 16 events ('BeginDecide' \/ 'DecideAccept' \/ 'DecideAgain' are the V3.0 decide
+-- loop; 'BeginCurate' \/ 'CurateDone' are the 256³ curate excursion).
 data ABEvent
   = SessionReady | AuthDenied | ShutterTap | LockComplete | BurstComplete
   | BeginDecide | DecideAccept | DecideAgain
+  | BeginCurate | CurateDone
   | PickA | PickB | ExportFamily | ExportDone | Retake | Fault
   deriving (Eq, Show, Enum, Bounded)
 
@@ -104,12 +121,14 @@ abStep Live BurstComplete     = Captured          -- lock + burst are internal t
 abStep Captured BeginDecide   = Deciding           -- V3.0: enter the 16³ decide loop
 abStep Deciding DecideAccept  = Picked             -- a decide-accept IS a committed pick
 abStep Deciding DecideAgain   = Live               -- reject: back to live for another burst
+abStep Picked   BeginCurate   = Curating           -- 256³ curation: a Picked self-excursion
+abStep Curating CurateDone    = Picked             -- back to the export-eligible phase
 abStep Captured PickA         = Picked
 abStep Captured PickB         = Picked
 abStep Picked   ExportFamily  = Exporting
 abStep Exporting ExportDone   = Done
 abStep p Retake
-  | p `elem` [Captured, Deciding, Picked, Done, Error] = Live   -- bail back to live (Error: recovery)
+  | p `elem` [Captured, Deciding, Picked, Curating, Done, Error] = Live   -- bail back to live (Error: recovery)
 abStep p _                    = p                  -- catch-all self-loop
 
 -- | Cross-language phase token (stable lowercase).
@@ -120,6 +139,7 @@ abPhaseName Live         = "live"
 abPhaseName Captured     = "captured"
 abPhaseName Deciding     = "deciding"
 abPhaseName Picked       = "picked"
+abPhaseName Curating     = "curating"
 abPhaseName Exporting    = "exporting"
 abPhaseName Done         = "done"
 abPhaseName Error        = "error"
@@ -134,6 +154,8 @@ abEventName BurstComplete = "burstComplete"
 abEventName BeginDecide   = "beginDecide"
 abEventName DecideAccept  = "decideAccept"
 abEventName DecideAgain   = "decideAgain"
+abEventName BeginCurate   = "beginCurate"
+abEventName CurateDone    = "curateDone"
 abEventName PickA         = "pickA"
 abEventName PickB         = "pickB"
 abEventName ExportFamily  = "exportFamily"
@@ -191,6 +213,21 @@ goldenDecidePhaseTrace :: [ABPhase]
 goldenDecidePhaseTrace =
   [ Bootstrap, Live, Live, Captured, Deciding, Live
   , Live, Captured, Deciding, Picked
+  , Exporting, Done, Live ]
+
+-- | The LAUNCH curate golden: decide-accept, then the 256³ curate excursion
+-- (one full loop), then export — proves the curation detour still reaches Done.
+goldenCurateHappyPath :: [ABEvent]
+goldenCurateHappyPath =
+  [ SessionReady, ShutterTap, BurstComplete, BeginDecide, DecideAccept
+  , BeginCurate, CurateDone
+  , ExportFamily, ExportDone, Retake ]
+
+-- | @scanl' abStep Bootstrap goldenCurateHappyPath@.
+goldenCuratePhaseTrace :: [ABPhase]
+goldenCuratePhaseTrace =
+  [ Bootstrap, Live, Live, Captured, Deciding, Picked
+  , Curating, Picked
   , Exporting, Done, Live ]
 
 -- ---------------------------------------------------------------------------
@@ -265,3 +302,24 @@ lawDecideVerdictsResolve =
 -- | @scanl' abStep Bootstrap goldenDecideHappyPath == goldenDecidePhaseTrace@.
 lawDecideGoldenTrace :: Bool
 lawDecideGoldenTrace = scanl' abStep Bootstrap goldenDecideHappyPath == goldenDecidePhaseTrace
+
+-- | Curating is ENTERED (a genuine transition) ONLY from Picked via BeginCurate —
+-- the 256³ loop cannot be reached without a committed pick (the accepted decide
+-- result) behind it.
+lawCurateEntryGated :: Bool
+lawCurateEntryGated =
+  and [ (abStep p e == Curating && p /= Curating) `implies` (p == Picked && e == BeginCurate)
+      | p <- allABPhases, e <- allABEvents ]
+
+-- | The curate excursion resolves exactly: CurateDone returns to Picked (so the
+-- export gate is untouched — curation is a Picked self-excursion), Retake bails
+-- to Live, and a fault lands in Error.
+lawCurateResolves :: Bool
+lawCurateResolves =
+     abStep Curating CurateDone == Picked
+  && abStep Curating Retake     == Live
+  && abStep Curating Fault      == Error
+
+-- | @scanl' abStep Bootstrap goldenCurateHappyPath == goldenCuratePhaseTrace@.
+lawCurateGoldenTrace :: Bool
+lawCurateGoldenTrace = scanl' abStep Bootstrap goldenCurateHappyPath == goldenCuratePhaseTrace

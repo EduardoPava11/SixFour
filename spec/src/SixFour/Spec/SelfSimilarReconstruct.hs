@@ -56,6 +56,8 @@ module SixFour.Spec.SelfSimilarReconstruct
   , tailToDetail
     -- * The shared octant operator, applied once per rung step
   , octantLift
+    -- * The DEVICE-layout volume expand (one rung, row-major capture order)
+  , expandRungVolume
     -- * The self-similar two-rung chain
   , Rungs(..)
   , reconstruct256
@@ -66,9 +68,12 @@ module SixFour.Spec.SelfSimilarReconstruct
   , lawWithinCaptureExact
   , lawBeyondCaptureInvented
   , lawZeroTailIsFloor
+  , lawVolumeExpandSingletonIsUnlift
+  , lawVolumeExpandBlockLocal
+  , lawVolumeExpandFloorConstant
   ) where
 
-import SixFour.Spec.OctreeCell           ( Detail, octantSynthesize, levelsBetween )
+import SixFour.Spec.OctreeCell           ( Detail, OctBand(..), V8(..), octantSynthesize, levelsBetween, unliftOct )
 import SixFour.Spec.SuccessiveRefinement ( SurfacedSplit(..), split, refine )
 import SixFour.Spec.OctreeGenome         ( octreeLeafCount )
 import SixFour.Spec.ByteCarrier          ( Latent, reenterQ16, toByte, mkLatent )
@@ -214,3 +219,74 @@ lawZeroTailIsFloor cube64 =
        in tailToDetail zeroTail == floorDet                       -- the seam zeroes (reenterQ16 0 == 0)
           && octantLift cube64 (tailToDetail zeroTail)
                == octantLift cube64 floorDet                      -- ...so the step is the zero-detail floor
+
+-- ---------------------------------------------------------------------------
+-- The DEVICE-layout volume expand (one rung step in capture order)
+-- ---------------------------------------------------------------------------
+
+-- | ONE up-rung of a scalar cube in the DEVICE volume layout — the capture
+-- convention @(t·side + row)·side + col@, col fastest — where 'octantSynthesize'
+-- speaks octree order. Every coarse voxel becomes its 2×2×2 block via
+-- 'unliftOct': output cell @(2t+dt, 2r+dr, 2c+dc)@ is 'V8' lane @dt·4+dr·2+dc@
+-- (near-t face first, so the octant z axis IS the time axis — the B2.3 pin).
+-- @Nothing@ detail = the zero-detail deterministic floor (zero-gene == floor);
+-- @Just ds@ supplies one COMMITTED 'Detail' per coarse voxel (voxel-major), the
+-- already-re-entered bands of a somatic θ_up — the float layer stays OUTSIDE
+-- this operator (the sandwich: this is a pure integer stage). This is the
+-- Haskell source of truth for the Zig oracle @s4_cube_expand_rung@ and the
+-- Swift @OctantCube.upRung@.
+expandRungVolume :: Int -> [Int] -> Maybe [Detail] -> [Int]
+expandRungVolume side vol mdet =
+  [ cellAt tt rr cc | tt <- [0 .. s2 - 1], rr <- [0 .. s2 - 1], cc <- [0 .. s2 - 1] ]
+  where
+    s2 = 2 * side
+    zeroDetail = (0, 0, 0, 0, 0, 0, 0)
+    detAt i = case mdet of
+      Nothing -> zeroDetail
+      Just ds -> if i >= 0 && i < length ds then ds !! i else zeroDetail
+    cellAt tt rr cc =
+      let (t, dt) = tt `divMod` 2
+          (r, dr) = rr `divMod` 2
+          (c, dc) = cc `divMod` 2
+          i = (t * side + r) * side + c
+          v = if i < length vol then vol !! i else 0
+          V8 a b c' d e f g h = unliftOct (OctBand v (detAt i))
+      in [a, b, c', d, e, f, g, h] !! ((dt * 2 + dr) * 2 + dc)
+
+-- | A side-1 volume expand IS one 'unliftOct' laid out in lane order
+-- @(dt,dr,dc)@ — pins the layout bijection between the device volume order and
+-- the 'V8' octant lanes on the smallest witness.
+lawVolumeExpandSingletonIsUnlift :: Int -> Detail -> Bool
+lawVolumeExpandSingletonIsUnlift v d =
+  let V8 a b c' d' e f g h = unliftOct (OctBand v d)
+  in expandRungVolume 1 [v] (Just [d]) == [a, b, c', d', e, f, g, h]
+
+-- | The expand is BLOCK-LOCAL: perturbing one coarse voxel changes ONLY its own
+-- 2×2×2 output block — the tooth that the scatter indexing neither smears nor
+-- swaps blocks (an off-by-one in any of the three axes fails this).
+lawVolumeExpandBlockLocal :: [Int] -> Int -> Int -> Bool
+lawVolumeExpandBlockLocal vol8 k delta =
+  let side = 2
+      volA = [ if i < length vol8 then vol8 !! i else 0 | i <- [0 .. 7] ]
+      j    = ((k `mod` 8) + 8) `mod` 8
+      volB = [ if i == j then v + max 1 (abs delta `mod` 64) else v
+             | (i, v) <- zip [0 ..] volA ]
+      outA = expandRungVolume side volA Nothing
+      outB = expandRungVolume side volB Nothing
+      (jt, jrc) = j `divMod` (side * side)
+      (jr, jc)  = jrc `divMod` side
+      inBlock n =
+        let (tt, rest) = n `divMod` (4 * 4)
+            (rr, cc)   = rest `divMod` 4
+        in tt `div` 2 == jt && rr `div` 2 == jr && cc `div` 2 == jc
+  in and [ inBlock n || x == y | (n, (x, y)) <- zip [0 ..] (zip outA outB) ]
+
+-- | The zero-detail floor of a CONSTANT volume is the constant volume one rung
+-- finer: @sUnlift(v,0) = (v,v)@ propagates through all three axes, so the floor
+-- expand of flatness invents nothing (the nearest-neighbour floor, exactly).
+lawVolumeExpandFloorConstant :: Int -> Bool
+lawVolumeExpandFloorConstant v0 =
+  let v    = v0 `mod` 60000
+      side = 2
+      vol  = replicate (side * side * side) v
+  in expandRungVolume side vol Nothing == replicate (8 * side * side * side) v

@@ -38,4 +38,15 @@ tests = testGroup "SelfSimilarReconstruct (one octant operator twice; held-exact
 
   , testProperty "zero latent tail = the deterministic zero-detail floor (zero-genome==floor)" $
       forAll (vectorOf 8 genI) lawZeroTailIsFloor
+
+  -- The DEVICE-layout volume expand (the Zig s4_cube_expand_rung / Swift upRung source of truth)
+  , testProperty "side-1 volume expand IS unliftOct in (dt,dr,dc) lane order" $
+      forAll genI $ \v -> forAll genDetail (lawVolumeExpandSingletonIsUnlift v)
+
+  , testProperty "volume expand is BLOCK-LOCAL (perturb one voxel -> only its 2x2x2 block moves)" $
+      forAll (vectorOf 8 genI) $ \vol -> forAll genI $ \k -> forAll genI $ \d ->
+        lawVolumeExpandBlockLocal vol k d
+
+  , testProperty "floor expand of a constant volume is the constant (nearest-neighbour floor)" $
+      forAll genI lawVolumeExpandFloorConstant
   ]

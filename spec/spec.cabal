@@ -193,6 +193,9 @@ library
         SixFour.Spec.LeafOverride
         SixFour.Spec.LocalPonder
         SixFour.Spec.GenomeCarrier
+        SixFour.Spec.SwapCarrier
+        SixFour.Spec.GeneSimilarity
+        SixFour.Spec.CurateRealize
         SixFour.Spec.PaletteGesture
         SixFour.Spec.GroupRGBT
         SixFour.Spec.Quad4Fixed
@@ -241,6 +244,7 @@ library
         SixFour.Codegen.RGBT4D
         SixFour.Codegen.VoxelReduce
         SixFour.Codegen.GenomeCarrier
+        SixFour.Codegen.SwapCarrier
         SixFour.Codegen.MaskedBand
         SixFour.Codegen.DeviceTrain
         SixFour.Codegen.PairTree
@@ -392,6 +396,9 @@ test-suite spec-tests
         Properties.VoxelReduce
         Properties.ABSurface
         Properties.GenomeCarrier
+        Properties.SwapCarrier
+        Properties.GeneSimilarity
+        Properties.CurateRealize
         Properties.PairTree
         Properties.PairTreeFixed
         Properties.RGBTLift

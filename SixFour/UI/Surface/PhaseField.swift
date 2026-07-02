@@ -36,6 +36,10 @@ enum PhaseField {
             // Post-capture REVIEW bench (A/B game retired): the captured 64³ beside its 16³
             // octree coarse, both on the Z₆₄ cursor, with EXPORT / RETAKE controls.
             CapturedReviewPhaseField(surface: surface, clock: clock)
+        case .curating:
+            // LAUNCH L1.3: the 256³ curation loop (a Picked self-excursion) on the
+            // proven curateScene lattice — entered by the CURATE button below.
+            Curating256PhaseField(surface: surface)
         case .exporting:
             ExportingPhaseField(surface: surface, clock: clock)
         case .done:

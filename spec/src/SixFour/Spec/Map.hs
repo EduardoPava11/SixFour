@@ -579,6 +579,13 @@ Emits no golden. Additive),
 @lawInputIsPaintable@ +
 @lawNudgeGovernsSuperRes@ (the 9-channel paint maps to the 256³ build). The TRAINER targets a
 @ModelOutput@, so one boundary serves UI render, 256³ build, and training. Additive),
+"SixFour.Spec.CurateRealize" (the curated-volume → indexed-GIF realization, LAUNCH L1.2: the
+interleaved Q16 volume the octant ladder built (@SelfSimilarReconstruct.expandRungVolume@) slices
+into per-frame pixels (the layout pin, exact) and quantizes with the SAME verified
+@QuantFixed.quantizeFrameQ16@ the shipped renderer runs; FRAME-LOCAL by law (t-slab streaming
+licensed), lossless on ≤k-colour frames, and the ladder floor of flatness realizes to one colour.
+Resolves the Upscale256 fork honestly: @upscale256@ consumes the V2-deferred global-palette cube,
+so the LIVE curate floor is ladder-expand + this realization. Additive),
 "SixFour.Spec.AboveFloorMargin" (★ the TRAINING GO/NO-GO de-risk: invented detail can survive the Q16
 commit (@reenterQ16@ = @round(x*65536)@) and move the output OFF the deterministic floor, and the margin
 is FINITE (½ a Q16 LSB rounds to the floor under round-half-to-even; 1 LSB survives). The floor is not
@@ -1109,6 +1116,15 @@ app-social layer (destined for Swift + CloudKit public DB + Game Center), still 
     council is the top 'councilSize'. Default majority judgment ties only on equal grade multisets.
   * "SixFour.Spec.Lineage" — the content-addressed gene GENEALOGY DAG (creator + parents per gene);
     @influence = |descendants|@ is the lineage rank scalar, acyclic by construction.
+  * "SixFour.Spec.SwapCarrier" — ★ the swap-economy WIRE: a second GIF89a Application-Extension
+    block (@S4GX@, coexists with @S4GN@) carrying one tradeable gene + its lineage tag; the Trade
+    hybrid model as BYTES (a Showcase serializes NO weights and expresses as the floor; @mintGrant@
+    consults the ledger, so a working Grant exists only for the creator or a settled trade's parties).
+  * "SixFour.Spec.GeneSimilarity" — gene similarity as a PULLBACK pseudometric (the GeneAtlas
+    retrieval metric): a flat θ is never compared word-by-word — it is EXPRESSED on a pinned probe
+    lattice (real @predictDetail@, Q16 commit inside) into a P6 cloud and @cloudDistance@ is pulled
+    back (pseudometric by theorem; gauge quotient: identical expression ⇒ distance 0; the
+    int→float→int sandwich is the port map).
   * "SixFour.Spec.Affiliation" — GUILDS as connected components of the trade graph (affiliation is
     behavioural — who you swap with); the partition is exact, oversize components schism at 'guildCap'.
   * "SixFour.Spec.Role" — the specialist↔generalist spectrum = @effectiveGenomeDim@ (participation

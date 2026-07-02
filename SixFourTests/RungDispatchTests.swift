@@ -46,6 +46,61 @@ struct RungDispatchTests {
         }
     }
 
+    // ── The volume up-rung twin (L1.2: cubeExpandRungKernel vs s4_cube_expand_rung) ──
+
+    private func randomVolume(side: Int, seed: UInt64, bound: Int32) -> [Int32] {
+        var rng = Rng(state: seed)
+        return (0 ..< side * side * side).map { _ in rng.int32(bound: bound) }
+    }
+
+    /// FLOOR ARM: the GPU volume up-rung with no details must be byte-exact to
+    /// the Zig oracle (which is itself fixture-gated against
+    /// `Spec.SelfSimilarReconstruct.expandRungVolume`).
+    @Test func expandFloorArmIsByteExactToZigOracle() throws {
+        let rung = try #require(RungDispatch())
+        let side = 8
+        let vol = randomVolume(side: side, seed: 0x6375_6265_4658_5031, bound: 30000)
+        let metal = try #require(rung.expandRung(volume: vol, side: side, details: nil))
+        let zig = try #require(SixFourNative.cubeExpandRung(volume: vol, side: side, details: nil))
+        #expect(metal == zig)
+    }
+
+    /// GENE ARM: per-voxel committed detail bands (negatives included — the
+    /// fdiv2 floor-division hazard) must also be byte-exact to the oracle.
+    @Test func expandGeneArmIsByteExactToZigOracle() throws {
+        let rung = try #require(RungDispatch())
+        let side = 8
+        var rng = Rng(state: 0x6375_6265_4658_5032)
+        let vol = randomVolume(side: side, seed: 0x6375_6265_4658_5033, bound: 30000)
+        let details = (0 ..< side * side * side * 7).map { _ in rng.int32(bound: 2000) }
+        let metal = try #require(rung.expandRung(volume: vol, side: side, details: details))
+        let zig = try #require(SixFourNative.cubeExpandRung(volume: vol, side: side, details: details))
+        #expect(metal == zig)
+    }
+
+    /// THE LADDER TIE: two GPU rungs 16³→64³ with θ_up-committed details must equal
+    /// the shipped decide-preview CPU path (`OctantCube.upRung` twice) — the same
+    /// operator the 256³ build will iterate, proven on the scale the user decides at.
+    @Test func expandLadderMatchesTheDecidePreviewPath() throws {
+        let rung = try #require(RungDispatch())
+        let side = 16
+        let theta: [Double] = [0.25, 0.1, -0.05] + Array(repeating: 0.02, count: 18)
+        let vol16 = randomVolume(side: side, seed: 0x6375_6265_4658_5034, bound: 20000)
+
+        func thetaDetails(_ vol: [Int32]) -> [Int32] {
+            vol.flatMap { v in
+                DeviceTrainStepCPU.predictCommitted(theta: theta, coarse: Int(v)).map(Int32.init)
+            }
+        }
+        let gpu32 = try #require(rung.expandRung(volume: vol16, side: side, details: thetaDetails(vol16)))
+        let gpu64 = try #require(rung.expandRung(volume: gpu32, side: side * 2, details: thetaDetails(gpu32)))
+
+        let cpu64 = OctantCube.upRung(
+            OctantCube.upRung(vol16.map(Int.init), side: side, theta: theta),
+            side: side * 2, theta: theta)
+        #expect(gpu64.map(Int.init) == cpu64)
+    }
+
     @Test func metalRoundTripIsIdentity() throws {
         let rung = try #require(RungDispatch())
         let blocks = randomBlocks(count: 256, seed: 0x6465_7669_6365_3634)

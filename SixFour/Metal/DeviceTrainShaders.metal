@@ -104,6 +104,58 @@ kernel void octantUnliftKernel(const device int *bands  [[buffer(0)]],
     unlift_oct(bands + gid * 8, blocks + gid * 8);
 }
 
+// ── The volume up-rung (one octant rung in the DEVICE layout) ────────────────
+
+struct CubeExpandParams {
+    uint side;         // coarse cube side; out is (2*side)^3
+    uint has_details;  // 0 = the zero-detail floor; 1 = per-voxel committed bands
+};
+
+/// ONE up-rung of a scalar cube in the DEVICE volume layout ((t*side + r)*side + c,
+/// col fastest): thread gid = one coarse voxel; its 2×2×2 output block is the
+/// octant unlift of [v, 7 detail bands] scattered at (2t+dt, 2r+dr, 2c+dc), lane
+/// order (dt,dr,dc) — near-t face first, the octant z axis IS the time axis.
+/// `details` is [side³×7] voxel-major COMMITTED Q16 bands (a somatic θ_up's
+/// invention, already through the Q16 crossing) or ignored when has_details==0
+/// (the deterministic floor; zero-gene == floor). PURE INTEGER — the θ float
+/// layer stays outside this kernel (the cascade-sandwich stage discipline).
+/// Byte-exact twin of the Zig oracle `s4_cube_expand_rung`
+/// (= Spec.SelfSimilarReconstruct.expandRungVolume), gated in RungDispatchTests.
+kernel void cubeExpandRungKernel(const device int *vol            [[buffer(0)]],
+                                 const device int *details        [[buffer(1)]],
+                                 device int       *out            [[buffer(2)]],
+                                 constant CubeExpandParams &p     [[buffer(3)]],
+                                 uint gid [[thread_position_in_grid]]) {
+    uint s = p.side;
+    if (gid >= s * s * s) { return; }
+    uint t = gid / (s * s);
+    uint rest = gid % (s * s);
+    uint r = rest / s;
+    uint c = rest % s;
+
+    int d0 = 0, d1 = 0, d2 = 0, d3 = 0, d4 = 0, d5 = 0, d6 = 0;
+    if (p.has_details != 0) {
+        const device int *dd = details + gid * 7;
+        d0 = dd[0]; d1 = dd[1]; d2 = dd[2]; d3 = dd[3]; d4 = dd[4]; d5 = dd[5]; d6 = dd[6];
+    }
+    int r0, r1;
+    s_unlift(vol[gid], d6, r0, r1);          // Haar along t
+    int a, b, cc, d, e, f, g, h;
+    unlift_quad(r0, d0, d1, d2, a, b, cc, d); // near-t face
+    unlift_quad(r1, d3, d4, d5, e, f, g, h);  // far-t face
+
+    uint s2 = 2 * s;
+    uint bt = 2 * t, br = 2 * r, bc = 2 * c;
+    out[(bt * s2 + br) * s2 + bc]             = a;
+    out[(bt * s2 + br) * s2 + bc + 1]         = b;
+    out[(bt * s2 + br + 1) * s2 + bc]         = cc;
+    out[(bt * s2 + br + 1) * s2 + bc + 1]     = d;
+    out[((bt + 1) * s2 + br) * s2 + bc]       = e;
+    out[((bt + 1) * s2 + br) * s2 + bc + 1]   = f;
+    out[((bt + 1) * s2 + br + 1) * s2 + bc]   = g;
+    out[((bt + 1) * s2 + br + 1) * s2 + bc + 1] = h;
+}
+
 // ── The fused rung training dispatch (the B2 seed) ──────────────────────────
 
 struct FusedTrainParams {

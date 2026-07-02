@@ -35,6 +35,7 @@ test {
     _ = @import("totality_test.zig"); // total-function redesign: T1 totality (all 10 refuse OOR), T3 intermediate-truth via i64, T5 ship-mode parity, T6 domain-boundary knife-edge
     _ = @import("temporal_fixture_test.zig"); // cross-language temporal one-level Haar split golden (VoxelReduce temporal half)
     _ = @import("rgbt4d_fixture_test.zig"); // cross-language RGBT-4D lift + cube-ladder golden (Metal/Zig alignment)
+    _ = @import("cube_expand_fixture_test.zig"); // cross-language device-layout volume up-rung golden (floor + gene arms)
     _ = @import("gif_fixture_test.zig"); // cross-language full-burst GIF golden (Stage 6)
     _ = @import("lut_fixture_test.zig"); // cross-language look transfer + LUT-extraction golden
 }

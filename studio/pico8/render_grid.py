@@ -40,6 +40,35 @@ _regions = hs_regions(grid)
 PREVIEW = dict(zip("col row w h".split(), _regions[0]))
 PALETTE = dict(zip("col row w h".split(), _regions[1]))
 
+# All named scenes, parsed from the spec (captureScene / decisionScene /
+# curateScene / ...): scene -> [(widget, {col,row,w,h,inter})], file order.
+import re as _re
+
+def hs_scenes(text: str):
+    scenes = {}
+    for m in _re.finditer(r"^(\w+Scene) :: Scene\n\1 =\n(.*?)^\s*\]", text,
+                          _re.MULTILINE | _re.DOTALL):
+        name, body = m.group(1), m.group(2)
+        widgets = []
+        for wm in _re.finditer(
+                r'\("(\w+)",\s*LRegion \{ lrCol = (\d+), lrRow = (\d+),\s*'
+                r'lrW = (\d+), lrH = (\d+)[^}]*lrInteractive = (True|False)',
+                body, _re.DOTALL):
+            widgets.append((wm.group(1),
+                            dict(col=int(wm.group(2)), row=int(wm.group(3)),
+                                 w=int(wm.group(4)), h=int(wm.group(5)),
+                                 inter=wm.group(6) == "True")))
+        scenes[name] = widgets
+    return scenes
+
+SCENES = hs_scenes(grid)
+
+# vivid per-widget palette (index order within a scene)
+WIDGET_RGB = [
+    (60, 200, 120), (220, 64, 64), (70, 130, 240), (240, 200, 60),
+    (200, 90, 220), (80, 210, 210), (240, 130, 50), (150, 150, 150),
+]
+
 # real-RGB representation (not limited to PICO-8's 16) --------------------
 RGB = {
     "off":     (0, 0, 0),
@@ -105,7 +134,9 @@ def verify() -> bool:
         return all(on_screen(c, r)
                    for r in range(w["row"], w["row"] + w["h"])
                    for c in range(w["col"], w["col"] + w["w"]))
-    checks.append(("widgets clear the corners", clears(PREVIEW) and clears(PALETTE)))
+    all_widgets = [w for ws in SCENES.values() for _, w in ws] or [PREVIEW, PALETTE]
+    checks.append(("widgets clear the corners (ALL scenes)",
+                   all(clears(w) for w in all_widgets)))
 
     corner_clipped = not on_screen(0, 0)
     checks.append(("physical corner (0,0) is clipped", corner_clipped))
@@ -136,6 +167,34 @@ def write_png(path: Path, w: int, h: int, rgb: bytearray) -> None:
                      + chunk(b"IEND", b""))
 
 
+def scene_cell_class(scene_widgets, c, r):
+    """off / safe / on / widget index for one scene's overview."""
+    if not on_screen(c, r):
+        return "off"
+    for i, (_, w) in enumerate(scene_widgets):
+        if in_rect(c, r, w):
+            return i
+    if r < SAFE_TOP_R or r >= ROWS - SAFE_BOT_R:
+        return "safe"
+    return "on"
+
+
+def render_scene(path, scene_widgets, scale=3):
+    W, H = COLS * scale, ROWS * scale
+    buf = bytearray(W * H * 3)
+    for ry in range(ROWS):
+        for rx in range(COLS):
+            cls = scene_cell_class(scene_widgets, rx, ry)
+            col = WIDGET_RGB[cls % len(WIDGET_RGB)] if isinstance(cls, int) else RGB[cls]
+            for dy in range(scale):
+                base = ((ry * scale + dy) * W + rx * scale) * 3
+                for dx in range(scale):
+                    off = base + dx * 3
+                    buf[off:off + 3] = bytes(col)
+    write_png(path, W, H, buf)
+    print(f"  wrote {path.name}  ({W}x{H})")
+
+
 def render_region(path, c0, r0, cw, ch, scale):
     W, H = cw * scale, ch * scale
     buf = bytearray(W * H * 3)
@@ -158,6 +217,10 @@ def main() -> int:
         render_region(HERE / "cellgrid_overview.png", 0, 0, COLS, ROWS, 3)
         span = RAD_HALF
         render_region(HERE / "cellgrid_corner.png", 0, 0, span, span, 10)
+        for sname, widgets in SCENES.items():
+            render_scene(HERE / f"cellgrid_{sname.removesuffix('Scene')}.png", widgets)
+            print(f"    {sname}: " + ", ".join(
+                f"{n}=({w['col']},{w['row']}) {w['w']}x{w['h']}" for n, w in widgets))
     return 0 if ok else 1
 
 

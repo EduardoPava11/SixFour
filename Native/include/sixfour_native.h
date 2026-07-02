@@ -135,6 +135,16 @@ int32_t s4_rgbt_unlift_quad(const int32_t *in_q16, int32_t *out_q16);
 int32_t s4_octant_lift(const int32_t *in_q16, int32_t *out_q16);
 // Inverse of s4_octant_lift.
 int32_t s4_octant_unlift(const int32_t *in_q16, int32_t *out_q16);
+// ONE up-rung of a scalar cube in the DEVICE volume layout ((t*side + r)*side + c,
+// col fastest): every coarse voxel becomes its 2x2x2 block via s4_octant_unlift;
+// output cell (2t+dt, 2r+dr, 2c+dc) = octant lane dt*4+dr*2+dc (near-t face first —
+// the octant z axis IS the time axis). `details` may be NULL (the zero-detail
+// deterministic floor, zero-gene == floor) or [side^3 * 7] i32 voxel-major COMMITTED
+// bands (the float theta layer stays OUTSIDE — a pure integer cascade stage).
+// Byte-exact vs Spec.SelfSimilarReconstruct.expandRungVolume (cube_expand fixture).
+// `out` is [(2*side)^3]. TOTAL: refuses rather than wrap.
+int32_t s4_cube_expand_rung(const int32_t *vol, int32_t side,
+                            const int32_t *details, int32_t *out);
 // One 2-D-Haar level over a side×side row-major grid (side even): tile into 2×2
 // blocks → coarse (side/2)² plane + (side/2)² detail triples (G,B,T).
 int32_t s4_cube_lift_level(int32_t side, const int32_t *grid,
@@ -354,6 +364,17 @@ int32_t s4_v21_accumulate_hist(const uint8_t *fine, int32_t fx, int32_t fy, int3
                                int32_t dx, int32_t dy, int32_t dt, int32_t n_levels,
                                int32_t *out_counts);
 
+// Soft-splat histogram accumulation (the sub-LSB sibling of accumulate_hist):
+// each `fine` sample is a high-precision position hi in 0..(n_levels-1)*w
+// (hi = level*w + subfraction); a unit of integer mass w splats across the two
+// adjacent levels ((w - hi%w) at hi/w, hi%w at hi/w + 1), so the discarded
+// sub-LSB fraction survives as the histogram's first moment. `fine` is
+// [ft*fy*fx*3] i32, layouts as accumulate_hist; each (voxel,channel) cell totals
+// box*w. Refuses w<=0, n_levels>256, or hi out of range.
+int32_t s4_v21_accumulate_hist_soft(const int32_t *fine, int32_t fx, int32_t fy, int32_t ft,
+                                    int32_t dx, int32_t dy, int32_t dt, int32_t n_levels,
+                                    int32_t w, int32_t *out_counts);
+
 // Ground-state centering: subtract each curve's minimum, so the GIF byte (argmin)
 // sits at energy 0. `curves` is [p*3*n_levels]; writes [p*3*n_levels] centered
 // energies. Centering in i64; refuses on i32-envelope overflow.
@@ -371,5 +392,22 @@ int32_t s4_v21_mode_relative(const int32_t *curves, int32_t p, int32_t n_levels,
 // is [p*3*n_levels], `modes` is [p*3] (the per-curve GIF level); writes [p*3*n_levels].
 int32_t s4_v21_anchor_at(const int32_t *rel, const int32_t *modes, int32_t p,
                          int32_t n_levels, int32_t *out_centered);
+
+// Palette delta (the temporal metric weight): the L1 / total-variation distance
+// between two palettes' per-channel value histograms, sum |hist1 - hist2|.
+// Permutation-invariant (slot order is the index gauge) and byte-exact.
+// `pal1`/`pal2` are [k*3] u8 SLOT-MAJOR (slot*3 + channel), values in
+// 0..n_levels-1; writes the scalar to out_pd[0]. Refuses n_levels>256 or a
+// value >= n_levels.
+int32_t s4_v21_palette_delta(const uint8_t *pal1, const uint8_t *pal2, int32_t k,
+                             int32_t n_levels, int32_t *out_pd);
+
+// 1-D Wasserstein-1 palette metric: the L1 distance between the two palettes'
+// per-channel value CDFs (palette_delta with a per-channel cumsum inserted
+// before the abs-sum), so it charges the GROUND DISTANCE mass must travel.
+// Byte-exact integer, permutation-invariant; same [k*3] slot-major layout;
+// writes the scalar to out_wd[0]. Refuses n_levels>256 or a value >= n_levels.
+int32_t s4_v21_wdist1d(const uint8_t *pal1, const uint8_t *pal2, int32_t k,
+                       int32_t n_levels, int32_t *out_wd);
 
 #endif // SIXFOUR_NATIVE_H

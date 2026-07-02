@@ -17,6 +17,8 @@
 #   gen       scripts/regenerate.sh    — xcodegen + pbxproj filetype patch + post-check
 #   lint      scripts/lint-grid.sh     — GRID design-language invariants
 #   build     xcodebuild (iPhone 17 Pro Simulator)
+#   test      xcodebuild test — SixFourTests (the Swift golden gates: spec parity,
+#             carrier/train goldens, RungDispatch bitwise) on the simulator
 #   device    scripts/run-on-device.sh — build/sign/install/launch on a connected iPhone
 #   doc       scripts/verify-doc-claims.sh
 #   all       run codegen→doc→verify→native→lint→gen→build per scripts/gate-order.txt
@@ -45,6 +47,7 @@ verb_native()  { ( cd "$ROOT/Native" && zig build test ); "$ROOT/Native/build-io
 verb_gen()     { "$ROOT/scripts/regenerate.sh"; }
 verb_lint()    { "$ROOT/scripts/lint-grid.sh" && "$ROOT/scripts/lint-no-global-palette.sh"; }
 verb_build()   { xcodebuild -scheme SixFour -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build; }
+verb_test()    { xcodebuild -scheme SixFour -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test; }
 verb_device()  { "$ROOT/scripts/run-on-device.sh" "$@"; }
 verb_doc()     { "$ROOT/scripts/verify-doc-claims.sh"; }
 
@@ -61,7 +64,7 @@ verb_all() {
 verb="${1:-}"
 [ "$#" -gt 0 ] && shift || true
 case "$verb" in
-  codegen|verify|native|gen|lint|build|device|doc|all) "verb_$verb" "$@" ;;
+  codegen|verify|native|gen|lint|build|test|device|doc|all) "verb_$verb" "$@" ;;
   ""|-h|--help|help)
     sed -n '2,24p' "$0"
     [ "$verb" = "" ] && exit 1 || exit 0 ;;

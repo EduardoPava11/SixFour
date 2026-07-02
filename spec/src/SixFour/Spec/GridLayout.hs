@@ -39,6 +39,7 @@ module SixFour.Spec.GridLayout
   , Scene
   , captureScene
   , decisionScene
+  , curateScene
     -- * Helpers
   , regionCells
   , regionsOverlap
@@ -137,6 +138,44 @@ decisionScene =
                          , lrWidget = 5, lrPriority = 5, lrInteractive = True })
   , ("accept",   LRegion { lrCol = 34, lrRow = 178, lrW = 32, lrH = 16
                          , lrWidget = 6, lrPriority = 6, lrInteractive = True })
+  ]
+
+-- | THE LAUNCH CURATE SCENE (L1.3) — the 256³ curation loop: the Curating phase's
+-- surface (a Picked self-excursion, "SixFour.Spec.ABSurface" @Curating@), where the
+-- user inspects and iterates the TRUE export volume the octant ladder built
+-- ("SixFour.Spec.SelfSimilarReconstruct" @expandRungVolume@ →
+-- "SixFour.Spec.CurateRealize"). Same proven lattice, same centre band:
+--
+--   * @hero@    : 64×128 — the real 256³ render (the biggest widget any scene
+--     carries: inspection IS the job). INTERACTIVE: horizontal drag scrubs t
+--     through the 256 frames.
+--   * @slabs@   : 64×12 strip — the t-slab rail: build progress per slab (the
+--     frame-local/block-local streaming, made visible) + tap-to-jump.
+--   * @source@  : 20×12 — the detail source: floor \/ my gene \/ adopted (the
+--     three-arm switch; zero-gene == floor keeps FLOOR always safe).
+--   * @repaint@ : 20×12 — reopen the 16³ paint bench to condition the next build.
+--   * @rebuild@ : 20×12 — re-run the ladder with the current knobs (the iterate
+--     verb of the curate loop).
+--   * @accept@  : 32×16 thumb hero — commit the curated 256³ (fires @CurateDone@,
+--     back to Picked: export-eligible).
+--
+-- Geometry: rows 16–191 (island + home-indicator clear), centre columns 18–81
+-- (the 14-cell corner arcs cleared). All eight laws below are @once@-tested over
+-- this scene in @Properties.GridLayout@.
+curateScene :: Scene
+curateScene =
+  [ ("hero",    LRegion { lrCol = 18, lrRow = 16,  lrW = 64, lrH = 128
+                        , lrWidget = 0, lrPriority = 0, lrInteractive = True })
+  , ("slabs",   LRegion { lrCol = 18, lrRow = 146, lrW = 64, lrH = 12
+                        , lrWidget = 1, lrPriority = 1, lrInteractive = True })
+  , ("source",  LRegion { lrCol = 18, lrRow = 160, lrW = 20, lrH = 12
+                        , lrWidget = 2, lrPriority = 2, lrInteractive = True })
+  , ("repaint", LRegion { lrCol = 40, lrRow = 160, lrW = 20, lrH = 12
+                        , lrWidget = 3, lrPriority = 3, lrInteractive = True })
+  , ("rebuild", LRegion { lrCol = 62, lrRow = 160, lrW = 20, lrH = 12
+                        , lrWidget = 4, lrPriority = 4, lrInteractive = True })
+  , ("accept",  LRegion { lrCol = 34, lrRow = 176, lrW = 32, lrH = 16
+                        , lrWidget = 5, lrPriority = 5, lrInteractive = True })
   ]
 
 -- | The screen cells @(col,row)@ a region claims.

@@ -46,6 +46,7 @@ import SixFour.Codegen.Collapse (emitCollapseGolden)
 import SixFour.Codegen.RGBT4D (emitRGBT4DGolden)
 import SixFour.Codegen.VoxelReduce (emitVoxelReduceGolden)
 import SixFour.Codegen.GenomeCarrier (emitGenomeCarrierGolden)
+import SixFour.Codegen.SwapCarrier (emitSwapCarrierGolden)
 import SixFour.Codegen.MaskedBand (emitMaskedBandGolden)
 import SixFour.Codegen.DeviceTrain (emitDeviceTrainGolden)
 import SixFour.Codegen.PairTree (emitPairTreeGolden)
@@ -93,6 +94,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "RGBT4DGolden.swift")         emitRGBT4DGolden
   writeUtf8 (swiftOutDir   </> "VoxelReduceGolden.swift")    emitVoxelReduceGolden
   writeUtf8 (swiftOutDir   </> "GenomeCarrierGolden.swift")  emitGenomeCarrierGolden
+  writeUtf8 (swiftOutDir   </> "SwapCarrierGolden.swift")    emitSwapCarrierGolden
   writeUtf8 (swiftOutDir   </> "PairTreeGolden.swift")       emitPairTreeGolden
   writeUtf8 (swiftOutDir   </> "MaskedBandGolden.swift")     emitMaskedBandGolden
   writeUtf8 (swiftOutDir   </> "DeviceTrainGolden.swift")    emitDeviceTrainGolden

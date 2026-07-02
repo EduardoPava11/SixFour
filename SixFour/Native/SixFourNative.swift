@@ -587,6 +587,31 @@ enum SixFourNative {
         return out
     }
 
+    /// ONE volume up-rung (`s4_cube_expand_rung` =
+    /// `Spec.SelfSimilarReconstruct.expandRungVolume`): `volume` is a side³
+    /// scalar cube in the device layout; `details` nil = the zero-detail floor,
+    /// else side³×7 voxel-major committed Q16 bands. Returns the (2·side)³ fine
+    /// cube. The CPU byte-exact oracle the Metal `cubeExpandRungKernel` twin is
+    /// gated against.
+    static func cubeExpandRung(volume: [Int32], side: Int, details: [Int32]?) -> [Int32]? {
+        let n = side * side * side
+        guard side > 0, volume.count == n,
+              details.map({ $0.count == n * 7 }) ?? true else { return nil }
+        var out = [Int32](repeating: 0, count: 8 * n)
+        let rc = volume.withUnsafeBufferPointer { v in
+            out.withUnsafeMutableBufferPointer { o -> Int32 in
+                if let details {
+                    return details.withUnsafeBufferPointer { d in
+                        s4_cube_expand_rung(v.baseAddress, Int32(side), d.baseAddress, o.baseAddress)
+                    }
+                }
+                return s4_cube_expand_rung(v.baseAddress, Int32(side), nil, o.baseAddress)
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_cube_expand_rung rc=\(rc)"); return nil }
+        return out
+    }
+
     // MARK: - V2.1 pre-collapse field
     //
     // Thin Swift surfaces over the V2.1 pre-collapse-field kernels (ports of

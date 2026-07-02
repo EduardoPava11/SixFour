@@ -42,4 +42,42 @@ struct DecideMachineTests {
         // Export stays pick-gated: no direct deciding → exporting edge.
         #expect(abStep(.deciding, .exportFamily) == .deciding)
     }
+
+    // MARK: - LAUNCH curate excursion (Curating; a .picked self-excursion)
+
+    @Test func contractCarriesTheCurateAlphabet() {
+        #expect(SixFourABSurface.phases.contains("curating"))
+        for e in ["beginCurate", "curateDone"] {
+            #expect(SixFourABSurface.events.contains(e), "missing \(e)")
+        }
+    }
+
+    /// The Swift `abStep` reproduces the generated curate-path golden trace
+    /// token-for-token (mirrors `lawCurateGoldenTrace`).
+    @Test func swiftStepReproducesTheCurateGolden() throws {
+        var phase = ABPhase.bootstrap
+        var trace = [phase.token]
+        for token in SixFourABSurface.goldenCuratePathEvents {
+            let event = try #require(ABEvent(rawValue: token), "unknown token \(token)")
+            phase = abStep(phase, event)
+            trace.append(phase.token)
+        }
+        #expect(trace == SixFourABSurface.goldenCuratePathTrace)
+    }
+
+    /// The curate edges and their gating (mirrors `lawCurateEntryGated` +
+    /// `lawCurateResolves`): a .picked self-excursion that leaves the export
+    /// gate untouched.
+    @Test func curateEdgesResolveAndEntryIsGated() {
+        #expect(abStep(.picked, .beginCurate) == .curating)
+        #expect(abStep(.curating, .curateDone) == .picked)   // back to export-eligible
+        #expect(abStep(.curating, .retake) == .live)
+        #expect(abStep(.curating, .fault) == .error)
+        // Entry gated: beginCurate anywhere else self-loops.
+        for phase in ABPhase.allCases where phase != .picked {
+            #expect(abStep(phase, .beginCurate) == (phase == .curating ? .curating : phase))
+        }
+        // Export stays pick-gated: no direct curating → exporting edge.
+        #expect(abStep(.curating, .exportFamily) == .curating)
+    }
 }

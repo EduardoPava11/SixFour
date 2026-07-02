@@ -55,6 +55,7 @@ import SixFour.Spec.Upscale256
   , driftPrior, quantizePrior
   , consumptionFixturePalette, consumptionFixtureExit, consumptionFixtureTarget )
 import SixFour.Spec.AtlasCascade      (ExitState(..), SlotExit(..), zeroSlot, exitSlotCount)
+import SixFour.Spec.SelfSimilarReconstruct (expandRungVolume)
 
 main :: IO ()
 main = do
@@ -163,6 +164,13 @@ main = do
   -- Spec.ModelIO.buildFloor at zero nudge). The Python trainer port (trainer/mlx/upscale256.py)
   -- must reproduce this byte-exact, so "above-floor" margin is measured against the REAL floor.
   writeFile (outDir </> "upscale256_golden.json") emitUpscaleGolden
+
+  -- cube_expand_golden.json: the DEVICE-layout volume up-rung (one octant rung,
+  -- row-major capture order), BOTH arms — the zero-detail floor and a committed-
+  -- detail gene arm. Spec.SelfSimilarReconstruct.expandRungVolume is the source of
+  -- truth; Native s4_cube_expand_rung (cube_expand_fixture_test.zig) must be
+  -- bit-exact on both.
+  writeFile (outDir </> "cube_expand_golden.json") emitCubeExpandGolden
 
   putStrLn $ "spec-fixtures: wrote color_golden.json to " <> outDir
   putStrLn $ "  linear_to_oklab cases: " <> show (length goldenLinearInputsQ16)
@@ -1088,3 +1096,24 @@ parseArgs (kv : rest)
 parseArgs (k : v : rest)
   | take 2 k == "--" = (k, v) : parseArgs rest
 parseArgs (_ : rest) = parseArgs rest
+
+-- | The device-layout volume-expand golden: a deterministic side-4 cube (values
+-- spanning negatives) expanded one rung twice — floor (no detail) and gene
+-- (deterministic committed bands, negatives included).
+emitCubeExpandGolden :: String
+emitCubeExpandGolden =
+  let side = 4 :: Int
+      n = side * side * side
+      vol = [ ((i * 137) `mod` 1201) - 600 | i <- [0 .. n - 1] ]
+      det i k = (((i * 7 + k) * 89) `mod` 129) - 64
+      details = [ (det i 0, det i 1, det i 2, det i 3, det i 4, det i 5, det i 6)
+                | i <- [0 .. n - 1] ]
+      detFlat = concat [ [a, b, c, d, e, f, g] | (a, b, c, d, e, f, g) <- details ]
+      floorOut = expandRungVolume side vol Nothing
+      geneOut  = expandRungVolume side vol (Just details)
+  in "{ \"side\": " <> show side
+     <> ", \"vol\": " <> show vol
+     <> ", \"details\": " <> show detFlat
+     <> ", \"expected_floor\": " <> show floorOut
+     <> ", \"expected_gene\": " <> show geneOut
+     <> " }\n"

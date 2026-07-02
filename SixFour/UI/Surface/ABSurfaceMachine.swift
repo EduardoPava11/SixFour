@@ -12,17 +12,20 @@ import Foundation
 ///
 /// == Phases and events
 ///
-///     Phase = bootstrap | unauthorized | live | captured | deciding | picked | exporting | done | error
+///     Phase = bootstrap | unauthorized | live | captured | deciding | picked | curating | exporting | done | error
 ///     Event = sessionReady | authDenied | shutterTap | lockComplete | burstComplete
 ///           | beginDecide | decideAccept | decideAgain
+///           | beginCurate | curateDone
 ///           | pickA | pickB | exportFamily | exportDone | retake | fault
 ///
 /// Lock + burst are INTERNAL to `.live` (the camera freezes; not visible sub-phases).
 /// `pickA` / `pickB` are BOTH live edges out of `.captured`, both landing in `.picked`
 /// (the user "plays the game": repeated picks self-loop in `.picked` while θ folds).
-/// Export is gated on a prior pick (`.exporting` is entered ONLY from `.picked`). `.retake`
-/// bails from `.captured` / `.picked` / `.done` back to `.live`. δ is total with a catch-all
-/// self-loop; `.fault` from any phase lands in `.error`.
+/// Export is gated on a prior pick (`.exporting` is entered ONLY from `.picked`). The LAUNCH
+/// 256³ curation loop is a `.picked` SELF-EXCURSION (`.picked` —beginCurate→ `.curating`
+/// —curateDone→ `.picked`), so the export gate is untouched. `.retake` bails from
+/// `.captured` / `.deciding` / `.picked` / `.curating` / `.done` back to `.live`. δ is total
+/// with a catch-all self-loop; `.fault` from any phase lands in `.error`.
 ///
 /// Tier-2 pure: Foundation only.
 
@@ -36,6 +39,7 @@ enum ABPhase: String, Equatable, CaseIterable {
     case captured
     case deciding
     case picked
+    case curating
     case exporting
     case done
     case error
@@ -57,6 +61,8 @@ enum ABEvent: String, Equatable, CaseIterable {
     case beginDecide
     case decideAccept
     case decideAgain
+    case beginCurate
+    case curateDone
     case pickA
     case pickB
     case exportFamily
@@ -88,16 +94,20 @@ func abStep(_ phase: ABPhase, _ event: ABEvent) -> ABPhase {
     case (.deciding, .decideAccept):    return .picked     // a decide-accept IS a committed pick
     case (.deciding, .decideAgain):     return .live       // reject: back to live
 
+    case (.picked, .beginCurate):       return .curating   // 256³ curation: a picked self-excursion
+    case (.curating, .curateDone):      return .picked     // back to the export-eligible phase
+
     case (.captured, .pickA):           return .picked
     case (.captured, .pickB):           return .picked     // both picks land in picked
 
     case (.picked, .exportFamily):      return .exporting   // export gated on a prior pick
     case (.exporting, .exportDone):     return .done
 
-    // Retake bails back to live from captured / picked / done (mid-A/B bail allowed).
+    // Retake bails back to live from captured / deciding / picked / curating / done.
     case (.captured, .retake),
          (.deciding, .retake),
          (.picked, .retake),
+         (.curating, .retake),
          (.done, .retake),
          (.error, .retake):       // recovery: a fault must not brick the surface
         return .live
@@ -146,6 +156,20 @@ extension ABPhase {
         }
         assert(dTrace == SixFourABSurface.goldenDecidePathTrace,
                "abStep decide trace \(dTrace) != golden \(SixFourABSurface.goldenDecidePathTrace)")
+
+        // The LAUNCH curate golden: the same fold over the curate-path events.
+        var cPhase = ABPhase.bootstrap
+        var cTrace = [cPhase.token]
+        for token in SixFourABSurface.goldenCuratePathEvents {
+            guard let event = ABEvent(rawValue: token) else {
+                assertionFailure("unknown golden curate event token: \(token)")
+                return
+            }
+            cPhase = abStep(cPhase, event)
+            cTrace.append(cPhase.token)
+        }
+        assert(cTrace == SixFourABSurface.goldenCuratePathTrace,
+               "abStep curate trace \(cTrace) != golden \(SixFourABSurface.goldenCuratePathTrace)")
         #endif
     }
 }
