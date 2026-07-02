@@ -1114,6 +1114,11 @@ app-social layer (destined for Swift + CloudKit public DB + Game Center), still 
     only remix pre-existing genes, which turns Lineage's "acyclic by construction" into a THEOREM
     ('lawBuiltGenealogyAcyclic'). Injective serialisation ('lawCanonicalRoundTrip'); byte-exact to
     hand-port.
+  * "SixFour.Spec.DerivationLog" — genealogy as a FOLD of an append-only derivation log (the lineage
+    sibling of the trade ledger). Self-verifying content-addressed events; the fold is
+    ORDER-INDEPENDENT + IDEMPOTENT + MONOTONE (a Merkle-CRDT in miniature), so concurrent creators
+    converge to the same DAG with no coordination. 'logFromOps' bridges GeneHash transcripts to a
+    gossip-able log that folds back acyclic ('lawReconstructedGenealogyAcyclic').
   * "SixFour.Spec.Affiliation" — GUILDS as connected components of the trade graph (affiliation is
     behavioural — who you swap with); the partition is exact, oversize components schism at 'guildCap'.
   * "SixFour.Spec.Role" — the specialist↔generalist spectrum = @effectiveGenomeDim@ (participation

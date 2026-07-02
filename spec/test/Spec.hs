@@ -7,6 +7,7 @@ import qualified Properties.Trade        as Trade
 import qualified Properties.Governance   as Governance
 import qualified Properties.Lineage      as Lineage
 import qualified Properties.GeneHash     as GeneHash
+import qualified Properties.DerivationLog as DerivationLog
 import qualified Properties.Affiliation  as Affiliation
 import qualified Properties.Role         as Role
 import qualified Properties.Color        as Color
@@ -418,6 +419,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Governance.tests
   , Lineage.tests
   , GeneHash.tests
+  , DerivationLog.tests
   , Affiliation.tests
   , Role.tests
   , V21Pyramid.tests
