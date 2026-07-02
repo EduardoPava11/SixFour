@@ -1119,6 +1119,10 @@ app-social layer (destined for Swift + CloudKit public DB + Game Center), still 
     ORDER-INDEPENDENT + IDEMPOTENT + MONOTONE (a Merkle-CRDT in miniature), so concurrent creators
     converge to the same DAG with no coordination. 'logFromOps' bridges GeneHash transcripts to a
     gossip-able log that folds back acyclic ('lawReconstructedGenealogyAcyclic').
+  * "SixFour.Spec.LedgerCRDT" — PROOF that the trade ledger is a Grow-only-Set CvRDT: the grant set is
+    a join-semilattice (union merge, commutative\/associative\/idempotent), the fold a monotone
+    homomorphism, so it earns STRONG EVENTUAL CONSISTENCY (Shapiro et al.) — same trades ⇒ same
+    holdings regardless of gossip order. 'lawHoldingsFromState' pins it to the shipped 'Trade.holdings'.
   * "SixFour.Spec.Affiliation" — GUILDS as connected components of the trade graph (affiliation is
     behavioural — who you swap with); the partition is exact, oversize components schism at 'guildCap'.
   * "SixFour.Spec.Role" — the specialist↔generalist spectrum = @effectiveGenomeDim@ (participation
