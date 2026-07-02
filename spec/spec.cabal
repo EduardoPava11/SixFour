@@ -19,6 +19,13 @@ library
     import:           warnings
     exposed-modules:
         SixFour.Spec.Map
+        SixFour.Spec.GuildScale
+        SixFour.Spec.Trade
+        SixFour.Spec.Governance
+        SixFour.Spec.Lineage
+        SixFour.Spec.Affiliation
+        SixFour.Spec.Role
+        SixFour.Codegen.Governance
         SixFour.Spec.Recursion
         SixFour.Spec.Shape
         SixFour.Spec.Color
@@ -344,6 +351,12 @@ test-suite spec-tests
     type:             exitcode-stdio-1.0
     main-is:          Spec.hs
     other-modules:
+        Properties.GuildScale
+        Properties.Trade
+        Properties.Governance
+        Properties.Lineage
+        Properties.Affiliation
+        Properties.Role
         Properties.Color
         Properties.ColorFixed
         Properties.ZoneProfile

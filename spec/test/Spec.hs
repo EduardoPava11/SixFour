@@ -2,6 +2,12 @@ module Main (main) where
 
 import Test.Tasty
 
+import qualified Properties.GuildScale   as GuildScale
+import qualified Properties.Trade        as Trade
+import qualified Properties.Governance   as Governance
+import qualified Properties.Lineage      as Lineage
+import qualified Properties.Affiliation  as Affiliation
+import qualified Properties.Role         as Role
 import qualified Properties.Color        as Color
 import qualified Properties.ColorFixed   as ColorFixed
 import qualified Properties.ZoneProfile  as ZoneProfile
@@ -401,4 +407,10 @@ main = defaultMain $ testGroup "sixfour-spec"
   , V21Field.tests
   , V21FieldUI.tests
   , V21Transport.tests
+  , GuildScale.tests
+  , Trade.tests
+  , Governance.tests
+  , Lineage.tests
+  , Affiliation.tests
+  , Role.tests
   ]

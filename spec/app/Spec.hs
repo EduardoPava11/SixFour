@@ -53,6 +53,7 @@ import SixFour.Codegen.GenomeFixed (emitGenomeFixedGolden)
 import SixFour.Codegen.GridAxis (emitGridAxisGolden)
 import SixFour.Codegen.ModelIO (emitModelIOContract)
 import SixFour.Codegen.CaptureFormat (emitCaptureFormatContract, emitCaptureFormatPy)
+import SixFour.Codegen.Governance (emitGovernanceContract)
 import SixFour.Spec.STBN3D    (Mask3D(..), generateSTBN3D)
 
 main :: IO ()
@@ -96,6 +97,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "QuartetDeltaGolden.swift")   emitQuartetDeltaGolden
   writeUtf8 (swiftOutDir   </> "GenomeFixedGolden.swift")    emitGenomeFixedGolden
   writeUtf8 (swiftOutDir   </> "GridAxisGolden.swift")        emitGridAxisGolden
+  writeUtf8 (swiftOutDir   </> "GovernanceContract.swift")    emitGovernanceContract
   writeUtf8 (swiftOutDir   </> "SixFourModelIO.swift")        emitModelIOContract
   writeUtf8 (swiftOutDir   </> "CaptureFormatContract.swift") emitCaptureFormatContract
   writeUtf8 (mlxOutDir     </> "capture_format.py")     emitCaptureFormatPy

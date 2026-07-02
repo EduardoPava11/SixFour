@@ -1053,6 +1053,8 @@ GIF89a Application-Extension, CRC32-checked, total Absent\/Corrupt\/VersionMisma
 == 9. Codegen — emitters to the app (Swift / Zig / Python), golden-pinned
 @SixFour.Codegen.Swift@, @.Shapes@, @.Golden@, @.Collapse@, @.RGBT4D@, @.PairTree@, @.QuartetDelta@, @.Genome@,
 @.GenomeFixed@, @.PaletteValue@, @.MLX@, @.CoreML@, @.Burn@, @.MaskedBand@ (the byte-exact theta_B forward),
+@.Governance@ (the port-ready swap-economy slice: the derived sizes + a golden roster→ranked-order
+contract; STAGED — not yet wired into the driver, awaiting the identity\/CloudKit decisions),
 @.JepaData@ (the I-JEPA data-engine emitter), @.JepaHead@ (the theta_B training-trajectory
 endpoints + 77-param position-head forward golden; @trainer/mlx/@ gate-forced), @.TemporalData@
 (the inter-frame @(t,t+1)@ value/policy delta golden; @reconstructNext==ctNext@ true labels).
@@ -1066,6 +1068,28 @@ transform derived from the captured palette's luminance-zone chroma profile (a p
   * "SixFour.Spec.LookTransfer" — the chrominance-only transfer (preview ≡ cube core)
   * "SixFour.Spec.RedFrontEnd"  — Log3G10 decode + RWG→Rec.709 + filmic tonemap (LUT-driven, Q16)
   * "SixFour.Spec.CubeLut"      — the 65³ .cube grid builder
+
+== 11. Economy & governance — the swap/guild social layer
+The closed, no-money economy over the gene weights: users swap tiny 16³-GIF-fronted genes, and
+reputation\/affiliation\/governance are pure FOLDS of the trade ledger (no money ⇒ no IAP tax). The
+app-social layer (destined for Swift + CloudKit public DB + Game Center), still pure spec today.
+
+  * "SixFour.Spec.Trade"      — the SUBSTRATE: an append-only trade ledger with HYBRID grant
+    semantics (accept GRANTS, never strips ⇒ holdings monotone); the demand\/reliability scalars the
+    rank\/trust axes fold from it.
+  * "SixFour.Spec.GuildScale" — the EARNED social-body sizes: council = largest odd within Miller's
+    span (7), guild cap = Dunbar cohesion ceiling (150), schism past the cap; odd is load-bearing
+    (breaks ties + unique majority-judgment median).
+  * "SixFour.Spec.Governance" — a guild's CONSTITUTION as a pure ranking function (@govern@):
+    meritocracy \/ gerontocracy \/ majority-judgment \/ monarchy over ledger-folded members; the
+    council is the top 'councilSize'. Default majority judgment ties only on equal grade multisets.
+  * "SixFour.Spec.Lineage" — the content-addressed gene GENEALOGY DAG (creator + parents per gene);
+    @influence = |descendants|@ is the lineage rank scalar, acyclic by construction.
+  * "SixFour.Spec.Affiliation" — GUILDS as connected components of the trade graph (affiliation is
+    behavioural — who you swap with); the partition is exact, oversize components schism at 'guildCap'.
+  * "SixFour.Spec.Role" — the specialist↔generalist spectrum = @effectiveGenomeDim@ (participation
+    ratio of a creator's genes in genome space; same math as "SixFour.Spec.Diversity" @effectiveDim@,
+    lifted to N-D). Metric proven now on synthetic extremes; named cut-points await a real corpus.
 -}
 -- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.Map () where
