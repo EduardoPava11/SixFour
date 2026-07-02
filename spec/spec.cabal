@@ -26,6 +26,7 @@ library
         SixFour.Spec.GeneHash
         SixFour.Spec.DerivationLog
         SixFour.Spec.LedgerCRDT
+        SixFour.Spec.SigChain
         SixFour.Spec.Affiliation
         SixFour.Spec.Role
         SixFour.Codegen.Governance
@@ -366,6 +367,7 @@ test-suite spec-tests
         Properties.GeneHash
         Properties.DerivationLog
         Properties.LedgerCRDT
+        Properties.SigChain
         Properties.Affiliation
         Properties.Role
         Properties.Color
