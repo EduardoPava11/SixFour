@@ -29,6 +29,18 @@ final class Surface {
 
     // MARK: the field's data (out-of-band Σ)
 
+    /// V3.0 (the `.deciding` surface): the committed burst's raw OKLab tiles, its somatic
+    /// θ_up gene (nil == the deterministic floor), and — once the user accepts — the
+    /// chosen model input + gene ride. Folded at `commit`; consumed by `DecidingPhaseField`
+    /// and (later) the 256³ build.
+    var burstTiles: [OKLabTile] = []
+    var thetaUp: CaptureGene.ThetaUp?
+    var acceptedInput: SixFourModelInput?
+    var acceptedUseGene: Bool = false
+    /// Mirrors the engine's flow version so late/invalidated flow arrivals are
+    /// observable by VALUE change, not nil-ness (the Done bundle rebuild trigger).
+    var v21FlowVersion: Int = 0
+
     /// The current 256-colour palette (sRGB8) the surface paints — the live per-frame
     /// palette during capture, frame-0's palette after a commit (the `palette` accessor).
     var palette: [SIMD3<UInt8>] = []

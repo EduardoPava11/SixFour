@@ -38,6 +38,7 @@ module SixFour.Spec.GridLayout
     LRegion(..)
   , Scene
   , captureScene
+  , decisionScene
     -- * Helpers
   , regionCells
   , regionsOverlap
@@ -98,6 +99,44 @@ captureScene =
                         , lrWidget = 0, lrPriority = 0, lrInteractive = False })
   , ("palette", LRegion { lrCol = 42, lrRow = 145, lrW = 16, lrH = 16
                         , lrWidget = 1, lrPriority = 1, lrInteractive = True })
+  ]
+
+-- | THE V3.0 DECISION SCENE — the post-capture surface where the user iterates the
+-- 16³ proposal until they like it. Every widget is a user-CHANGEABLE model-boundary
+-- knob (grounded in "SixFour.Spec.ModelIO" @ModelInput@ + the V3 somatic gene), on
+-- the same proven lattice as 'captureScene':
+--
+--   * @preview@  : 64×64 hero — the rendered result (@renderFrame@, palette[index]).
+--     INTERACTIVE: horizontal drag scrubs the frame (and derives the paint layer).
+--   * @paint@    : 64×64 — the 16³ control grid at 4 atoms per control cell (16 pt,
+--     paintable): the @miNudge@ 'CellBudget' surface (one cell → 4096-leaf subtree).
+--   * @channels@ : 64×12 strip — the 9 ChannelProduct colour×space pairs (which
+--     channel the brush paints).
+--   * @gauge@    : 20×12 — the φ6 toggle (@miGauge@: colour-by-space vs the dual).
+--   * @gene@     : 20×12 — the SOMATIC θ_up toggle (learned invention vs the
+--     deterministic floor; zero-gene == floor makes OFF always safe).
+--   * @again@    : 20×12 — reject: recapture / re-propose (the decision stream).
+--   * @accept@   : 32×16 thumb hero — commit this 16³ (ends the loop).
+--
+-- Geometry: rows 16–193 (top 64 pt clears the 62 pt island; bottom 772 pt clears
+-- 874−34=840); centre columns 18–81 stay clear of the 14-cell corner arcs. All
+-- eight laws below are @once@-tested over this scene in @Properties.GridLayout@.
+decisionScene :: Scene
+decisionScene =
+  [ ("preview",  LRegion { lrCol = 18, lrRow = 16,  lrW = 64, lrH = 64
+                         , lrWidget = 0, lrPriority = 0, lrInteractive = True })
+  , ("paint",    LRegion { lrCol = 18, lrRow = 82,  lrW = 64, lrH = 64
+                         , lrWidget = 1, lrPriority = 1, lrInteractive = True })
+  , ("channels", LRegion { lrCol = 18, lrRow = 148, lrW = 64, lrH = 12
+                         , lrWidget = 2, lrPriority = 2, lrInteractive = True })
+  , ("gauge",    LRegion { lrCol = 18, lrRow = 162, lrW = 20, lrH = 12
+                         , lrWidget = 3, lrPriority = 3, lrInteractive = True })
+  , ("gene",     LRegion { lrCol = 40, lrRow = 162, lrW = 20, lrH = 12
+                         , lrWidget = 4, lrPriority = 4, lrInteractive = True })
+  , ("again",    LRegion { lrCol = 62, lrRow = 162, lrW = 20, lrH = 12
+                         , lrWidget = 5, lrPriority = 5, lrInteractive = True })
+  , ("accept",   LRegion { lrCol = 34, lrRow = 178, lrW = 32, lrH = 16
+                         , lrWidget = 6, lrPriority = 6, lrInteractive = True })
   ]
 
 -- | The screen cells @(col,row)@ a region claims.

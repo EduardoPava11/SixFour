@@ -12,8 +12,9 @@ import Foundation
 ///
 /// == Phases and events
 ///
-///     Phase = bootstrap | unauthorized | live | captured | picked | exporting | done | error
+///     Phase = bootstrap | unauthorized | live | captured | deciding | picked | exporting | done | error
 ///     Event = sessionReady | authDenied | shutterTap | lockComplete | burstComplete
+///           | beginDecide | decideAccept | decideAgain
 ///           | pickA | pickB | exportFamily | exportDone | retake | fault
 ///
 /// Lock + burst are INTERNAL to `.live` (the camera freezes; not visible sub-phases).
@@ -27,12 +28,13 @@ import Foundation
 
 // MARK: - Phases (Σ)
 
-/// The 8 UI-lifecycle phases — the exact `SixFourABSurface.phases` tokens, one case each.
+/// The UI-lifecycle phases — the exact `SixFourABSurface.phases` tokens, one case each.
 enum ABPhase: String, Equatable, CaseIterable {
     case bootstrap
     case unauthorized
     case live
     case captured
+    case deciding
     case picked
     case exporting
     case done
@@ -44,7 +46,7 @@ enum ABPhase: String, Equatable, CaseIterable {
 
 // MARK: - Events (the FSM transition triggers)
 
-/// The 11 FSM events — the exact `SixFourABSurface.events` tokens. Out-of-band data
+/// The FSM events — the exact `SixFourABSurface.events` tokens. Out-of-band data
 /// (palette bytes, the rendered GIF, the learned taste θ) lives in σ's fields, never here.
 enum ABEvent: String, Equatable, CaseIterable {
     case sessionReady
@@ -52,6 +54,9 @@ enum ABEvent: String, Equatable, CaseIterable {
     case shutterTap
     case lockComplete
     case burstComplete
+    case beginDecide
+    case decideAccept
+    case decideAgain
     case pickA
     case pickB
     case exportFamily
@@ -79,6 +84,10 @@ func abStep(_ phase: ABPhase, _ event: ABEvent) -> ABPhase {
 
     case (.live, .burstComplete):       return .captured   // lock + burst are internal to live
 
+    case (.captured, .beginDecide):     return .deciding   // V3.0: the 16³ decide loop
+    case (.deciding, .decideAccept):    return .picked     // a decide-accept IS a committed pick
+    case (.deciding, .decideAgain):     return .live       // reject: back to live
+
     case (.captured, .pickA):           return .picked
     case (.captured, .pickB):           return .picked     // both picks land in picked
 
@@ -87,8 +96,10 @@ func abStep(_ phase: ABPhase, _ event: ABEvent) -> ABPhase {
 
     // Retake bails back to live from captured / picked / done (mid-A/B bail allowed).
     case (.captured, .retake),
+         (.deciding, .retake),
          (.picked, .retake),
-         (.done, .retake):
+         (.done, .retake),
+         (.error, .retake):       // recovery: a fault must not brick the surface
         return .live
 
     default:
@@ -121,6 +132,20 @@ extension ABPhase {
         }
         assert(trace == SixFourABSurface.goldenHappyPathTrace,
                "abStep trace \(trace) != golden \(SixFourABSurface.goldenHappyPathTrace)")
+
+        // The V3.0 decide golden: the same fold over the decide-path events.
+        var dPhase = ABPhase.bootstrap
+        var dTrace = [dPhase.token]
+        for token in SixFourABSurface.goldenDecidePathEvents {
+            guard let event = ABEvent(rawValue: token) else {
+                assertionFailure("unknown golden decide event token: \(token)")
+                return
+            }
+            dPhase = abStep(dPhase, event)
+            dTrace.append(dPhase.token)
+        }
+        assert(dTrace == SixFourABSurface.goldenDecidePathTrace,
+               "abStep decide trace \(dTrace) != golden \(SixFourABSurface.goldenDecidePathTrace)")
         #endif
     }
 }

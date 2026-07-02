@@ -11,17 +11,24 @@ phase machine; the CLOCK half of 'SixFour.Spec.Display' (the 20 fps κ, the proj
 == Phases and events
 
 @
-Phase  = Bootstrap | Unauthorized | Live | Captured | Picked | Exporting | Done | Error
+Phase  = Bootstrap | Unauthorized | Live | Captured | Deciding | Picked | Exporting | Done | Error
 Event  = SessionReady | AuthDenied | ShutterTap | LockComplete | BurstComplete
+       | BeginDecide | DecideAccept | DecideAgain
        | PickA | PickB | ExportFamily | ExportDone | Retake | Fault
 @
+
+V3.0 adds the DECIDING phase (the 16³ iterate surface, 'SixFour.Spec.GridLayout'
+@decisionScene@): Captured —BeginDecide→ Deciding; DecideAccept lands in Picked (a
+decide-accept IS a committed pick, so 'lawExportGatedOnPick' is untouched);
+DecideAgain (and Retake) bail to Live. Entry is gated ('lawDecideEntryGated').
 
 Lock + burst are INTERNAL to Live (camera freezes; not visible sub-phases). PickA and
 PickB are BOTH live edges out of Captured, both landing in Picked (the user "plays the game":
 repeated picks self-loop in Picked while θ folds — see 'SixFour.Spec.DivergenceSchedule'). Export
 is gated on a prior pick (Exporting is entered ONLY from Picked). Retake bails from
 Done\/Captured\/Picked back to Live (mid-A/B bail allowed). δ is total with a catch-all self-loop;
-'Fault' from any phase lands in Error.
+''Fault'' from any phase lands in Error; 'Retake' RECOVERS from Error back to Live
+(otherwise a transient fault would brick the surface until force-quit).
 
 == Captured is the A/B screen — two 16×16 candidate tiles
 
@@ -49,6 +56,8 @@ module SixFour.Spec.ABSurface
     -- * Golden gate
   , goldenABHappyPath
   , goldenABPhaseTrace
+  , goldenDecideHappyPath
+  , goldenDecidePhaseTrace
     -- * Laws (QuickCheck'd in Properties.ABSurface)
   , lawABPhaseTotal
   , lawABNoOrphan
@@ -57,18 +66,23 @@ module SixFour.Spec.ABSurface
   , lawDoneExplicit
   , lawABCellGrid
   , lawABGoldenTrace
+  , lawDecideEntryGated
+  , lawDecideVerdictsResolve
+  , lawDecideGoldenTrace
   ) where
 
 import Data.List (scanl', sort, nub)
 
--- | The 8 UI-lifecycle phases (one surface, no screens).
+-- | The 9 UI-lifecycle phases (one surface, no screens). 'Deciding' is the V3.0
+-- 16³ iterate surface.
 data ABPhase
-  = Bootstrap | Unauthorized | Live | Captured | Picked | Exporting | Done | Error
+  = Bootstrap | Unauthorized | Live | Captured | Deciding | Picked | Exporting | Done | Error
   deriving (Eq, Ord, Show, Enum, Bounded)
 
--- | The 11 events.
+-- | The 14 events ('BeginDecide' \/ 'DecideAccept' \/ 'DecideAgain' are the V3.0 decide loop).
 data ABEvent
   = SessionReady | AuthDenied | ShutterTap | LockComplete | BurstComplete
+  | BeginDecide | DecideAccept | DecideAgain
   | PickA | PickB | ExportFamily | ExportDone | Retake | Fault
   deriving (Eq, Show, Enum, Bounded)
 
@@ -87,12 +101,15 @@ abStep _ Fault              = Error
 abStep Bootstrap SessionReady = Live
 abStep Bootstrap AuthDenied   = Unauthorized
 abStep Live BurstComplete     = Captured          -- lock + burst are internal to Live
+abStep Captured BeginDecide   = Deciding           -- V3.0: enter the 16³ decide loop
+abStep Deciding DecideAccept  = Picked             -- a decide-accept IS a committed pick
+abStep Deciding DecideAgain   = Live               -- reject: back to live for another burst
 abStep Captured PickA         = Picked
 abStep Captured PickB         = Picked
 abStep Picked   ExportFamily  = Exporting
 abStep Exporting ExportDone   = Done
 abStep p Retake
-  | p `elem` [Captured, Picked, Done] = Live       -- bail back to live
+  | p `elem` [Captured, Deciding, Picked, Done, Error] = Live   -- bail back to live (Error: recovery)
 abStep p _                    = p                  -- catch-all self-loop
 
 -- | Cross-language phase token (stable lowercase).
@@ -101,6 +118,7 @@ abPhaseName Bootstrap    = "bootstrap"
 abPhaseName Unauthorized = "unauthorized"
 abPhaseName Live         = "live"
 abPhaseName Captured     = "captured"
+abPhaseName Deciding     = "deciding"
 abPhaseName Picked       = "picked"
 abPhaseName Exporting    = "exporting"
 abPhaseName Done         = "done"
@@ -113,6 +131,9 @@ abEventName AuthDenied    = "authDenied"
 abEventName ShutterTap    = "shutterTap"
 abEventName LockComplete  = "lockComplete"
 abEventName BurstComplete = "burstComplete"
+abEventName BeginDecide   = "beginDecide"
+abEventName DecideAccept  = "decideAccept"
+abEventName DecideAgain   = "decideAgain"
 abEventName PickA         = "pickA"
 abEventName PickB         = "pickB"
 abEventName ExportFamily  = "exportFamily"
@@ -156,6 +177,21 @@ goldenABHappyPath =
 goldenABPhaseTrace :: [ABPhase]
 goldenABPhaseTrace =
   [Bootstrap, Live, Live, Captured, Picked, Exporting, Done, Live]
+
+-- | The V3.0 decide golden: capture, iterate at 16³ (one reject loop, then a
+-- second burst is decided and accepted), export.
+goldenDecideHappyPath :: [ABEvent]
+goldenDecideHappyPath =
+  [ SessionReady, ShutterTap, BurstComplete, BeginDecide, DecideAgain
+  , ShutterTap, BurstComplete, BeginDecide, DecideAccept
+  , ExportFamily, ExportDone, Retake ]
+
+-- | @scanl' abStep Bootstrap goldenDecideHappyPath@.
+goldenDecidePhaseTrace :: [ABPhase]
+goldenDecidePhaseTrace =
+  [ Bootstrap, Live, Live, Captured, Deciding, Live
+  , Live, Captured, Deciding, Picked
+  , Exporting, Done, Live ]
 
 -- ---------------------------------------------------------------------------
 -- Laws
@@ -208,3 +244,24 @@ lawABCellGrid _ =
 -- | @scanl' abStep Bootstrap goldenABHappyPath == goldenABPhaseTrace@.
 lawABGoldenTrace :: Bool
 lawABGoldenTrace = scanl' abStep Bootstrap goldenABHappyPath == goldenABPhaseTrace
+
+-- | Deciding is ENTERED (a genuine transition) ONLY from Captured via BeginDecide —
+-- the decide loop cannot be reached without a committed burst behind it.
+lawDecideEntryGated :: Bool
+lawDecideEntryGated =
+  and [ (abStep p e == Deciding && p /= Deciding) `implies` (p == Captured && e == BeginDecide)
+      | p <- allABPhases, e <- allABEvents ]
+
+-- | The decide verdicts resolve exactly: accept lands in Picked (so
+-- 'lawExportGatedOnPick' holds unchanged — a decide-accept IS a pick), again and
+-- Retake bail to Live, and a fault lands in Error.
+lawDecideVerdictsResolve :: Bool
+lawDecideVerdictsResolve =
+     abStep Deciding DecideAccept == Picked
+  && abStep Deciding DecideAgain  == Live
+  && abStep Deciding Retake       == Live
+  && abStep Deciding Fault        == Error
+
+-- | @scanl' abStep Bootstrap goldenDecideHappyPath == goldenDecidePhaseTrace@.
+lawDecideGoldenTrace :: Bool
+lawDecideGoldenTrace = scanl' abStep Bootstrap goldenDecideHappyPath == goldenDecidePhaseTrace

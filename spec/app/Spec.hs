@@ -47,6 +47,7 @@ import SixFour.Codegen.RGBT4D (emitRGBT4DGolden)
 import SixFour.Codegen.VoxelReduce (emitVoxelReduceGolden)
 import SixFour.Codegen.GenomeCarrier (emitGenomeCarrierGolden)
 import SixFour.Codegen.MaskedBand (emitMaskedBandGolden)
+import SixFour.Codegen.DeviceTrain (emitDeviceTrainGolden)
 import SixFour.Codegen.PairTree (emitPairTreeGolden)
 import SixFour.Codegen.QuartetDelta (emitQuartetDeltaGolden)
 import SixFour.Codegen.GenomeFixed (emitGenomeFixedGolden)
@@ -94,6 +95,7 @@ main = do
   writeUtf8 (swiftOutDir   </> "GenomeCarrierGolden.swift")  emitGenomeCarrierGolden
   writeUtf8 (swiftOutDir   </> "PairTreeGolden.swift")       emitPairTreeGolden
   writeUtf8 (swiftOutDir   </> "MaskedBandGolden.swift")     emitMaskedBandGolden
+  writeUtf8 (swiftOutDir   </> "DeviceTrainGolden.swift")    emitDeviceTrainGolden
   writeUtf8 (swiftOutDir   </> "QuartetDeltaGolden.swift")   emitQuartetDeltaGolden
   writeUtf8 (swiftOutDir   </> "GenomeFixedGolden.swift")    emitGenomeFixedGolden
   writeUtf8 (swiftOutDir   </> "GridAxisGolden.swift")        emitGridAxisGolden
@@ -121,7 +123,7 @@ main = do
   let Mask3D maskBytes = generateSTBN3D @8 @8 @8
   writeBinary (resourceOutDir </> "stbn3d-8.bin") maskBytes
 
-  putStrLn "spec-codegen: wrote 31 files + 1 resource."
+  putStrLn "spec-codegen: wrote 32 files + 1 resource."
   putStrLn $ "  swift   : " <> swiftOutDir
   putStrLn $ "  mlx     : " <> mlxOutDir
   putStrLn $ "  burn    : " <> burnOutDir

@@ -66,6 +66,7 @@ library
         SixFour.Spec.V21Field
         SixFour.Spec.V21FieldUI
         SixFour.Spec.V21Transport
+        SixFour.Spec.V21Pyramid
         SixFour.Spec.NudgeRankTheorem
         SixFour.Spec.LadderIdentity
         SixFour.Spec.LargeJepaHead
@@ -91,6 +92,8 @@ library
         SixFour.Spec.MaskedBandPrediction
         SixFour.Spec.MaskedBandTrainer
         SixFour.Spec.DetailPredictor
+        SixFour.Spec.DeviceTrainStep
+        SixFour.Spec.GeneTaxonomy
         SixFour.Spec.Dim6
         SixFour.Spec.ProjectionOrdering
         SixFour.Spec.Dimensions
@@ -239,6 +242,7 @@ library
         SixFour.Codegen.VoxelReduce
         SixFour.Codegen.GenomeCarrier
         SixFour.Codegen.MaskedBand
+        SixFour.Codegen.DeviceTrain
         SixFour.Codegen.PairTree
         SixFour.Codegen.QuartetDelta
         SixFour.Codegen.GenomeFixed
@@ -395,6 +399,7 @@ test-suite spec-tests
         Properties.V21Field
         Properties.V21FieldUI
         Properties.V21Transport
+        Properties.V21Pyramid
         Properties.Recursion
         Properties.NudgeRankTheorem
         Properties.LadderIdentity
@@ -426,6 +431,8 @@ test-suite spec-tests
         Properties.MaskedBandPrediction
         Properties.MaskedBandTrainer
         Properties.DetailPredictor
+        Properties.DeviceTrainStep
+        Properties.GeneTaxonomy
         Properties.Dim6
         Properties.ProjectionOrdering
         Properties.Dimensions

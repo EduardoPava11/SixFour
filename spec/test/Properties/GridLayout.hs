@@ -31,6 +31,17 @@ tests = testGroup "GridLayout (the capture-scene contention proof — every widg
   , testProperty "WIDGET SIZING: every widget cell is on the rounded display (clears the corners)" $
       once (lawWidgetsClearCorners captureScene)
 
+  -- The V3.0 DECISION scene (the post-capture 16\179 iterate surface) passes the
+  -- same eight laws: every user-changeable knob is a proven, contention-free claim.
+  , testProperty "decisionScene: disjoint" $ once (lawSceneDisjoint decisionScene)
+  , testProperty "decisionScene: in-bounds" $ once (lawSceneInBounds decisionScene)
+  , testProperty "decisionScene: interactive touch floor" $ once (lawInteractiveTouchFloor decisionScene)
+  , testProperty "decisionScene: safe-area clearance" $ once (lawSafeAreaClearance decisionScene)
+  , testProperty "decisionScene: priorities distinct" $ once (lawPriorityDistinct decisionScene)
+  , testProperty "decisionScene: algebraic == geometric disjointness" $ once (lawDisjointMatchesRects decisionScene)
+  , testProperty "decisionScene: cover partitions the lattice" $ once (lawCoverPartitions decisionScene)
+  , testProperty "decisionScene: widgets clear the rounded corners" $ once (lawWidgetsClearCorners decisionScene)
+
   -- The laws are robust on arbitrary scenes too: an overlapping pair is BOTH
   -- contested and AABB-overlapping (the bridge holds off the canonical scene).
   , testProperty "bridge holds on an overlapping 2-region scene" $

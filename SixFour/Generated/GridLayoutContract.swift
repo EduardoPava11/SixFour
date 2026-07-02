@@ -31,6 +31,19 @@ public enum GridLayoutContract {
         GridRegion(name: "palette", col: 42, row: 145, w: 16, h: 16, widget: 1, priority: 1, interactive: true),
     ]
 
+    /// The V3.0 DECISION-scene layout, mirrored from `SixFour.Spec.GridLayout.decisionScene`:
+    /// the post-capture surface of user-changeable model-boundary knobs (preview scrub,
+    /// 16³ paint, channel strip, φ6 gauge, somatic-gene toggle, again/accept verdicts).
+    public static let decisionScene: [GridRegion] = [
+        GridRegion(name: "preview", col: 18, row: 16, w: 64, h: 64, widget: 0, priority: 0, interactive: true),
+        GridRegion(name: "paint", col: 18, row: 82, w: 64, h: 64, widget: 1, priority: 1, interactive: true),
+        GridRegion(name: "channels", col: 18, row: 148, w: 64, h: 12, widget: 2, priority: 2, interactive: true),
+        GridRegion(name: "gauge", col: 18, row: 162, w: 20, h: 12, widget: 3, priority: 3, interactive: true),
+        GridRegion(name: "gene", col: 40, row: 162, w: 20, h: 12, widget: 4, priority: 4, interactive: true),
+        GridRegion(name: "again", col: 62, row: 162, w: 20, h: 12, widget: 5, priority: 5, interactive: true),
+        GridRegion(name: "accept", col: 34, row: 178, w: 32, h: 16, widget: 6, priority: 6, interactive: true),
+    ]
+
     /// Look up a region by name (the composer asks for "preview", "palette", …).
     public static func region(_ name: String, in scene: [GridRegion] = captureScene) -> GridRegion? {
         scene.first { $0.name == name }
@@ -55,14 +68,15 @@ public enum GridLayoutContract {
     /// Re-asserts the Haskell laws at runtime (defense-in-depth): disjoint,
     /// in-bounds, interactive regions clear the touch floor, priorities distinct.
     public static func selfCheck() -> Bool {
-        let s = captureScene
-        let touch = SixFourLattice.touchFloorCells
-        let inBounds = s.allSatisfy {
-            $0.col >= 0 && $0.col + $0.w <= cols && $0.row >= 0 && $0.row + $0.h <= rows
+        [captureScene, decisionScene].allSatisfy { s in
+            let touch = SixFourLattice.touchFloorCells
+            let inBounds = s.allSatisfy {
+                $0.col >= 0 && $0.col + $0.w <= cols && $0.row >= 0 && $0.row + $0.h <= rows
+            }
+            let floorOK = s.filter { $0.interactive }.allSatisfy { $0.w >= touch && $0.h >= touch }
+            let prios = s.map { $0.priority }
+            let distinct = Set(prios).count == prios.count
+            return isDisjoint(s) && inBounds && floorOK && distinct
         }
-        let floorOK = s.filter { $0.interactive }.allSatisfy { $0.w >= touch && $0.h >= touch }
-        let prios = s.map { $0.priority }
-        let distinct = Set(prios).count == prios.count
-        return isDisjoint(s) && inBounds && floorOK && distinct
     }
 }

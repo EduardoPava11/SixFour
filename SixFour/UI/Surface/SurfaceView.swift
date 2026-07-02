@@ -110,6 +110,12 @@ struct SurfaceView: View {
             .onChange(of: surface.liftedWidget) { _, _ in
                 surface.liftChangedTick = clock.tick
             }
+            // The ASYNC V2.1 flow landed (up to ~19 s after the burst): fold it into σ so
+            // the export bundle ships the recovered time axis whenever it is ready.
+            .onChange(of: engine.v21FlowVersion) { _, v in
+                surface.v21Flow = engine.v21Flow
+                surface.v21FlowVersion = v
+            }
             // engine.phase → σ event. The engine drives the lifecycle forward; σ.step
             // maps each engine edge onto the verified A/B FSM. Lock + burst + render are all
             // internal to `.live`; the engine's `.done` folds the GIFA into σ then fires
@@ -237,6 +243,13 @@ struct SurfaceView: View {
         // FIELD / AIRDROP read the true camera histogram (nil keeps the index-cube proxy path).
         surface.v21Counts = engine.v21Counts
         surface.v21Flow = engine.v21Flow   // the recovered time axis; the export ships this
+        surface.burstTiles = engine.burstTiles   // V3.0: the decide surface previews these
+        surface.thetaUp = engine.thetaUp         // V3.0: the somatic gene (nil == floor)
+        surface.v21FlowVersion += 1              // flow state (possibly nil) is fresh for THIS burst
+        // Every new burst starts UNDECIDED: the previous capture's accepted decision
+        // must never ride along to this one's export (σ-lifecycle audit).
+        surface.acceptedInput = nil
+        surface.acceptedUseGene = false
         // Build the 16³ octree-coarse substrate once, post-capture, for the review bench's
         // coarse tile (byte-exact VoxelReduce of the committed 64³ cube).
         surface.buildCoarseSubstrate()

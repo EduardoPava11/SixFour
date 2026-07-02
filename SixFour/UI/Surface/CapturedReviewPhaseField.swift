@@ -81,18 +81,31 @@ struct CapturedReviewPhaseField: View {
     }
 
     private var controls: some View {
-        HStack(spacing: GlobalLattice.pt(6)) {
-            Button { retake() } label: {
-                CellActionButton(icon: .none, title: "RETAKE", prominent: false, fillWidth: false)
+        // DECIDE rides its OWN row: three cell buttons overflow the control row's
+        // width (device-observed overlap, 2026-07-01), and the decide loop is a
+        // separate concern from the retake/export pair anyway.
+        VStack(spacing: GlobalLattice.pt(4)) {
+            if Feature.v3SomaticTrain, surface.phase == .captured {
+                Button { surface.step(.beginDecide) } label: {
+                    CellActionButton(icon: .none, title: "DECIDE", prominent: false, fillWidth: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Iterate the 16³ proposal before export")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Discard and shoot again")
 
-            Button { export() } label: {
-                CellActionButton(icon: .none, title: "EXPORT", prominent: true, fillWidth: false)
+            HStack(spacing: GlobalLattice.pt(6)) {
+                Button { retake() } label: {
+                    CellActionButton(icon: .none, title: "RETAKE", prominent: false, fillWidth: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Discard and shoot again")
+
+                Button { export() } label: {
+                    CellActionButton(icon: .none, title: "EXPORT", prominent: true, fillWidth: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Export the GIF and the probability-field training data")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Export the GIF and the probability-field training data")
         }
     }
 

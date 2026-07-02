@@ -29,6 +29,9 @@ enum PhaseField {
             UnauthorizedPhaseField(surface: surface, clock: clock)
         case .live:
             LivePhaseField(surface: surface, clock: clock, settings: settings, onShutter: onShutter)
+        case .deciding:
+            // V3.0: the 16³ decide loop (GridLayoutContract.decisionScene widgets).
+            DecidingPhaseField(surface: surface)
         case .captured, .picked:
             // Post-capture REVIEW bench (A/B game retired): the captured 64³ beside its 16³
             // octree coarse, both on the Z₆₄ cursor, with EXPORT / RETAKE controls.
@@ -140,6 +143,10 @@ struct DonePhaseField: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { if shareItems.isEmpty { shareItems = exportItems() } }
+        // The flow may land (or be invalidated) AFTER this field mounts: rebuild on the
+        // VERSION, not nil-ness — a stale→correct replacement is non-nil→non-nil and a
+        // nil-ness trigger would silently ship the wrong time axis (device audit).
+        .onChange(of: surface.v21FlowVersion) { _, _ in shareItems = exportItems() }
         .sheet(item: $lutShare) { item in
             ActivityView(items: [item.url])
         }

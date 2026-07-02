@@ -33,4 +33,13 @@ enum Feature {
     /// ON: the review bench shows FIELD (the two probability widgets) and AIRDROP (GIF + field tensor),
     /// both built from the committed burst. Not read by the capture engine, so it only lights the UI.
     static let v21Capture = true
+
+    /// V3.0 on-device SOMATIC training at the capture seam. **ON while V3 is built.**
+    ///
+    /// With this on, `CaptureSession.finishBurst` trains the per-capture θ_up gene
+    /// (`CaptureGene.train`: burst tiles → Q16 volume → one fused GPU dispatch,
+    /// `docs/V3-BUILD-WORKFLOW.md` B2.3) and carries it on `BurstResult.thetaUp`.
+    /// The gene is optional everywhere — zero-gene == the deterministic floor — so
+    /// flipping this off (or any failure) degrades to exactly today's output.
+    static let v3SomaticTrain = true
 }

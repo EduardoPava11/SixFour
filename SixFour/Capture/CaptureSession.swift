@@ -47,6 +47,26 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     private var v21HistBuffer: (any MTLBuffer)?
     private let v21Levels = 256
     private var continuation: CheckedContinuation<BurstResult, Error>?
+    /// V3.0 seam relief: where the ASYNC flow encode delivers (set by the view model
+    /// before a burst; runs on the detached encoder task, NOT the main actor). The Int
+    /// is the BURST GENERATION the flow belongs to — the receiver MUST drop deliveries
+    /// whose generation is not the current one (the stale-flow corruption gate).
+    var flowCallback: (@Sendable (V21Flow?, Int) -> Void)?
+
+    /// Monotonic burst counter (delegateQueue-confined): stamps every async flow
+    /// delivery so a late encode can never be attributed to a newer capture.
+    private(set) var burstGeneration = 0
+
+    /// True while a detached flow encode still holds its ~800 MB histogram buffer
+    /// (delegateQueue-confined). A new burst SKIPS its own flow encode while set —
+    /// two live buffers risk jetsam (device audit 2026-07-01); the skipped burst
+    /// ships without a flow (the export's temporal-proxy fallback covers it).
+    private var flowJobActive = false
+
+    /// The detached flow-encode task's buffer handle (MTLBuffer is thread-safe for
+    /// read-only accumulation results; the wrapper states that intent).
+    private struct V21FlowJob: @unchecked Sendable { let buffer: any MTLBuffer }
+
     /// Per-burst latch — the first delivered sample buffer's
     /// `CMFormatDescription` is checked against x420; subsequent frames
     /// skip the read since pixel-format negotiation is fixed at
@@ -99,6 +119,10 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         /// model's GIF derive. Unlike `v21Counts` (pooled, time destroyed) this keeps the full
         /// `[t × value]` joint, so a MOVING capture stays trainable. nil when off/unavailable.
         let flow: V21Flow?
+        /// V3.0 (Feature.v3SomaticTrain only): the per-capture SOMATIC gene — θ_up fine-tuned on
+        /// this burst's own manufactured octant pairs (`CaptureGene.train`, one fused GPU dispatch).
+        /// nil when off/unavailable; its absence is the deterministic floor (zero-gene == floor).
+        let thetaUp: CaptureGene.ThetaUp?
     }
 
     /// Aggregate statistics over the 63 inter-frame intervals (in ms).
@@ -721,6 +745,8 @@ final class CaptureSession: NSObject, @unchecked Sendable {
 
     private func finishBurst() {
         precondition(collected.count == targetFrameCount)
+        burstGeneration += 1
+        let generation = burstGeneration
         let timing = Self.computeTiming(
             ptsSeconds: ptsSeconds,
             targetFps: targetFps,
@@ -731,17 +757,47 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         // last frame's command buffer (which carried the 64th hist pass) has completed, and a single
         // queue runs command buffers in order, so all 64 slices are written.
         var v21Counts: [Int32]?
-        var v21Flow: V21Flow?
         if let buf = v21HistBuffer, let pipe = pipelineRef {
             v21Counts = MetalPipeline.poolV21Counts(buffer: buf, frames: targetFrameCount,
                                                     tileSide: pipe.tileSide, nLevels: v21Levels)
-            // Recover the time axis while the per-frame buffer is still alive (it is freed just below).
-            // Heavy compute at the seam; runs on the capture actor, not main. Device perf unvalidated.
-            v21Flow = MetalPipeline.encodeV21Flow(buffer: buf, frames: targetFrameCount,
-                                                  tileSide: pipe.tileSide, nLevels: v21Levels)
-            Self.log.log("V2.1 flow: \(v21Flow == nil ? "nil (encode failed)" : "encoded \(v21Flow!.maps.count) frames") ; pooled field \(v21Counts == nil ? "nil" : "ok")")
+            // Recover the time axis OFF the seam: device-measured 2026-07-01, the flow
+            // encode took ~19 s and blocked burst → review the whole time. The detached
+            // task owns the per-frame buffer (freed with it); the flow arrives via
+            // `flowCallback` → the engine publishes it → σ folds it (export is the only
+            // consumer and builds its bundle late). `BurstResult.flow` is now always nil.
+            if flowJobActive {
+                // A previous burst's encode still holds its buffer: skip this one
+                // (memory over completeness; the export falls back to the proxy).
+                Self.log.log("V2.1 flow: SKIPPED (previous encode still running) — pooled field \(v21Counts == nil ? "nil" : "ok")")
+            } else {
+                flowJobActive = true
+                let job = V21FlowJob(buffer: buf)
+                let frames = targetFrameCount, tile = pipe.tileSide, levels = v21Levels
+                let callback = flowCallback
+                let queue = delegateQueue
+                Self.log.log("V2.1 flow: encoding async gen=\(generation) (pooled field \(v21Counts == nil ? "nil" : "ok"))")
+                Task.detached(priority: .userInitiated) { [weak self] in
+                    let flow = MetalPipeline.encodeV21Flow(buffer: job.buffer, frames: frames,
+                                                           tileSide: tile, nLevels: levels)
+                    Self.log.log("V2.1 flow (async gen=\(generation)): \(flow == nil ? "nil (encode failed)" : "encoded \(flow!.maps.count) frames")")
+                    callback?(flow, generation)
+                    queue.async { [weak self] in self?.flowJobActive = false }
+                }
+            }
         }
         v21HistBuffer = nil
+        // V3.0 (gated): train this capture's somatic θ_up — burst tiles → Q16 volume →
+        // [octant gather → SIMT descent → Q16 commit] in ONE GPU dispatch. Heavy compute
+        // at the seam (the encodeV21Flow precedent above); failure is the floor, not an error.
+        var thetaUp: CaptureGene.ThetaUp?
+        if Feature.v3SomaticTrain {
+            thetaUp = CaptureGene.train(tiles: collected)
+            if let g = thetaUp {
+                Self.log.log("V3 somatic θ_up: loss \(g.loss) vs floor \(g.floorLoss) (−\(Int((g.lossReduction * 100).rounded()))%) in \(Int(g.trainMillis)) ms")
+            } else {
+                Self.log.log("V3 somatic θ_up: nil (unavailable) — the floor ships")
+            }
+        }
         let snapshot = collected
         let cont = continuation
         collected.removeAll(keepingCapacity: true)
@@ -751,7 +807,8 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         pipelineRef = nil
         continuation = nil
         collecting = false
-        cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing, v21Counts: v21Counts, flow: v21Flow))
+        cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing, v21Counts: v21Counts,
+                                            flow: nil, thetaUp: thetaUp))
     }
 
     /// Pure aggregation of inter-frame timing — `static` and side-effect-free so

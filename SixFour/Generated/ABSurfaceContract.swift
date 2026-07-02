@@ -4,21 +4,26 @@
 
 import Foundation
 
-/// The simplified 8-phase capture -> A/B -> export FSM constants, pinned bit-for-bit
+/// The capture -> decide/A-B -> export FSM constants, pinned bit-for-bit
 /// to `SixFour.Spec.ABSurface` and gated by `cabal test`. The Swift `ABPhase` / `ABEvent`
 /// / `abStep` port (in `ABSurfaceMachine.swift`) reads its phase/event token alphabet and
 /// the golden happy-path trace through this enum.
 public enum SixFourABSurface {
-    /// The 8 UI-lifecycle phases (one surface, no screens). The Swift `ABPhase` port
+    /// The UI-lifecycle phases (one surface, no screens). The Swift `ABPhase` port
     /// uses these exact tokens.
-    public static let phases: [String] = ["bootstrap", "unauthorized", "live", "captured", "picked", "exporting", "done", "error"]
-    /// The 11 FSM events (transition triggers only; out-of-band data lives in sigma).
-    public static let events: [String] = ["sessionReady", "authDenied", "shutterTap", "lockComplete", "burstComplete", "pickA", "pickB", "exportFamily", "exportDone", "retake", "fault"]
+    public static let phases: [String] = ["bootstrap", "unauthorized", "live", "captured", "deciding", "picked", "exporting", "done", "error"]
+    /// The FSM events (transition triggers only; out-of-band data lives in sigma).
+    public static let events: [String] = ["sessionReady", "authDenied", "shutterTap", "lockComplete", "burstComplete", "beginDecide", "decideAccept", "decideAgain", "pickA", "pickB", "exportFamily", "exportDone", "retake", "fault"]
     /// The golden happy-path event sequence + its phase trace
     /// (`scanl abStep Bootstrap`). The cross-language pin: the Swift `abStep` port must
     /// reproduce it token-for-token.
     public static let goldenHappyPathEvents: [String] = ["sessionReady", "shutterTap", "burstComplete", "pickA", "exportFamily", "exportDone", "retake"]
     public static let goldenHappyPathTrace: [String] = ["bootstrap", "live", "live", "captured", "picked", "exporting", "done", "live"]
+
+    /// The V3.0 DECIDE golden (capture -> deciding -> reject-loop -> accept -> export):
+    /// the second cross-language pin, folded by `ABPhase.assertSpecParity()` too.
+    public static let goldenDecidePathEvents: [String] = ["sessionReady", "shutterTap", "burstComplete", "beginDecide", "decideAgain", "shutterTap", "burstComplete", "beginDecide", "decideAccept", "exportFamily", "exportDone", "retake"]
+    public static let goldenDecidePathTrace: [String] = ["bootstrap", "live", "live", "captured", "deciding", "live", "live", "captured", "deciding", "picked", "exporting", "done", "live"]
 
     /// Candidate A's 16x16 tile rectangle (col, row, width, height) on the lattice.
     public static let candidateRegionA: [Int] = [16, 100, 16, 16]
@@ -28,12 +33,16 @@ public enum SixFourABSurface {
     /// Re-derives every pinned invariant — a live Haskell<->Swift parity gate for the
     /// A/B FSM (alphabet sizes + the golden trace shape + the candidate geometry).
     public static func selfCheck() -> Bool {
-        if phases.count != 8 || events.count != 11 { return false }
+        if phases.count != 9 || events.count != 14 { return false }
         // The trace is one longer than its event list, starts at bootstrap, and the
         // golden happy path ends back at live (done -> retake -> live).
         guard goldenHappyPathTrace.count == goldenHappyPathEvents.count + 1 else { return false }
         if goldenHappyPathTrace.first != "bootstrap" { return false }
         if goldenHappyPathTrace.last != "live" { return false }
+        // The decide golden has the same shape and visits deciding.
+        guard goldenDecidePathTrace.count == goldenDecidePathEvents.count + 1 else { return false }
+        if !goldenDecidePathTrace.contains("deciding") { return false }
+        if goldenDecidePathTrace.last != "live" { return false }
         // The two candidate tiles are disjoint (A is left of B with a gutter).
         let ax = candidateRegionA[0], aw = candidateRegionA[2]
         let bx = candidateRegionB[0]

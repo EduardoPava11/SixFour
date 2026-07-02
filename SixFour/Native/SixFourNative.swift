@@ -565,6 +565,28 @@ enum SixFourNative {
         return Data(out[0..<outLen])
     }
 
+    // MARK: - Octant lift (2×2×2 ↔ 1 coarse + 7 detail)
+
+    /// One 2×2×2 → (coarse, 7 detail bands) octant lift (`s4_octant_lift` =
+    /// `OctreeCell.liftOct`, byte-exact integers). `block` is the 8 fine cells in
+    /// Morton lane order; returns `[coarse, g0, b0, t0, g1, b1, t1, dz]`.
+    ///
+    /// This is the V3.0 on-device supervision-pair manufacture
+    /// (`Spec.DeviceTrainStep.supervisionPair`): pooling the capture one octant
+    /// step down is exact and reversible, so the capture that was just taken IS
+    /// the training set for the up-rung fine-tune. Gated by `DeviceTrainGolden`.
+    static func octantLift(block: [Int32]) -> [Int32]? {
+        guard block.count == 8 else { return nil }
+        var out = [Int32](repeating: 0, count: 8)
+        let rc = block.withUnsafeBufferPointer { b in
+            out.withUnsafeMutableBufferPointer { o in
+                s4_octant_lift(b.baseAddress, o.baseAddress)
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_octant_lift rc=\(rc)"); return nil }
+        return out
+    }
+
     // MARK: - V2.1 pre-collapse field
     //
     // Thin Swift surfaces over the V2.1 pre-collapse-field kernels (ports of

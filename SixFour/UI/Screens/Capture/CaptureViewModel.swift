@@ -150,6 +150,22 @@ final class CaptureViewModel {
     /// Folded into `Surface.v21Flow` at commit so the export ships the flow instead of the pooled field.
     var v21Flow: V21Flow? = nil
 
+    /// V3.0 (Feature.v3SomaticTrain only): the last burst's raw OKLab tiles + its per-capture
+    /// SOMATIC gene (θ_up trained at the capture seam). Folded into σ at commit so the
+    /// `.deciding` surface (`DecideSurface`) reads them; nil gene == the deterministic floor.
+    var burstTiles: [OKLabTile] = []
+    var thetaUp: CaptureGene.ThetaUp? = nil
+
+    /// Bumps when the ASYNC V2.1 flow lands (the flow encode left the burst seam —
+    /// device-measured 19 s — so it arrives after `BurstResult`) AND when a new burst
+    /// invalidates it. `SurfaceView` observes this to fold the (possibly nil) flow into σ.
+    var v21FlowVersion: Int = 0
+
+    /// The current burst epoch: bumped at every capture() start. An async flow delivery
+    /// carries the epoch its callback was installed under; a mismatch means the flow
+    /// belongs to an ABANDONED burst and is dropped (never attributed to a newer capture).
+    private var flowEpoch = 0
+
     /// The current deterministic-core stage banner (quantize → dither →
     /// significance → palette → encode), or nil when not rendering deterministically.
     /// Surfaces the verified Zig pipeline as the thing the user watches run.
@@ -460,6 +476,21 @@ final class CaptureViewModel {
 
     func capture() async {
         guard let session, let pipeline, let engines else { return }
+        // RE-ENTRANCY GUARD (device audit 2026-07-01): the shutter stays tappable while a
+        // burst is in flight; a second capture() would corrupt the burst mid-collection
+        // and fault the surface. Only an idle/finished engine may start a burst.
+        switch phase {
+        case .idle, .done: break
+        default:
+            Self.logger.warning("[viewmodel] capture() ignored — engine busy (\(String(describing: self.phase), privacy: .public))")
+            return
+        }
+        // NEW BURST EPOCH: invalidate any in-flight async flow delivery from the previous
+        // burst, and clear the stale flow so THIS burst's commit can never inherit it
+        // (the stale-flow export-corruption gate; see CaptureSession.flowCallback).
+        flowEpoch += 1
+        v21Flow = nil
+        v21FlowVersion += 1
         syncPreviewDither()  // keep the live look in sync with the engine + sampler
         Haptics.impact(.medium)
         loadingProgress = 0      // fresh resolve sweep for this capture
@@ -514,10 +545,24 @@ final class CaptureViewModel {
                 session.burstFrameCallback = nil
                 previewRenderer = nil
             }
+            let epoch = flowEpoch
+            session.flowCallback = { [weak self] flow, generation in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    guard self.flowEpoch == epoch else {
+                        Self.logger.warning("[viewmodel] DROPPED stale flow (epoch \(epoch) != \(self.flowEpoch), gen \(generation))")
+                        return
+                    }
+                    self.v21Flow = flow
+                    self.v21FlowVersion += 1
+                }
+            }
             let result = try await session.captureBurst(into: pipeline)
             lastTimingSummary = result.timing.summary
             v21Counts = result.v21Counts   // camera-box field (gated); nil keeps the proxy path
-            v21Flow = result.flow          // recovered time axis (gated); the export ships this
+            // result.flow is nil by design now — the async encode delivers via flowCallback.
+            burstTiles = result.tiles      // V3.0: the decide surface previews these
+            thetaUp = result.thetaUp       // V3.0: the somatic gene (nil == floor)
             Self.logger.debug("[viewmodel] burst complete: \(result.timing.summary, privacy: .public)")
 
             let tiles = result.tiles
@@ -882,6 +927,11 @@ final class CaptureViewModel {
     func reset() {
         phase = .idle
         primaryOutput = nil
+        // Invalidate any in-flight async flow and drop the last burst's (retake/recovery:
+        // the next commit must never inherit a previous capture's time axis).
+        flowEpoch += 1
+        v21Flow = nil
+        v21FlowVersion += 1
         // currentBundle deliberately persists across reset() — Retake
         // brings the user back to capture, but if they DON'T retake
         // they should still be able to open editing tools on the

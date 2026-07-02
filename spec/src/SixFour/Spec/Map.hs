@@ -32,6 +32,10 @@ index cross-cut; physically the modules stay where they are, gated by golden vec
     "SixFour.Spec.V21Transport" (the RECOVERED TIME axis: a byte-exact 1-D optimal-transport
     displacement flow @T = F⁻¹∘F@ on the equal-mass per-frame value histograms; anchor + per-frame maps
     reconstruct all 64 slices, restoring the time↔value coupling the pooled field marginalises away),
+    "SixFour.Spec.V21Pyramid" (the two-scale SPATIAL field pyramid: the @64×64@ sub-bins block-pool into
+    @16×16@ bins; a byte-exact aggregate — pooling is transitive so bins == pooled sub-bins — that is lossy
+    DOWNWARD, and whose @16²=256@ coarse bins ARE the realisable palette basis for the barycentric-coordinate
+    value head),
     "SixFour.Spec.ByteCarrier", "SixFour.Spec.QuantFixed", "SixFour.Spec.ColorFixed",
     "SixFour.Spec.LeafOverride", + the @safeNudge@/domain half of "SixFour.Spec.RelationalResidual" and
     the Held rung of "SixFour.Spec.SelfSimilarReconstruct". @liftOct@ (the @2x2x2->1@ octant edge, the
@@ -940,6 +944,26 @@ never increases loss. @lawStableTrainerSurvivesBatchDivergence@ = DEFECT+FIX (GH
 @trainBandJoint@ DIVERGES to NaN on a batch of 8 high-ṽ examples (η·N·λ past stability); the additive mean-gradient
 @trainBandJointStable@ converges on the same fixture (use it for real batches). Pure law module over MaskedBandPrediction;
 trainBandJoint + all its goldens untouched; re-pins nothing),
+"SixFour.Spec.DeviceTrainStep" (★ the V3.0 ON-DEVICE per-capture training gate: the capture manufactures
+its OWN supervision pair (@supervisionPair = liftOct@, lossless by octant reversibility —
+@lawSupervisionPairIsExact@), and the mean-gradient descent @trainDevice@ (η=0.2, 600 steps — the
+@trainer/mlx/superres.py train_detail@ twin, batch-stable from the start) recovers the manufactured detail
+EXACTLY through the Q16 crossing: @lawDeviceTrainedDetailIsGolden@ = THE TWIN (committed bands ==
+@goldenDeviceDetail@ — the MPSGraph AND Metal-4 device trainers gate on these POST-COMMIT bytes; float
+trajectories may differ per backend, the committed integers may not; fixture float32-robust by
+construction), @lawTrainedDetailSurvivesCommit@ (delegates "SixFour.Spec.AboveFloorMargin"
+@survivesCommit@ — the fine-tune moves off the floor for real), plus floor-start / loss-down / monotone /
+batch-stable. Obligation @contractDeviceGoldenUnrunOnHardware@ (run the fixture ON the iPhone, B1/B2 in
+@docs/V3-BUILD-WORKFLOW.md@). Law module over DetailPredictor+OctreeCell; emits
+@DeviceTrainGolden.swift@ via "SixFour.Codegen.DeviceTrain"),
+"SixFour.Spec.GeneTaxonomy" (★ the V3.0 GENE REGISTRY — every learned blob categorised by lifecycle
+class (Germline=shipped base/Somatic=per-capture/Identity=per-user/Meme=shareable AirDrop layer) ×
+train site × size, zero-gene==floor claimed per entry; THE CASCADE BOUNDARY AS A LAW:
+@foldsIntoRungDispatch@ (weights+grads ≤ 32 KiB threadgroup) with @lawFoldBoundaryIsRealOnBothSides@ —
+θ_up(21)/θ_cell(9) FOLD into the rung dispatch, time-rung(5,772)/value-pref(29,249) do NOT; sizes
+DERIVED not asserted (@lawSizesAreDerivedNotAsserted@ imports DetailPredictor.paramCount +
+MaskedBandPrediction.paramCountB); class⇒site coherence + germline-never-trains-on-device. Contract
+registry — proofs live in the genes' own modules; emits no golden),
 "SixFour.Spec.CarrierL" (★ L CARRIES THE SIGNAL (frontier 1b) — the coarse/DC band is
 the backbone, A/B search is the perturbation L re-balances: @lawCarrierIsDC@ (lBalance =
 ocCoarse), @lawZeroSearchIsCarrierFloor@ (A/B=0 ⇒ pure-L constant floor),

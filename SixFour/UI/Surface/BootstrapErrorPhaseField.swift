@@ -113,11 +113,10 @@ struct UnauthorizedPhaseField: View {
 
 /// `error` — a fault dropped the surface here (`surfaceStep`: `.fault` from any phase →
 /// `.error`). A warning glyph + the fault token (read from σ) + a Try-Again cell button.
-/// δ has no modelled recovery event out of `.error`, so Try-Again dispatches
-/// `.sessionReady` — the natural re-initialise intent. From `.error` that is currently a
-/// no-op (δ default), which keeps this renderer honest to the committed FSM; when the
-/// spec adds an error→bootstrap reset event the wiring already points at it. The button
-/// only emits an event; it never reaches around σ.
+/// Recovery is the MODELLED `.retake` edge (Spec.ABSurface: Error joins the Retake bail
+/// list → `.live`); the `.live` phase change also fires `engine.reset()` in SurfaceView,
+/// so the capture engine restarts with the surface. The button only emits an event; it
+/// never reaches around σ.
 struct ErrorPhaseField: View {
     let surface: Surface
     let clock: SurfaceClock
@@ -138,7 +137,7 @@ struct ErrorPhaseField: View {
                     }
                 }
 
-                Button { surface.step(.sessionReady) } label: {
+                Button { surface.step(.retake) } label: {
                     CellActionButton(icon: .none, title: "TRY AGAIN",
                                      prominent: true, fillWidth: false)
                 }

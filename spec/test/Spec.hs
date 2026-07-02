@@ -46,6 +46,7 @@ import qualified Properties.OctreeCell   as OctreeCell
 import qualified Properties.V21Field     as V21Field
 import qualified Properties.V21FieldUI   as V21FieldUI
 import qualified Properties.V21Transport as V21Transport
+import qualified Properties.V21Pyramid   as V21Pyramid
 import qualified Properties.Recursion    as Recursion
 import qualified Properties.LadderIdentity as LadderIdentity
 import qualified Properties.PerScaleWeights as PerScaleWeights
@@ -75,6 +76,8 @@ import qualified Properties.DetailEntropy as DetailEntropy
 import qualified Properties.DetailMaskedPrediction as DetailMaskedPrediction
 import qualified Properties.MaskedBandPrediction as MaskedBandPrediction
 import qualified Properties.MaskedBandTrainer as MaskedBandTrainer
+import qualified Properties.DeviceTrainStep as DeviceTrainStep
+import qualified Properties.GeneTaxonomy as GeneTaxonomy
 import qualified Properties.DetailPredictor as DetailPredictor
 import qualified Properties.Dim6          as Dim6
 import qualified Properties.ProjectionOrdering as ProjectionOrdering
@@ -273,6 +276,8 @@ main = defaultMain $ testGroup "sixfour-spec"
   , DetailMaskedPrediction.tests
   , MaskedBandPrediction.tests
   , MaskedBandTrainer.tests
+  , DeviceTrainStep.tests
+  , GeneTaxonomy.tests
   , DetailPredictor.tests
   , Dim6.tests
   , ProjectionOrdering.tests
@@ -413,4 +418,5 @@ main = defaultMain $ testGroup "sixfour-spec"
   , Lineage.tests
   , Affiliation.tests
   , Role.tests
+  , V21Pyramid.tests
   ]
