@@ -20,8 +20,13 @@ settings:
     # Xcode synthesize a partial plist that drops CFBundleIdentifier,
     # which then breaks `simctl install` ("Missing bundle ID").
     CODE_SIGN_STYLE: Automatic
-    CODE_SIGN_IDENTITY: "-"
-    CODE_SIGNING_REQUIRED: NO
+    # Device (iphoneos) builds sign for real with the personal team's
+    # Apple Development identity; the ad-hoc "-" identity is a
+    # SIMULATOR-ONLY hack (a device rejects ad-hoc-signed apps), so both
+    # it and the signing-not-required escape are scoped to the sim SDK.
+    DEVELOPMENT_TEAM: 9WANULVN2G
+    "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
+    "CODE_SIGNING_REQUIRED[sdk=iphonesimulator*]": NO
     # Xcode 26's Metal toolchain emits `default.metallib` with embedded
     # source records (-frecord-sources); codesign treats it as a nested
     # code object and the simulator's ad-hoc bundle sign won't recurse
@@ -145,22 +150,25 @@ targets:
       # a nested bundle and rejects the install with "Missing bundle ID".
       - path: SixFour
         type: group
-    # Game Center capability — the swap economy's identity source (CreatorID = the local
-    # player's gamePlayerID; see SixFour/GeneLibrary/CreatorIdentity.swift). Runtime
-    # authentication also needs a provisioning profile with Game Center enabled + a signed-in
-    # (sandbox) account; the entitlement here is what the code links against.
-    entitlements:
-      path: SixFour/SixFour.entitlements
-      properties:
-        com.apple.developer.game-center: true
-        # CloudKit — the swap economy's public gene database (GeneExchange /
-        # CloudKitGeneDatabase). Runtime access needs a signed-in iCloud account +
-        # the container provisioned in the developer portal; the entitlement here is
-        # what CKContainer.default() links against.
-        com.apple.developer.icloud-services:
-          - CloudKit
-        com.apple.developer.icloud-container-identifiers:
-          - iCloud.com.sixfour.SixFour
+    # Game Center + CloudKit entitlements — DISABLED 2026-07-02 for on-device
+    # testing. The swap-economy code that needs them (GeneLibrary/: CreatorIdentity
+    # GKLocalPlayer auth, GeneExchange CKContainer.default()) is dormant — nothing
+    # outside GeneLibrary/ instantiates it, so no runtime path can crash on the
+    # missing entitlements. With them declared, a device build demands an explicit
+    # App ID profile with Game Center + iCloud, which the portal refuses to mint
+    # until the pending Program License Agreement is accepted (and iCloud may need
+    # a paid membership); without them the cached wildcard team profile
+    # (9WANULVN2G.*) signs the device build offline. RESTORE this block (and
+    # re-run `xcodegen generate`) when the S4GX swap-economy port goes live:
+    #
+    # entitlements:
+    #   path: SixFour/SixFour.entitlements
+    #   properties:
+    #     com.apple.developer.game-center: true
+    #     com.apple.developer.icloud-services:
+    #       - CloudKit
+    #     com.apple.developer.icloud-container-identifiers:
+    #       - iCloud.com.sixfour.SixFour
     info:
       path: SixFour/Info.plist
       properties:

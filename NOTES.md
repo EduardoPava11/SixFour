@@ -7,6 +7,70 @@ newest first.
 
 ---
 
+## 2026-07-02: the gene-swap laws + the entropy/scale architecture (spec-first, adversarially verified)
+
+> **Session theme (Daniel):** turn the S/K/I combinator reading and the gene-swap economy into
+> gated spec, then push the entropy analysis of the scale ladder as far as the discrete-geometry +
+> algebraic-number-theory lens allows. Every design round was run design → adversarial-critic →
+> `runghc -isrc` verify; the critics killed several plausible-but-wrong ideas before they could land.
+
+**7 NEW LAWS LANDED into `spec/` (all green `cabal test`, 100% Haddock each):**
+- `Spec.DescriptorQuasiIsometry` — the descriptor admissibility gate: `geneDistance` is a two-sided
+  additive quasi-isometry on the Q16 floor (no collapse, no discontinuity); keystone = the per-band
+  probe design is a full-rank Vandermonde over ℤ (det 2).
+- `Spec.PacketEconomy` — decode-compute is scarce; elites are meaning-per-S-packet Pareto-optimal;
+  the S/K/I combinators as lambdas (`I=λx.x`, `K=λx y.x`, `S=λf g x.f x(g x)`), packets charge K/S only.
+- `Spec.GeneRecombination` — sexual crossover (per-word Q16 lerp, linear head ⇒ no Git-Re-Basin),
+  balanced by a lineage-keyed grant (child grantable iff both parents held); crossover mints no credit.
+- `Spec.PaintOrderPrior` — paint first-touch order seeds the PonderNet halting prior; permutation-pair
+  keystone structurally forbids a magnitude-only policy.
+- `Spec.AnytimeDecode` — partial decode never fails: scheme-1 `unliftVec` prefix + octant floor totality.
+  (Repaired from an unsound `unliftOct` re-target that a probe proved false.)
+- `Spec.BudgetHead` — the advisory two-headed gene: only the Maybe-fork routing is floor-safe
+  (adversarial `DecodeStrategy` family); learned estimator stubbed.
+- `Spec.CombinatorExactSequence` — **the capstone:** S, K, I ARE the three canonical maps of the octant
+  short exact sequence `0 → detail → fine → coarse → 0` (K = surjection `scalarCollapseLossy`, I =
+  splitting `liftOct`/`unliftOct` work-0, S = a section, `K.S=id`). The gene lives on S because a section
+  is the only one of the three not canonically determined by the sequence.
+
+**10 ARCHITECTURE DOCS (design-of-record, not yet all built):** `docs/DEVICE-MODEL-MAP.md`,
+`GENE-ARCHIVE-PLAN.md`, `GENE-LAWS-DESIGN.md`, `GENE-COMPUTE-ECONOMY.md`, `GENE-LAWS-VERIFICATION.md`,
+`GIF-NATIVE-MODEL.md`, `DESTRUCTIVE-PYRAMID.md`, `SCALE-TRANSITION-TRAINING.md`, `ENTROPY-INVARIANTS.md`,
+`MEMORY-ROOT-LATENT-WORK.md`.
+
+**Key verdicts (honest, some negative):**
+- GIF89a is a TOKENIZER either way (palette=vocab, LZW≠attention); build the JEPA recursive loop first,
+  GPT/attention is a hard separate decision; the one missing link is a Swift caller for `s4_gif_decode`.
+- The proven entropy invariants: chain rule `H(fine)=H(coarse)+H(detail|coarse)` (witness = the lift
+  bijection) and `I(coarse;fine)=H(coarse)` (witness = the deterministic pool).
+- The "give up determinism" concession is a WASH, SHARPENED not overturned: a deterministic lift is a
+  wash by the data-processing inequality; lossy buys rate iff a corpus-level submodularity gap `G>0`
+  (a decidable measurement, never per-capture). The energy-work analogy is information-accounting, NOT
+  physical joules (no temperature/bath). Memory ladder is `8×`/rung INDEX-ONLY (total is 3.5× at the
+  small end from palette overhead; LZW size is content-dependent).
+- The scale-transition training target (the 32↔64 relationship as a self-supervised pair, residual =
+  `fine − S(K fine)`) is SOUND; supervised ≤64³, invented above (`lawBeyondCaptureInvented`).
+
+**Device-signing unblock (`project.yml`):** Game Center + CloudKit entitlements commented out so the
+device build signs offline with the cached wildcard profile (Apple portal was refusing provisioning
+until the PLA is accepted). Restore the entitlements before the S4GX swap economy goes live.
+
+**Risks / things to watch.**
+- The entropy/work laws (`Spec.IndexMemoryLadder`, the CombinatorWork typeclass) are DESIGN ONLY, unbuilt.
+- `BudgetHead`'s learned float estimator is a Tier-1 stub; `s4_gif_decode` still has no Swift caller
+  (the GIF is write-only on device), which blocks the JEPA loop, the pyramid, and scale-transition training.
+- Above-64³ synthesis is "unbacked debt" (no ground-truth residual); do not sell it as checkpoint resume.
+
+**Verification performed.**
+- `cabal test spec-tests` → green (all 7 new modules + existing suite pass; 1/1 test suites).
+- Every law verified constructible + consistent + NON-VACUOUS via `cabal exec -- runghc -isrc` probes
+  (each Properties test carries a deliberately-wrong foil that fails where the correct impl passes).
+- `cabal haddock sixfour-spec` → 100% on all 7 new modules, warning-clean.
+- Adversarial critics caught and fixed real defects before landing: three keystone vacuity bugs, an
+  unsound AnytimeDecode re-target, an entropy chain-rule circularity, and the VAR "small-n" trap.
+
+---
+
 ## 2026-06-25 (later): MPS↔MLX, GIF89a full-scope heads, the spec repair, and the algebraic-number-theory generalization
 
 > **Session theme (Daniel):** train on the Mac, generalize the GIF89a as index + per-frame palette,
