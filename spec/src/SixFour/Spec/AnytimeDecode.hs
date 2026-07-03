@@ -39,6 +39,7 @@ underneath, which is exactly why "spending less never breaks the picture".
     s vol Nothing) = 8·s³@ for every input, an integer totality fact on the ℤ voxel
     cube.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.AnytimeDecode
   ( -- * Prefix reads over the additive lift
     takeBands

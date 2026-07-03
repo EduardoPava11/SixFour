@@ -39,6 +39,10 @@ tests = testGroup "SelfSimilarReconstruct (one octant operator twice; held-exact
   , testProperty "zero latent tail = the deterministic zero-detail floor (zero-genome==floor)" $
       forAll (vectorOf 8 genI) lawZeroTailIsFloor
 
+  , testProperty "END-TO-END: reconstruct256 itself pins zero-tail==floor and unit-tail moves (d=1)" $
+      forAll arbitrary $ \k -> forAll (vectorOf 8 genI) $ \cap ->
+        lawReconstruct256EndToEnd k cap
+
   -- The DEVICE-layout volume expand (the Zig s4_cube_expand_rung / Swift upRung source of truth)
   , testProperty "side-1 volume expand IS unliftOct in (dt,dr,dc) lane order" $
       forAll genI $ \v -> forAll genDetail (lawVolumeExpandSingletonIsUnlift v)

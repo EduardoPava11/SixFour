@@ -61,6 +61,21 @@ if command -v zig >/dev/null 2>&1; then
   "
 fi
 
+# THE SWIFT TIER (SixFourTests): every Generated/*Golden selfCheck + spec-parity fold
+# (SwapCarrier/GenomeCarrier/GeneHash goldens, DecideMachine, RungDispatch bitwise) runs under
+# xcodebuild test. Previously reachable ONLY via `s4.sh test`, so a Swift-only byte drift
+# passed this gate green (audit 2026-07-03). Skipped only if xcodebuild/the project is absent
+# — and the skip is LOUD, never silent.
+if command -v xcodebuild >/dev/null 2>&1 && [ -d "$root/SixFour.xcodeproj" ]; then
+  run "Swift golden selfChecks (xcodebuild test, SixFourTests)" "
+    ( cd '$root' && xcodebuild -quiet -scheme SixFour -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test )
+  "
+else
+  echo ""
+  echo "=== Swift golden selfChecks — NOT RUN (xcodebuild or SixFour.xcodeproj absent) ==="
+  echo "!! WARNING: the Swift tier is unverified in this run; use scripts/s4.sh test"
+fi
+
 # The I-JEPA DATA ENGINE (Python) must reproduce the spec-emitted corpus byte-exact -- the data
 # design is spec-FORCED, not described. A one-integer drift in the Python lift fails this.
 if command -v python3 >/dev/null 2>&1 && [ -f "$root/trainer/jepa_data.py" ]; then

@@ -10,6 +10,12 @@ tests = testGroup "NudgeRankTheorem (rank / collapse / residual-reuse — three 
   [ testGroup "H1 RANK"
     [ testProperty "single voxel comparison matrix is rank <= 1 (all 2x2 minors 0)"
         lawSingleVoxelRank1
+    , testProperty "QUANTIFIED: EVERY voxel is rank <= 1 (outer product, all minors 0, all P6)"
+        lawSingleVoxelRank1Everywhere
+    , testProperty "QUANTIFIED: every TWO-voxel aggregate is singular (min voxels for rank 3 is 3)"
+        lawTwoVoxelAggregateIsSingular
+    , testProperty "QUANTIFIED: rank 3 reachable at EVERY scale (phi6-paired family, det = axbyLt)"
+        lawRank3ReachableAtEveryScale
     , testProperty "cell aggregate reaches full rank 3 (det != 0, 9 independent entries)"
         lawCellAggregateReachesRank3
     , testProperty "9 channels independent at the CELL, degenerate at the VOXEL"

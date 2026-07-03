@@ -37,6 +37,7 @@ An untouched cell halts at the floor (@λ_p = 1.0@, 0 packets), the free @I@ rea
     real 'geometricPrior' \/ 'expectedSteps'; the DEPLOYED schedule is the integer
     rank function, keeping the byte-exact floor off the float seam.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.PaintOrderPrior
   ( -- * Carriers
     CellIx

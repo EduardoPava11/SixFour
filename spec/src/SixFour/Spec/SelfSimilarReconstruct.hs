@@ -68,6 +68,7 @@ module SixFour.Spec.SelfSimilarReconstruct
   , lawWithinCaptureExact
   , lawBeyondCaptureInvented
   , lawZeroTailIsFloor
+  , lawReconstruct256EndToEnd
   , lawVolumeExpandSingletonIsUnlift
   , lawVolumeExpandBlockLocal
   , lawVolumeExpandFloorConstant
@@ -219,6 +220,30 @@ lawZeroTailIsFloor cube64 =
        in tailToDetail zeroTail == floorDet                       -- the seam zeroes (reenterQ16 0 == 0)
           && octantLift cube64 (tailToDetail zeroTail)
                == octantLift cube64 floorDet                      -- ...so the step is the zero-detail floor
+
+-- | ★ END-TO-END: the EXPORTED 'reconstruct256' itself (not just its pieces) is pinned at
+-- both arms, at the octant scale @d = 1@ where the single-band invented tail is well-shaped.
+-- A zero latent tail makes the full two-rung composition equal the deterministic zero-detail
+-- floor of the held-exact replay, and a unit tail moves it — so the composed function, the
+-- one the app will actually call, carries both the floor guarantee and a live invented rung.
+-- (Added 2026-07-03: the audit found every law here tested the pieces while the composed
+-- headline function had no law of its own.)
+lawReconstruct256EndToEnd :: Int -> [Int] -> Bool
+lawReconstruct256EndToEnd k0 cap =
+  length cap /= 8 ||
+  let d        = 1
+      k        = abs k0 `mod` (d + 1)
+      sp       = split k d cap
+      cube64   = refine d sp
+      z        = mkLatent 0
+      one      = mkLatent 1
+      zeroTail = LatentTail [[ (z,z,z,z,z,z,z) ]]
+      oneTail  = LatentTail [[ (one,one,one,one,one,one,one) ]]
+      floorDet = [[ (0,0,0,0,0,0,0) ]]
+      out0     = reconstruct256 (Rungs sp d zeroTail)
+      out1     = reconstruct256 (Rungs sp d oneTail)
+  in out0 == octantLift cube64 floorDet
+     && out1 /= out0
 
 -- ---------------------------------------------------------------------------
 -- The DEVICE-layout volume expand (one rung step in capture order)

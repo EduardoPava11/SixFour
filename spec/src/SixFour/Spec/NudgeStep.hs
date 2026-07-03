@@ -44,6 +44,18 @@ exactly "SixFour.Spec.LatentNavigation"'s @lawUndoNeedsHistoryNotInverse@.
 'lawNudgeUndoIsHistory' simply DELEGATES to that proof (it does not re-derive it),
 so the two modules agree on one theorem rather than two.
 
+== Carrier limitation (CHECKED — do not ship a two-axis gesture UI on this path)
+
+'LatentCube' is a cube of SCALARS (one 'Latent' per voxel), so a 2-DOF @(a,b)@
+gesture can only act through the 1-DOF sum @da+db@: the antisymmetric gesture
+@(+1,-1)@ is EXACTLY a no-op and axis-swapped gestures are indistinguishable.
+The two SEARCH axes "SixFour.Spec.XYTLabDuality" proves distinct are therefore
+NOT distinguishable on THIS carrier — 'lawScalarGestureCollapse' pins that as a
+named fact instead of a silent lie (audit G7, 2026-07-03). This module is the
+DEMOTED, non-canonical steering path (see @spec/exploration/V2-RGB-FIRST-CLASS-PLAN.md@
+section 3.4): the canonical two-axis nudge is the residual-carrier @NudgeWord@
+(plan M5), which acts on a carrier that actually HAS the channel structure.
+
 This is the reversible-rung (Q16) layer: every device-bound value is a 'Q16'
 integer; the float 'Latent' stays Mac-side and only ever reaches a byte through
 'reenterQ16'. Additive: imports only already-proven modules, re-pins no golden
@@ -68,6 +80,7 @@ module SixFour.Spec.NudgeStep
   , lawNudgeThenProject
   , lawProjectIsManyToOne
   , lawNudgeUndoIsHistory
+  , lawScalarGestureCollapse
   ) where
 
 import SixFour.Spec.ByteCarrier      (Latent, Q16, mkLatent, unLatent, reenterQ16, toByte)
@@ -160,6 +173,24 @@ lawProjectIsManyToOne =
       b = mkLatentCube [0.4 / 65536]   -- distinct float, same Q16 cell (rounds to 0)
   in unLatentCube a /= unLatentCube b              -- the latents differ
      && map toByte (project a) == map toByte (project b)  -- ...but P collides them
+
+-- | THE CARRIER LIMITATION AS A CHECKED FACT (audit G7, 2026-07-03): on the scalar
+-- 'LatentCube', a 2-DOF gesture acts only through @da+db@ — (1) axis-swapped gestures
+-- are indistinguishable, (2) the antisymmetric gesture @(k,-k)@ is EXACTLY a no-op,
+-- and (3) the one DOF that DOES exist is live (a nonzero sum moves every voxel). A
+-- UI that offered two gesture axes on this path would silently discard one; the
+-- canonical two-axis nudge is the residual-carrier @NudgeWord@ (plan M5). If this
+-- law ever FAILS, the carrier gained channel structure and the demotion note (and
+-- this law) must be retired together.
+lawScalarGestureCollapse :: Int -> Int -> [Double] -> Bool
+lawScalarGestureCollapse da db xs =
+  let lc = mkLatentCube xs
+      move (u, v) = unLatentCube (nudge (Gesture 0 (u, v)) lc)
+  in move (da, db) == move (db, da)                    -- (1) swap-blind
+     && move (da, negate da) == unLatentCube lc        -- (2) antisymmetric gesture = no-op
+     && (null xs || da + db == 0
+          || not (all (\x -> abs x < 1e6) xs)
+          || move (da, db) /= unLatentCube lc)         -- (3) the surviving 1 DOF is live
 
 -- | Undo is HISTORY-REPLAY, not a spatial inverse — DELEGATED to
 -- "SixFour.Spec.LatentNavigation".@lawUndoNeedsHistoryNotInverse@ (the @SE ≠ NW⁻¹@

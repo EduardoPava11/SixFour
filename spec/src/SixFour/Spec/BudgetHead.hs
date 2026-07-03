@@ -33,6 +33,7 @@ is advised, so a starved or wrong head degrades to the floor, never to a fault.
     base extractor yields the identical @expressionSource@ ('lawBudgetHeadForwardCompatible'),
     keeping the just-landed wire codec intact.
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.BudgetHead
   ( -- * The advisory budget head (learned estimator STUBBED as a schedule)
     BudgetHead(..)

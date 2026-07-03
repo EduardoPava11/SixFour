@@ -7,7 +7,7 @@ import Test.QuickCheck
 import qualified Data.Vector         as V
 import qualified Data.Vector.Unboxed as U
 
-import SixFour.Spec.Color   (OKLab(..))
+import SixFour.Spec.Color   (OKLab(..), okLabDistanceSquared)
 import SixFour.Spec.StageA
 import SixFour.Spec.Palette (Palette(..))
 import SixFour.Spec.Indices (IndexTensor(..))
@@ -50,4 +50,20 @@ tests = testGroup "StageA / variance-cut reference"
   , testProperty "lawWuShapesOut: ship-shape Stage A output pinned (palette 256, indices 4096)" $
       once $ forAll genShipFrame $ \fr ->
         lawWuShapesOut (varianceCutReference @64 @64 @256) fr
+
+  -- The two obligations the module header CLAIMS but no law pinned (audit 2026-07-03):
+  -- "pinned, deterministic" and "reconstructs the frame under nearest-OKLab".
+  , testProperty "DETERMINISM: two runs on the same frame give identical (palette, indices)" $
+      forAll genFrame $ \fr ->
+        let (Palette p1, IndexTensor i1) = runStageA (varianceCutReference @H @W @K) fr
+            (Palette p2, IndexTensor i2) = runStageA (varianceCutReference @H @W @K) fr
+        in p1 == p2 && i1 == i2
+
+  , testProperty "NEAREST-ASSIGNMENT: every pixel's index is a nearest centroid in OKLab" $
+      forAll genFrame $ \fr@(Frame pixels) ->
+        let (Palette pal, IndexTensor ix) = runStageA (varianceCutReference @H @W @K) fr
+            dist p j = okLabDistanceSquared p (pal V.! j)
+            bestFor p = V.minimum (V.map (okLabDistanceSquared p) pal)
+        in and [ dist px (ix U.! i) <= bestFor px
+               | (i, px) <- zip [0 ..] (V.toList pixels) ]
   ]

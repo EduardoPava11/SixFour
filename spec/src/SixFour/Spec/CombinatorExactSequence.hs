@@ -49,6 +49,7 @@ inverse of K; the residual is the difference between them.
     surjection to the quotient, and the splitting that reconciles them. That there
     are exactly three is why S, K, I (and no fourth combinator) are the right basis.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.CombinatorExactSequence
   ( -- * The three canonical maps (S/K/I) of the octant SES
     kSurj

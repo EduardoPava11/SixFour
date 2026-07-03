@@ -9,8 +9,12 @@
 Launch scope, hardest first: **L1** the 16³/64³/256³ ladder + the user-curates-256³
 loop → **L2** the gene swap (S4GX ports + seams) → **L3** Apple services + App
 Store checklist → **L4** train-on-adopted-genes → **L5** the GeneAtlas
-(retrieval visualization). **L0 gate repairs come before everything** — the
-local gate is RED today.
+(retrieval visualization). **L0 gate repairs come before everything** — L0.1
+(header parity) and L0.2 (test verb) were repaired 2026-07-02; the 2026-07-03
+audit then found and fixed a second gate-RED (7 untagged compartments from the
+research merge) plus a Swift-tier hole (gate.sh ran no Swift selfChecks; it now
+runs `xcodebuild test`, which surfaced and fixed the FrontProjectionTests
+double-flip).
 
 ---
 

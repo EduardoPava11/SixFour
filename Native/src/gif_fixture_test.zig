@@ -47,9 +47,18 @@ test "cross-language: Haskell golden GIF reproduced byte-exactly by the Zig core
     defer alloc.free(golden);
 
     // The matching input (linear-sRGB Float16 halfs, T·H·W·3) the golden was made
-    // from. Absent today; once present, the body below runs the real comparison.
-    const in_halfs = readFileAlloc(alloc, dir, "golden_input.halfs") catch
-        return error.SkipZigTest;
+    // from. Guarded like golden.gif: under -Drequire_fixtures=true an absent input
+    // is a FAIL, never a silent skip (the two files are co-emitted by spec-fixtures).
+    const in_halfs = readFileAlloc(alloc, dir, "golden_input.halfs") catch |e| {
+        if (e == error.SkipZigTest) {
+            if (build_options.require_fixtures) {
+                std.debug.print("\n  [FAIL] golden_input.halfs absent but -Drequire_fixtures=true; produce the fixtures first\n", .{});
+                return error.FixtureRequired;
+            }
+            return error.SkipZigTest;
+        }
+        return e;
+    };
     defer alloc.free(in_halfs);
 
     // Match the Haskell golden's burst shape (app/Fixtures.hs burst* constants).

@@ -13,24 +13,20 @@ import simd
 /// drift from the shared file. Per SIXFOUR-SPEC-METHODOLOGY: a Layer 0-2 round-trip.
 struct FrontProjectionTests {
 
-    /// Read a decoded CGImage into a top-left-origin RGBA8 buffer. `CGContext` is
-    /// bottom-left origin, so we flip rows back to top-left to match the GIF's
-    /// `y·64 + x` convention.
+    /// Read a decoded CGImage into a top-left-origin RGBA8 buffer. Quartz's COORDINATE
+    /// origin is bottom-left, but a full-rect `ctx.draw` of an image into a bitmap
+    /// context lands the image's top row in the FIRST memory row (y=0 in coordinates is
+    /// the LAST memory row), so the buffer is already top-left ordered — no flip. The
+    /// previous manual row flip here double-flipped and mirrored every frame vertically,
+    /// which the index pattern turns into a 4096/4096 mismatch (audit fix 2026-07-03).
     private func topLeftRGBA(_ cg: CGImage) -> [UInt8]? {
         let w = cg.width, h = cg.height
-        var flipped = [UInt8](repeating: 0, count: w * h * 4)
+        var out = [UInt8](repeating: 0, count: w * h * 4)
         let cs = CGColorSpaceCreateDeviceRGB()
         let info = CGImageAlphaInfo.premultipliedLast.rawValue
-        guard let ctx = CGContext(data: &flipped, width: w, height: h, bitsPerComponent: 8,
+        guard let ctx = CGContext(data: &out, width: w, height: h, bitsPerComponent: 8,
                                   bytesPerRow: w * 4, space: cs, bitmapInfo: info) else { return nil }
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
-        // flipped is bottom-left origin; restore top-left.
-        var out = [UInt8](repeating: 0, count: w * h * 4)
-        for y in 0..<h {
-            let src = (h - 1 - y) * w * 4
-            let dst = y * w * 4
-            for b in 0..<(w * 4) { out[dst + b] = flipped[src + b] }
-        }
         return out
     }
 

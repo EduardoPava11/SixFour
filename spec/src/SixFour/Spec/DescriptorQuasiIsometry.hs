@@ -56,6 +56,7 @@ The pinned constants @c1 = loNum\/loDen = 1\/2@ and @c2 = hiNum\/hiDen = 18@ are
 shipped 'defaultPredictorShape' (7 bands × 3 features, 9-point 'canonicalProbe'); the
 upper constant is a validated safe ceiling (the observed single-word worst case is 9).
 -}
+-- COMPARTMENT: MLX-MODEL | tag:MacTag
 module SixFour.Spec.DescriptorQuasiIsometry
   ( -- * The Q16-floor gene metric and the descriptor distance
     thetaFloorRep
@@ -80,23 +81,31 @@ module SixFour.Spec.DescriptorQuasiIsometry
 
 import SixFour.Spec.GeneSimilarity  (geneDistance, canonicalProbe)
 import SixFour.Spec.DetailPredictor (PredictorShape, defaultPredictorShape, rawBands)
-import SixFour.Spec.Q16             (quantizeQ16, toQ16)
+import SixFour.Spec.Q16             (toQ16)
+import SixFour.Spec.ByteCarrier     (mkLatent, reenterQ16, toByte)
+
+-- | The Double→Int floor word, routed through THE single sanctioned float→device
+-- crossing "SixFour.Spec.ByteCarrier".'reenterQ16' (byte-identical to the raw
+-- @quantizeQ16@ it wraps). A direct @quantizeQ16@ import here was the q16-crossing
+-- lint violation the 2026-07-03 audit fix surfaced.
+floorWord :: Double -> Int
+floorWord = toByte . reenterQ16 . mkLatent
 
 -- | The shipped predictor shape (7 bands × 3 features). The pinned constants are
 -- for this shape; expressing the laws over it matches "SixFour.Spec.GeneSimilarity".
 sh :: PredictorShape
 sh = defaultPredictorShape
 
--- | The Q16 FLOOR REPRESENTATIVE of a gene, word by word (@quantizeQ16@ is the
--- Double→Int floor; the representative is the canonical integer point of the
--- sub-quantum gauge class).
+-- | The Q16 FLOOR REPRESENTATIVE of a gene, word by word ('floorWord' is the
+-- Double→Int floor via the sanctioned crossing; the representative is the canonical
+-- integer point of the sub-quantum gauge class).
 thetaFloorRep :: [Double] -> [Int]
-thetaFloorRep = map quantizeQ16
+thetaFloorRep = map floorWord
 
 -- | The gene re-expressed as its Q16 floor representative (Double view), so the
 -- descriptor distance is read on the floor, "never raw fp32 θ".
 floorGene :: [Double] -> [Double]
-floorGene = map (toQ16 . quantizeQ16)
+floorGene = map (toQ16 . floorWord)
 
 -- | @dq@: the L¹ distance between two genes' Q16 floor representatives (integer,
 -- gauge-quotiented).
@@ -114,10 +123,10 @@ loNum, loDen, hiNum, hiDen, slack, oneStep :: Int
 loNum = 1; loDen = 2; hiNum = 18; hiDen = 1; slack = 0; oneStep = 1
 
 -- | A probe-parameterised committed cloud mirror of @expressGene@'s value readouts:
--- @quantizeQ16 (rawBands θ v)@ at each (probe stimulus, band). Uses the REAL
+-- @floorWord (rawBands θ v)@ at each (probe stimulus, band). Uses the REAL
 -- 'rawBands', so cloud agreement here is exactly agreement of the shipped expression.
 committedCloud :: [Int] -> [Double] -> [Int]
-committedCloud probe g = [ quantizeQ16 rb | v <- probe, rb <- rawBands sh g v ]
+committedCloud probe g = [ floorWord rb | v <- probe, rb <- rawBands sh g v ]
 
 -- | A correct 3×3 integer determinant (the byte-exact full-rank certificate).
 det3x3 :: [[Int]] -> Int

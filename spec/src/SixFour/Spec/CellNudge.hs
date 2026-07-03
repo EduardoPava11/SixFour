@@ -32,6 +32,7 @@ module SixFour.Spec.CellNudge
   , lawNineHonestAtCell
   , lawZeroCellBudgetIsFloor
   , lawPaintOnePairIsLocal
+  , lawOutOfRangePaintRefused
   , lawCellGovernsSuperResSubtree
   , lawLossIsCellAggregate
   , lawGaugeExplicit
@@ -99,11 +100,33 @@ lawZeroCellBudgetIsFloor n0 =
   let n = abs n0 `mod` 100
   in all (all (== 0)) (emptyCellBudget n)
 
--- | Painting one channel in one cell is LOCAL: exactly that (cell, pair) entry changes, nothing else.
-lawPaintOnePairIsLocal :: Bool
-lawPaintOnePairIsLocal =
-  let b = paintCellPair (emptyCellBudget 4) 1 3 7
-  in (b !! 1) !! 3 == 7 && sum (map sum b) == 7
+-- | Painting one channel in one cell is LOCAL: exactly that (cell, pair) entry changes, nothing
+-- else. Quantified over the whole in-range domain — any grid size, any cell, any pair, any
+-- positive value (2026-07-03; previously a single fixed witness, audit finding G3).
+lawPaintOnePairIsLocal :: Int -> Int -> Int -> Int -> Bool
+lawPaintOnePairIsLocal n0 c0 p0 v0 =
+  let n = 1 + abs n0 `mod` 64
+      c = abs c0 `mod` n
+      p = abs p0 `mod` nPairs
+      v = 1 + abs v0
+      b = paintCellPair (emptyCellBudget n) c p v
+  in (b !! c) !! p == v && sum (map sum b) == v
+
+-- | REFUSAL: painting an out-of-range (cell, pair) is a PINNED no-op — the budget comes back
+-- EXACTLY unchanged (never a resize, never a wrap-around write into a neighbouring entry) — and a
+-- negative value is clamped to zero, never stored raw. Pins the invalid-input direction the audit
+-- (2026-07-03) found unpinned. Teeth: an implementation that indexed with @!!@ would crash on the
+-- out-of-range cell; one that wrapped indices would move a wrong entry; one that stored raw @v@
+-- would leak a negative budget into the gate's @sum@.
+lawOutOfRangePaintRefused :: Int -> Int -> Int -> Bool
+lawOutOfRangePaintRefused n0 p0 v0 =
+  let n   = 1 + abs n0 `mod` 64
+      v   = 1 + abs v0
+      bud = emptyCellBudget n
+  in paintCellPair bud (-1) 0 v            == bud   -- cell below range: no-op
+  && paintCellPair bud n 0 v               == bud   -- cell above range: no-op
+  && paintCellPair bud 0 (nPairs + abs p0) v == bud -- pair above range: no-op
+  && paintCellPair bud 0 0 (negate v)      == bud   -- negative value: clamps to 0 (== empty)
 
 -- | One painted 16³ control cell governs a @4096@-leaf subtree of the 256³ output: @(256/16)³ ==
 -- twicenessSpan² == 4096@, the two octant-twiceness rungs (16 → 64 → 256). Ties the paint scale to the

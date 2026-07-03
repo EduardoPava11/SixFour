@@ -95,17 +95,22 @@ take on a dependency.
 
 ## Train / deploy spine
 - **Train (base net):** MLX on the M1.
-- **Train (on-device, per-user):** **MPSGraph** — an Apple system framework, so it satisfies
-  the Tier 2 contract. Proven on the physical iPhone 17 Pro 2026-06-12
-  (`SixFour/Atlas/AtlasTrainer.swift`: Bradley–Terry value training, 12.4 ms/step,
-  bit-identical loss trajectory Mac↔iPhone). The never-`mlx-swift` rule stands;
-  Core AI is now allowed for **L-inference only** (see the amendment above), never
-  for training. MPSGraph does not execute in the simulator (gate via
+- **Train (on-device, per-user):** two paths under `SixFour/Train/` (PATH CORRECTION
+  2026-07-03: `SixFour/Atlas/` was deleted with the A/B retirement, commit `1e0837b`;
+  the historical AtlasTrainer proof — Bradley–Terry value training, 12.4 ms/step,
+  bit-identical loss trajectory Mac↔iPhone, physical iPhone 17 Pro 2026-06-12 —
+  established that MPSGraph training on device works; git history is the record).
+  Today: `Train/RungDispatch.swift` (plain Metal fused kernel — runs in the simulator
+  too) is the LIVE per-capture θ_up trainer; `Train/DeviceTrainer.swift` (MPSGraph)
+  is the golden-parity harness, exercised by `DeviceTrainGoldenTests` only. MPSGraph
+  satisfies the Tier 2 contract (Apple system framework); the never-`mlx-swift` rule
+  stands; Core AI is allowed for **L-inference only** (see the amendment above),
+  never for training. MPSGraph does not execute in the simulator (gate via
   `targetEnvironment(simulator)`).
   **Orientation:** this contract (the amendment above) is the canon. The sunset
   plans `docs/ON-DEVICE-TRAINING.md` / `docs/COLOR-ATLAS.md` / `docs/STATUS.md`
   were deleted; their essentials live in these rules and the purpose-headers in
-  `SixFour/Atlas/`.
+  `SixFour/Train/`.
 - **Verify:** Haskell spec (golden vectors gate every backend).
 - **Deploy (theta_B, the only learned object):** MLX-trained 63-param blob →
   HAND-WRITTEN Swift forward in `SixFour/Native/MaskedBandForward.swift`,

@@ -38,6 +38,7 @@ phenotype.
   * The child stays on the 21-word manifold ('lawCrossoverPreservesShape'): crossover
     is a within-lattice move, never a dimensionality drift.
 -}
+-- COMPARTMENT: SWIFT-APP-SOCIAL | tag:DisplaySide
 module SixFour.Spec.GeneRecombination
   ( -- * Blend weights (Q16 fractions)
     BlendWeight

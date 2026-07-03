@@ -46,8 +46,12 @@ module SixFour.Spec.CaptureFormat
     -- * The export / import maps (one frame's index plane)
   , exportFrameToWire
   , importWireToCapture
+    -- * The export / import maps (the FULL capture: per-frame palette + index plane)
+  , exportCaptureToWire
+  , importWireToCaptureAll
     -- * Laws
   , lawExportImportRoundTripsIndices
+  , lawExportImportRoundTripsCapture
   , lawTimeAxisUnscaledAtWire
   , lawWireIsSpatialFourXOnly
   , lawCaptureNudgeAligned
@@ -115,6 +119,29 @@ lawExportImportRoundTripsIndices :: Eq a => [a] -> Bool
 lawExportImportRoundTripsIndices plane =
   length plane /= captureSide * captureSide
     || importWireToCapture (exportFrameToWire plane) == plane
+
+-- | Export the FULL capture — every frame's (sRGB8 palette, index plane) — to the wire. The palette
+-- is CARRIED VERBATIM (replicate acts on the index plane only); the frame count is untouched.
+exportCaptureToWire :: [([(Int, Int, Int)], [a])] -> [([(Int, Int, Int)], [a])]
+exportCaptureToWire = map (\(pal, plane) -> (pal, exportFrameToWire plane))
+
+-- | Import the FULL wire artifact back to the logical capture: exact per-frame decimation, palettes
+-- verbatim, frame count untouched.
+importWireToCaptureAll :: [([(Int, Int, Int)], [a])] -> [([(Int, Int, Int)], [a])]
+importWireToCaptureAll = map (\(pal, plane) -> (pal, importWireToCapture plane))
+
+-- | ★ THE FULL-ARTIFACT ROUND TRIP (audit G6, 2026-07-03): the WHOLE capture — every frame's sRGB8
+-- palette bytes AND index plane, at any frame count including the canonical 64 — survives
+-- export∘import EXACTLY, with the palette plane verbatim ON the wire (not merely recovered) and the
+-- time axis unscaled. Lifts 'lawExportImportRoundTripsIndices' from one frame's index plane to the
+-- artifact of record; this is the strongest round-trip the wire admits (Q16 recovery stays forbidden
+-- per 'contractQ16NotRecoverableAcrossGif' — the (index + sRGB8) level IS the whole contract).
+lawExportImportRoundTripsCapture :: Eq a => [([(Int, Int, Int)], [a])] -> Bool
+lawExportImportRoundTripsCapture frames =
+  any ((/= captureSide * captureSide) . length . snd) frames
+    || ( importWireToCaptureAll (exportCaptureToWire frames) == frames
+      && map fst (exportCaptureToWire frames) == map fst frames     -- palettes verbatim on the wire
+      && length (exportCaptureToWire frames) == length frames )     -- time axis unscaled
 
 -- | The TIME axis is unscaled at the wire: the shipped GIF has the same 64 frames as the capture. This is
 -- the theorem that forbids conflating the capture wire ('Export.replicate2D', space-only) with the model

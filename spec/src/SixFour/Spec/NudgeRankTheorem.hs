@@ -74,6 +74,9 @@ module SixFour.Spec.NudgeRankTheorem
   , allMinors2Zero
     -- * H1 — RANK
   , lawSingleVoxelRank1
+  , lawSingleVoxelRank1Everywhere
+  , lawTwoVoxelAggregateIsSingular
+  , lawRank3ReachableAtEveryScale
   , lawCellAggregateReachesRank3
   , lawNineIndependentAtCellNotVoxel
   , lawHeldOutLossIsCellAggregateNotPerVoxel
@@ -162,6 +165,40 @@ lawSingleVoxelRank1 =
   in m == outerI (colorVec p) (spaceVec p)              -- it IS a single outer product
      && allMinors2Zero m                                -- rank ≤ 1
      && lawComparisonIsSeparable p                      -- reuse the proven separability
+
+-- | QUANTIFIED RANK CEILING (2026-07-03, audit G2): the rank-≤1 verdict holds at EVERY voxel,
+-- not at one hand-built witness — for ALL @P6@, the comparison matrix IS the outer product
+-- @colorVec ⊗ spaceVec@ and every 2×2 minor vanishes. This is the theorem
+-- 'lawSingleVoxelRank1' witnesses, now universally quantified.
+lawSingleVoxelRank1Everywhere :: Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Bool
+lawSingleVoxelRank1Everywhere l a b x y t =
+  let p = P6 l a b x y t
+      m = compareMatrix p
+  in m == outerI (colorVec p) (spaceVec p) && allMinors2Zero m
+
+-- | QUANTIFIED MINIMALITY (2026-07-03, audit G2): the OTHER half of "minimum voxels for rank 3
+-- is exactly 3", previously prose — a TWO-voxel aggregate is ALWAYS singular (a sum of two
+-- rank-1 outer products has rank ≤ 2, so @det3 == 0@), for all pairs of voxels. Together with
+-- 'lawRank3ReachableAtEveryScale' this pins the minimum at exactly 3 as a law, not a comment.
+lawTwoVoxelAggregateIsSingular :: [Integer] -> [Integer] -> Bool
+lawTwoVoxelAggregateIsSingular u v =
+  det3 (cellAggregate [mkP6 u, mkP6 v]) == 0
+  where mkP6 ws = case ws ++ repeat 0 of
+          (l:a:b:x:y:t:_) -> P6 l a b x y t
+          _               -> P6 0 0 0 0 0 0   -- unreachable (the padded list is infinite)
+
+-- | QUANTIFIED REACHABILITY (2026-07-03, audit G2): rank 3 is reached at EVERY scale, not just
+-- by the unit witness — the φ6-paired family @{(a,x), (b,y), (L,t)}@ aggregates to
+-- @diag(a·x, b·y, L·t)@ with @det = a·x·b·y·L·t ≠ 0@ for any nonzero components. The 9-channel
+-- cell surface is honest for arbitrarily large (and mixed-sign) paint magnitudes.
+lawRank3ReachableAtEveryScale :: Integer -> Integer -> Integer -> Integer -> Integer -> Integer -> Bool
+lawRank3ReachableAtEveryScale a0 b0 l0 x0 y0 t0 =
+  let nz w = if w == 0 then 1 else w
+      (a, b, l, x, y, t) = (nz a0, nz b0, nz l0, nz x0, nz y0, nz t0)
+      agg = cellAggregate [ P6 0 a 0 x 0 0, P6 0 0 b 0 y 0, P6 l 0 0 0 0 t ]
+  in agg == [[a*x, 0, 0], [0, b*y, 0], [0, 0, l*t]]
+     && det3 agg == a*x * b*y * l*t
+     && det3 agg /= 0
 
 -- | The CELL aggregate of ≥3 generic voxels reaches FULL RANK 3 (non-zero 3×3 det),
 -- so the cell has 9 genuinely independent comparison entries. Minimum voxels for

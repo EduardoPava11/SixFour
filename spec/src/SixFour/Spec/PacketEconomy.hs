@@ -44,6 +44,7 @@ the meaning-per-'S'-packet Pareto frontier.
   * The floor gene ('zeroParams') is the Pareto ORIGIN: 0 meaning, 0 packets, not
     admitted, never elite; the whole frontier is anchored there.
 -}
+-- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.PacketEconomy
   ( -- * Domain
     Combinator(..)

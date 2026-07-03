@@ -28,4 +28,9 @@ tests = testGroup "NudgeStep (one gesture -> one shared-latent step -> P re-proj
 
   , testProperty "undo = history-replay, delegated to LatentNavigation.lawUndoNeedsHistoryNotInverse" $
       once lawNudgeUndoIsHistory
+
+  , testProperty "CARRIER LIMITATION (checked, G7): scalar cube collapses (a,b) to a+b; (k,-k) is a no-op; the surviving DOF is live" $
+      forAll (choose (-64, 64)) $ \da -> forAll (choose (-64, 64)) $ \db ->
+      forAll genVoxels $ \xs ->
+        lawScalarGestureCollapse da db xs
   ]

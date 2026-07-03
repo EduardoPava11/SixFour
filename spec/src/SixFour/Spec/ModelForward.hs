@@ -43,9 +43,12 @@ module SixFour.Spec.ModelForward
   , forwardOctant
   , forwardFromInput
   , floorOctant
+  , paintOnlyInput
     -- * Laws
   , lawZeroNudgeForwardIsFloor
   , lawNudgeMovesOutput
+  , lawForwardFromInputConsumesPaint
+  , lawMissingBudgetRowIsFloor
   , lawResidualStaysInA7
   , lawForwardCommitIsQ16
   ) where
@@ -56,7 +59,9 @@ import SixFour.Spec.RootLatticeDetail     (fromRootCoords, inA)
 import SixFour.Spec.SelfSimilarReconstruct (LatentTail(..), tailToDetail, octantLift)
 import SixFour.Spec.CellNudge             (CellBudget, emptyCellBudget, paintCellPair)
 import SixFour.Spec.ModelIO               (ModelInput(..))
-import SixFour.Spec.AboveFloorMargin      (marginCoeffQ16)
+import SixFour.Spec.Upscale256            (UpscaleInput(..))
+import SixFour.Spec.AtlasCascade          (emptyExit)
+import SixFour.Spec.AboveFloorMargin     (marginCoeffQ16)
 
 -- | The opaque LEARNED head: given a control-cell index and the φ6 gauge, emit the 7 A_7 root
 -- coordinates of that cell's invented detail. ModelForward proves the forward FRAME holds for ANY such
@@ -121,15 +126,54 @@ lawZeroNudgeForwardIsFloor coarse =
      ( forwardOctant survHead (emptyCellBudget 1) False coarse == floorOctant coarse
     && forwardOctant survHead (emptyCellBudget 1) True  coarse == floorOctant coarse )
 
--- | A PAINTED CELL MOVES THE OUTPUT off the floor: budgeting one channel in cell 0 ungates the invention,
--- the surviving A_7 detail commits to nonzero, and the lift differs from 'floorOctant'. The inequality is
--- guaranteed by the reversibility of the octant lift (delegates "SixFour.Spec.AboveFloorMargin"
--- @lawAboveFloorMarginReachable@). Teeth: if the commit zeroed the residual the outputs would coincide.
-lawNudgeMovesOutput :: [Int] -> Bool
-lawNudgeMovesOutput coarse =
+-- | A PAINTED CELL MOVES THE OUTPUT off the floor, for ANY of the nine channel pairs, ANY positive
+-- budget, and EITHER gauge: one nonzero entry in control cell 0's row ungates the invention (the gate
+-- is @sum bs == 0@), the surviving A_7 detail commits to nonzero, and the lift differs from
+-- 'floorOctant'. The inequality is guaranteed by the reversibility of the octant lift (delegates
+-- "SixFour.Spec.AboveFloorMargin" @lawAboveFloorMarginReachable@). Teeth: if the commit zeroed the
+-- residual the outputs would coincide. (Generalized 2026-07-03 from the single fixed witness
+-- cell-0\/pair-0\/budget-1; the pair index is taken mod 9 and the budget clamped positive, so the law
+-- is total on all four arguments.)
+lawNudgeMovesOutput :: Int -> Int -> Bool -> [Int] -> Bool
+lawNudgeMovesOutput pair v gauge coarse =
   length coarse /= 8 ||
-  let painted = paintCellPair (emptyCellBudget 1) 0 0 1   -- paint cell 0, pair 0, budget 1
-  in forwardOctant survHead painted False coarse /= floorOctant coarse
+  let painted = paintCellPair (emptyCellBudget 1) 0 (abs pair `mod` 9) (max 1 (abs v))
+  in forwardOctant survHead painted gauge coarse /= floorOctant coarse
+
+-- | A capture-free 'ModelInput' carrying ONLY the fields 'forwardFromInput' consumes (the paint
+-- and the gauge), with a canonical empty capture in @miCapture@. 'forwardFromInput' never reads
+-- @miCapture@ (that is W1.2's builder seam); this constructor makes that a testable fact rather
+-- than prose, and lets the laws drive the REAL input boundary without a real capture.
+paintOnlyInput :: CellBudget -> Bool -> ModelInput
+paintOnlyInput bud gauge = ModelInput
+  { miCapture = UpscaleInput 0 0 [] [] [] [] [] (const False) emptyExit [] 1
+  , miNudge   = bud
+  , miGauge   = gauge
+  }
+
+-- | ★ THE INPUT BOUNDARY IS HONEST END-TO-END: driving the forward THROUGH the "SixFour.Spec.ModelIO"
+-- boundary ('forwardFromInput', the function the app-side port actually mirrors) consumes exactly the
+-- paint and the gauge — the unpainted input is the byte-exact floor and a painted input moves off it,
+-- through 'ModelInput', not merely at 'forwardOctant'. (Added 2026-07-03: the audit found
+-- 'forwardFromInput' exported but pinned by no law.)
+lawForwardFromInputConsumesPaint :: Int -> Int -> Bool -> [Int] -> Bool
+lawForwardFromInputConsumesPaint pair v gauge coarse =
+  length coarse /= 8 ||
+  let painted = paintCellPair (emptyCellBudget 1) 0 (abs pair `mod` 9) (max 1 (abs v))
+  in    forwardFromInput survHead (paintOnlyInput (emptyCellBudget 1) gauge) coarse
+          == floorOctant coarse
+     && forwardFromInput survHead (paintOnlyInput painted gauge) coarse
+          /= floorOctant coarse
+
+-- | REFUSAL: a budget with NO row for the control cell invents nothing — 'budgetRow' answers the
+-- empty row off the end of the list (never a crash, never a neighbour's row), the empty row gates
+-- the head off, and the forward is the byte-exact floor, for any head and either gauge. Pins the
+-- invalid-input direction the audit (2026-07-03) found unpinned: silent degradation is now a
+-- CONTRACT (degrade to the floor), not an accident.
+lawMissingBudgetRowIsFloor :: Bool -> [Int] -> Bool
+lawMissingBudgetRowIsFloor gauge coarse =
+  length coarse /= 8 ||
+  forwardOctant survHead [] gauge coarse == floorOctant coarse
 
 -- | THE HEAD'S CODOMAIN IS A_7: for ANY coordinates the head emits, reading them as A_7 root coordinates
 -- reconstructs a mean-free (Σ = 0) residual, so the invention is a legal detail band by construction.
