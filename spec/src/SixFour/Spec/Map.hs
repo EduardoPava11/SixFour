@@ -1125,6 +1125,41 @@ app-social layer (destined for Swift + CloudKit public DB + Game Center), still 
     lattice (real @predictDetail@, Q16 commit inside) into a P6 cloud and @cloudDistance@ is pulled
     back (pseudometric by theorem; gauge quotient: identical expression ⇒ distance 0; the
     int→float→int sandwich is the port map).
+  * "SixFour.Spec.DescriptorQuasiIsometry" — the descriptor ADMISSIBILITY GATE: promotes the
+    'GeneSimilarity' pullback PSEUDOmetric to a TWO-SIDED additive quasi-isometry on the Q16 floor
+    (no COLLAPSE, no DISCONTINUITY), so a learned encoder may stand in for @expressGene@ only if it
+    preserves distance both ways. Keystone = the per-band probe design is a full-rank Vandermonde
+    over ℤ (det 2), the algebraic certificate that @c1>0@; distortion @κ = c2\/c1@ bounded, never
+    an identity.
+  * "SixFour.Spec.PacketEconomy" — DECODE-COMPUTE is the scarce resource genes compete for:
+    encode is cheap, decode spends S\/K\/I packets (@I@=free floor read, @K@=pool, @S@=weighted
+    invent where the gene lives), and a gene is an elite only if not Pareto-dominated on
+    (meaning UP, packets DOWN). The two fitnesses are DISJOINT (objective "does something" above a
+    HELD target = admission; social attention dormant), so no global scalar collapses the atlas;
+    selection order is integer meaning-per-packet (cross-multiply, no divide).
+  * "SixFour.Spec.CombinatorExactSequence" — S\/K\/I ARE the three canonical maps of the octant
+    short exact sequence @0 -> detail -> fine -> coarse -> 0@: K = the surjection (forgets detail,
+    'scalarCollapseLossy'), I = the splitting (the reversible lift 'liftOct'\/'unliftOct', exact iso,
+    work 0), S = a SECTION (invent a detail representative, @K.S=id@ on the coarse). The gene lives
+    on S because a section is the only one of the three not canonically determined by the sequence;
+    @S.K/=id@ and the residual @v@ vs @S(K v)@ is what training minimizes.
+  * "SixFour.Spec.GeneRecombination" — SEXUAL, BALANCED crossover: a per-word Q16 lerp of two
+    parent θ blobs (linear head ⇒ no Git-Re-Basin), child commits BOTH parents (acyclic DAG),
+    grantable only to someone holding BOTH parents (lineage-keyed, closes single-parent laundering);
+    'recombine' has no @Ledger@, so crossover mints no credit.
+  * "SixFour.Spec.PaintOrderPrior" — the paint FIRST-TOUCH order seeds the PonderNet halting prior
+    on the A7 rung ladder: earliest touch ⇒ lowest @λ_p@ ⇒ deepest read ⇒ most packets. Keystone is
+    a PERMUTATION-PAIR property, so a magnitude-only policy (ignoring order) is structurally
+    forbidden; packets are conserved under permutation (reallocated, never inflated).
+  * "SixFour.Spec.AnytimeDecode" — partial decode NEVER fails: reading k bands is a strict PREFIX of
+    the full decode over the additive 'unliftVec' (a successive-refinement code), and depth-0 (the
+    coarse floor = Showcase = FloorExact) is always reachable via the total zero-detail octant expand.
+    A tail-dependent decoder is provably rejected.
+  * "SixFour.Spec.BudgetHead" — the two-headed gene's ADVISORY budget head (learned estimator
+    Tier-1 stub): it estimates a per-rung packet schedule but only gates the @Maybe [Detail]@ fork
+    of the decode, so a wrong estimate lands on a coarser point of the SAME ladder, never off it
+    (keystone = only the Maybe-fork routing is floor-safe, an adversarial 'DecodeStrategy' family).
+    The advisory rides tag-adjacent, excluded from tag identity, swapMinor-only.
   * "SixFour.Spec.GeneHash" — the CONTENT-ADDRESS itself: a 'GeneId' is FNV-1a over a canonical
     preimage that INCLUDES the parents, so the address commits to ancestry. 'mint'\/'buildFrom' can
     only remix pre-existing genes, which turns Lineage's "acyclic by construction" into a THEOREM

@@ -47,6 +47,13 @@ import qualified Properties.ABSurface    as ABSurface
 import qualified Properties.GenomeCarrier as GenomeCarrier
 import qualified Properties.SwapCarrier as SwapCarrier
 import qualified Properties.GeneSimilarity as GeneSimilarity
+import qualified Properties.DescriptorQuasiIsometry as DescriptorQuasiIsometry
+import qualified Properties.PacketEconomy as PacketEconomy
+import qualified Properties.CombinatorExactSequence as CombinatorExactSequence
+import qualified Properties.GeneRecombination as GeneRecombination
+import qualified Properties.PaintOrderPrior as PaintOrderPrior
+import qualified Properties.AnytimeDecode as AnytimeDecode
+import qualified Properties.BudgetHead as BudgetHead
 import qualified Properties.CurateRealize as CurateRealize
 import qualified Properties.PairTree     as PairTree
 import qualified Properties.PairTreeFixed as PairTreeFixed
@@ -254,6 +261,13 @@ main = defaultMain $ testGroup "sixfour-spec"
   , GenomeCarrier.tests
   , SwapCarrier.tests
   , GeneSimilarity.tests
+  , DescriptorQuasiIsometry.tests
+  , PacketEconomy.tests
+  , CombinatorExactSequence.tests
+  , GeneRecombination.tests
+  , PaintOrderPrior.tests
+  , AnytimeDecode.tests
+  , BudgetHead.tests
   , CurateRealize.tests
   , PairTree.tests
   , PairTreeFixed.tests
