@@ -520,6 +520,17 @@ train: concentrated blocks have conditional factor 1 = zero bits, skipped
 (@lawConcentratedTransitionIsFree@); mass buys certainty (shot noise, physics note). The 16-rung is
 the realized GCT, never a target. Cadence fit is measured doc (palette16_bench + AtlasTrainer
 12.4 ms/step): the constraint is information, not compute. Additive),
+"SixFour.Spec.PullField" (★ INFLUENCE IS THE GAME — all three rungs in ONE GIF89a as a per-region
+resolution field: depth 0 = 16-rung / 4×4×4 voxel PULL to one color, 1 = 32-rung / 2×2×2, 2 = free.
+The field IS the halting field made visible (fed by certified order / W=1 skip / paint). Render-side
+paint laws: @lawZeroInfluenceIsCoarsePull@ (= lawZeroPaintVolumeIsFloor seen from pixels, independent
+replicate check), @lawFullInfluenceIsIdentity@, @lawInfluenceIsLocal@ (one region moves only its own
+pixels). BYTES FOLLOW INFLUENCE, both axes of the standard: @lawInteriorRunsAreFree@ (pulled blocks
+= flat runs = LZW nearly free) + @lawTemporalPullSkipsFrames@ (pulled blocks identical across their
+4-frame window ⇒ the Image Descriptor changed-rect omits them). Pull = round-half-up block mean
+(s4_sums_to_srgb8 semantics): resolution is EMERGENT from influence, never stored. Indices only,
+never the GCT; graded/energy-weighted pulls = design headroom. NOT Spec.InfluenceField (that module
+= the decorative radiation-ground tunables). Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with

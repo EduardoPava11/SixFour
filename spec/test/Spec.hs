@@ -127,6 +127,7 @@ import qualified Properties.PaletteKinetics as PaletteKinetics
 import qualified Properties.KinematicLadder as KinematicLadder
 import qualified Properties.KinematicHaltPrior as KinematicHaltPrior
 import qualified Properties.TriScaleTraining as TriScaleTraining
+import qualified Properties.PullField as PullField
 import qualified Properties.GaugeAction as GaugeAction
 import qualified Properties.ScaleFiltration as ScaleFiltration
 import qualified Properties.RingReduction as RingReduction
@@ -344,6 +345,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , KinematicLadder.tests
   , KinematicHaltPrior.tests
   , TriScaleTraining.tests
+  , PullField.tests
   , GaugeAction.tests
   , ScaleFiltration.tests
   , RingReduction.tests
