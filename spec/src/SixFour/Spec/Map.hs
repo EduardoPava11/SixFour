@@ -543,6 +543,19 @@ entropy (@lawBleedGeneratesEntropyLedger@ — W factorizes exactly across a blee
 PaletteKinetics chain rule driven by the radius knob). ρ = the single knob trading entropy kept vs
 bytes spent, both sides integer-exact. Opponent = the V2 INTEGER latent, not CIE; d6/energy metrics
 stay in Dim6. Additive),
+"SixFour.Spec.ChoiceTraining" (★ TRAINING LOOKS DIFFERENT — the three rungs as three GIFs, mixed,
+and the USER'S CHOICE is the training signal. @lawMixIsRegionwiseSplice@: every mixed render = a
+regionwise splice of the three pure GIFs (render once per rung, arms cost zero re-renders — a
+contract law: cross-region smoothing would break it loudly). @lawSingleRegionChoiceIsUnambiguous@:
+arms differing in one region render byte-identical elsewhere — a pick isolates exactly one variable
+(PullField locality applied to pairs). @lawPaintUnderdeterminesDepth@ = "paint is fun but ambiguous"
+made exact: the field→mask map is non-injective (all-1 vs all-2 fields, same mask) + pigeonhole
+3^8 > 2^8 — paint says WHERE, never HOW DEEP; paint constrains the arm space, choices resolve it.
+@lawTournamentIdentifiesField@: two comparisons per region recover ANY target field exactly (16
+picks determine 6561 possibilities; single-peaked chooser as the identifiability witness).
+Bradley–Terry update = trainer machinery (AtlasTrainer proof, 12.4 ms/step), referenced not
+re-landed; certified-order floor + W=1 skip prune uncontested regions so the user is only asked
+where influence is genuinely contested. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with

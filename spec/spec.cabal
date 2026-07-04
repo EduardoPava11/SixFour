@@ -139,6 +139,7 @@ library
         SixFour.Spec.TriScaleTraining
         SixFour.Spec.PullField
         SixFour.Spec.LabBleed
+        SixFour.Spec.ChoiceTraining
         SixFour.Spec.GaugeAction
         SixFour.Spec.ScaleFiltration
         SixFour.Spec.RingReduction
@@ -515,6 +516,7 @@ test-suite spec-tests
         Properties.TriScaleTraining
         Properties.PullField
         Properties.LabBleed
+        Properties.ChoiceTraining
         Properties.ScaleFiltration
         Properties.RingReduction
         Properties.MetricLattice
