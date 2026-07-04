@@ -76,6 +76,34 @@ final class NudgePaintModel: ObservableObject {
     /// Count of cells with any non-zero budget (the painted footprint).
     var paintedCellCount: Int { budget.reduce(0) { $0 + ($1.contains { $0 != 0 } ? 1 : 0) } }
 
+    /// `Spec.ModelForward.paintMask` in Swift, re-ordered for the engine: the 16³ paint
+    /// gate in DEVICE (t,r,c) order over this model's MORTON-ordered `CellBudget`
+    /// (this file owns the Morton order, so the conversion lives here). A cell is live
+    /// iff any of its 9 channel budgets is nonzero — the same `sum bs != 0` gate as the
+    /// spec's `cellDetail`. Returns nil when NOTHING is painted: callers treat nil as
+    /// the whole-volume shortcut (gene invents everywhere, the pre-W1 arm).
+    static func deviceMask(budget: [[Int]]) -> [Bool]? {
+        let s = side
+        var any = false
+        var mask = [Bool](repeating: false, count: s * s * s)
+        for z in 0 ..< s {
+            for y in 0 ..< s {
+                for x in 0 ..< s {
+                    let cell = mortonIndex(x: x, y: y, z: z)
+                    let painted = cell < budget.count && budget[cell].contains { $0 != 0 }
+                    if painted {
+                        any = true
+                        mask[(z * s + y) * s + x] = true   // device order: t=z, row=y, col=x
+                    }
+                }
+            }
+        }
+        return any ? mask : nil
+    }
+
+    /// The live paint's device-order mask (nil = unpainted = whole-volume shortcut).
+    func deviceMask() -> [Bool]? { Self.deviceMask(budget: budget) }
+
     /// The wireable model boundary for inference (zero paint ⇒ the byte-exact floor).
     func modelInput(captureHandle: Int) -> SixFourModelInput {
         SixFourModelInput(captureHandle: captureHandle, nudge: budget, gauge: gauge)

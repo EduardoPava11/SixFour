@@ -36,6 +36,11 @@ final class CurateModel: ObservableObject {
     let substrate: [[VoxelReduce.Px]]
     let gene: CaptureGene.ThetaUp?
     let paintedCells: Int
+    /// The ACCEPTED paint's 16³ device-order mask (W1): the decide-time
+    /// `acceptedInput.nudge`, consumed at last — the gene arm invents ONLY in
+    /// painted cells (`Spec.ModelForward.lawPaintGatesBlockLocal`); nil = the
+    /// whole-volume shortcut (nothing was painted).
+    let paintMask: [Bool]?
 
     private var floorVol: [Int32]?
     private var geneVol: [Int32]?
@@ -51,11 +56,12 @@ final class CurateModel: ObservableObject {
     static let slabCount = 16
 
     init(substrate: [[VoxelReduce.Px]], gene: CaptureGene.ThetaUp?,
-         useGene: Bool, paintedCells: Int = 0) {
+         useGene: Bool, paintedCells: Int = 0, paintMask: [Bool]? = nil) {
         self.substrate = substrate
         self.gene = gene
         self.useGene = useGene && gene != nil
         self.paintedCells = paintedCells
+        self.paintMask = paintMask
         rebuild()
     }
 
@@ -66,8 +72,10 @@ final class CurateModel: ObservableObject {
         let sub = substrate
         let theta = gene.map { g in g.theta.map(Double.init) }
         let channel = gene?.channel ?? 0
+        let mask = paintMask
         Task { [weak self] in
-            let (f, g) = await Self.buildArms(sub: sub, theta: theta, channel: channel)
+            let (f, g) = await Self.buildArms(sub: sub, theta: theta,
+                                              channel: channel, mask: mask)
             guard let self else { return }
             self.floorVol = f
             self.geneVol = g
@@ -77,19 +85,22 @@ final class CurateModel: ObservableObject {
     }
 
     private nonisolated static func buildArms(sub: [[VoxelReduce.Px]], theta: [Double]?,
-                                              channel: Int) async -> ([Int32]?, [Int32]?) {
+                                              channel: Int, mask: [Bool]?)
+        async -> ([Int32]?, [Int32]?) {
         await Task.detached(priority: .userInitiated) {
             if let builder = CurateBuilder() {
                 let f = builder.build(substrate: sub, theta: nil, rungs: 2)
                 let g = theta.flatMap {
-                    builder.build(substrate: sub, theta: $0, geneChannel: channel, rungs: 2)
+                    builder.build(substrate: sub, theta: $0, geneChannel: channel,
+                                  rungs: 2, paintMask: mask)
                 }
                 return (f, g)
             }
             // No Metal: the CPU twin — byte-identical by CurateBuilderTests gate 1.
             let f = OctantCube.expandProposal(substrate: sub, theta: nil)
             let g = theta.flatMap {
-                OctantCube.expandProposal(substrate: sub, theta: $0, geneChannel: channel)
+                OctantCube.expandProposal(substrate: sub, theta: $0, geneChannel: channel,
+                                          paintMask: mask)
             }
             return (f, g)
         }.value
@@ -131,11 +142,11 @@ struct CurateSurface: View {
 
     @MainActor
     init(substrate: [[VoxelReduce.Px]], thetaUp: CaptureGene.ThetaUp?,
-         useGene: Bool, paintedCells: Int,
+         useGene: Bool, paintedCells: Int, paintMask: [Bool]? = nil,
          onCurate: @escaping (CurateVerdict, Bool) -> Void) {
         _model = StateObject(wrappedValue: CurateModel(
             substrate: substrate, gene: thetaUp, useGene: useGene,
-            paintedCells: paintedCells))
+            paintedCells: paintedCells, paintMask: paintMask))
         self.onCurate = onCurate
     }
 

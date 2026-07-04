@@ -57,16 +57,22 @@ enum OctantCube {
     /// becomes a 2×2×2 block. `theta` nil (or the zero gene) yields the
     /// deterministic zero-detail floor = nearest-neighbour; a trained θ_up
     /// invents the seven bands from the coarse value (`predictCommitted` — the
-    /// same committed integers the trainer gated).
-    static func upRung(_ vol: [Int], side: Int, theta: [Double]?) -> [Int] {
+    /// same committed integers the trainer gated). `mask` (aligned with `vol`,
+    /// device (t,r,c) order) is the W1 paint gate — `Spec.ModelForward.gateDetail`:
+    /// invention lands ONLY in masked-on cells; masked-off cells ride the floor.
+    /// nil = ungated (every cell may invent).
+    static func upRung(_ vol: [Int], side: Int, theta: [Double]?,
+                       mask: [Bool]? = nil) -> [Int] {
         let s2 = side * 2
         var out = [Int](repeating: 0, count: s2 * s2 * s2)
         let zero = [Int](repeating: 0, count: 7)
         for t in 0 ..< side {
             for r in 0 ..< side {
                 for c in 0 ..< side {
-                    let v = vol[(t * side + r) * side + c]
-                    let detail = theta.map { DeviceTrainStepCPU.predictCommitted(theta: $0, coarse: v) } ?? zero
+                    let i = (t * side + r) * side + c
+                    let v = vol[i]
+                    let live = mask.map { i < $0.count && $0[i] } ?? true
+                    let detail = (live ? theta : nil).map { DeviceTrainStepCPU.predictCommitted(theta: $0, coarse: v) } ?? zero
                     let block = unlift(coarse: v, detail: detail)
                     var lane = 0
                     for dt in 0 ... 1 {
@@ -83,17 +89,44 @@ enum OctantCube {
         return out
     }
 
+    /// `Spec.ModelForward.upsampleMask` in Swift: up-rung a side³ cell mask —
+    /// each bit governs its 2×2×2 children in the device (t,r,c) layout, so ONE
+    /// painted 16³ cell governs its whole subtree at EVERY rung
+    /// (`lawMaskUpsampleIsBlockReplication`).
+    static func upsampleMask(side: Int, mask: [Bool]) -> [Bool] {
+        let s2 = side * 2
+        var out = [Bool](repeating: false, count: s2 * s2 * s2)
+        for tt in 0 ..< s2 {
+            for rr in 0 ..< s2 {
+                for cc in 0 ..< s2 {
+                    let i = ((tt / 2) * side + (rr / 2)) * side + (cc / 2)
+                    out[(tt * s2 + rr) * s2 + cc] = i < mask.count && mask[i]
+                }
+            }
+        }
+        return out
+    }
+
     /// THE DECIDE PREVIEW BUILD: the 16³ proposal (`Surface.coarseSubstrate`,
     /// 16 frames × 16² OKLab Q16) expanded two octant rungs to 64³, per channel.
     /// The gene invents on its trained channel only (L today); the other
     /// channels ride the deterministic floor. Returns the interleaved
     /// `((t·64 + row)·64 + col)·3 + ch` Q16 volume, or nil for a malformed
     /// substrate. `theta` nil == the pure floor (zero-gene == floor).
+    ///
+    /// `paintMask` (W1): the 16³ paint gate in device (t,r,c) order
+    /// (`NudgePaintModel.deviceMask` builds it from the Morton `CellBudget`).
+    /// Non-nil ⇒ the gene invents ONLY in painted cells — at both rungs, via the
+    /// spec's `upsampleMask`, so a painted 16-cell governs its whole 4³ block of
+    /// the 64³ (`lawPaintGatesBlockLocal`). nil ⇒ the whole-volume shortcut (the
+    /// pre-W1 gene arm, unchanged).
     static func expandProposal(substrate: [[VoxelReduce.Px]],
-                               theta: [Double]?, geneChannel: Int = 0) -> [Int32]? {
+                               theta: [Double]?, geneChannel: Int = 0,
+                               paintMask: [Bool]? = nil) -> [Int32]? {
         let side = 16
         guard substrate.count == side,
               substrate.allSatisfy({ $0.count == side * side }) else { return nil }
+        let mask32 = paintMask.map { upsampleMask(side: side, mask: $0) }
         var out = [Int32](repeating: 0, count: 64 * 64 * 64 * 3)
         for ch in 0 ..< 3 {
             var vol = [Int](repeating: 0, count: side * side * side)
@@ -104,7 +137,8 @@ enum OctantCube {
                 }
             }
             let th = ch == geneChannel ? theta : nil
-            let v64 = upRung(upRung(vol, side: side, theta: th), side: side * 2, theta: th)
+            let v64 = upRung(upRung(vol, side: side, theta: th, mask: paintMask),
+                             side: side * 2, theta: th, mask: mask32)
             for i in 0 ..< v64.count {
                 out[i * 3 + ch] = Int32(v64[i])
             }

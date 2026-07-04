@@ -19,7 +19,8 @@ struct Curating256PhaseField: View {
             substrate: surface.coarseSubstrate,
             thetaUp: surface.thetaUp,
             useGene: surface.acceptedUseGene,
-            paintedCells: paintedCells
+            paintedCells: paintedCells,
+            paintMask: paintMask
         ) { verdict, useGene in
             switch verdict {
             case .accept:
@@ -34,5 +35,13 @@ struct Curating256PhaseField: View {
     private var paintedCells: Int {
         guard let input = surface.acceptedInput else { return 0 }
         return input.nudge.reduce(0) { $0 + ($1.contains { $0 != 0 } ? 1 : 0) }
+    }
+
+    /// W1: the accepted paint CONSUMED — the decide-time `acceptedInput.nudge`
+    /// as a device-order mask, gating WHERE the curate build's gene arm invents
+    /// (nil = nothing painted = the whole-volume shortcut). This closes the
+    /// "recorded but consumed by nothing" gap the 2026-07-03 audit named.
+    private var paintMask: [Bool]? {
+        surface.acceptedInput.flatMap { NudgePaintModel.deviceMask(budget: $0.nudge) }
     }
 }

@@ -44,6 +44,10 @@ module SixFour.Spec.ModelForward
   , forwardFromInput
   , floorOctant
   , paintOnlyInput
+    -- * The paint-gated VOLUME expand (W1: the budget gates WHERE invention lands)
+  , paintMask
+  , gateDetail
+  , upsampleMask
     -- * Laws
   , lawZeroNudgeForwardIsFloor
   , lawNudgeMovesOutput
@@ -51,12 +55,16 @@ module SixFour.Spec.ModelForward
   , lawMissingBudgetRowIsFloor
   , lawResidualStaysInA7
   , lawForwardCommitIsQ16
+  , lawZeroPaintVolumeIsFloor
+  , lawPaintGatesBlockLocal
+  , lawMaskUpsampleIsBlockReplication
   ) where
 
 import SixFour.Spec.ByteCarrier          (mkLatent)
+import SixFour.Spec.OctreeCell           (Detail)
 import SixFour.Spec.Q16                   (toQ16)
 import SixFour.Spec.RootLatticeDetail     (fromRootCoords, inA)
-import SixFour.Spec.SelfSimilarReconstruct (LatentTail(..), tailToDetail, octantLift)
+import SixFour.Spec.SelfSimilarReconstruct (LatentTail(..), tailToDetail, octantLift, expandRungVolume)
 import SixFour.Spec.CellNudge             (CellBudget, emptyCellBudget, paintCellPair)
 import SixFour.Spec.ModelIO               (ModelInput(..))
 import SixFour.Spec.Upscale256            (UpscaleInput(..))
@@ -174,6 +182,85 @@ lawMissingBudgetRowIsFloor :: Bool -> [Int] -> Bool
 lawMissingBudgetRowIsFloor gauge coarse =
   length coarse /= 8 ||
   forwardOctant survHead [] gauge coarse == floorOctant coarse
+
+-- ---------------------------------------------------------------------------
+-- The paint-gated VOLUME expand (W1): the budget gates WHERE invention lands
+-- ---------------------------------------------------------------------------
+
+-- | The volume-wide paint MASK: cell @i@ is live iff its budget row carries any paint — the
+-- SAME @sum bs \/= 0@ gate as 'cellDetail', applied across all @n@ cells. This is what lets a
+-- 'CellBudget' gate a whole volume expand instead of one octant.
+paintMask :: CellBudget -> Int -> [Bool]
+paintMask bud n = [ sum (budgetRow bud i) /= 0 | i <- [0 .. n - 1] ]
+
+-- | Gate a per-voxel invented-detail list by the paint mask: painted cells keep their
+-- invented bands, unpainted cells are zeroed to the floor band. Composed with
+-- 'SixFour.Spec.SelfSimilarReconstruct.expandRungVolume' this IS the paint-gated volume
+-- expand — no new operator, only a masked detail source (the sandwich stays pure integer).
+gateDetail :: [Bool] -> [Detail] -> [Detail]
+gateDetail = zipWith (\m d -> if m then d else (0, 0, 0, 0, 0, 0, 0))
+
+-- | Up-rung a @side³@ cell mask: each bit governs its 2×2×2 children in the device
+-- @(t,r,c)@ layout, so ONE painted 16³ cell governs its whole subtree at EVERY rung —
+-- the behavioural realisation of "SixFour.Spec.CellNudge" @lawCellGovernsSuperResSubtree@.
+upsampleMask :: Int -> [Bool] -> [Bool]
+upsampleMask side mask =
+  [ maskAt (tt `div` 2) (rr `div` 2) (cc `div` 2)
+  | tt <- [0 .. s2 - 1], rr <- [0 .. s2 - 1], cc <- [0 .. s2 - 1] ]
+  where
+    s2 = 2 * side
+    maskAt t r c =
+      let i = (t * side + r) * side + c
+      in i >= 0 && i < length mask && (mask !! i)
+
+-- | ★ W1 KEYSTONE, volume-wide zero-nudge-is-floor: an EMPTY budget gates every cell off,
+-- so the paint-gated volume expand equals the zero-detail floor expand for ANY invented
+-- detail list — 'lawZeroNudgeForwardIsFloor' lifted from one octant to the whole rung.
+lawZeroPaintVolumeIsFloor :: [Int] -> [Detail] -> Bool
+lawZeroPaintVolumeIsFloor vol ds =
+  length vol /= 8 ||
+  expandRungVolume 2 vol (Just (gateDetail (paintMask (emptyCellBudget 8) 8) ds))
+    == expandRungVolume 2 vol Nothing
+
+-- | ★ W1 LOCALITY: painting exactly ONE cell moves the output ONLY inside that cell's
+-- 2×2×2 block — every other voxel of the gated expand is the floor byte-for-byte, and the
+-- painted block genuinely moves (a nonzero invented band is supplied everywhere, so only
+-- the gate decides). The volume-wide composition of 'lawNudgeMovesOutput' with
+-- "SixFour.Spec.SelfSimilarReconstruct" @lawVolumeExpandBlockLocal@.
+lawPaintGatesBlockLocal :: Int -> Int -> [Int] -> Bool
+lawPaintGatesBlockLocal cell0 pairIx vol =
+  length vol /= 8 ||
+  let side  = 2
+      n     = side * side * side
+      cell  = abs cell0 `mod` n
+      bud   = paintCellPair (emptyCellBudget n) cell (abs pairIx `mod` 9) 1
+      ds    = replicate n (1, 0, 0, 0, 0, 0, 0)
+      gated = expandRungVolume side vol (Just (gateDetail (paintMask bud n) ds))
+      floorV = expandRungVolume side vol Nothing
+      s2    = 2 * side
+      (t, rc) = cell `divMod` (side * side)
+      (r, c)  = rc `divMod` side
+      inBlock j =
+        let (tt, rr2) = j `divMod` (s2 * s2)
+            (rr, cc)  = rr2 `divMod` s2
+        in tt `div` 2 == t && rr `div` 2 == r && cc `div` 2 == c
+      zipped = zip [0 :: Int ..] (zip gated floorV)
+  in and [ g == f | (j, (g, f)) <- zipped, not (inBlock j) ]   -- floor everywhere else
+     && or  [ g /= f | (j, (g, f)) <- zipped, inBlock j ]      -- the painted block moves
+
+-- | The mask up-rung is EXACT block replication: child @(tt,rr,cc)@ reads bit
+-- @(tt\/2, rr\/2, cc\/2)@, no smear, no swap — the mask twin of
+-- "SixFour.Spec.SelfSimilarReconstruct" @lawVolumeExpandBlockLocal@'s indexing tooth.
+lawMaskUpsampleIsBlockReplication :: [Bool] -> Bool
+lawMaskUpsampleIsBlockReplication bits0 =
+  let side = 2
+      mask = take (side * side * side) (bits0 ++ repeat False)
+      up   = upsampleMask side mask
+      s2   = 2 * side
+  in length up == s2 * s2 * s2
+     && and [ up !! ((tt * s2 + rr) * s2 + cc)
+                == mask !! (((tt `div` 2) * side + (rr `div` 2)) * side + (cc `div` 2))
+            | tt <- [0 .. s2 - 1], rr <- [0 .. s2 - 1], cc <- [0 .. s2 - 1] ]
 
 -- | THE HEAD'S CODOMAIN IS A_7: for ANY coordinates the head emits, reading them as A_7 root coordinates
 -- reconstructs a mean-free (Σ = 0) residual, so the invention is a legal detail band by construction.

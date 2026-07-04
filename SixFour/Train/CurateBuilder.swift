@@ -40,18 +40,38 @@ final class CurateBuilder {
         }
     }
 
+    /// `Spec.ModelForward.gateDetail` in Swift: zero the 7 invented bands of every
+    /// masked-off cell, so the kernel (untouched) lands the floor there — the
+    /// paint gate stays a pure-integer detail transform (the sandwich holds).
+    static func gateDetails(_ details: [Int32], mask: [Bool]) -> [Int32] {
+        var out = details
+        for cell in 0 ..< details.count / 7 where !(cell < mask.count && mask[cell]) {
+            for b in 0 ..< 7 { out[cell * 7 + b] = 0 }
+        }
+        return out
+    }
+
     /// One channel's ladder: `rungs` successive GPU up-rungs from a side³ scalar
     /// cube. `theta` nil = the deterministic floor at every rung; else θ invents
     /// per rung on the CURRENT coarse values (the weight-tied self-similar shape).
-    func expandLadder(base: [Int32], side: Int, rungs: Int, theta: [Double]?) -> [Int32]? {
+    /// `paintMask` (W1, device (t,r,c) order at `side³`): invention lands only in
+    /// painted cells; the mask up-rungs with the volume (`OctantCube.upsampleMask`,
+    /// = `lawMaskUpsampleIsBlockReplication`). nil = ungated.
+    func expandLadder(base: [Int32], side: Int, rungs: Int, theta: [Double]?,
+                      paintMask: [Bool]? = nil) -> [Int32]? {
         var vol = base
         var s = side
+        var mask = paintMask
         for _ in 0 ..< rungs {
-            let details = theta.map { Self.thetaDetails(vol, theta: $0) }
+            var details = theta.map { Self.thetaDetails(vol, theta: $0) }
+            if let m = mask, details != nil {
+                details = details.map { Self.gateDetails($0, mask: m) }
+            }
             guard let next = rung.expandRung(volume: vol, side: s, details: details) else {
                 return nil
             }
             vol = next
+            mask = mask.map { OctantCube.upsampleMask(side: s, mask: $0) }
             s *= 2
         }
         return vol
@@ -64,7 +84,8 @@ final class CurateBuilder {
     /// or nil for a malformed substrate / no GPU. `rungs: 2` == the decide
     /// preview's `OctantCube.expandProposal`, bit-for-bit (gated).
     func build(substrate: [[VoxelReduce.Px]], theta: [Double]?,
-               geneChannel: Int = 0, rungs: Int) -> [Int32]? {
+               geneChannel: Int = 0, rungs: Int,
+               paintMask: [Bool]? = nil) -> [Int32]? {
         let side = substrate.count
         guard side > 0, rungs >= 0,
               substrate.allSatisfy({ $0.count == side * side }) else { return nil }
@@ -79,7 +100,8 @@ final class CurateBuilder {
                 }
             }
             guard let fine = expandLadder(base: vol, side: side, rungs: rungs,
-                                          theta: ch == geneChannel ? theta : nil) else {
+                                          theta: ch == geneChannel ? theta : nil,
+                                          paintMask: paintMask) else {
                 return nil
             }
             for i in 0 ..< fine.count { out[i * 3 + ch] = fine[i] }

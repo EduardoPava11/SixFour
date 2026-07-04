@@ -3,7 +3,12 @@ module Properties.ModelForward (tests) where
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
+import SixFour.Spec.OctreeCell (Detail)
 import SixFour.Spec.ModelForward
+
+genDetail :: Gen Detail
+genDetail = (,,,,,,) <$> g <*> g <*> g <*> g <*> g <*> g <*> g
+  where g = choose (-256, 256)
 
 -- | Exactly the octant shape: 8 coarse children. Under the previous bare-@[Int]@
 -- generator the laws' @length \/= 8 ||@ totality guard short-circuited on almost
@@ -40,4 +45,13 @@ tests = testGroup "ModelForward (the nudge-conditioned forward contract)"
       lawResidualStaysInA7
   , testProperty "the commit is byte-exact Q16 (invented coords re-enter the grid with no drift)"
       lawForwardCommitIsQ16
+  , testProperty "W1 KEYSTONE: zero paint gates the WHOLE volume expand to the floor (any invented detail)"
+      (forAll genCoarse8 $ \vol -> forAll (vectorOf 8 genDetail) $ \ds ->
+         lawZeroPaintVolumeIsFloor vol ds)
+  , testProperty "W1 LOCALITY: one painted cell moves ONLY its own block; everywhere else is the floor"
+      (forAll (choose (0, 7)) $ \cell -> forAll (choose (0, 8)) $ \p ->
+       forAll genCoarse8 $ \vol ->
+         lawPaintGatesBlockLocal cell p vol)
+  , testProperty "the mask up-rung is exact block replication (one 16-cell governs its whole subtree)"
+      (forAll (vectorOf 8 arbitrary) lawMaskUpsampleIsBlockReplication)
   ]
