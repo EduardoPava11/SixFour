@@ -14,7 +14,7 @@ The formally-verified **source of truth**. Tensors are verified here (Naperian +
 SoA channel-axis laws in `Spec/Tensor.hs`) and so are the NN layers
 (σ-equivariance theorem in `Spec/LookNetCompose.hs`). The `sixfour-spec` library
 is GHC-boot-only (`base`, `vector`, `containers`, `text`, `transformers`).
-Tooling executables (`spec-tui`, `spec-gif`, tests) may use `brick`/`vty`/
+Tooling executables (`spec-codegen`, `spec-fixtures`, `spec-gen`, tests) may use `brick`/`vty`/
 `JuicyPixels`/`QuickCheck` — they are dev tools, never shipped. The spec emits
 contracts to every other tier and pins them with golden vectors so nothing
 drifts; `cabal test` is the gate.
@@ -116,7 +116,7 @@ take on a dependency.
   HAND-WRITTEN Swift forward in `SixFour/Native/MaskedBandForward.swift`,
   golden-gated (`MaskedBandGolden`) and byte-exact on device. NO Core AI.
   (SUPERSEDES the 2026-06-22-retired "Deploy L via Core AI" line; see the amendment
-  block above. The `trainer/coreai_export/` → `L.aimodel` → Core AI path is ORPHANED.)
+  block above. The `trainer/coreai_export/` → `L.aimodel` → Core AI path was DELETED 2026-06-26.)
 - **Deploy (A/B + integer core):** hand-written Swift + Metal + Zig on the iPhone
   17 Pro (zero third-party deps).
 - **Fallback:** the older PyTorch→CoreML→ANE distillation is superseded by the
@@ -139,10 +139,42 @@ the two: the NN emits 384, the leaf space is 768. The form is pinned canonically
 `Spec/Net.hs slotLookDims` → `Generated/NetContract.swift` + `trainer/.../net_shape.py`.
 Both NN-input and NN-output are true, at different layers.
 
+
+## The GIF89a color head (the 16/32/64 ladder)
+
+The camera's COLOR HEAD and its exact-arithmetic learning gates (landed 2026-07-03/04):
+
+- **`Native/src/palette16.zig`** (zero imports): 16×16 bin → 768-byte GCT. u64 block-SUMS are the
+  transitive pyramid carrier (rounded means do not compose — teeth-tested); the GCT is a final
+  rounding realization. `s4_ladder_delay_cs` = THE TIME LAW: GIF89a's centisecond GCE delay forces
+  the isotropic ladder 64@20fps / 32@10 / 16@5 (delays 5/10/20 cs) and caps it at 64 (side | 320).
+  Inverse-EOTF LUTs (literal goldens, sRGB + HLG BT.2100) give the radiometric path; the capture
+  contract (10-bit `x420`, Swift does Y'CbCr→R'G'B' + range expansion BEFORE the LUT) is recorded
+  in the file header. `s4_pool_sums_bgra8` pools straight from CVPixelBuffer 32BGRA (stride-aware,
+  center-crop in-kernel).
+- **`Native/src/kinematic.zig`** (zero imports): `s4_certified_order` / `s4_newton_predict` /
+  `s4_residual_loss` — the exact on-device observables of `Spec.KinematicLadder` +
+  `Spec.KinematicHaltPrior` (certified kinematic order = the PonderNet halting-prior floor; short
+  windows REFUSE rather than vacuously certify).
+- **`SixFour/Metal/PaletteLadder.metal`**: GPU pooling, one thread per bin, sequential integer
+  accumulation over raw bytes (no texture/unorm-float) — byte-identical to the Zig floor by
+  construction; the Zig kernel is the authority, parity gated in `ColorHeadTests`.
+- **`SixFour/Capture/ColorHead.swift`**: the per-tick circuit — poolSums64 → ingest derives the
+  32/16 rungs by exact u64 adds at the GIF-exact cadences → GCT + 256 particle L-streams →
+  `haltFloor()` per-slot certified order. AVFoundation-free; CaptureSession integration point =
+  `poolSums64` + `ingest` per tick (not yet wired).
+- **Spec gates**: `Spec.OctantViews` (2×2×2 grading 1+3+3+1 = Walsh–Hadamard; latents = mixed
+  derivatives), `Spec.PaletteKinetics` (256 particles; entropy as exact microstate counts W),
+  `Spec.KinematicLadder` (Δ^k coarsens by Pascal row k+1; Newton = Mahler basis; budget law),
+  `Spec.KinematicHaltPrior` (cheapest zero-loss halt == certified order), `Spec.TriScaleTraining`
+  (transitions train disjoint bits; info-per-compute rung-invariant; all three scales = 9/8 the
+  finest alone). Tests: spec suite + `zig build test` + `SixFourTests/ColorHeadTests` (Metal↔Zig
+  parity) + `PaintGateTests`.
+
 ## Build / test
 ```bash
 cd spec && cabal build && cabal test && cabal run spec-codegen   # verify + regen contracts
-cd Native && zig build test                                      # owned Zig core (31 tests)
+cd Native && zig build test                                      # owned Zig core (100 tests; runner may report 'failed command' — run the cached test binary in .zig-cache/o/*/test directly for truth)
 cd .. && xcodegen generate                                       # regen .xcodeproj (after ANY new .swift)
 xcodebuild -scheme SixFour -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 ```
