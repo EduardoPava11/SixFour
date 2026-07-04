@@ -19,6 +19,8 @@ pub const panic = std.debug.no_panic;
 comptime {
     _ = @import("kernels.zig");
     _ = @import("synth.zig"); // synthetic-burst training-data generator (s4_synth_burst)
+    _ = @import("palette16.zig"); // GIF89a-camera color head: 16x16 bins -> GCT, ladder time law, EOTF LUT pooling
+    _ = @import("kinematic.zig"); // kinematic certification: certified order / Newton prediction / residual loss
 }
 
 // ── toolchain/link smoke test ───────────────────────────────────────────────

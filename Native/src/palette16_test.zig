@@ -275,3 +275,30 @@ test "LAW: linear sums keep the transitive carrier property, 64->16 == 64->32->1
     }
     try std.testing.expectEqualSlices(u64, &direct, &twostep);
 }
+
+test "BGRA camera pooling == RGB pooling on the same pixels (stride + crop respected)" {
+    // Build a 40-wide x 36-tall BGRA image with stride 192 (> 40*4 = 160),
+    // pool the 32x32 window at offset (4, 2), and compare against
+    // s4_pool_sums_srgb8 on the equivalent tight RGB crop.
+    // image is 40 px wide; the 32-px window at x0=4 + stride enforce the width
+    const H = 36;
+    const STRIDE = 192;
+    var bgra: [H * STRIDE]u8 = undefined;
+    fillLcg(&bgra, 77);
+    var rgb: [32 * 32 * 3]u8 = undefined;
+    for (0..32) |y| {
+        for (0..32) |x| {
+            const src = (2 + y) * STRIDE + (4 + x) * 4;
+            rgb[(y * 32 + x) * 3] = bgra[src + 2];
+            rgb[(y * 32 + x) * 3 + 1] = bgra[src + 1];
+            rgb[(y * 32 + x) * 3 + 2] = bgra[src];
+        }
+    }
+    var a: [16 * 16 * 3]u64 = undefined;
+    var b: [16 * 16 * 3]u64 = undefined;
+    try std.testing.expectEqual(p16.S4_RC_OK, p16.s4_pool_sums_bgra8(&bgra, STRIDE, 4, 2, 32, 16, &a));
+    try std.testing.expectEqual(p16.S4_RC_OK, p16.s4_pool_sums_srgb8(&rgb, 32, 16, &b));
+    try std.testing.expectEqualSlices(u64, &b, &a);
+    // Window overrunning the row refuses.
+    try std.testing.expectEqual(p16.S4_RC_BAD_ARGS, p16.s4_pool_sums_bgra8(&bgra, STRIDE, 20, 0, 32, 16, &a));
+}

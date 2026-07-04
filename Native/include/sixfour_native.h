@@ -410,4 +410,65 @@ int32_t s4_v21_palette_delta(const uint8_t *pal1, const uint8_t *pal2, int32_t k
 int32_t s4_v21_wdist1d(const uint8_t *pal1, const uint8_t *pal2, int32_t k,
                        int32_t n_levels, int32_t *out_wd);
 
+// ── GIF89a-camera COLOR HEAD (palette16.zig) ─────────────────────────────────
+// The 16x16 bin grid = 256 palette slots ordered by (x,y); u64 block-SUMS are
+// the transitive pyramid carrier (rounded means do not compose); the GCT is
+// the final rounding realization. rc 0 == ok, -1 bad args, -2 not
+// representable, -3 out of range.
+
+// EXACT block-sum pooling of a tight sRGB8 square (3 bytes/px) into
+// out_side x out_side bins of R,G,B u64 sums. Requires out_side | side.
+int32_t s4_pool_sums_srgb8(const uint8_t *rgb, int32_t side, int32_t out_side,
+                           uint64_t *out_sums);
+
+// CAMERA-FACING pooling: 32BGRA pixels (memory order B,G,R,A; rows `stride`
+// bytes apart), square window of `side` at pixel offset (x0, y0) — the
+// center-crop happens here, byte-exact, no intermediate copy.
+int32_t s4_pool_sums_bgra8(const uint8_t *bgra, int32_t stride, int32_t x0,
+                           int32_t y0, int32_t side, int32_t out_side,
+                           uint64_t *out_sums);
+
+// Bin sums -> sRGB8 bytes by round-half-up mean over `area` pixels per bin.
+int32_t s4_sums_to_srgb8(const uint64_t *sums, int32_t out_side, int64_t area,
+                         uint8_t *out_rgb);
+
+// Sensor square in, GIF89a Global Color Table out (768 bytes = 256 RGB
+// triples, row-major bin order = slot order). side must be a multiple of 16.
+int32_t s4_palette16_gct(const uint8_t *rgb, int32_t side, uint8_t *out_gct768);
+
+// THE TIME LAW: the GCE delay (integer centiseconds) playing an s-frame
+// isotropic burst over the 320 cs window: 64->5 (20fps), 32->10, 16->20;
+// -2 (not representable) for 128/256 — the centisecond quantum caps the
+// isotropic ladder at 64.
+int32_t s4_ladder_delay_cs(int32_t side);
+
+// Inverse-EOTF LUT lookups (literal golden tables; scene-linear u16 scale).
+uint16_t s4_srgb8_to_linear16(uint8_t v);
+int32_t s4_hlg10_to_linear16(uint16_t v); // >=0 linear value, or -3 OOR
+
+// RADIOMETRIC pooling: linearize-then-sum. srgb8 = tight RGB gamma bytes;
+// hlg10 = FULL-RANGE 10-bit R'G'B' codes in u16 (interleaved RGB) — refuses
+// any code > 1023 whole-frame (no partial sums).
+int32_t s4_pool_sums_linear_srgb8(const uint8_t *rgb, int32_t side,
+                                  int32_t out_side, uint64_t *out_sums);
+int32_t s4_pool_sums_linear_hlg10(const uint16_t *rgb10, int32_t side,
+                                  int32_t out_side, uint64_t *out_sums);
+
+// ── KINEMATIC CERTIFICATION (kinematic.zig) ──────────────────────────────────
+// Exact observables of a slot trajectory f(0..n-1) (one palette particle's
+// channel over the capture window); the PonderNet halting-prior floor.
+
+// Smallest k < cap with Delta^{k+1} == 0 on the window; cap if none. REFUSES
+// (-1) windows too short to falsify (needs n >= cap+2) — never vacuously
+// certifies. n <= 256, cap <= 8 recommended (i64 overflow headroom).
+int32_t s4_certified_order(const int64_t *f, int32_t n, int32_t cap);
+
+// Order-m truncated Newton-Mahler prediction at tick t:
+// f_hat(t) = sum_{k<=m} C(t,k) * Delta^k f(0). 0 on bad args.
+int64_t s4_newton_predict(const int64_t *f, int32_t n, int32_t order, int32_t t);
+
+// Exact per-depth loss L_order = sum_t |f(t) - f_hat(t)|; -1 bad args;
+// 0 iff order >= certified order (minimal sufficiency).
+int64_t s4_residual_loss(const int64_t *f, int32_t n, int32_t order);
+
 #endif // SIXFOUR_NATIVE_H

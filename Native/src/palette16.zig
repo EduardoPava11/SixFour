@@ -362,3 +362,57 @@ pub export fn s4_pool_sums_linear_hlg10(
     }
     return S4_RC_OK;
 }
+
+/// CAMERA-FACING pooling: pool an sRGB-encoded BGRA8 rect (the CVPixelBuffer
+/// 32BGRA layout: 4 bytes/px in memory order B,G,R,A; rows `stride` bytes
+/// apart) into out_side × out_side bins of R,G,B u64 sums, reading the square
+/// window at pixel offset (x0, y0) of side `side` — the center-crop happens
+/// HERE, byte-exact, no intermediate copy. Same transitive sums carrier as
+/// s4_pool_sums_srgb8 (the Swift ladder derives 32/16 rungs by exact u64
+/// adds). Gamma bytes (the GCT/floor path); linearize-then-sum stays the
+/// measurement path above.
+pub export fn s4_pool_sums_bgra8(
+    bgra: [*c]const u8,
+    stride: i32,
+    x0: i32,
+    y0: i32,
+    side: i32,
+    out_side: i32,
+    out_sums: [*c]u64,
+) i32 {
+    if (bgra == null or out_sums == null) return S4_RC_BAD_ARGS;
+    if (stride <= 0 or x0 < 0 or y0 < 0) return S4_RC_BAD_ARGS;
+    if (side <= 0 or out_side <= 0 or out_side > side) return S4_RC_BAD_ARGS;
+    if (@rem(side, out_side) != 0) return S4_RC_BAD_ARGS;
+    if ((x0 + side) * 4 > stride) return S4_RC_BAD_ARGS; // window must fit a row
+    const st: usize = @intCast(stride);
+    const ox: usize = @intCast(x0);
+    const oy: usize = @intCast(y0);
+    const s: usize = @intCast(side);
+    const o: usize = @intCast(out_side);
+    const q: usize = s / o;
+
+    var by: usize = 0;
+    while (by < o) : (by += 1) {
+        var bx: usize = 0;
+        while (bx < o) : (bx += 1) {
+            var sum = [3]u64{ 0, 0, 0 };
+            var dy: usize = 0;
+            while (dy < q) : (dy += 1) {
+                const row = (oy + by * q + dy) * st;
+                var dx: usize = 0;
+                while (dx < q) : (dx += 1) {
+                    const px = row + (ox + bx * q + dx) * 4;
+                    sum[0] += bgra[px + 2]; // R
+                    sum[1] += bgra[px + 1]; // G
+                    sum[2] += bgra[px]; //     B
+                }
+            }
+            const bin = (by * o + bx) * 3;
+            out_sums[bin] = sum[0];
+            out_sums[bin + 1] = sum[1];
+            out_sums[bin + 2] = sum[2];
+        }
+    }
+    return S4_RC_OK;
+}
