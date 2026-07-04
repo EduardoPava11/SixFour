@@ -556,6 +556,18 @@ picks determine 6561 possibilities; single-peaked chooser as the identifiability
 Bradley–Terry update = trainer machinery (AtlasTrainer proof, 12.4 ms/step), referenced not
 re-landed; certified-order floor + W=1 skip prune uncontested regions so the user is only asked
 where influence is genuinely contested. Additive),
+"SixFour.Spec.FidelityLadder" (★ MIX THE THREE VIEWS TO HIGH FIDELITY > PAINT, and why cadence
+matters. @lawRungsPartitionTheSameMass@: every rung's window totals the SAME mass — no rung sees
+more data, they PARTITION the same photons (each size equivalent in data interpretation; the
+20/10/5 Hz cadences make the partitions commensurable). @lawCoarseBinIsEightChildren@: each coarse
+bin = exactly 8× its child's mass (√8 SNR/rung by shot noise, physics note) — the 16×16 is the
+palette SEED. KEYSTONE @lawDeeperIsCloser@: over exact ℚ, SSE(d0) ≥ SSE(d1) ≥ SSE(d2) = 0 — nested
+partitions are nested projections, so choice-driven mixing is MONOTONE DESCENT to fidelity, never a
+wander. @lawMixesStrictlyExtendPaint@: witnessed mix render (the 32-rung look) that NO binary paint
+mask can produce — the ternary family strictly extends W1 paint. Post-capture UI/UX is DOWNSTREAM
+of the bin data (ColorHead derives all rungs/GCT/particles/halt floor from the 64-rung sums —
+referenced, gated by ColorHeadTests). Byte realization rounds ONCE at the end; the rational law is
+the structure. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with
