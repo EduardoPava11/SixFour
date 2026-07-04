@@ -474,6 +474,17 @@ final class CaptureViewModel {
         session?.focusAndExpose(at: normalized)
     }
 
+    /// PRE-LOCK exposure expression (QoL 2026-07-03): the user's EV bias, applied to the
+    /// live continuous AE so the burst locks THEIR chosen dynamic-range placement.
+    /// Clamped to ±2 EV here (the session re-clamps to the device's own range).
+    private(set) var exposureBiasEV: Float = 0
+
+    func setExposureBias(_ ev: Float) {
+        let clamped = min(max(ev, -2), 2)
+        exposureBiasEV = clamped
+        session?.setExposureBias(clamped)
+    }
+
     func capture() async {
         guard let session, let pipeline, let engines else { return }
         // RE-ENTRANCY GUARD (device audit 2026-07-01): the shutter stays tappable while a
@@ -557,12 +568,24 @@ final class CaptureViewModel {
                     self.v21FlowVersion += 1
                 }
             }
+            // QoL 2026-07-03: the somatic train left the burst seam (the felt post-capture
+            // delay). Same epoch guard as the flow: a late gene never lands on a newer burst.
+            session.thetaUpCallback = { [weak self] gene, generation in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    guard self.flowEpoch == epoch else {
+                        Self.logger.warning("[viewmodel] DROPPED stale θ_up (epoch \(epoch) != \(self.flowEpoch), gen \(generation))")
+                        return
+                    }
+                    self.thetaUp = gene
+                }
+            }
             let result = try await session.captureBurst(into: pipeline)
             lastTimingSummary = result.timing.summary
             v21Counts = result.v21Counts   // camera-box field (gated); nil keeps the proxy path
             // result.flow is nil by design now — the async encode delivers via flowCallback.
             burstTiles = result.tiles      // V3.0: the decide surface previews these
-            thetaUp = result.thetaUp       // V3.0: the somatic gene (nil == floor)
+            thetaUp = result.thetaUp       // nil by design — the async train delivers via thetaUpCallback
             Self.logger.debug("[viewmodel] burst complete: \(result.timing.summary, privacy: .public)")
 
             let tiles = result.tiles

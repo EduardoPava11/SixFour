@@ -10,6 +10,19 @@ import SwiftUI
 /// `UnauthorizedPhaseField` / `LivePhaseField` / `ErrorPhaseField`, plus minimal exporting/done
 /// fields. The cut renderers (Settings / Capturing / Browsing / Rendering / Review) are no
 /// longer routed but left in place. A phase change re-draws cells on the ONE surface — no view swap.
+/// WHAT THE ENGINE IS COMPUTING RIGHT NOW, rendered by the live surface (QoL
+/// 2026-07-03): the pipeline stages (lock → burst → refine → encode) were
+/// "internal to `.live`" — invisible — so a multi-second capture read as a HANG.
+/// The computation is now UI: the stage label is a cell text and the progress
+/// fills the palette-as-shutter cell by cell. `label == ""` is idle (no chrome).
+struct EngineStage: Equatable {
+    let label: String
+    /// 0..1 fill of the shutter progress field; nil = indeterminate (label only).
+    let progress: Double?
+    var active: Bool { !label.isEmpty }
+    static let idle = EngineStage(label: "", progress: nil)
+}
+
 enum PhaseField {
 
     /// Route a phase to its field renderer. `clock` carries the 20 fps heartbeat so the
@@ -17,18 +30,28 @@ enum PhaseField {
     /// branches produce heterogeneous renderers.
     /// `onShutter` is the direct engine `capture()` kick (lock + burst are internal to
     /// `.live` under ABSurface — there is no `.locking` phase to observe), wired by
-    /// `SurfaceView` and called by the LivePhaseField shutter.
+    /// `SurfaceView` and called by the LivePhaseField shutter. `onMeter` /
+    /// `onExposureBias` / `exposureBias` are the pre-lock exposure expression (QoL
+    /// 2026-07-03): tap the hero to meter a point, drag vertically to bias EV — the
+    /// burst then locks the AE the user placed, not whatever the camera drifted to.
     @MainActor
     @ViewBuilder
     static func field(for phase: ABPhase, _ surface: Surface, _ clock: SurfaceClock,
-                      _ settings: AppSettings, onShutter: @escaping () -> Void) -> some View {
+                      _ settings: AppSettings, onShutter: @escaping () -> Void,
+                      onMeter: @escaping (CGPoint) -> Void = { _ in },
+                      onExposureBias: @escaping (Float) -> Void = { _ in },
+                      exposureBias: Float = 0,
+                      stage: EngineStage = .idle) -> some View {
         switch phase {
         case .bootstrap:
             BootstrapPhaseField(surface: surface, clock: clock)
         case .unauthorized:
             UnauthorizedPhaseField(surface: surface, clock: clock)
         case .live:
-            LivePhaseField(surface: surface, clock: clock, settings: settings, onShutter: onShutter)
+            LivePhaseField(surface: surface, clock: clock, settings: settings,
+                           onShutter: onShutter, onMeter: onMeter,
+                           onExposureBias: onExposureBias, exposureBias: exposureBias,
+                           stage: stage)
         case .deciding:
             // V3.0: the 16³ decide loop (GridLayoutContract.decisionScene widgets).
             DecidingPhaseField(surface: surface)

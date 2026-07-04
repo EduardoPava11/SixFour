@@ -35,6 +35,22 @@ struct LivePhaseField: View {
     /// ABSurface (no `.locking` phase), so the shutter starts the burst itself; σ STAYS
     /// `.live` until the engine finishes (then `.done` → `burstComplete` → `.captured`).
     var onShutter: () -> Void = {}
+    /// PRE-LOCK exposure expression (QoL 2026-07-03). `onMeter`: tap the hero to
+    /// one-shot meter that point (normalized 0..1). `onExposureBias`: vertical drag
+    /// sets an absolute EV bias (up = brighter, 1 EV per 200 pt). The burst then LOCKS
+    /// the AE the user placed — the lock invariant is untouched, the choice is theirs.
+    var onMeter: (CGPoint) -> Void = { _ in }
+    var onExposureBias: (Float) -> Void = { _ in }
+    var exposureBias: Float = 0
+    /// THE VISIBLE COMPUTATION (QoL 2026-07-03): the engine's pipeline stage. While
+    /// active, the stage label rides the top cell and the palette-as-shutter becomes
+    /// the PROGRESS FIELD (cells fill as work completes) — the surface always shows
+    /// the function it is performing; a busy surface is never a frozen one. σ stays
+    /// `.live` throughout (the FSM is untouched; this is render state only).
+    var stage: EngineStage = .idle
+
+    /// The EV the current vertical drag started from (nil = no EV drag in flight).
+    @State private var evDragBase: Float?
 
     /// The current shared placement (identity → position). Re-read every body so a move in
     /// any phase is visible here (one global position across phases).
@@ -54,7 +70,8 @@ struct LivePhaseField: View {
             // the 4 pt cell grid is intact.
             Color.clear
                 .contentShape(Rectangle())
-                .gesture(lookSwipe)
+                .gesture(lookSwipeAndExposureDrag)
+                .simultaneousGesture(meterTap)
 
             // Field64 — the 64-cell preview hero, placed at its SHARED global position and
             // movable (long-press to lift). The data source is the live camera tile; the
@@ -81,28 +98,79 @@ struct LivePhaseField: View {
         // exception is a transient LOOK name, shown only when a grade is active (default
         // `.off` ⇒ the screen is unchanged), so the swipe is legible without clutter.
         .overlay(alignment: .top) {
-            if settings.captureLook != .off {
+            if stage.active {
+                // The computation announces itself: LOCK / BURST n/64 / REFINE / ENCODE.
+                CellText(stage.label, cell: GlobalLattice.gif(1))
+                    .padding(.top, GlobalLattice.gif(4))
+                    .allowsHitTesting(false)
+                    .accessibilityLabel("Working: \(stage.label)")
+            } else if settings.captureLook != .off {
                 CellText(settings.captureLook.displayName, cell: GlobalLattice.gif(1))
                     .padding(.top, GlobalLattice.gif(4))
                     .allowsHitTesting(false)
                     .accessibilityLabel("Look: \(settings.captureLook.displayName)")
             }
         }
+        // The EV readout (QoL 2026-07-03): shown ONLY when the user has biased exposure
+        // (0 = silent, the uncluttered default) — same transient-cell idiom as the LOOK
+        // name, so the pre-lock exposure choice is legible without chrome.
+        .overlay(alignment: .topTrailing) {
+            if exposureBias != 0 {
+                CellText(String(format: "EV %+.1f", exposureBias), cell: GlobalLattice.gif(1))
+                    .padding(.top, GlobalLattice.gif(4))
+                    .padding(.trailing, GlobalLattice.gif(2))
+                    .allowsHitTesting(false)
+                    .accessibilityLabel(String(format: "Exposure bias %+.1f EV", exposureBias))
+            }
+        }
     }
 
-    /// A horizontal swipe cycles the LOOK (right = next, left = previous) with a haptic
-    /// tick. `.onEnded` so one swipe = one step; horizontal-dominant + a 6-cell minimum
-    /// keeps it from firing on taps or vertical drags. It only writes `settings.captureLook`
-    /// (a render param) — never a position, so the cell grid is never disturbed.
-    private var lookSwipe: some Gesture {
-        DragGesture(minimumDistance: GlobalLattice.gif(6))
+    /// ONE ground drag, two verbs by dominant axis (QoL 2026-07-03):
+    ///   * HORIZONTAL swipe (on end, 6-cell minimum) cycles the LOOK — unchanged.
+    ///   * VERTICAL drag (continuous) sets the EV bias: up = brighter, 1 EV per 200 pt,
+    ///     absolute from the drag's starting bias (`evDragBase`), engine-clamped ±2.
+    /// Both only write render/exposure params — never a position, so the cell grid is
+    /// never disturbed. Gated to `.live` (a busy surface neither grades nor meters).
+    private var lookSwipeAndExposureDrag: some Gesture {
+        DragGesture(minimumDistance: GlobalLattice.gif(2))
+            .onChanged { value in
+                guard surface.phase == .live, !stage.active else { return }
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard abs(dy) > abs(dx) else { return }        // vertical-dominant = EV
+                if evDragBase == nil { evDragBase = exposureBias }
+                onExposureBias((evDragBase ?? 0) + Float(-dy / 200))
+            }
             .onEnded { value in
+                defer { evDragBase = nil }
+                guard surface.phase == .live, !stage.active else { return }
                 let dx = value.translation.width
                 let dy = value.translation.height
                 guard abs(dx) > abs(dy), abs(dx) >= GlobalLattice.gif(6) else { return }
                 settings.captureLook = dx < 0 ? settings.captureLook.next : settings.captureLook.prev
                 Haptics.selection()   // discrete look-CHANGE confirmation — NOT a cell detent
                                       // (cellTick `play(1)` is reserved for the frame-locked .cellDetent)
+            }
+    }
+
+    /// Tap the HERO to meter (QoL 2026-07-03): a tap inside the preview's footprint
+    /// one-shot meters focus + exposure at that point (normalized to the 64² tile).
+    /// The hero itself is `allowsHitTesting(false)`, so the tap lands here on the
+    /// ground layer and is mapped into the hero's placed region.
+    private var meterTap: some Gesture {
+        SpatialTapGesture()
+            .onEnded { tap in
+                // Inert while the engine works: a mid-burst meter would fight the
+                // locked AE (σ stays `.live` through the pipeline, so gate on stage).
+                guard surface.phase == .live, !stage.active else { return }
+                let r = region(for: .field64, at: placement)
+                let atom = CGFloat(SixFourLattice.gifPx)
+                let rect = CGRect(x: CGFloat(r.col) * atom, y: CGFloat(r.row) * atom,
+                                  width: CGFloat(r.w) * atom, height: CGFloat(r.h) * atom)
+                guard rect.contains(tap.location) else { return }
+                onMeter(CGPoint(x: (tap.location.x - rect.minX) / rect.width,
+                                y: (tap.location.y - rect.minY) / rect.height))
+                Haptics.selection()
             }
     }
 
@@ -148,18 +216,30 @@ struct LivePhaseField: View {
         let padded: [SIMD3<UInt8>] = (0 ..< 256).map { $0 < surface.palette.count ? surface.palette[$0] : ghost }
         let ordered = GridScript.capture(side: 16).surfaceColors(palette: padded)
 
+        // THE PROGRESS FIELD (QoL 2026-07-03): while the engine works, the shutter the
+        // user tapped fills cell by cell — completed work at full palette colour,
+        // pending work dimmed. 256 cells over progress ∈ [0,1]; an indeterminate stage
+        // (LOCK) shows all-dimmed + the label. Idle renders the plain live palette.
+        let filled = stage.active ? Int(((stage.progress ?? 0) * 256).rounded()) : 256
+        let working = stage.active
+
         // ONE composed gesture (no Button): a clean TAP fires `.shutterTap`, a long-press
         // LIFTS it to move. `.movable` composes them with `.exclusively` so they never fight
-        // — the prior Button-wrapping swallowed the tap. Both gated to `.live` via `enabled`
-        // (a busy palette is inert: no capture, no move).
+        // — the prior Button-wrapping swallowed the tap. Gated INERT while σ is busy OR the
+        // engine pipeline is running (pre-QoL the shutter looked tappable mid-burst because
+        // σ stays `.live` — an honest surface may not advertise a dead verb).
         return CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gif(1)) { c, r in
             let rank = r * 16 + c
-            return rank < ordered.count ? ordered[rank] : ghost
+            let base = rank < ordered.count ? ordered[rank] : ghost
+            guard working else { return base }
+            return rank < filled
+                ? base
+                : SIMD3<UInt8>(base.x / 4, base.y / 4, base.z / 4)
         }
         .movable(.palette16, settings: settings, surface: surface, clock: clock,
-                 enabled: surface.phase == .live,
+                 enabled: surface.phase == .live && !stage.active,
                  onTap: { onShutter() })   // kick the burst directly; σ stays .live until done
-        .accessibilityLabel("Capture 64-frame burst")
+        .accessibilityLabel(stage.active ? "Working: \(stage.label)" : "Capture 64-frame burst")
         .accessibilityHint("Tap to capture sixty-four frames; long-press to move the palette")
     }
 }

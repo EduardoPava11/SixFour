@@ -53,6 +53,13 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// whose generation is not the current one (the stale-flow corruption gate).
     var flowCallback: (@Sendable (V21Flow?, Int) -> Void)?
 
+    /// The somatic-train twin of `flowCallback` (QoL 2026-07-03): θ_up training left
+    /// the burst seam — it used to run synchronously in `finishBurst`, holding the
+    /// capture screen until the GPU dispatch finished (the felt post-capture delay).
+    /// The gene now arrives here (generation-tagged, possibly nil = the floor) and the
+    /// engine folds it into σ late; `BurstResult.thetaUp` is nil by design, like `flow`.
+    var thetaUpCallback: (@Sendable (CaptureGene.ThetaUp?, Int) -> Void)?
+
     /// Monotonic burst counter (delegateQueue-confined): stamps every async flow
     /// delivery so a late encode can never be attributed to a newer capture.
     private(set) var burstGeneration = 0
@@ -121,7 +128,9 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         let flow: V21Flow?
         /// V3.0 (Feature.v3SomaticTrain only): the per-capture SOMATIC gene — θ_up fine-tuned on
         /// this burst's own manufactured octant pairs (`CaptureGene.train`, one fused GPU dispatch).
-        /// nil when off/unavailable; its absence is the deterministic floor (zero-gene == floor).
+        /// ALWAYS nil by design since QoL 2026-07-03 (like `flow`): training left the burst seam
+        /// and the gene arrives late via `thetaUpCallback`. Its absence is the deterministic
+        /// floor (zero-gene == floor); the decide surface attaches the gene when it lands.
         let thetaUp: CaptureGene.ThetaUp?
     }
 
@@ -603,6 +612,22 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         }
     }
 
+    /// PRE-LOCK exposure expression (QoL 2026-07-03): bias the continuous AE target by
+    /// `ev` stops, clamped to the device's own range. The burst-lock invariant is
+    /// untouched — the burst still locks AE at capture start; this lets the user choose
+    /// WHAT gets locked (place highlights/shadows deliberately, then shoot). Best-effort.
+    func setExposureBias(_ ev: Float) {
+        guard let device else { return }
+        let clamped = min(max(ev, device.minExposureTargetBias), device.maxExposureTargetBias)
+        do {
+            try device.lockForConfiguration()
+            device.setExposureTargetBias(clamped)
+            device.unlockForConfiguration()
+        } catch {
+            Self.log.error("setExposureBias failed: \(String(describing: error))")
+        }
+    }
+
     /// Set focus + exposure point of interest in normalized device coords (0..1).
     /// Triggers a one-shot auto-focus/exposure at that point.
     func focusAndExpose(at point: CGPoint) {
@@ -787,15 +812,23 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         }
         v21HistBuffer = nil
         // V3.0 (gated): train this capture's somatic θ_up — burst tiles → Q16 volume →
-        // [octant gather → SIMT descent → Q16 commit] in ONE GPU dispatch. Heavy compute
-        // at the seam (the encodeV21Flow precedent above); failure is the floor, not an error.
-        var thetaUp: CaptureGene.ThetaUp?
+        // [octant gather → SIMT descent → Q16 commit] in ONE GPU dispatch. OFF the seam
+        // (QoL 2026-07-03, the encodeV21Flow precedent above): the synchronous train held
+        // the capture screen for the whole dispatch — the felt post-capture delay. The
+        // burst now resumes immediately; the gene arrives via `thetaUpCallback`
+        // (generation-guarded; nil = the floor, never an error). The decide surface
+        // starts on the floor arm and attaches the gene when it lands.
         if Feature.v3SomaticTrain {
-            thetaUp = CaptureGene.train(tiles: collected)
-            if let g = thetaUp {
-                Self.log.log("V3 somatic θ_up: loss \(g.loss) vs floor \(g.floorLoss) (−\(Int((g.lossReduction * 100).rounded()))%) in \(Int(g.trainMillis)) ms")
-            } else {
-                Self.log.log("V3 somatic θ_up: nil (unavailable) — the floor ships")
+            let tilesForTrain = collected
+            let callback = thetaUpCallback
+            Task.detached(priority: .userInitiated) {
+                let g = CaptureGene.train(tiles: tilesForTrain)
+                if let g {
+                    Self.log.log("V3 somatic θ_up (async gen=\(generation)): loss \(g.loss) vs floor \(g.floorLoss) (−\(Int((g.lossReduction * 100).rounded()))%) in \(Int(g.trainMillis)) ms")
+                } else {
+                    Self.log.log("V3 somatic θ_up (async gen=\(generation)): nil (unavailable) — the floor ships")
+                }
+                callback?(g, generation)
             }
         }
         let snapshot = collected
@@ -808,7 +841,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         continuation = nil
         collecting = false
         cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing, v21Counts: v21Counts,
-                                            flow: nil, thetaUp: thetaUp))
+                                            flow: nil, thetaUp: nil))
     }
 
     /// Pure aggregation of inter-frame timing — `static` and side-effect-free so

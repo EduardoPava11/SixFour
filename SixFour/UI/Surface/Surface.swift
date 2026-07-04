@@ -194,6 +194,12 @@ extension Surface {
     /// indexed sRGB8 is mapped to OKLab Q16 through the owned Zig kernel (`srgb8ToOklab`, the
     /// one canonical forward), then `VoxelReduce.reduce` collapses 64³ → 16³ byte-exact. Called
     /// once at `commit`; the result feeds `gifCell16`. Clears to empty if no cube is committed.
+    ///
+    /// OFF-MAIN since QoL 2026-07-03: the 262K-pixel reindex + 64 Zig OKLab calls +
+    /// the VoxelReduce ran synchronously INSIDE the σ fold (a main-thread hitch right at
+    /// the `.done` transition). The heavy pass is now a pure detached function over value
+    /// snapshots; σ publishes the result when it lands, and consumers that mounted early
+    /// attach it late (the async-gene pattern — `DecideModel.attachSubstrate`).
     func buildCoarseSubstrate() {
         coarseSubstrate = []
         let side = cubeSide                       // 64
@@ -201,25 +207,41 @@ extension Surface {
         guard !indexCube.isEmpty, !palettesPerFrame.isEmpty else { return }
         let frames = indexCube.count / ppf
         guard frames > 0, palettesPerFrame.count >= frames else { return }
+        let idx = indexCube
+        let pals = palettesPerFrame
+        Task { [weak self] in
+            let sub = await Task.detached(priority: .userInitiated) {
+                Self.reduceCoarseSubstrate(indexCube: idx, palettes: pals,
+                                           frames: frames, side: side, ppf: ppf)
+            }.value
+            self?.coarseSubstrate = sub
+        }
+    }
 
+    /// The pure heavy pass (value-in / value-out, runs detached): indexed sRGB8 →
+    /// OKLab Q16 (owned Zig kernel) → byte-exact `VoxelReduce` 64³ → 16³.
+    private nonisolated static func reduceCoarseSubstrate(
+        indexCube: [UInt8], palettes: [[SIMD3<UInt8>]],
+        frames: Int, side: Int, ppf: Int
+    ) -> [[VoxelReduce.Px]] {
         var cube = [[VoxelReduce.Px]]()
         cube.reserveCapacity(frames)
         for t in 0..<frames {
-            let pal = palettesPerFrame[t]
+            let pal = palettes[t]
             var rgb = [UInt8](); rgb.reserveCapacity(ppf * 3)
             for p in 0..<ppf {
                 let idx = Int(indexCube[t * ppf + p])
                 let c = idx < pal.count ? pal[idx] : SIMD3<UInt8>(0, 0, 0)
                 rgb.append(c.x); rgb.append(c.y); rgb.append(c.z)
             }
-            guard let q16 = SixFourNative.srgb8ToOklab(rgb: rgb, k: ppf) else { return }
+            guard let q16 = SixFourNative.srgb8ToOklab(rgb: rgb, k: ppf) else { return [] }
             var frame = [VoxelReduce.Px](); frame.reserveCapacity(ppf)
             for p in 0..<ppf {
                 frame.append((Int(q16[p * 3]), Int(q16[p * 3 + 1]), Int(q16[p * 3 + 2])))
             }
             cube.append(frame)
         }
-        coarseSubstrate = VoxelReduce.reduce(2, side, cube).substrate
+        return VoxelReduce.reduce(2, side, cube).substrate
     }
 }
 

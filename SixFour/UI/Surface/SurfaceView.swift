@@ -45,7 +45,11 @@ struct SurfaceView: View {
             StageGround(surface: surface, placement: engine.settings.widgetPlacement, tick: clock.tick)
                 .ignoresSafeArea()
             PhaseField.field(for: surface.phase, surface, clock, engine.settings,
-                             onShutter: { Task { await engine.capture() } })
+                             onShutter: { Task { await engine.capture() } },
+                             onMeter: { engine.focus(at: $0) },
+                             onExposureBias: { engine.setExposureBias($0) },
+                             exposureBias: engine.exposureBiasEV,
+                             stage: engineStage)
         }
             // The rounded play boundary is an INVISIBLE constraint (widgets kept inside it by
             // `Boundary.footprintFits`); any saved position outside it is re-homed on launch.
@@ -115,6 +119,11 @@ struct SurfaceView: View {
             .onChange(of: engine.v21FlowVersion) { _, v in
                 surface.v21Flow = engine.v21Flow
                 surface.v21FlowVersion = v
+            }
+            // The ASYNC somatic θ_up landed (QoL 2026-07-03 — training left the burst
+            // seam): fold it into σ so the decide surface attaches the gene arm late.
+            .onChange(of: engine.thetaUp) { _, g in
+                surface.thetaUp = g
             }
             // engine.phase → σ event. The engine drives the lifecycle forward; σ.step
             // maps each engine edge onto the verified A/B FSM. Lock + burst + render are all
@@ -189,6 +198,27 @@ struct SurfaceView: View {
             }
         }
         if changed { engine.settings.widgetPlacement = p }
+    }
+
+    // MARK: - engine.phase → the visible computation (QoL 2026-07-03)
+
+    /// The engine's pipeline stage as the live surface renders it. The stages stay
+    /// INTERNAL to σ (`.live` never changes — the FSM is untouched), but they are no
+    /// longer INVISIBLE: the label + progress fill the shutter cell by cell, so a
+    /// multi-second capture reads as work, never as a hang.
+    private var engineStage: EngineStage {
+        switch engine.phase {
+        case .locking:
+            return EngineStage(label: "LOCK", progress: nil)
+        case .capturing(let p):
+            return EngineStage(label: "BURST \(Int((p * 64).rounded()))/64", progress: p)
+        case .renderingStageA:
+            return EngineStage(label: "REFINE", progress: engine.loadingProgress)
+        case .renderingEncode:
+            return EngineStage(label: "ENCODE", progress: engine.loadingProgress)
+        default:
+            return .idle
+        }
     }
 
     // MARK: - engine.phase → σ event

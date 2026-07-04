@@ -24,8 +24,13 @@ import Combine
 /// (`Surface.coarseSubstrate`) up-rung'd to 64³ by `OctantCube.expandProposal` —
 /// the deterministic floor, or the gene's invention when the toggle rides θ_up.
 /// Never a faked image (the `NudgePaintView` honesty rule); without a substrate
-/// it falls back to the capture frame. Paint conditions the LEARNED model (the
-/// accepted input records it); it does not yet alter this preview.
+/// it falls back to the capture frame.
+///
+/// PAINT IS LIVE (W1, 2026-07-03): painting gates WHERE the gene invents —
+/// painted 16³ cells ride θ_up, unpainted cells ride the floor
+/// (`Spec.ModelForward.lawPaintGatesBlockLocal`); zero paint keeps the
+/// whole-volume gene arm (the shortcut, so the gene toggle stays meaningful
+/// before the first stroke). The gene arm rebuilds debounced after each stroke.
 enum DecideVerdict {
     case accept
     case again
@@ -37,11 +42,16 @@ enum DecideVerdict {
 @MainActor
 final class DecideModel: ObservableObject {
     let tiles: [OKLabTile]
-    let gene: CaptureGene.ThetaUp?
+    /// The somatic gene. `var` since QoL 2026-07-03: training left the burst seam, so
+    /// the gene may ARRIVE LATE (`attachGene`) — the surface starts on the floor arm
+    /// and the gene cell enables the moment θ_up lands.
+    @Published private(set) var gene: CaptureGene.ThetaUp?
     /// The REAL 16³ proposal — the lossless coarse tier of the committed cube
     /// (`Surface.coarseSubstrate`, 16 frames × 16² OKLab Q16). Empty until a
     /// capture commits (then the surface falls back to capture-frame preview).
-    let substrate: [[VoxelReduce.Px]]
+    /// `var` since QoL 2026-07-03: the substrate builds OFF-MAIN at the σ fold,
+    /// so a fast user can mount this surface before it lands (`attachSubstrate`).
+    @Published private(set) var substrate: [[VoxelReduce.Px]]
     let paint = NudgePaintModel()
 
     /// Cached 64³ reconstructions (interleaved Q16): the deterministic floor and
@@ -57,6 +67,9 @@ final class DecideModel: ObservableObject {
     /// do not propagate through DecideModel automatically (device audit: the gauge
     /// button never repainted). Forward them.
     private var paintForward: AnyCancellable?
+    /// The debounced gene-arm rebuild after a paint stroke (W1): cancelled and
+    /// re-armed per stroke so a drag repaints once, ~0.35 s after the last cell.
+    private var repaintTask: Task<Void, Never>?
 
     /// Ride the learned somatic detail (true) or the deterministic floor (false).
     /// Defaults to the gene when the burst trained one; absence pins the floor.
@@ -75,19 +88,25 @@ final class DecideModel: ObservableObject {
         self.substrate = substrate
         self.useGene = gene != nil
         paintForward = paint.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+                self?.scheduleGeneRebuild()
+            }
         buildReconstructions()
     }
 
     /// Build both reconstruction arms off the main thread (each ~0.1–0.8 s debug);
-    /// publish when ready. The gene arm honours the gene's TRAINED channel.
+    /// publish when ready. The gene arm honours the gene's TRAINED channel and the
+    /// live paint mask (W1: painted cells invent, unpainted ride the floor).
     private func buildReconstructions() {
         guard !substrate.isEmpty else { return }
         let sub = substrate
         let theta = gene.map { g in g.theta.map(Double.init) }
         let channel = gene?.channel ?? 0
+        let mask = paint.deviceMask()
         Task { [weak self] in
-            let (floor, geneArm) = await Self.buildArms(sub: sub, theta: theta, channel: channel)
+            let (floor, geneArm) = await Self.buildArms(sub: sub, theta: theta,
+                                                        channel: channel, mask: mask)
             guard let self else { return }
             self.floorRecon = floor
             self.geneRecon = geneArm
@@ -95,13 +114,55 @@ final class DecideModel: ObservableObject {
         }
     }
 
+    /// The ASYNC coarse substrate landed (QoL 2026-07-03 — the σ fold builds it
+    /// off-main): attach it and build both reconstruction arms. Until then the
+    /// surface honestly showed the capture-frame fallback. Repeat/empty = no-op.
+    func attachSubstrate(_ sub: [[VoxelReduce.Px]]) {
+        guard substrate.isEmpty, !sub.isEmpty else { return }
+        substrate = sub
+        buildReconstructions()
+    }
+
+    /// The ASYNC somatic gene landed (QoL 2026-07-03 — training left the burst seam):
+    /// attach it, default the toggle ON (mirroring the old at-init behaviour), and
+    /// build the gene arm. A nil or repeat delivery is a no-op; the floor arm the
+    /// user has been looking at is untouched.
+    func attachGene(_ g: CaptureGene.ThetaUp?) {
+        guard gene == nil, let g else { return }
+        gene = g
+        useGene = true
+        scheduleGeneRebuild()
+    }
+
+    /// W1: a paint stroke re-gates the gene arm. Debounced (a drag is many strokes);
+    /// the floor arm never depends on paint, so only the gene arm rebuilds.
+    private func scheduleGeneRebuild() {
+        guard gene != nil, !substrate.isEmpty else { return }
+        repaintTask?.cancel()
+        repaintTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled, let self else { return }
+            let sub = self.substrate
+            let theta = self.gene.map { g in g.theta.map(Double.init) }
+            let channel = self.gene?.channel ?? 0
+            let mask = self.paint.deviceMask()
+            let (_, geneArm) = await Self.buildArms(sub: sub, theta: theta,
+                                                    channel: channel, mask: mask)
+            guard !Task.isCancelled else { return }
+            self.geneRecon = geneArm
+            self.objectWillChange.send()
+        }
+    }
+
     /// The pure off-main build (only Sendable value types cross the boundary).
     private nonisolated static func buildArms(sub: [[VoxelReduce.Px]], theta: [Double]?,
-                                              channel: Int) async -> ([Int32]?, [Int32]?) {
+                                              channel: Int, mask: [Bool]?)
+        async -> ([Int32]?, [Int32]?) {
         await Task.detached(priority: .userInitiated) {
             let floor = OctantCube.expandProposal(substrate: sub, theta: nil)
             let geneArm = theta.flatMap {
-                OctantCube.expandProposal(substrate: sub, theta: $0, geneChannel: channel)
+                OctantCube.expandProposal(substrate: sub, theta: $0, geneChannel: channel,
+                                          paintMask: mask)
             }
             return (floor, geneArm)
         }.value
@@ -158,6 +219,12 @@ struct DecideSurface: View {
     @StateObject private var model: DecideModel
     private let onDecide: (DecideVerdict, SixFourModelInput, Bool) -> Void
     private let scene = GridLayoutContract.decisionScene
+    /// Kept as plain properties so the ASYNC deliveries (QoL 2026-07-03: the gene
+    /// trains off the burst seam; the substrate builds off the σ fold) reach the
+    /// persistent `DecideModel` via `.onChange` — a re-init alone cannot update a
+    /// `@StateObject`.
+    private let thetaUp: CaptureGene.ThetaUp?
+    private let substrate: [[VoxelReduce.Px]]
 
     @MainActor
     init(tiles: [OKLabTile], thetaUp: CaptureGene.ThetaUp?,
@@ -165,6 +232,8 @@ struct DecideSurface: View {
          onDecide: @escaping (DecideVerdict, SixFourModelInput, Bool) -> Void) {
         _model = StateObject(wrappedValue: DecideModel(
             tiles: tiles, gene: thetaUp, substrate: substrate))
+        self.thetaUp = thetaUp
+        self.substrate = substrate
         self.onDecide = onDecide
     }
 
@@ -180,17 +249,41 @@ struct DecideSurface: View {
             acceptCell.place("accept", in: scene)
         }
         .ignoresSafeArea()
+        // The async somatic gene landed after this surface mounted: attach it.
+        .onChange(of: thetaUp) { _, g in model.attachGene(g) }
+        // The async coarse substrate landed (built off-main at the σ fold): attach it.
+        // Keyed on the layer count — the build only ever transitions empty → full.
+        .onChange(of: substrate.count) { _, _ in model.attachSubstrate(substrate) }
     }
 
     // ── channels: which colour×space pair the brush paints ──────────────────
 
+    /// The 9 ChannelProduct pairs as LATTICE CELLS (QoL 2026-07-03): the system
+    /// segmented Picker was the one control on this surface speaking a foreign
+    /// design language (glass chrome on a cell grid — the LivePhaseField header
+    /// explicitly bans UIKit Picker/Slider chrome). Each cell is tinted by its
+    /// colour axis (`NudgeChannel.tint`, the same hues the paint grid shows), so
+    /// selecting a channel and seeing its paint are one visual system.
     private var channelStrip: some View {
-        Picker("Channel", selection: $model.channel) {
+        HStack(spacing: 0) {
             ForEach(0 ..< NudgeChannel.labels.count, id: \.self) { i in
-                Text(NudgeChannel.labels[i]).tag(i)
+                channelCell(i)
             }
         }
-        .pickerStyle(.segmented)
+    }
+
+    private func channelCell(_ i: Int) -> some View {
+        let selected = model.channel == i
+        return Button { model.channel = i } label: {
+            Text(NudgeChannel.labels[i])
+                .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                .foregroundStyle(selected ? Color.black : NudgeChannel.tint(i).opacity(0.9))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(selected ? NudgeChannel.tint(i) : Color.white.opacity(0.10))
+                .overlay(Rectangle().stroke(Color.white.opacity(selected ? 0.6 : 0.25),
+                                            lineWidth: selected ? 1 : 0.5))
+        }
+        .buttonStyle(.plain)
     }
 
     // ── the four decision cells ──────────────────────────────────────────────

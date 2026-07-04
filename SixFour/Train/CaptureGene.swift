@@ -15,7 +15,7 @@ enum CaptureGene {
 
     /// The per-capture somatic gene: the trained up-rung inventor + its birth
     /// telemetry. `theta` is the spec flat row-major layout (7 bands × 3).
-    struct ThetaUp: Sendable, Codable {
+    struct ThetaUp: Sendable, Codable, Equatable {
         let theta: [Float]
         let committed: [Int]   // f_θ at pair 0's coarse, post-Q16 (telemetry)
         let loss: Float        // final summed supervised loss
