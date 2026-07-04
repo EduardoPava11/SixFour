@@ -138,6 +138,7 @@ library
         SixFour.Spec.KinematicHaltPrior
         SixFour.Spec.TriScaleTraining
         SixFour.Spec.PullField
+        SixFour.Spec.LabBleed
         SixFour.Spec.GaugeAction
         SixFour.Spec.ScaleFiltration
         SixFour.Spec.RingReduction
@@ -513,6 +514,7 @@ test-suite spec-tests
         Properties.KinematicHaltPrior
         Properties.TriScaleTraining
         Properties.PullField
+        Properties.LabBleed
         Properties.ScaleFiltration
         Properties.RingReduction
         Properties.MetricLattice

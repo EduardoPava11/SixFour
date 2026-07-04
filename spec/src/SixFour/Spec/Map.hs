@@ -531,6 +531,18 @@ pixels). BYTES FOLLOW INFLUENCE, both axes of the standard: @lawInteriorRunsAreF
 (s4_sums_to_srgb8 semantics): resolution is EMERGENT from influence, never stored. Indices only,
 never the GCT; graded/energy-weighted pulls = design headroom. NOT Spec.InfluenceField (that module
 = the decorative radiation-ground tunables). Additive),
+"SixFour.Spec.LabBleed" (★ WE CAN GENERATE EQUATIONS — the RGB→opponent-Lab conversion as DATA
+(coefficient rows → rendered equations, pinned strings, @lawOpponentEquationsMatchFunction@ — the
+Codegen source, never a hand-copy per tier; det = 6 = 2·3 @lawOpponentDetIsSix@, the non-unit 3 = the
+index-3 Λ boundary made numeric). VARIABLE DISTANCE PER SCALE IS FORCED: pooling ×8 + L1 homogeneity
+⇒ the metric dilates by exactly 8 per rung on the sums carrier (@lawMetricDilatesWithCarrier@) — one
+byte radius ρ IS the ladder 8^k·ρ. BLEED (box quantizer, floor-division cells) generates BOTH:
+compression (@lawBleedGeneratesCompression@ — coarser bleed never increases index transitions; runs
+only merge, @lawBleedNestsAcrossScales@; PullField's lawInteriorRunsAreFree is the ρ→∞ endpoint) and
+entropy (@lawBleedGeneratesEntropyLedger@ — W factorizes exactly across a bleed step; the
+PaletteKinetics chain rule driven by the radius knob). ρ = the single knob trading entropy kept vs
+bytes spent, both sides integer-exact. Opponent = the V2 INTEGER latent, not CIE; d6/energy metrics
+stay in Dim6. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with
