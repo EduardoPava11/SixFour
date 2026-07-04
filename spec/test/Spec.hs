@@ -120,6 +120,12 @@ import qualified Properties.SameObjectJEPA as SameObjectJEPA
 import qualified Properties.ConstructionEncoder as ConstructionEncoder
 import qualified Properties.HierarchicalDelta as HierarchicalDelta
 import qualified Properties.RootLatticeDetail as RootLatticeDetail
+import qualified Properties.RootLatticeDecoder as RootLatticeDecoder
+import qualified Properties.SpineRing as SpineRing
+import qualified Properties.OctantViews as OctantViews
+import qualified Properties.PaletteKinetics as PaletteKinetics
+import qualified Properties.KinematicLadder as KinematicLadder
+import qualified Properties.KinematicHaltPrior as KinematicHaltPrior
 import qualified Properties.GaugeAction as GaugeAction
 import qualified Properties.ScaleFiltration as ScaleFiltration
 import qualified Properties.RingReduction as RingReduction
@@ -330,6 +336,12 @@ main = defaultMain $ testGroup "sixfour-spec"
   , ConstructionEncoder.tests
   , HierarchicalDelta.tests
   , RootLatticeDetail.tests
+  , RootLatticeDecoder.tests
+  , SpineRing.tests
+  , OctantViews.tests
+  , PaletteKinetics.tests
+  , KinematicLadder.tests
+  , KinematicHaltPrior.tests
   , GaugeAction.tests
   , ScaleFiltration.tests
   , RingReduction.tests

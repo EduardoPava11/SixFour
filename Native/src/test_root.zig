@@ -38,4 +38,5 @@ test {
     _ = @import("cube_expand_fixture_test.zig"); // cross-language device-layout volume up-rung golden (floor + gene arms)
     _ = @import("gif_fixture_test.zig"); // cross-language full-burst GIF golden (Stage 6)
     _ = @import("lut_fixture_test.zig"); // cross-language look transfer + LUT-extraction golden
+    _ = @import("palette16_test.zig"); // GIF89a-camera color head: 16x16 bin -> GCT (sums-carrier transitivity + means-don't-compose teeth + centisecond time law)
 }

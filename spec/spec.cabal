@@ -130,6 +130,12 @@ library
         SixFour.Spec.ConstructionEncoder
         SixFour.Spec.HierarchicalDelta
         SixFour.Spec.RootLatticeDetail
+        SixFour.Spec.RootLatticeDecoder
+        SixFour.Spec.SpineRing
+        SixFour.Spec.OctantViews
+        SixFour.Spec.PaletteKinetics
+        SixFour.Spec.KinematicLadder
+        SixFour.Spec.KinematicHaltPrior
         SixFour.Spec.GaugeAction
         SixFour.Spec.ScaleFiltration
         SixFour.Spec.RingReduction
@@ -497,6 +503,12 @@ test-suite spec-tests
         Properties.HierarchicalDelta
         Properties.RootLatticeDetail
         Properties.GaugeAction
+        Properties.RootLatticeDecoder
+        Properties.SpineRing
+        Properties.OctantViews
+        Properties.PaletteKinetics
+        Properties.KinematicLadder
+        Properties.KinematicHaltPrior
         Properties.ScaleFiltration
         Properties.RingReduction
         Properties.MetricLattice

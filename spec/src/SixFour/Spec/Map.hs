@@ -438,6 +438,76 @@ mean-free part. The @MeanFree@ newtype (hidden constructor; built ONLY via @mkMe
 or the checked @mkMeanFreeChecked@, NEVER by subtracting a mean = dividing by the non-unit @b@)
 carries @Σ=0@ in the TYPE (@lawMeanFreeIsSigmaZero@). Gates the IDEALIZED LINEAR Haar skeleton, not
 the floored kernel. Additive),
+"SixFour.Spec.RootLatticeDecoder" (★ inference on the detail band IS closest-vector decoding on
+A_{b-1} — the exact Conway–Sloane algorithm (round, then repair the sum deficiency at the worst
+rounding errors), certified GLOBALLY optimal in exact rational arithmetic by beating every root
+e_i − e_j (@lawDecodeVoronoiOptimal@; for A_{b-1} the roots ARE the Voronoi-relevant vectors, with
+b=3 brute-force teeth @lawDecodeMatchesBruteForce@). @lawDecodeFactorsThroughFold@ = the Weyl
+folding (sort into the fundamental chamber) is WIRED, learning only ever acts on the residual;
+equivariance laws (@lawDecodeWeylEquivariant@, @lawDecodeTranslationEquivariant@) are stated on the
+generic tie-free stratum @genericPoint@ (Voronoi walls honestly excluded — nearest point non-unique
+there). Sibling of RootLatticeDetail. Additive),
+"SixFour.Spec.SpineRing" (★ DECISION OF RECORD — the Morton gene: the spine algebra is the PRODUCT
+ring @(ℤ/2^k)³@ (per-axis 2-adic), NOT an 8-adic ring; Morton interleaving is demoted to a CHART
+(@lawMortonIsChart@ = truncation-compatible tree bijection; @lawMortonNotAdditive@ = not a ring
+map). FORCED by axis identity: the product has axis idempotents @e_x+e_y+e_t=1@
+(@lawAxisIdempotentsResolveIdentity@) while ℤ/2^{3k} is local (@lawMortonRingHasOnlyTrivialIdempotents@,
+exhaustive) so the 8-adic side cannot name "the t axis"; the t-collapse (V2.1 time-drop) is an
+ideal quotient in the product (@lawTCollapseKernelIsIdealInProduct@, @lawTCoarseningIsRingHom@) but
+through the chart is not even additively closed and matches NO ideal
+(@lawTCollapseIsNoIdealOfMortonRing@, all ideals enumerated) — a bit-mask forever
+(@lawTMaskIsChartLevelOnly@). THE GENE TURNS ON AT DEPTH 2 (at k=1 dropping the top t-bit IS a ring
+quotient); axes coarsen independently (@lawAxesCoarsenIndependently@) = three independent pyramids.
+Additive),
+"SixFour.Spec.OctantViews" (★ the 2×2×2 ↔ 1+7-latents morphism GRADED BY AXIS SUBSETS — the linear
+octant skeleton is the 3-bit Walsh–Hadamard transform (characters of (ℤ/2)³), grading 1+3+3+1
+(@lawBandCountIsBinomial@, detail total 7 = rank A₇ ties RootLatticeDetail). KEYSTONE
+@lawLatentIsViewDetail@: every order-k latent is computable from its k-dim VIEW alone (pool the
+complement first) — the three pair latents ARE the isometric faces x:y (frame), x:t, y:t
+(slit-scan); @lawViewsDetermineBlock@ = 8·v = Σ sign·band (reconstruction divides only by 2³, stays
+in ℤ[1/2]). Time's ARROW: x↔y swap permutes latents (@lawXYSwapPermutesLatents@, unordered pair)
+while reversing the ordered (t,t+1) negates exactly the t-bands (@lawTimeReversalFlipsTBands@);
+t-pooling kills its bands (@lawAxisPoolingKillsItsBands@ — the latent-level SpineRing t-collapse).
+COLOR IS A FIBER: linear color maps (opponent L,a,b) commute with all 8 bands
+(@lawColorFiberCommutes@) — base grading and color space mix only through the GIF extraction (GCT =
+color fiber at the 16-rung, LZW indices = base). Gates the idealized LINEAR skeleton, not the
+floored kernel. Additive),
+"SixFour.Spec.PaletteKinetics" (★ the 16×16 base as 256 PARTICLES + entropy in EXACT INTEGERS. Rung
+equality 64@20fps == 32@10fps == 16@5fps (same 3.2 s window, same printed canvas, same spacetime
+region at three densities) tied to true GIF89a terms. Slots ordered by (x,y) (@lawSlotIsXYOrder@);
+mass = pooled sum, conserved (@lawMassPoolsExactly@); velocity = per-tick delta, commutes with
+pooling (@lawVelocityCommutesWithPooling@); KEYSTONE kinetics
+@lawCoarseVelocityIsBinomialSmoothing@: coarse Δ(T) = pool(δ(2T) + 2δ(2T+1) + δ(2T+2)) — momentum
+coarsens by Pascal's row, exactly. ENTROPY = Boltzmann microstate count W (Integer; H = log W never
+landed as a real): certainty is mass concentration (@lawCertainMassHasOneMicrostate@, W=1 iff one
+value), max entropy = balanced split, KEYSTONE @lawMicrostatesChainRule@: the chain rule
+H(fine)=H(coarse)+H(detail|coarse) as the multinomial FACTORIZATION W(fine) = W(totals)·∏W(within) —
+palette collapse DIVIDES W exactly (@lawCoarseningNeverIncreasesW@, data processing as integer
+divisibility). Extends docs/ENTROPY-INVARIANTS.md counting-entropy to the palette head; shot-noise
+mass-buys-certainty stays a physics NOTE, not law. Additive),
+"SixFour.Spec.KinematicLadder" (★ building to 64×64: the KINEMATIC TOWER as exact discrete calculus.
+16 = position+mass, 16→32 = velocity, 32→64 = ACCELERATION; the exact Taylor expansion is Newton's
+forward-difference formula = the MAHLER BASIS (binomials C(t,k) are the 2-adic monomials).
+@lawKthDifferenceCoarsensByPascal@: coarsening sends Δ^k through Pascal's row k+1 — velocity (1,2,1),
+acceleration (1,3,3,1), jerk (1,4,6,4,1) (Pascal mod 2 = Sierpiński via Kummer = 2-adic parity).
+@lawBandsAreMixedDifferences@: every OctantViews band = (−1)^|S| · pooled ∏Δ_a — the graded latents
+ARE the mixed derivatives (1 mass + 3 velocities + 3 mixed accelerations + 1 mixed jerk). BUDGET:
+@lawPolynomialTrajectoryHaltsExactly@ — Δ^{k+1}≡0 ⇒ order-k Newton prediction exact, zero S-packets
+beyond order k (kinematic order == halting depth == S-budget; teeth: t^{k+1} leaves residual exactly
+(k+1)!). S/K/I as movement: K descends (Pascal-smooths), I is the floor, S pays for the Mahler tail;
+MAP-Elites reward = admission by meaning-per-packet (GENE-ARCHIVE-PLAN, referenced not landed).
+Linear skeleton, same honest boundary as OctantViews. Additive),
+"SixFour.Spec.KinematicHaltPrior" (★ THE WIRING: KinematicLadder's budget law becomes the PonderNet
+halting prior. @certifiedOrder@ = smallest k with Δ^{k+1}≡0 on the window (exact Integer, computable
+on-device pre-learning); @residualLoss@ j = Σ|f − NewtonPredict_j f| (Integer). KEYSTONE
+@lawCheapestZeroLossHaltIsCertifiedOrder@: under the PonderNet objective (PonderHaltDistribution's
+expectedLoss) the cheapest zero-loss pointed halting == the certified order — halting depth DERIVED
+from the objective, not asserted. @lawResidualZeroIffAtOrAboveOrder@ (L_j=0 ⇔ j≥k, both directions);
+pointed prior proper/pointed/spends exactly k+1 steps; TEETH @lawEarlyHaltPaysResidual@: one step
+early pays integer residual ≥ 1 — an early-halting gene provably lies. Composes with PonderBudget
+(paint = WHERE to think, certification = how deep thinking CAN help); MAP-Elites meaning-per-packet
+metering referenced. Honest boundary: certification is exact on the OBSERVED window only; a floor
+for learned halting, not a replacement. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with
