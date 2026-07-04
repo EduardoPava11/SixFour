@@ -77,3 +77,24 @@ corrections:
 Stage impact: S2's brush UI becomes the view toggle + in-view painting (three-position
 control, one canvas per rung view); S4's decide arms compare the network's PROPOSED mix
 against the user-corrected mix. S1/S3/S5 unchanged.
+
+## AMENDMENT 2 (`Spec.AxisSKI` — the dimensional upgrade)
+
+SKI reconsidered over the x:y:t voxel: the combinators are AXIS-INDEXED (K_x, K_y, K_t
+and their sections), the isotropic ladder is the DIAGONAL, and the field value upgrades
+from a scalar depth to a DEPTH VECTOR (d_x, d_y, d_t) per region — crisp-but-still,
+blurry-but-alive, streaked. Consequences per stage:
+
+- S1: the superlevel masks become PER-AXIS superlevels (three nested families, one per
+  axis; nesting per axis automatic from max — same derivation, vectorized).
+- S2: a pick grants the current view's depth VECTOR. The view space is the axis lattice
+  (spatial × temporal); v1 UI may expose only the diagonal (three pure views) plus a
+  per-region time-hold toggle (= raising d_t alone — the beat-hold of YINYANG-UIUX §0,
+  now algebra), with the full lattice as headroom.
+- S4: proposed-mix vs corrected-mix comparisons unchanged in shape; the arm space grows
+  27^regions but the certified-order/W pruning applies PER AXIS (temporal certification
+  from the kinematic ladder, spatial from W) so the asked set stays small.
+- Gene consequence: the gene decomposes by axis (each S_a owes a disjoint band set;
+  lawAxisWashKillsItsBands), and time's arrow lives only in S_t
+  (lawZeroSectionIsArrowBlind) — the temporal gene is a genuinely different object from
+  the spatial ones, which the MAP-Elites axes should reflect.

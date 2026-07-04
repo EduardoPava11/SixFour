@@ -133,6 +133,7 @@ import qualified Properties.ChoiceTraining as ChoiceTraining
 import qualified Properties.FidelityLadder as FidelityLadder
 import qualified Properties.CubeBrush as CubeBrush
 import qualified Properties.MixSKI as MixSKI
+import qualified Properties.AxisSKI as AxisSKI
 import qualified Properties.GaugeAction as GaugeAction
 import qualified Properties.ScaleFiltration as ScaleFiltration
 import qualified Properties.RingReduction as RingReduction
@@ -356,6 +357,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , FidelityLadder.tests
   , CubeBrush.tests
   , MixSKI.tests
+  , AxisSKI.tests
   , GaugeAction.tests
   , ScaleFiltration.tests
   , RingReduction.tests

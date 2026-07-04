@@ -143,6 +143,7 @@ library
         SixFour.Spec.FidelityLadder
         SixFour.Spec.CubeBrush
         SixFour.Spec.MixSKI
+        SixFour.Spec.AxisSKI
         SixFour.Spec.GaugeAction
         SixFour.Spec.ScaleFiltration
         SixFour.Spec.RingReduction
@@ -523,6 +524,7 @@ test-suite spec-tests
         Properties.FidelityLadder
         Properties.CubeBrush
         Properties.MixSKI
+        Properties.AxisSKI
         Properties.ScaleFiltration
         Properties.RingReduction
         Properties.MetricLattice

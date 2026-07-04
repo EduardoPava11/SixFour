@@ -593,6 +593,18 @@ lie to the 16-view), @lawMixesAreDistinguishable@ (witness: 3^8 distinct outputs
 together: the mix is exactly the K-fiber, pure gene, no marginal content. CORRECTION RECORDED: v1
 ships real bins (pull of measured data), network learns the FIELD not the content; invention stays
 the W1-gated upgrade path. Additive),
+"SixFour.Spec.AxisSKI" (â SKI RECONSIDERED DIMENSIONALLY — the combinators are AXIS-INDEXED over
+x:y:t: three K's (K_x,K_y,K_t — the freedom SpineRing's product ring bought) and three S's; MixSKI's
+scale chain is this algebra's DIAGONAL (@lawIsotropicPullFactors@ — the isotropic pull = the three
+axis washes in every order). @lawAxisWashesCommuteAndProject@ (commuting idempotent projections =
+SpineRing's per-axis coarsening at operator level). @lawAnisotropicStrictlyExtends@: the depth
+VECTOR (d_x,d_y,d_t) per region — crisp-but-still (fine x,y / pulled t) matches NO isotropic depth;
+27 view-cells vs 3. @lawAxisWashKillsItsBands@: the doubled wash along a annihilates exactly the
+a-containing OctantViews bands, ALL THREE axes (generalizes the landed t-only law) — THE GENE
+DECOMPOSES BY AXIS: each S_a owes a disjoint band set. @lawZeroSectionIsArrowBlind@: w_t commutes
+with time reversal while the t-band it discards is reversal-ODD — the arrow enters synthesis
+exactly and only through the temporal gene; S_t â¢ S_x,S_y by algebra. UI: picks grant depth
+VECTORS; the view space is the axis lattice with the pure views on its diagonal. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with
