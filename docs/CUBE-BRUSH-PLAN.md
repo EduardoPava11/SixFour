@@ -55,3 +55,25 @@ cube set of depth-2 cubes, so the change is backward compatible at the gate laye
   network (user places 4³/2³ only)? Spec supports both; UI complexity differs.
 - Does a cube grant TIME depth too (it is 4×4×4 in spacetime) or do beats get a separate
   hold gesture (YINYANG-UIUX §0)? Spec treats spacetime uniformly; UI may split.
+
+## AMENDMENT (same day, `Spec.MixSKI` — the math correction)
+
+Daniel's correction, now law-gated: the UI is a **VIEW TOGGLE** (coarse/mid/fine — the
+three bin streams, K-images of one signal), and the user paints voxels IN the current
+view at that view's own granularity. A pick in view r IS a depth-r cube — the CubeBrush
+stroke algebra (semilattice, finest wins, full bandwidth) is unchanged. Two framing
+corrections:
+
+1. **v1 content = REAL bins.** The mixed 64³ ships the pull of measured data at each
+   chosen depth, not network invention (`lawSectionFactorsThroughChain`: every mixed
+   region is canonical maps applied a chosen number of times). Invention inside grants
+   is the W1-gated upgrade path, not v1.
+2. **The network's target is the MIX, not the content.** SKI: K and I are canonical;
+   the mix is a choice of section; the gene lives on S — so "teach the network to
+   produce custom 64³" = train S on the user's picks (the BT/choice machinery consumes
+   pick-vs-proposal disagreements). `lawMixesShareCoarseViews` is the safety rail: no
+   learned mix can move the coarse marginals.
+
+Stage impact: S2's brush UI becomes the view toggle + in-view painting (three-position
+control, one canvas per rung view); S4's decide arms compare the network's PROPOSED mix
+against the user-corrected mix. S1/S3/S5 unchanged.

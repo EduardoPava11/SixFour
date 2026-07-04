@@ -581,6 +581,18 @@ exactly-rendered outlier pollutes the finer mean) — the pull is only the FLOOR
 granted cubes. Port: W1 mask = the depth≥1 superlevel; per-transition invention masks = nested
 superlevels (automatic from max); an old binary mask = a cube set of depth-2 cubes (backward
 compatible). Plan: docs/CUBE-BRUSH-PLAN.md. Additive),
+"SixFour.Spec.MixSKI" (★ WHAT SKI SAYS about mixing the views — the correction grounding CubeBrush
+in CombinatorExactSequence: the three bin streams are K-IMAGES of one signal (toggle views = walk
+the K-chain); the user picks REAL bins per view; the mixed 64³ = a per-region CHOICE OF SECTION —
+K and I are canonical (zero freedom) so THE ONLY CHOICE IN THE PIPELINE IS THE MIX, and the gene
+lives on S: teaching the network to produce custom 64³ = TRAINING S; the user's paint is a gene
+specification. Laws (washQ = S₀∘K over exact ℚ): @lawSectionFactorsThroughChain@ (depth pulls =
+wash composites; washes compose — the mix never leaves the K-chain; K∘S=id = per-view faithfulness),
+@lawMixesShareCoarseViews@ (ALL mixes K-indistinguishable — coarse marginals invariant; no mix can
+lie to the 16-view), @lawMixesAreDistinguishable@ (witness: 3^8 distinct outputs, every region) —
+together: the mix is exactly the K-fiber, pure gene, no marginal content. CORRECTION RECORDED: v1
+ships real bins (pull of measured data), network learns the FIELD not the content; invention stays
+the W1-gated upgrade path. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with
