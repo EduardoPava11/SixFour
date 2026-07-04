@@ -126,6 +126,7 @@ import qualified Properties.OctantViews as OctantViews
 import qualified Properties.PaletteKinetics as PaletteKinetics
 import qualified Properties.KinematicLadder as KinematicLadder
 import qualified Properties.KinematicHaltPrior as KinematicHaltPrior
+import qualified Properties.TriScaleTraining as TriScaleTraining
 import qualified Properties.GaugeAction as GaugeAction
 import qualified Properties.ScaleFiltration as ScaleFiltration
 import qualified Properties.RingReduction as RingReduction
@@ -342,6 +343,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , PaletteKinetics.tests
   , KinematicLadder.tests
   , KinematicHaltPrior.tests
+  , TriScaleTraining.tests
   , GaugeAction.tests
   , ScaleFiltration.tests
   , RingReduction.tests

@@ -508,6 +508,18 @@ early pays integer residual ≥ 1 — an early-halting gene provably lies. Compo
 (paint = WHERE to think, certification = how deep thinking CAN help); MAP-Elites meaning-per-packet
 metering referenced. Honest boundary: certification is exact on the OBSERVED window only; a floor
 for learned halting, not a replacement. Additive),
+"SixFour.Spec.TriScaleTraining" (★ CAN the app train all three scales at the appropriate
+information density? YES, gated exactly: the ladder trains TRANSITIONS (never marginals) — the
+microstate chain rule TELESCOPES across both transitions (@lawLadderTelescopesExactly@: W(fine) =
+∏ per-transition within-block factors × W(coarsest)=1), so the 16→32 and 32→64 heads consume
+DISJOINT bits. Density: samples scale ×8 per rung (@lawDetailSamplesScaleByEight@);
+information-per-compute is RUNG-INVARIANT — exactly 7 detail values per 2×2×2 block at every scale
+(@lawInfoPerComputeIsRungInvariant@); both transitions cost exactly 9/8 of the finest alone
+(@lawTriScaleOverheadIsNineEighths@, integer identity — the coarse head is a 12.5% rider). WHERE to
+train: concentrated blocks have conditional factor 1 = zero bits, skipped
+(@lawConcentratedTransitionIsFree@); mass buys certainty (shot noise, physics note). The 16-rung is
+the realized GCT, never a target. Cadence fit is measured doc (palette16_bench + AtlasTrainer
+12.4 ms/step): the constraint is information, not compute. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with
