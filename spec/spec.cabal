@@ -141,6 +141,7 @@ library
         SixFour.Spec.LabBleed
         SixFour.Spec.ChoiceTraining
         SixFour.Spec.FidelityLadder
+        SixFour.Spec.CubeBrush
         SixFour.Spec.GaugeAction
         SixFour.Spec.ScaleFiltration
         SixFour.Spec.RingReduction
@@ -519,6 +520,7 @@ test-suite spec-tests
         Properties.LabBleed
         Properties.ChoiceTraining
         Properties.FidelityLadder
+        Properties.CubeBrush
         Properties.ScaleFiltration
         Properties.RingReduction
         Properties.MetricLattice

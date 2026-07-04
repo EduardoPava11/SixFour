@@ -120,3 +120,18 @@ what their seeing does.
   descent means any stopping point is coherent; default field = certified floor).
 - The gene/BT utility's persistence granularity (per-user vs per-scene-class) — MAP-
   Elites axes decision, `docs/GENE-ARCHIVE-PLAN.md`.
+
+## 6. AMENDMENT (2026-07-04, form follows function): paint returns, typed
+
+Section 1's "the user should not paint" is CORRECTED by the cube-brush change
+(`Spec.CubeBrush`, docs/CUBE-BRUSH-PLAN.md): the user DOES paint — with rung-typed
+brushes (16-brush = 4×4×4 cubes, 32-brush = 2×2×2, 64-brush = voxels), laying a set of
+overlapping cubes; finest wins; the NETWORK constructs the 64³ inside the granted
+volume (forced by `lawOverlapPullCanRegress` — the pull is only the floor).
+
+What survives from this doc unchanged: the beat structure (§0 — a cube is spacetime, so
+brushes grant time depth too), propose-then-correct (§1 — the bin data still proposes;
+cubes are the correction channel, now full-bandwidth per
+`lawTypedPaintHasFullBandwidth`), the choice channel (§2 — re-scoped to taste-training
+on the network's constructions where the user laid no cubes), and the yin-yang table
+(§3 — DECIDE's training column gains "cube strokes = full WHERE+DEPTH labels").

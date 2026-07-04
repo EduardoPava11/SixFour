@@ -131,6 +131,7 @@ import qualified Properties.PullField as PullField
 import qualified Properties.LabBleed as LabBleed
 import qualified Properties.ChoiceTraining as ChoiceTraining
 import qualified Properties.FidelityLadder as FidelityLadder
+import qualified Properties.CubeBrush as CubeBrush
 import qualified Properties.GaugeAction as GaugeAction
 import qualified Properties.ScaleFiltration as ScaleFiltration
 import qualified Properties.RingReduction as RingReduction
@@ -352,6 +353,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LabBleed.tests
   , ChoiceTraining.tests
   , FidelityLadder.tests
+  , CubeBrush.tests
   , GaugeAction.tests
   , ScaleFiltration.tests
   , RingReduction.tests

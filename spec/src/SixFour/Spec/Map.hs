@@ -568,6 +568,19 @@ mask can produce — the ternary family strictly extends W1 paint. Post-capture 
 of the bin data (ColorHead derives all rungs/GCT/particles/halt floor from the 64-rung sums —
 referenced, gated by ColorHeadTests). Byte realization rounds ONCE at the end; the rational law is
 the structure. Additive),
+"SixFour.Spec.CubeBrush" (★ FORM FOLLOWS FUNCTION — paint returns carrying RESOLUTION: rung-typed
+brushes lay OVERLAPPING CUBES (16-brush = 4×4×4, 32 = 2×2×2, 64 = voxel) and the NETWORK constructs
+the 64³. Semantics = pointwise MAX (finest wins, @lawFinestWinsAtOverlap@); semilattice ⇒ strokes
+commute + duplicates absorb (@lawStrokesCommuteAndAbsorb@ — order-free/undo-friendly by algebra);
+@lawCubeIsLocal@. THE PIGEONHOLE DISSOLVED: @lawTypedPaintHasFullBandwidth@ — canonical cube sets
+realize EVERY region field and the voxel render agrees with PullField (typed paint says WHERE and
+HOW DEEP in one gesture; ChoiceTraining re-scoped to taste, not retired). WHY THE NETWORK
+CONSTRUCTS: @lawWholeBlockDeepeningImprovesFidelity@ (clean refinement monotone, exact ℚ) vs TEETH
+@lawOverlapPullCanRegress@ (overlapping pull-only rendering STRICTLY regresses — exact witness: an
+exactly-rendered outlier pollutes the finer mean) — the pull is only the FLOOR; θ_up invents inside
+granted cubes. Port: W1 mask = the depth≥1 superlevel; per-transition invention masks = nested
+superlevels (automatic from max); an old binary mask = a cube set of depth-2 cubes (backward
+compatible). Plan: docs/CUBE-BRUSH-PLAN.md. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with
