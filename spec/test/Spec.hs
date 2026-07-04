@@ -135,6 +135,7 @@ import qualified Properties.CubeBrush as CubeBrush
 import qualified Properties.MixSKI as MixSKI
 import qualified Properties.AxisSKI as AxisSKI
 import qualified Properties.OpponentDerivation as OpponentDerivation
+import qualified Properties.YinYangCNN as YinYangCNN
 import qualified Properties.GaugeAction as GaugeAction
 import qualified Properties.ScaleFiltration as ScaleFiltration
 import qualified Properties.RingReduction as RingReduction
@@ -360,6 +361,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , MixSKI.tests
   , AxisSKI.tests
   , OpponentDerivation.tests
+  , YinYangCNN.tests
   , GaugeAction.tests
   , ScaleFiltration.tests
   , RingReduction.tests

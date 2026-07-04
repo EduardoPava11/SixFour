@@ -618,6 +618,17 @@ lost S₃-integrality. @lawDetIsProductOfIndices@: det 6 = 3×2 with NAMED owner
 (the SES's ℤ/3 via Σ mod 3; the Λ story structural), 2 = [A₂:⟨a,b⟩] (the revisable chart).
 @lawInverseAndImage@: image ⇔ L≡b (mod 3) ∧ (2L+b)/3+a even; exact integer inverse; teeth on both
 congruences. Companion of LabBleed (the matrix as Codegen data); GHCi-provable throughout. Additive),
+"SixFour.Spec.YinYangCNN" (★ THE YIN-YANG INFERENCE-LEARNING CNN — the architecture DERIVED from the
+stack (design: docs/YINYANG-CNN-DESIGN.md). YIN frozen exact: @lawEncoderIsAllOnesConv@ — the
+stride-2 all-ones conv IS the sums carrier, zero parameters (K is a theorem, MixSKI). YANG = S only:
+@lawStagedExpansionCountsSumToSeven@ — per-axis head widths are the multiset {1,2,4} in EVERY axis
+order, summing to 7 = rank A₇ (widths are theorems, not hyperparameters);
+@lawSwapTyingBySymmetrization@ — x↔y weight tying by INTEGER symmetrization H' = H + π∘H∘σ commutes
+exactly over ℤ (no /2); S_t un-tied (reversal-odd targets, AxisSKI; t-reversal augmentation NEGATES
+t-bands). Cited, not re-proven: root-chart color input (OpponentDerivation), band targets = mixed
+derivatives (KinematicLadder), certified-order halting floor, W/mass loss weights, 9/8 tri-scale
+budget, mix head = the section/gene trained on picks (ChoiceTraining/CubeBrush) with the
+coarse-marginal safety rail. Open: axis order (recommend t-last), mix-head trunk sharing. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with

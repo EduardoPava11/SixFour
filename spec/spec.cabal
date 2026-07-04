@@ -145,6 +145,7 @@ library
         SixFour.Spec.MixSKI
         SixFour.Spec.AxisSKI
         SixFour.Spec.OpponentDerivation
+        SixFour.Spec.YinYangCNN
         SixFour.Spec.GaugeAction
         SixFour.Spec.ScaleFiltration
         SixFour.Spec.RingReduction
@@ -527,6 +528,7 @@ test-suite spec-tests
         Properties.MixSKI
         Properties.AxisSKI
         Properties.OpponentDerivation
+        Properties.YinYangCNN
         Properties.ScaleFiltration
         Properties.RingReduction
         Properties.MetricLattice
