@@ -605,6 +605,19 @@ DECOMPOSES BY AXIS: each S_a owes a disjoint band set. @lawZeroSectionIsArrowBli
 with time reversal while the t-band it discards is reversal-ODD — the arrow enters synthesis
 exactly and only through the temporal gene; S_t â¢ S_x,S_y by algebra. UI: picks grant depth
 VECTORS; the view space is the axis lattice with the pure views on its diagonal. Additive),
+"SixFour.Spec.OpponentDerivation" (★ THE LATENT DERIVATION OF Lab FROM RGB — the opponent transform
+is a THEOREM: (L,a,b) = the isotypic decomposition of the S₃ permutation representation on ℤ^RGB.
+@lawLumaIsTheUniqueInvariant@ (invariant iff p=q=r, the iff — L spans the trivial rep);
+@lawChromaIsA2OfChannels@ (chroma = A₂ = ker Σ — the b=3 instance of the octant SES; COLOR AND SPACE
+ARE THE SAME THEOREM at different b, RootLatticeDetail reused). @lawRootChartIsEquivariant@: in the
+root chart (α₁,α₂) the 3-cycle acts by the INTEGER matrix [[−1,−1],[1,0]] = the Eisenstein unit ω
+(det 1, tr −1, M³=I); the swap = a det −1 reflection — hue permutation IS hexagonal geometry.
+@lawStoredChartTradesSymmetryForBytes@: the shipped (a,b) chart is INDEX 2 in A₂ (b−a = 2α₂; parity
+obstruction) ⇒ the cycle is only HALF-integral in it (2·a(σv) = −(a+b)(v)) — byte storage priced in
+lost S₃-integrality. @lawDetIsProductOfIndices@: det 6 = 3×2 with NAMED owners — 3 = [ℤ³:A₂⊕ℤ·diag]
+(the SES's ℤ/3 via Σ mod 3; the Λ story structural), 2 = [A₂:⟨a,b⟩] (the revisable chart).
+@lawInverseAndImage@: image ⇔ L≡b (mod 3) ∧ (2L+b)/3+a even; exact integer inverse; teeth on both
+congruences. Companion of LabBleed (the matrix as Codegen data); GHCi-provable throughout. Additive),
 "SixFour.Spec.GaugeAction" (★ the model's three GAUGE freedoms as ONE finite GROUP ACTION whose
 OBSERVABLE is the orbit invariant (rendered image = quotient X/G): the palette gauge @S_K@ (permute
 colours + remap index) and the @ℤ/2@ channel/ordering involution (swapAB\/XOR\/phi6), each with

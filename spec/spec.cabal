@@ -144,6 +144,7 @@ library
         SixFour.Spec.CubeBrush
         SixFour.Spec.MixSKI
         SixFour.Spec.AxisSKI
+        SixFour.Spec.OpponentDerivation
         SixFour.Spec.GaugeAction
         SixFour.Spec.ScaleFiltration
         SixFour.Spec.RingReduction
@@ -525,6 +526,7 @@ test-suite spec-tests
         Properties.CubeBrush
         Properties.MixSKI
         Properties.AxisSKI
+        Properties.OpponentDerivation
         Properties.ScaleFiltration
         Properties.RingReduction
         Properties.MetricLattice
