@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- SixFour is fully local: captures become GIFs on-device; nothing is
+	     uploaded, no analytics, no third-party SDKs (the Tier-2 zero-dependency
+	     contract). The gene-exchange layer ships dark (entitlements disabled),
+	     so no data types are collected and no tracking occurs. Revisit the
+	     collected-data section before enabling GameCenter/CloudKit (L2/L3). -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!-- AppSettings.swift: UserDefaults for the app's own capture-pipeline
+		     settings (same-app access only). -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<!-- GIFRenderer.swift: FileManager.attributesOfItem on the GIF the app
+		     just wrote inside its own container (size surfaced to the user). -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
