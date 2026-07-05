@@ -98,6 +98,7 @@ library
         SixFour.Spec.MaskedBandPrediction
         SixFour.Spec.MaskedBandTrainer
         SixFour.Spec.DetailPredictor
+        SixFour.Spec.GatedResidual
         SixFour.Spec.DeviceTrainStep
         SixFour.Spec.GeneTaxonomy
         SixFour.Spec.Dim6
@@ -485,6 +486,7 @@ test-suite spec-tests
         Properties.MaskedBandPrediction
         Properties.MaskedBandTrainer
         Properties.DetailPredictor
+        Properties.GatedResidual
         Properties.DeviceTrainStep
         Properties.GeneTaxonomy
         Properties.Dim6

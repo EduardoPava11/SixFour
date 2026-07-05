@@ -42,4 +42,15 @@ enum Feature {
     /// The gene is optional everywhere — zero-gene == the deterministic floor — so
     /// flipping this off (or any failure) degrades to exactly today's output.
     static let v3SomaticTrain = true
+
+    /// The yin-yang circuit LIVE at the capture seam. **ON while the color head ships.**
+    ///
+    /// With this on, every burst tick also runs the 16/32/64 ladder (`ColorHead`:
+    /// x420 measurement path → exact u64 sums at 20/10/5 Hz), and `finishBurst`
+    /// trains the S_t yang band head on the burst's OWN manufactured t-band pairs
+    /// (`BandHeadTrainer`, plain Metal, the YinYangCircuitTests conventions) —
+    /// the yin ladder makes the labels, the yang head consumes them, per capture,
+    /// on the phone. Telemetry-only for now (log + `bandHeadCallback`); no GIF
+    /// byte depends on it, so flipping this off degrades to exactly today's output.
+    static let yinYangBands = true
 }

@@ -115,6 +115,109 @@ final class ColorHead {
         return ((width - side) / 2, (height - side) / 2, side)
     }
 
+    // MARK: - The measurement path: x420 → full-range R'G'B'10 → linear pool
+
+    /// The luma half of the capture contract (`palette16.zig` header): video-range
+    /// 10-bit Y' (64…940) → full-range (0…1023), held at ×4096 fixed point so the
+    /// per-pixel step is one table read plus adds. Codes above 940 clamp to 1023,
+    /// below 64 to 0 (range expansion is a clamp by definition, not absorption).
+    static let x420LumaLUT4096: [Int32] = (0..<1024).map { y in
+        let n = Int64(max(0, y - 64)) * 1023 * 4096 + 438
+        return Int32(min(Int64(1023) * 4096, n / 876))
+    }
+
+    /// The chroma half: BT.2020 NCL coefficients folded into ×4096 fixed point in
+    /// 10-bit full-range units per video-range chroma code (C'−512, span ±448 ⇒
+    /// normalized C = (C'−512)/896): R += 1.4746·C_r, G −= 0.16455·C_b + 0.57135·C_r,
+    /// B += 1.8814·C_b, each ×1023/896×4096.
+    static func x420ChromaOffsets4096(cb: Int32, cr: Int32) -> (r: Int32, g: Int32, b: Int32) {
+        let cbs = cb - 512, crs = cr - 512
+        return (r: 6896 * crs, g: -770 * cbs - 2672 * crs, b: 8799 * cbs)
+    }
+
+    /// One pixel of the conversion — the pure twin the pixel loop must equal
+    /// (tested against the float BT.2020 reference in X420MeasurementPathTests).
+    static func x420RGB10(y: Int, cb: Int, cr: Int) -> (r: Int, g: Int, b: Int) {
+        let lum = x420LumaLUT4096[y]
+        let off = x420ChromaOffsets4096(cb: Int32(cb), cr: Int32(cr))
+        let clamp: (Int32) -> Int = { v in Int(min(1023, max(0, (v + 2048) >> 12))) }
+        return (clamp(lum + off.r), clamp(lum + off.g), clamp(lum + off.b))
+    }
+
+    /// Reused per-tick conversion target (side²·3 u16) — one allocation per crop
+    /// geometry, not per frame.
+    private var rgb10Scratch: [UInt16] = []
+
+    /// THE MEASUREMENT PATH (the capture contract recorded in `palette16.zig`):
+    /// pool one x420 (10-bit YCbCr 4:2:0 video-range, BT.2020/HLG) buffer into
+    /// the 64-rung bin sums. Swift owns the colorimetry — integer BT.2020
+    /// Y'CbCr→R'G'B' with video→full range expansion (nearest chroma, exact
+    /// fixed point) — then the Zig floor owns the radiometry:
+    /// `s4_pool_sums_linear_hlg10` linearizes through the HLG golden LUT and
+    /// block-sums, so bin sums are ∝ scene light in linear16 units.
+    ///
+    /// NOTE: on this path `lastCropArea` stays 0, deliberately skipping the GCT
+    /// realization in `emit16` — `s4_sums_to_srgb8` is byte-sum-only and would
+    /// refuse linear16 means; realizing a GCT from linear sums needs an
+    /// inverse-EOTF realization kernel that does not exist yet. The ladder,
+    /// t-band pairs, and halt floor are unit-agnostic and unaffected.
+    func poolSums64(fromX420 pixelBuffer: CVPixelBuffer) -> [UInt64]? {
+        guard CVPixelBufferGetPixelFormatType(pixelBuffer)
+                == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange else { return nil }
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+        guard let yBase = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0),
+              let cBase = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 1)
+        else { return nil }
+
+        let w = CVPixelBufferGetWidth(pixelBuffer)
+        let h = CVPixelBufferGetHeight(pixelBuffer)
+        guard let crop = ColorHead.cropWindow(width: w, height: h, maxSide: cropSide)
+        else { return nil }
+        let side = crop.side
+
+        // x420 samples are the top 10 bits of 16-bit little-endian words.
+        let yStride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0) / 2
+        let cStride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1) / 2
+        let yPtr = yBase.assumingMemoryBound(to: UInt16.self)
+        let cPtr = cBase.assumingMemoryBound(to: UInt16.self)
+
+        if rgb10Scratch.count != side * side * 3 {
+            rgb10Scratch = [UInt16](repeating: 0, count: side * side * 3)
+        }
+        ColorHead.x420LumaLUT4096.withUnsafeBufferPointer { lut in
+            rgb10Scratch.withUnsafeMutableBufferPointer { rgb in
+                for row in 0..<side {
+                    let py = crop.y0 + row
+                    let yRow = yPtr + py * yStride
+                    let cRow = cPtr + (py >> 1) * cStride
+                    var o = row * side * 3
+                    for col in 0..<side {
+                        let px = crop.x0 + col
+                        let lum = lut[Int(yRow[px] >> 6)]
+                        let ci = (px >> 1) * 2
+                        let off = ColorHead.x420ChromaOffsets4096(
+                            cb: Int32(cRow[ci] >> 6), cr: Int32(cRow[ci + 1] >> 6))
+                        rgb[o] = UInt16(min(1023, max(0, (lum + off.r + 2048) >> 12)))
+                        rgb[o + 1] = UInt16(min(1023, max(0, (lum + off.g + 2048) >> 12)))
+                        rgb[o + 2] = UInt16(min(1023, max(0, (lum + off.b + 2048) >> 12)))
+                        o += 3
+                    }
+                }
+            }
+        }
+
+        var sums = [UInt64](repeating: 0, count: 64 * 64 * 3)
+        let rc = rgb10Scratch.withUnsafeBufferPointer { rgb in
+            sums.withUnsafeMutableBufferPointer { out in
+                s4_pool_sums_linear_hlg10(rgb.baseAddress, Int32(side), 64, out.baseAddress)
+            }
+        }
+        guard rc == 0 else { return nil }
+        lastCropArea = 0
+        return sums
+    }
+
     // MARK: - The ladder: exact u64 adds at GIF-exact cadences
 
     /// Ingest one 64-rung frame (one 20 Hz tick). Derives the 32- and 16-rung
@@ -253,6 +356,31 @@ final class ColorHead {
                 s4_certified_order(buf.baseAddress, Int32(history.count), cap)
             }
         }
+    }
+
+    // MARK: - The halting-depth budget (KinematicHaltPrior KEYSTONE)
+
+    /// The halting depth the certified-order floor licenses — the max certified
+    /// kinematic order across slots whose window is long enough to certify, or
+    /// -1 if none certify yet. This is `lawCheapestZeroLossHaltIsCertifiedOrder`
+    /// made into a runtime budget: Newton prediction of order k is EXACT, so the
+    /// per-slot order is exactly how deep learning can help.
+    ///
+    /// Pure + static so `KinematicHaltPriorBudgetTests` can exercise the gate on
+    /// synthetic order vectors with no camera.
+    static func haltingDepthBudget(_ orders: [Int32]) -> Int {
+        Int(orders.filter { $0 >= 0 }.max() ?? -1)
+    }
+
+    /// Whether the S_t yang head has residual worth fitting, given the floor.
+    /// The head is a first-order (bias + causal-L) predictor, so a scene whose
+    /// motion certifies at order ≤ 1 everywhere (static or constant-velocity) is
+    /// already shipped EXACTLY by the kinematic floor + bias — training it there
+    /// is the wasted S-packets ARM 3 of the training-occurs proof punishes. Real
+    /// spatially-conditional t-band structure only appears at order ≥ 2
+    /// (acceleration and up). `orders` = `haltFloor()`.
+    static func residualNeedsLearning(_ orders: [Int32]) -> Bool {
+        haltingDepthBudget(orders) >= 2
     }
 }
 

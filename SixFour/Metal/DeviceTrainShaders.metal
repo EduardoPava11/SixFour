@@ -321,6 +321,7 @@ kernel void deviceTrainSimtKernel(const device int          *blocks       [[buff
                                   constant FusedTrainParams &p            [[buffer(4)]],
                                   device float              *scratch      [[buffer(5)]],
                                   device float              *lossOut      [[buffer(6)]],
+                                  const device float        *thetaInit    [[buffer(7)]],
                                   uint tid [[thread_position_in_threadgroup]]) {
     const uint n = p.n;
     if (n == 0) { return; }
@@ -339,7 +340,11 @@ kernel void deviceTrainSimtKernel(const device int          *blocks       [[buff
         }
     }
     if (tid == 0) {
-        for (uint c = 0; c < kParamsD; c++) { th[c] = 0.0f; }   // the zero floor
+        // The meta-INIT W₀ (research §5.4): descend from `thetaInit` instead of the bare
+        // zero floor. The host binds an all-zero buffer by default, so the un-meta path is
+        // byte-identical to the old `th = 0` floor (the golden holds); a non-zero W₀ starts
+        // the few-step fit near the family optimum.
+        for (uint c = 0; c < kParamsD; c++) { th[c] = thetaInit[c]; }
     }
     threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup);
 

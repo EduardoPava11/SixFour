@@ -95,6 +95,7 @@ import qualified Properties.MaskedBandTrainer as MaskedBandTrainer
 import qualified Properties.DeviceTrainStep as DeviceTrainStep
 import qualified Properties.GeneTaxonomy as GeneTaxonomy
 import qualified Properties.DetailPredictor as DetailPredictor
+import qualified Properties.GatedResidual as GatedResidual
 import qualified Properties.Dim6          as Dim6
 import qualified Properties.ProjectionOrdering as ProjectionOrdering
 import qualified Properties.Dimensions    as Dimensions
@@ -321,6 +322,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , DeviceTrainStep.tests
   , GeneTaxonomy.tests
   , DetailPredictor.tests
+  , GatedResidual.tests
   , Dim6.tests
   , ProjectionOrdering.tests
   , Dimensions.tests

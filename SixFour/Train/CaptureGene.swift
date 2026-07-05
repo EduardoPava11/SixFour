@@ -30,6 +30,25 @@ enum CaptureGene {
         var lossReduction: Double {
             floorLoss > 0 ? 1 - Double(loss) / Double(floorLoss) : 0
         }
+
+        /// The default fraction of the residual a capture must explain for its
+        /// learning to count as WORK (research report §4 "yields work"): below this
+        /// the gene is noise-floored or flat and the lossless floor ships instead.
+        static let defaultWorkBar = 0.25
+
+        /// Did this capture's learning YIELD WORK worth shipping the gene for?
+        /// Two conditions, mirroring the FLOORED-discharge probe's three regimes
+        /// (`AmortizedFitProbeTests`):
+        ///   1. it CLEARED THE Q16 LSB — at least one committed band is non-zero
+        ///      (a flat capture commits all-zero and fails here), AND
+        ///   2. it EXPLAINED ENOUGH — `lossReduction ≥ bar` (a noise capture floors
+        ///      below the bar, its residual being unpredictable from coarse).
+        /// When false, the gene invented nothing useful; ship the byte-exact floor.
+        /// This is the gated-S rule made a runtime decision — the S-map spends only
+        /// where the free coarse-pool label carries above-floor, learnable detail.
+        func yieldsWork(bar: Double = defaultWorkBar) -> Bool {
+            committed.contains { $0 != 0 } && lossReduction >= bar
+        }
     }
 
     /// Assemble the burst tiles into the interleaved OKLab Q16 volume
