@@ -838,8 +838,9 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         if Feature.v3SomaticTrain {
             let tilesForTrain = collected
             let callback = thetaUpCallback
+            let w0 = Feature.metaInitW0 ? MetaInit.deployedW0 : nil   // gated; nil = zero floor
             Task.detached(priority: .userInitiated) {
-                let g = CaptureGene.train(tiles: tilesForTrain)
+                let g = CaptureGene.train(tiles: tilesForTrain, w0: w0)
                 // GATED-S ship decision (research report §4): deliver the gene ONLY when
                 // its learning yielded work — it cleared the Q16 LSB AND explained enough
                 // of the residual. A flat capture (nothing committed) or a noise capture

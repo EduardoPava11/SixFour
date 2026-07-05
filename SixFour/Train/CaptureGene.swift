@@ -79,11 +79,13 @@ enum CaptureGene {
     /// nil where Metal compute is unavailable or the burst shape is untrainable;
     /// callers treat the gene as optional (its absence is the floor).
     static func train(tiles: [OKLabTile], channel: Int = 0,
-                      rung: RungDispatch? = RungDispatch()) -> ThetaUp? {
+                      rung: RungDispatch? = RungDispatch(),
+                      w0: [Float]? = nil) -> ThetaUp? {
         guard let rung, let volume = volume(from: tiles) else { return nil }
         let t0 = DispatchTime.now().uptimeNanoseconds
+        // W₀ = the meta-init the descent starts from (nil = the zero floor, today's path).
         guard let out = rung.trainOnVolume(volume: volume, frames: tiles.count,
-                                           side: tiles[0].side, channel: channel)
+                                           side: tiles[0].side, channel: channel, w0: w0)
         else { return nil }
         let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1_000_000
         // The zero-param floor loss on the SAME manufactured pairs: ½ Σ t̃² (the

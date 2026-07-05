@@ -138,3 +138,51 @@ struct MetaInitKernelWiringTests {
         #expect(fromMeta.loss < 0.5 * fromZero.loss)    // …and by a wide margin in 5 steps
     }
 }
+
+/// The offline W₀-blob infrastructure (research §5.5): the producer is deterministic
+/// and the on-disk format round-trips, so a shipped `metainit-w0.bin` is reproducible.
+struct MetaInitBlobTests {
+
+    @Test func producerIsDeterministic() {
+        // Same synthetic corpus, no RNG ⇒ byte-identical W₀ across calls (a reproducible
+        // blob across builds).
+        #expect(MetaInit.syntheticCorpusW0() == MetaInit.syntheticCorpusW0())
+    }
+
+    @Test func blobRoundTripsExactly() {
+        let w0 = MetaInit.syntheticCorpusW0()
+        guard let back = MetaInit.deserialize(MetaInit.serialize(w0)) else {
+            Issue.record("deserialize failed"); return
+        }
+        // Serialised as Float32, so the round-trip equals the Float32 view of each param.
+        #expect(back.count == w0.count)
+        #expect(zip(back, w0).allSatisfy { $0 == Double(Float($1)) })
+    }
+
+    @Test func blobRejectsWrongLength() {
+        #expect(MetaInit.deserialize(Data([0, 1, 2])) == nil)               // not 21×4 bytes
+        #expect(MetaInit.deserialize(Data(repeating: 0, count: 80)) == nil) // 20 floats, not 21
+    }
+}
+
+/// FP32 numerics audit pin (`docs/FP32-NUMERICS-AUDIT.md`): the single float→device
+/// crossing is round-half-to-even, the cross-device-fragile op. If this rule ever
+/// regressed (round-half-up, truncation), the A-series fingerprint would silently
+/// diverge from the M-series one.
+struct Fp32NumericsAuditTests {
+
+    @Test func theQ16CrossingIsRoundHalfToEven() {
+        let q = 65536.0
+        // Exact half-ULP boundaries: round to the EVEN neighbour (banker's rounding),
+        // matching the kernel's `rint`.
+        #expect(DeviceTrainStepCPU.quantizeQ16(0.5 / q) == 0)    // 0.5 → 0 (even)
+        #expect(DeviceTrainStepCPU.quantizeQ16(1.5 / q) == 2)    // 1.5 → 2 (even)
+        #expect(DeviceTrainStepCPU.quantizeQ16(2.5 / q) == 2)    // 2.5 → 2 (even)
+        #expect(DeviceTrainStepCPU.quantizeQ16(3.5 / q) == 4)    // 3.5 → 4 (even)
+        #expect(DeviceTrainStepCPU.quantizeQ16(-0.5 / q) == 0)   // −0.5 → 0
+        #expect(DeviceTrainStepCPU.quantizeQ16(-1.5 / q) == -2)  // −1.5 → −2
+        // Non-boundary values round normally.
+        #expect(DeviceTrainStepCPU.quantizeQ16(0.6 / q) == 1)
+        #expect(DeviceTrainStepCPU.quantizeQ16(-0.6 / q) == -1)
+    }
+}

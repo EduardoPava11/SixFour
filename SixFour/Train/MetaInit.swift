@@ -58,6 +58,64 @@ enum MetaInit {
         return theta
     }
 
+    // MARK: - The shipped W₀ blob (offline producer → device loader)
+
+    /// Serialise a meta-init to the on-disk blob: `paramCount` little-endian Float32
+    /// (84 bytes for the 21-param head) — a plain binary Resource, the house pattern
+    /// (`stbn3d-8.bin`). Float32, not Double, because the device consumes `[Float]`.
+    static func serialize(_ w0: [Double]) -> Data {
+        var data = Data(capacity: w0.count * 4)
+        for x in w0 {
+            var le = Float(x).bitPattern.littleEndian
+            withUnsafeBytes(of: &le) { data.append(contentsOf: $0) }
+        }
+        return data
+    }
+
+    /// The exact inverse of `serialize` — nil unless the blob is a whole number of
+    /// Float32 of the expected length.
+    static func deserialize(_ data: Data, count: Int = DeviceTrainStepCPU.paramCount) -> [Double]? {
+        guard data.count == count * 4 else { return nil }
+        var out = [Double](); out.reserveCapacity(count)
+        var i = data.startIndex
+        for _ in 0..<count {
+            let bits = data[i..<(i + 4)].reduce(into: UInt32(0)) { acc, byte in acc = (acc >> 8) | (UInt32(byte) << 24) }
+            out.append(Double(Float(bitPattern: bits)))
+            i += 4
+        }
+        return out
+    }
+
+    /// THE OFFLINE PRODUCER (deterministic, no RNG): the Reptile meta-init over a
+    /// SYNTHETIC capture family — the documented STAND-IN until real AirDropped bursts
+    /// (`docs/PER-CAPTURE-LEARNING-RESEARCH.md` §5.1) supply the corpus. Kept explicit
+    /// and seeded so the blob it emits is reproducible byte-for-byte across builds.
+    /// NOT validated on real scenes, which is exactly why the deployed path is gated
+    /// OFF (`Feature.metaInitW0`) until a real-corpus W₀ replaces it.
+    static func syntheticCorpusW0() -> [Double] {
+        let c = [0.10, -0.08, 0.06, 0.12, -0.05, 0.09, -0.07]
+        let family = [0.6, 0.8, 1.0, 1.2, 1.4].map { amp -> [Pair] in
+            (0..<16).map { i in
+                let vt = 0.1 + 0.8 * Double(i) / 15
+                let detail = c.map { DeviceTrainStepCPU.quantizeQ16(amp * $0 * vt) }
+                return Pair(coarse: Int((vt * 65536).rounded()), detail: detail)
+            }
+        }
+        return reptile(captures: family, outerSteps: 300, innerSteps: 5, eta: 0.5, epsilon: 0.2)
+    }
+
+    /// The W₀ the device descends from when `Feature.metaInitW0` is on: a shipped
+    /// `metainit-w0.bin` Resource (a real-corpus blob) if present, else the synthetic
+    /// stand-in. Computed once. `[Float]` for the kernel's `w0:` parameter.
+    static let deployedW0: [Float] = {
+        if let url = Bundle.main.url(forResource: "metainit-w0", withExtension: "bin"),
+           let data = try? Data(contentsOf: url),
+           let w = deserialize(data), w.count == DeviceTrainStepCPU.paramCount {
+            return w.map(Float.init)
+        }
+        return syntheticCorpusW0().map(Float.init)
+    }()
+
     /// REPTILE outer loop: adapt `innerSteps` from the current `W₀` on each capture,
     /// then nudge `W₀` a fraction `epsilon` toward the mean adapted point. Starts at
     /// the zero floor; returns the meta-initialisation. First-order (no second-order
