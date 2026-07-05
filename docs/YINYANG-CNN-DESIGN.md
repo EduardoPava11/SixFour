@@ -71,3 +71,17 @@ deps); floats re-enter the Zig Q16 floor before touching bytes (the contract).
   the CONDITIONING structure is not. Recommend t-last: spatial context helps motion.
 - Does the mix head share a trunk with the band heads or stand alone? (Shared trunk =
   taste informed by content; standalone = simpler gene carriage in S4GX.)
+
+## AMENDMENT (same day): the training locus is the iPhone — MPS/Metal, Apple only
+
+Correction to "Parameter accounting": the yang heads train ON DEVICE, full stop. No
+MLX in the loop, no Mac — plain Metal (`BandHeadShaders.metal` bandHeadTrainKernel,
+the RungDispatch pattern: simulator-capable, fused, deterministic single-thread
+descent) with MPSGraph available as the parity harness (DeviceTrainer precedent).
+Base initialization = zeros; the corpus is the user's life (the floored-is-data
+lesson: data, not architecture, is the constraint — and the camera never runs out).
+`BandHeadTrainer.swift` is the host surface; BandHeadTrainerTests replicates the
+three-arm training-occurs proof ON the simulator (structured learns to <5% of floor,
+noise floors, bit-deterministic across runs). Trained floats re-enter the Zig Q16
+floor before touching bytes (the contract). MLX remains Mac-side tooling for
+research probes only — never a dependency of the phone's loop.
