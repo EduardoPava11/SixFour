@@ -44,12 +44,23 @@ struct SurfaceView: View {
             // CLEAR background ON TOP of this. (docs/SIXFOUR-DIMENSIONAL-FIELD-ARCHITECTURE.md S5.)
             StageGround(surface: surface, placement: engine.settings.widgetPlacement, tick: clock.tick)
                 .ignoresSafeArea()
-            PhaseField.field(for: surface.phase, surface, clock, engine.settings,
-                             onShutter: { Task { await engine.capture() } },
-                             onMeter: { engine.focus(at: $0) },
-                             onExposureBias: { engine.setExposureBias($0) },
-                             exposureBias: engine.exposureBiasEV,
-                             stage: engineStage)
+            // THE SCENE CANVAS is centred in the REAL screen, not pinned top-leading.
+            // Every widget places by absolute cell → point inside a coordinate space
+            // sized to the EXACT grid (400 × 872); centring that box in the live screen
+            // bounds makes the scene truly centred and device-independent — the ≤ 1-atom
+            // slack is split symmetrically instead of dumped bottom-right, and a screen
+            // that is not 402 × 874 still centres the scene instead of shifting it. The
+            // cell coordinates (and the proven contention-free layout) are untouched.
+            GeometryReader { geo in
+                PhaseField.field(for: surface.phase, surface, clock, engine.settings,
+                                 onShutter: { Task { await engine.capture() } },
+                                 onMeter: { engine.focus(at: $0) },
+                                 onExposureBias: { engine.setExposureBias($0) },
+                                 exposureBias: engine.exposureBiasEV,
+                                 stage: engineStage)
+                    .gridCentered(in: geo.size)
+            }
+            .ignoresSafeArea()
         }
             // The rounded play boundary is an INVISIBLE constraint (widgets kept inside it by
             // `Boundary.footprintFits`); any saved position outside it is re-homed on launch.

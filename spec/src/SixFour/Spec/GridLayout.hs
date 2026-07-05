@@ -87,16 +87,19 @@ type Scene = [(String, LRegion)]
 
 -- | THE capture scene — the as-built WIP layout in 4 pt cells (100 × 218 field):
 --
---   * @preview@ : 64×64 (256 pt) hero, centered (@(100-64)/2 = 18@), top row 22
---     (88 pt — clears the 62 pt Dynamic Island). Non-interactive.
+--   * @preview@ : 64×64 (256 pt) hero, centered (@(100-64)/2 = 18@), top row 16
+--     (64 pt — clears the 62 pt Dynamic Island). Non-interactive. This is the
+--     LOCKED SCENE ANCHOR: identical @(col 18, row 16, 64×64)@ in 'captureScene',
+--     'decisionScene', and the review field, so the scene never jumps or resizes
+--     across capture → captured → decide. Matches 'MovableLayout' Field64 default.
 --   * @palette@ : 16×16 (64 pt) live palette = the capture button, centered
 --     (@(100-16)/2 = 42@), top row 145 (thumb zone). Interactive (64 ≥ 44 floor).
 --
--- Disjoint (preview rows 22–85, palette rows 145–160), in-bounds, and safe-area
+-- Disjoint (preview rows 16–79, palette rows 145–160), in-bounds, and safe-area
 -- clearing — all proven below.
 captureScene :: Scene
 captureScene =
-  [ ("preview", LRegion { lrCol = 18, lrRow = 22,  lrW = 64, lrH = 64
+  [ ("preview", LRegion { lrCol = 18, lrRow = 16,  lrW = 64, lrH = 64
                         , lrWidget = 0, lrPriority = 0, lrInteractive = False })
   , ("palette", LRegion { lrCol = 42, lrRow = 145, lrW = 16, lrH = 16
                         , lrWidget = 1, lrPriority = 1, lrInteractive = True })

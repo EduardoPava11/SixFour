@@ -66,6 +66,20 @@ final class Surface {
     /// review bench's coarse tile. Empty until a capture commits; cleared on retake.
     var coarseSubstrate: [[VoxelReduce.Px]] = []
 
+    /// The 32³ MID substrate — the `VoxelReduce` reduction ONE isotropic level down from the
+    /// 64³ (32 frames × 32×32, Q16 OKLab), the middle rung between `coarseSubstrate` (16³) and
+    /// the raw `indexCube` (64³). Built alongside the coarse in `buildCoarseSubstrate()`, read
+    /// by `gifCell32`. These three cubes are the ONLY honest views of the capture: each is a
+    /// byte-exact pool of the photons, never invention (256³ would be invented — deliberately
+    /// not offered). The view toggle walks them via `sceneRung`.
+    var midSubstrate: [[VoxelReduce.Px]] = []
+
+    /// Which of the three honest cube rungs the scene is showing (default: the full 64³). The
+    /// review scene reads `sceneCell(_:_:cursor:rung:)` at this rung; a byte-exact pool of the
+    /// same capture, block-replicated into the same footprint so coarser = chunkier, never
+    /// smaller. Reset to `.fine64` on retake.
+    var sceneRung: SceneRung = .fine64
+
     /// The committed GIF file on disk — the Review Share source. Set by `commit(_:)` from
     /// the engine's `CaptureOutput.gifURL`; `nil` until a GIFA is rendered.
     var gifURL: URL?
@@ -118,7 +132,9 @@ final class Surface {
     /// `abStep` (`ABSurfaceMachine.swift`) and is the only writer of `phase`.
     func step(_ event: ABEvent) {
         phase = abStep(phase, event)
-        if phase == .live { coarseSubstrate = []; curatedUseGene = nil }   // retake drops the per-capture stashes
+        if phase == .live {                                    // retake drops the per-capture stashes
+            coarseSubstrate = []; midSubstrate = []; sceneRung = .fine64; curatedUseGene = nil
+        }
     }
 
     // MARK: κ-fed cursor advance (Z₆₄)
@@ -180,14 +196,38 @@ extension Surface {
     /// the model reads — mapped back to sRGB8 through the canonical Q16 OKLab gamma path.
     /// Returns `nil` until `buildCoarseSubstrate()` has run on a committed cube.
     func gifCell16(_ x: Int, _ y: Int, _ t16: Int) -> SIMD3<UInt8>? {
-        let side = cubeSide / 4                  // 64 → 16 (2 spatial levels)
-        guard t16 >= 0, t16 < coarseSubstrate.count else { return nil }
-        guard x >= 0, x < side, y >= 0, y < side else { return nil }
-        let frame = coarseSubstrate[t16]
+        substrateCell(coarseSubstrate, side: cubeSide / 4, x, y, t16)   // 64 → 16 (2 levels)
+    }
+
+    /// One cell of the 32³ MID tile at mid-frame `t32` (0..<32) — the same reader as `gifCell16`
+    /// one isotropic level up (side 32). Reads `midSubstrate`; `nil` until it is built.
+    func gifCell32(_ x: Int, _ y: Int, _ t32: Int) -> SIMD3<UInt8>? {
+        substrateCell(midSubstrate, side: cubeSide / 2, x, y, t32)      // 64 → 32 (1 level)
+    }
+
+    /// Shared Q16-OKLab substrate reader (the `gifCell16`/`gifCell32` body): `substrate` is
+    /// `[frame'][position']`, `side` its spatial side. Out-of-range → `nil` (ground shows through).
+    private func substrateCell(_ substrate: [[VoxelReduce.Px]], side: Int,
+                               _ x: Int, _ y: Int, _ t: Int) -> SIMD3<UInt8>? {
+        guard t >= 0, t < substrate.count, x >= 0, x < side, y >= 0, y < side else { return nil }
+        let frame = substrate[t]
         let p = y * side + x
         guard p >= 0, p < frame.count else { return nil }
         let lab = frame[p]
         return SurfaceColor.oklabQ16ToSrgb8(SIMD3<Int32>(Int32(lab.0), Int32(lab.1), Int32(lab.2)))
+    }
+
+    /// THE THREE-CUBE READER: one cell of the scene at `rung`, driven by the shared Z₆₄ playback
+    /// `cursor` (0..<64). The coarser rungs have fewer frames (32³→32, 16³→16), so the cursor is
+    /// mapped down proportionally (`cursor·rungFrames/64`) — the three rungs animate in lockstep.
+    /// `fine64` reads the raw `indexCube` through its per-frame palette; the coarse rungs read the
+    /// byte-exact OKLab substrates. All three are exact pools of the capture (no invention).
+    func sceneCell(_ x: Int, _ y: Int, cursor t: Int, rung: SceneRung) -> SIMD3<UInt8>? {
+        switch rung {
+        case .fine64:   return gifCell(x, y, t)
+        case .mid32:    return gifCell32(x, y, (t * 32) / cubeSide)
+        case .coarse16: return gifCell16(x, y, (t * 16) / cubeSide)
+        }
     }
 
     /// Build (and cache) the 16³ coarse substrate from the committed 64³ cube. Each frame's
@@ -202,6 +242,7 @@ extension Surface {
     /// attach it late (the async-gene pattern — `DecideModel.attachSubstrate`).
     func buildCoarseSubstrate() {
         coarseSubstrate = []
+        midSubstrate = []
         let side = cubeSide                       // 64
         let ppf = SixFourShape.pixelsPerFrame     // 4096
         guard !indexCube.isEmpty, !palettesPerFrame.isEmpty else { return }
@@ -210,20 +251,23 @@ extension Surface {
         let idx = indexCube
         let pals = palettesPerFrame
         Task { [weak self] in
-            let sub = await Task.detached(priority: .userInitiated) {
-                Self.reduceCoarseSubstrate(indexCube: idx, palettes: pals,
-                                           frames: frames, side: side, ppf: ppf)
+            let (coarse, mid) = await Task.detached(priority: .userInitiated) {
+                Self.reduceScenePyramid(indexCube: idx, palettes: pals,
+                                        frames: frames, side: side, ppf: ppf)
             }.value
-            self?.coarseSubstrate = sub
+            self?.coarseSubstrate = coarse
+            self?.midSubstrate = mid
         }
     }
 
-    /// The pure heavy pass (value-in / value-out, runs detached): indexed sRGB8 →
-    /// OKLab Q16 (owned Zig kernel) → byte-exact `VoxelReduce` 64³ → 16³.
-    private nonisolated static func reduceCoarseSubstrate(
+    /// The pure heavy pass (value-in / value-out, runs detached): indexed sRGB8 → OKLab Q16
+    /// (owned Zig kernel) once, then TWO byte-exact `VoxelReduce` reductions of the same cube —
+    /// `(16³ = reduce level 2, 32³ = reduce level 1)`. Both share the OKLab conversion, so the
+    /// mid rung is nearly free. Returns `([], [])` if the OKLab kernel refuses a frame.
+    private nonisolated static func reduceScenePyramid(
         indexCube: [UInt8], palettes: [[SIMD3<UInt8>]],
         frames: Int, side: Int, ppf: Int
-    ) -> [[VoxelReduce.Px]] {
+    ) -> (coarse16: [[VoxelReduce.Px]], mid32: [[VoxelReduce.Px]]) {
         var cube = [[VoxelReduce.Px]]()
         cube.reserveCapacity(frames)
         for t in 0..<frames {
@@ -234,14 +278,35 @@ extension Surface {
                 let c = idx < pal.count ? pal[idx] : SIMD3<UInt8>(0, 0, 0)
                 rgb.append(c.x); rgb.append(c.y); rgb.append(c.z)
             }
-            guard let q16 = SixFourNative.srgb8ToOklab(rgb: rgb, k: ppf) else { return [] }
+            guard let q16 = SixFourNative.srgb8ToOklab(rgb: rgb, k: ppf) else { return ([], []) }
             var frame = [VoxelReduce.Px](); frame.reserveCapacity(ppf)
             for p in 0..<ppf {
                 frame.append((Int(q16[p * 3]), Int(q16[p * 3 + 1]), Int(q16[p * 3 + 2])))
             }
             cube.append(frame)
         }
-        return VoxelReduce.reduce(2, side, cube).substrate
+        return (VoxelReduce.reduce(2, side, cube).substrate,   // 64³ → 16³
+                VoxelReduce.reduce(1, side, cube).substrate)   // 64³ → 32³
+    }
+}
+
+/// THE THREE HONEST CUBE RUNGS — the isotropic octant ladder within capture. Each is a
+/// byte-exact `VoxelReduce` pool of the same 64³ photons (space AND time halved per level),
+/// so all three are TRUE readings of the scene, never invention. 256³ is deliberately absent
+/// (it would be invented, not measured). `side³` voxels, block-replicated into the same
+/// footprint — coarser reads as chunkier, never smaller.
+enum SceneRung: Int, CaseIterable, Sendable {
+    case coarse16 = 16
+    case mid32 = 32
+    case fine64 = 64
+
+    /// The spatial (and temporal) side of this rung's cube.
+    var side: Int { rawValue }
+    /// The display label ("16³" / "32³" / "64³").
+    var label: String { "\(rawValue)³" }
+    /// Cycle coarse → mid → fine → coarse (the toggle's forward step).
+    var next: SceneRung {
+        switch self { case .coarse16: return .mid32; case .mid32: return .fine64; case .fine64: return .coarse16 }
     }
 }
 
