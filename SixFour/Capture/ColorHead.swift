@@ -52,7 +52,14 @@ final class ColorHead {
 
     private var pending32: [UInt64]?
     private var pending16: [UInt64]?
+    private var pendingRaw64: [UInt64]?
     private var lastCropArea: Int64 = 0
+
+    /// Accumulated S_t training pairs (the 32→64 transition's t-bands), drained
+    /// by the trainer. Exact integers until the drain converts to Float.
+    private var tBandFeatures: [[Int64]] = []
+    private var tBandTargets: [Int64] = []
+    private static let maxRetainedPairs = 8192
 
     /// - Parameter cropSide: center-crop side in pixels (multiple of 64).
     /// - Parameter historyTicks: 16-rung frames retained per slot (the
@@ -122,7 +129,11 @@ final class ColorHead {
         if let held = pending32 {
             let frame32 = zip(held, spatial32).map(+)
             latest32 = frame32
+            if let rawPrev = pendingRaw64 {
+                emitTBandPairs(prevTick: rawPrev, currentTick: sums64)
+            }
             pending32 = nil
+            pendingRaw64 = nil
 
             let spatial16 = ColorHead.poolSpatial2(frame32, side: 32)
             if let held16 = pending16 {
@@ -135,7 +146,57 @@ final class ColorHead {
             }
         } else {
             pending32 = spatial32
+            pendingRaw64 = sums64
         }
+    }
+
+    // MARK: - The S_t training pairs (the 32→64 transition's t-bands)
+
+    /// Per 2×2×2 spacetime block (2×2 fine bins × the tick pair): CAUSAL
+    /// features from the FIRST tick's four L-sums (+ bias), target = the
+    /// block's t-band, band_T = Σ(t=0) − Σ(t=1) (the OctantViews sign — the
+    /// reversal-ODD label S_t owes, Spec.AxisSKI). Exact integers here;
+    /// floats only at 'drainTBandPairs'.
+    private func emitTBandPairs(prevTick: [UInt64], currentTick: [UInt64]) {
+        let lum: ([UInt64], Int, Int) -> Int64 = { sums, bx, by in
+            let i = (by * 64 + bx) * 3
+            return Int64(sums[i]) + Int64(sums[i + 1]) + Int64(sums[i + 2])
+        }
+        for by in stride(from: 0, to: 64, by: 2) {
+            for bx in stride(from: 0, to: 64, by: 2) {
+                let p00 = lum(prevTick, bx, by)
+                let p01 = lum(prevTick, bx + 1, by)
+                let p10 = lum(prevTick, bx, by + 1)
+                let p11 = lum(prevTick, bx + 1, by + 1)
+                let cSum = lum(currentTick, bx, by) + lum(currentTick, bx + 1, by)
+                    + lum(currentTick, bx, by + 1) + lum(currentTick, bx + 1, by + 1)
+                let tBand = (p00 + p01 + p10 + p11) - cSum
+                tBandFeatures.append([1, p00, p01, p10, p11])
+                tBandTargets.append(tBand)
+            }
+        }
+        if tBandTargets.count > ColorHead.maxRetainedPairs {
+            let drop = tBandTargets.count - ColorHead.maxRetainedPairs
+            tBandFeatures.removeFirst(drop)
+            tBandTargets.removeFirst(drop)
+        }
+    }
+
+    /// Drain the accumulated S_t pairs as Float rows for 'BandHeadTrainer'
+    /// (row-major, width 5: bias + the four causal fine L-sums), scaled by
+    /// `scale` (callers pass ~1/binMass so features sit near O(1)). Clears
+    /// the accumulator. The single exact→float boundary of the circuit.
+    func drainTBandPairs(scale: Float) -> (features: [Float], targets: [Float], width: Int) {
+        var f = [Float]()
+        f.reserveCapacity(tBandFeatures.count * 5)
+        for row in tBandFeatures {
+            f.append(1)
+            for v in row.dropFirst() { f.append(Float(v) * scale) }
+        }
+        let t = tBandTargets.map { Float($0) * scale }
+        tBandFeatures.removeAll(keepingCapacity: true)
+        tBandTargets.removeAll(keepingCapacity: true)
+        return (f, t, 5)
     }
 
     private func emit16(_ frame16: [UInt64]) {
