@@ -39,6 +39,14 @@ struct GlobalLattice {
     static let cols = SixFourLattice.cols
     static let rows = SixFourLattice.rows
 
+    /// The EXACT grid extent in points (cols·gifPx × rows·gifPx = 400 × 872).
+    /// The scene canvas is this size and is centred in the REAL screen at
+    /// runtime (`GeometryReader`), so a widget's placement is device-independent
+    /// and the ≤ 1-atom bleed is split symmetrically — the baked `screenWidthPt`
+    /// constants pin the atom count, they do NOT pin where the grid sits.
+    static let gridWidthPt: CGFloat = CGFloat(cols) * gifPx
+    static let gridHeightPt: CGFloat = CGFloat(rows) * gifPx
+
     // MARK: Widget cell-counts (square blocks; grow by more cells, never bigger cells)
 
     /// The hero preview: 64 cells = 1 GIF pixel per cell (the cube law); 256 pt at 4 pt.

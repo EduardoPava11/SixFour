@@ -30,6 +30,19 @@ extension View {
             .position(x: midX, y: midY)   // LINT-ALLOW-POSITION: the one sanctioned placement
     }
 
+    /// Centre the scene canvas — the EXACT grid extent (`gridWidthPt × gridHeightPt`)
+    /// — in the live screen `size`, so every absolute cell placement inside it is
+    /// device-independent and the ≤ 1-atom screen bleed is split symmetrically rather
+    /// than dumped bottom-right. Call with a `GeometryReader`'s `geo.size`. This is the
+    /// sanctioned home of the scene-centring `.position` (the atom counts are baked; where
+    /// the grid SITS is computed from the real screen, not baked).
+    func gridCentered(in size: CGSize) -> some View {
+        self
+            .frame(width: GlobalLattice.gridWidthPt, height: GlobalLattice.gridHeightPt,
+                   alignment: .topLeading)
+            .position(x: size.width / 2, y: size.height / 2)   // LINT-ALLOW-POSITION: scene centring
+    }
+
     /// Place by region NAME, looked up in a `GridLayoutContract` scene (the composer
     /// asks for "preview", "palette", …). A name absent from the proven scene is a
     /// layout bug — it traps in debug and falls back to an unplaced view in release.

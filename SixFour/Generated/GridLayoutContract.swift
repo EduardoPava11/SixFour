@@ -27,7 +27,7 @@ public enum GridLayoutContract {
 
     /// The widget regions composing the capture screen.
     public static let captureScene: [GridRegion] = [
-        GridRegion(name: "preview", col: 18, row: 22, w: 64, h: 64, widget: 0, priority: 0, interactive: false),
+        GridRegion(name: "preview", col: 18, row: 16, w: 64, h: 64, widget: 0, priority: 0, interactive: false),
         GridRegion(name: "palette", col: 42, row: 145, w: 16, h: 16, widget: 1, priority: 1, interactive: true),
     ]
 

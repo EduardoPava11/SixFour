@@ -60,6 +60,19 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// engine folds it into σ late; `BurstResult.thetaUp` is nil by design, like `flow`.
     var thetaUpCallback: (@Sendable (CaptureGene.ThetaUp?, Int) -> Void)?
 
+    /// YIN-YANG (Feature.yinYangBands only): the per-burst 16/32/64 ladder. Fresh
+    /// per burst (its tick pairing is burst-relative), fed synchronously on
+    /// `delegateQueue` right after each frame's GPU submission, drained at the
+    /// burst seam. nil keeps the shipped path untouched.
+    private var colorHead: ColorHead?
+    /// The band-head twin of `thetaUpCallback`: the S_t yang head's training
+    /// verdict (generation-tagged, nil = Metal unavailable, no pairs, or the
+    /// certified floor was already exact — the floor ships, never an error) AND
+    /// the per-slot certified-order vector (`haltFloor()`), the halting-depth
+    /// budget that must survive to the render/influence path (A1, the
+    /// KinematicHaltPrior keystone). Empty vector = the ladder was off.
+    var bandHeadCallback: (@Sendable (BandHeadTrainer.Result?, [Int32], Int) -> Void)?
+
     /// Monotonic burst counter (delegateQueue-confined): stamps every async flow
     /// delivery so a late encode can never be attributed to a newer capture.
     private(set) var burstGeneration = 0
@@ -674,6 +687,10 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 self.v21HistBuffer = Feature.v21Capture
                     ? pipeline.makeV21HistBuffer(frames: self.targetFrameCount, nLevels: self.v21Levels)
                     : nil
+                // YIN-YANG (gated): a fresh ladder per burst. cropSide 512 keeps the
+                // per-tick Swift colorimetry ≈256k px (~ms in release), well inside
+                // the 50 ms tick budget on delegateQueue.
+                self.colorHead = Feature.yinYangBands ? ColorHead(cropSide: 512) : nil
                 self.continuation = cont
                 self.firstFrameVerified = false
                 self.collecting = true
@@ -821,14 +838,76 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         if Feature.v3SomaticTrain {
             let tilesForTrain = collected
             let callback = thetaUpCallback
+            let w0 = Feature.metaInitW0 ? MetaInit.deployedW0 : nil   // gated; nil = zero floor
             Task.detached(priority: .userInitiated) {
-                let g = CaptureGene.train(tiles: tilesForTrain)
+                let g = CaptureGene.train(tiles: tilesForTrain, w0: w0)
+                // GATED-S ship decision (research report §4): deliver the gene ONLY when
+                // its learning yielded work — it cleared the Q16 LSB AND explained enough
+                // of the residual. A flat capture (nothing committed) or a noise capture
+                // (residual unpredictable from coarse) ships the byte-exact floor instead,
+                // so a marginal/floored gene never reaches the render.
+                let shipped = (g?.yieldsWork() ?? false) ? g : nil
                 if let g {
-                    Self.log.log("V3 somatic θ_up (async gen=\(generation)): loss \(g.loss) vs floor \(g.floorLoss) (−\(Int((g.lossReduction * 100).rounded()))%) in \(Int(g.trainMillis)) ms")
+                    let verdict = g.yieldsWork() ? "SHIP" : "floor (no work: −\(Int((g.lossReduction * 100).rounded()))%, committed \(g.committed.contains { $0 != 0 } ? "≠0" : "=0"))"
+                    Self.log.log("V3 somatic θ_up (async gen=\(generation)): \(verdict) — loss \(g.loss) vs floor \(g.floorLoss) (−\(Int((g.lossReduction * 100).rounded()))%) in \(Int(g.trainMillis)) ms")
                 } else {
                     Self.log.log("V3 somatic θ_up (async gen=\(generation)): nil (unavailable) — the floor ships")
                 }
-                callback?(g, generation)
+                callback?(shipped, generation)
+            }
+        }
+        // YIN-YANG (gated): train the S_t yang band head on THIS burst's own
+        // manufactured t-band pairs — the yin ladder made the labels during the
+        // burst; the drain (the single exact→float boundary) happens HERE on
+        // delegateQueue (ColorHead is queue-confined), the plain-Metal descent
+        // runs OFF the seam like θ_up above. Verdict semantics are the
+        // YinYangCircuitTests conventions: floor = target variance; learned
+        // ≈ finalMSE ≪ floor, floored ≈ finalMSE near floor (honest control).
+        if let ch = colorHead {
+            let pxPerBin = Int64(ch.cropSide / 64) * Int64(ch.cropSide / 64)
+            // linear16 L-sums per fine bin: ~pxPerBin·65535 per channel at clip —
+            // 1/(pxPerBin·65535) puts features at O(1) (the drain contract).
+            let (f, y, w) = ch.drainTBandPairs(scale: 1.0 / (Float(pxPerBin) * 65535.0))
+            // A1 (KinematicHaltPrior keystone): keep the FULL per-slot certified-order
+            // vector, not a scalar count. It is the halting-depth budget AND survives to
+            // the render/influence path via `bandHeadCallback`.
+            let haltOrders = ch.haltFloor()
+            let budget = ColorHead.haltingDepthBudget(haltOrders)
+            let needsLearning = ColorHead.residualNeedsLearning(haltOrders)
+            let certifiable = haltOrders.filter { $0 >= 0 }.count
+            colorHead = nil
+            let callback = bandHeadCallback
+            if y.isEmpty {
+                Self.log.log("YinYang S_t (gen=\(generation)): no pairs (ladder starved) — the floor ships")
+                callback?(nil, haltOrders, generation)
+            } else if !needsLearning {
+                // The certified floor already ships the motion exactly (order ≤ 1
+                // everywhere): predict with the derivatives we have, pay no S-packets.
+                Self.log.log("YinYang S_t (gen=\(generation)): SKIP — halt budget \(budget) (\(certifiable)/256 certifiable) ≤ 1, kinematic floor is exact, no residual to learn")
+                callback?(nil, haltOrders, generation)
+            } else {
+                Task.detached(priority: .userInitiated) {
+                    // Subsample stride 16 for the single-thread kernel's budget
+                    // (the YinYangCircuitTests convention).
+                    var sf = [Float](), sy = [Float]()
+                    sy.reserveCapacity(y.count / 16 + 1)
+                    sf.reserveCapacity((y.count / 16 + 1) * w)
+                    for i in Swift.stride(from: 0, to: y.count, by: 16) {
+                        sf.append(contentsOf: f[(i * w)..<(i * w + w)])
+                        sy.append(y[i])
+                    }
+                    let mean = sy.reduce(0, +) / Float(sy.count)
+                    let floorVar = sy.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Float(sy.count)
+                    let r = BandHeadTrainer()?.train(features: sf, targets: sy, featureWidth: w,
+                                                     steps: 2500, eta: 0.4)
+                    if let r {
+                        let cut = floorVar > 0 ? Int(((1 - r.finalMSE / floorVar) * 100).rounded()) : 0
+                        Self.log.log("YinYang S_t (async gen=\(generation)): \(sy.count) pairs, MSE \(r.initialMSE) → \(r.finalMSE) vs var-floor \(floorVar) (−\(cut)%), halt budget \(budget) (\(certifiable)/256 certifiable)")
+                    } else {
+                        Self.log.log("YinYang S_t (async gen=\(generation)): nil (Metal unavailable) — the floor ships")
+                    }
+                    callback?(r, haltOrders, generation)
+                }
             }
         }
         let snapshot = collected
@@ -923,6 +1002,7 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
                 continuation = nil
                 pipelineRef = nil
                 v21HistBuffer = nil
+                colorHead = nil
                 collecting = false
                 cont?.resume(throwing: CaptureError.firstFramePixelFormatMismatch(
                     expected: want10Bit,
@@ -975,8 +1055,18 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
             continuation = nil
             pipelineRef = nil
             v21HistBuffer = nil
+            colorHead = nil
             collecting = false
             cont?.resume(throwing: error)
+            return
+        }
+
+        // YIN-YANG (gated): run the ladder tick AFTER the GPU submission so the
+        // pipeline is never kept waiting on CPU colorimetry. Synchronous on
+        // delegateQueue — ColorHead's tick pairing needs frame order. A nil pool
+        // (unexpected geometry) just starves the ladder; the floor ships.
+        if let ch = colorHead, let sums = ch.poolSums64(fromX420: pixelBuffer) {
+            ch.ingest(sums)
         }
     }
 

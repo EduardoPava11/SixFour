@@ -30,6 +30,25 @@ enum CaptureGene {
         var lossReduction: Double {
             floorLoss > 0 ? 1 - Double(loss) / Double(floorLoss) : 0
         }
+
+        /// The default fraction of the residual a capture must explain for its
+        /// learning to count as WORK (research report §4 "yields work"): below this
+        /// the gene is noise-floored or flat and the lossless floor ships instead.
+        static let defaultWorkBar = 0.25
+
+        /// Did this capture's learning YIELD WORK worth shipping the gene for?
+        /// Two conditions, mirroring the FLOORED-discharge probe's three regimes
+        /// (`AmortizedFitProbeTests`):
+        ///   1. it CLEARED THE Q16 LSB — at least one committed band is non-zero
+        ///      (a flat capture commits all-zero and fails here), AND
+        ///   2. it EXPLAINED ENOUGH — `lossReduction ≥ bar` (a noise capture floors
+        ///      below the bar, its residual being unpredictable from coarse).
+        /// When false, the gene invented nothing useful; ship the byte-exact floor.
+        /// This is the gated-S rule made a runtime decision — the S-map spends only
+        /// where the free coarse-pool label carries above-floor, learnable detail.
+        func yieldsWork(bar: Double = defaultWorkBar) -> Bool {
+            committed.contains { $0 != 0 } && lossReduction >= bar
+        }
     }
 
     /// Assemble the burst tiles into the interleaved OKLab Q16 volume
@@ -60,11 +79,13 @@ enum CaptureGene {
     /// nil where Metal compute is unavailable or the burst shape is untrainable;
     /// callers treat the gene as optional (its absence is the floor).
     static func train(tiles: [OKLabTile], channel: Int = 0,
-                      rung: RungDispatch? = RungDispatch()) -> ThetaUp? {
+                      rung: RungDispatch? = RungDispatch(),
+                      w0: [Float]? = nil) -> ThetaUp? {
         guard let rung, let volume = volume(from: tiles) else { return nil }
         let t0 = DispatchTime.now().uptimeNanoseconds
+        // W₀ = the meta-init the descent starts from (nil = the zero floor, today's path).
         guard let out = rung.trainOnVolume(volume: volume, frames: tiles.count,
-                                           side: tiles[0].side, channel: channel)
+                                           side: tiles[0].side, channel: channel, w0: w0)
         else { return nil }
         let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1_000_000
         // The zero-param floor loss on the SAME manufactured pairs: ½ Σ t̃² (the

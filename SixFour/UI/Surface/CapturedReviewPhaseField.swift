@@ -22,11 +22,16 @@ struct CapturedReviewPhaseField: View {
     private let ghost = SIMD3<UInt8>(20, 20, 24)
     private let labelInk = Color(srgb8: SIMD3<UInt8>(190, 190, 190))
 
-    // Single centred capture tile (lattice is 100 cols wide; centre col = 50) with the controls
-    // stacked below it, on-screen. The tile's GridRegion `w == h == captureFoot`.
+    // Single capture tile on the LOCKED SCENE ANCHOR — the identical (col 18, row 16, 64×64)
+    // that capture + decide dock the scene at, so the scene never resizes or jumps as you move
+    // capture → captured → decide. Centred (cols 18–82 ⇒ centre col 50) with the label below it
+    // (row 16 is under the Dynamic Island, so the title cannot ride above the scene) and the
+    // controls stacked lower. The tile's GridRegion `w == h == captureFoot`.
     private enum Layout {
-        static let captureCol = 8, captureRow = 26, captureFoot = 84  // 64³ capture (336 pt), centred
+        static let captureCol = 18, captureRow = 16, captureFoot = 64  // 64³ capture (256 pt), the anchor
         static let labelH = 5
+        // The 16³/32³/64³ view toggle, centred (cols 26–74 ⇒ centre 50) below the scene + label.
+        static let rungCol = 26, rungRow = 90, rungW = 48, rungH = 8
         static let controlsCol = 22, controlsRow = 122, controlsW = 56, controlsH = 10
     }
 
@@ -34,8 +39,13 @@ struct CapturedReviewPhaseField: View {
         ZStack(alignment: .topLeading) {
             Color.clear
 
-            label("CAPTURE", col: Layout.captureCol, row: Layout.captureRow - 6, w: Layout.captureFoot)
             captureTile.place(region("capture64", Layout.captureCol, Layout.captureRow, Layout.captureFoot))
+            // Below the scene (row 16 clears the island for the tile, not for text above it).
+            label("CAPTURE", col: Layout.captureCol,
+                  row: Layout.captureRow + Layout.captureFoot + 1, w: Layout.captureFoot)
+            rungToggle.place(GridRegion(name: "rungToggle", col: Layout.rungCol, row: Layout.rungRow,
+                                        w: Layout.rungW, h: Layout.rungH,
+                                        widget: 7, priority: 7, interactive: true))
 
             controls.place(GridRegion(name: "reviewControls",
                                       col: Layout.controlsCol, row: Layout.controlsRow,
@@ -50,12 +60,37 @@ struct CapturedReviewPhaseField: View {
 
     // MARK: - Tile (a bitmap in a footprint; pixel density is independent of the atom)
 
-    /// The 64³ capture: 64 source voxels in a 64-cell footprint (4 pt/cell), the committed index
-    /// cube read through its per-frame palette at the live cursor. The one honest artifact: exactly
-    /// what the camera captured and collapsed, with no invented super-resolution rung above it.
+    /// The capture at the SELECTED rung (`surface.sceneRung`): `rung.side` source voxels rendered
+    /// into the SAME 64-cell footprint, so a coarser rung reads as chunkier (block-replicated),
+    /// never smaller — the scene never moves or resizes. All three rungs are byte-exact pools of
+    /// exactly what the camera captured; no invented super-resolution rung is ever offered.
     private var captureTile: some View {
         let t = surface.cursor
-        return scaleTile(source: 64, footprint: Layout.captureFoot) { c, r in surface.gifCell(c, r, t) }
+        let rung = surface.sceneRung
+        return scaleTile(source: rung.side, footprint: Layout.captureFoot) { c, r in
+            surface.sceneCell(c, r, cursor: t, rung: rung)
+        }
+    }
+
+    /// The 16³ / 32³ / 64³ view toggle — three tap segments that walk the honest cube rungs. The
+    /// active rung is inked bright; the coarser you go, the chunkier the SAME scene reads. This is
+    /// the UI made an honest reflection of what the photons gave us: three exact resolutions, no
+    /// invention. (256³ is deliberately not a segment.)
+    private var rungToggle: some View {
+        HStack(spacing: GlobalLattice.pt(2)) {
+            ForEach(SceneRung.allCases, id: \.rawValue) { rung in
+                let active = surface.sceneRung == rung
+                Button { surface.sceneRung = rung } label: {
+                    CellText(rung.label, rows: Layout.rungH,
+                             ink: active ? Color(srgb8: SIMD3<UInt8>(235, 235, 235))
+                                         : Color(srgb8: SIMD3<UInt8>(110, 110, 116)))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show the \(rung.label) view")
+                .accessibilityAddTraits(active ? [.isSelected] : [])
+            }
+        }
     }
 
     /// Render `source × source` voxels into a `footprint`-cell box. `cellPt = footprintPt / source`,

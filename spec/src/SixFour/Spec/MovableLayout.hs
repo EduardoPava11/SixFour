@@ -117,7 +117,8 @@ instance ColorWidget ColorIdentity where
   cwDefaultCol  Field64       = 18   -- == GridLayout preview dock
   cwDefaultCol  Palette16     = 42   -- == GridLayout palette dock
   cwDefaultCol  DiversityRing = 40   -- thumb band, disjoint from preview+palette
-  cwDefaultRow  Field64       = 22
+  cwDefaultRow  Field64       = 16   -- == GridLayout preview dock (the LOCKED scene anchor,
+                                     -- identical across capture / decide / review)
   cwDefaultRow  Palette16     = 145
   cwDefaultRow  DiversityRing = 170  -- 170·4=680 ≥ 62 top; (170+20)·4=760 ≤ 840 bottom
   cwInteractive Palette16     = True
@@ -196,7 +197,8 @@ type GoldenStep = (ColorIdentity, (Int, Int))
 --
 --   1. @DiversityRing +(10,0)@  — accept (slides right, no collision).
 --   2. @Palette16     +(-24,-123)@ — would land Palette16 (16²) on Field64
---      (col 18 row 22); rejected, snaps back ('lawRejectIsIdentity' witness).
+--      (col 18 row 22, inside Field64's rows 16–79); rejected, snaps back
+--      ('lawRejectIsIdentity' witness).
 --   3. @Field64       +(20,0)@   — clamp-along-edge: 18+20=38 but @cols-64 = 36@,
 --      so it clamps to 36 (accept), proving 'lawMoveInBounds' + 'lawMoveAtomAligned'.
 goldenScript :: [GoldenStep]

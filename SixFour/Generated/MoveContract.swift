@@ -44,7 +44,7 @@ public enum MoveContract {
     /// Default dock row (atoms) — the shipped seed position.
     public static func defaultRow(_ i: ColorIdentity) -> Int {
         switch i {
-        case .field64: return 22
+        case .field64: return 16
         case .palette16: return 145
         case .diversityRing: return 170
         }
@@ -114,7 +114,7 @@ public enum MoveContract {
     /// CROSS-LANGUAGE GOLDEN: the Placement after folding `move` over the fixed
     /// `goldenScript` from `defaultPlacement` (Spec.MovableLayout.goldenAfter).
     /// Re-folded + compared in Surface.assertSpecParity (DEBUG).
-    public static let goldenAfter: [ColorIdentity: (col: Int, row: Int)] = [.field64: (36, 22), .palette16: (42, 145), .diversityRing: (50, 170)]
+    public static let goldenAfter: [ColorIdentity: (col: Int, row: Int)] = [.field64: (36, 16), .palette16: (42, 145), .diversityRing: (50, 170)]
 
     /// The same fixed script the Haskell `goldenAfter` folds — so Swift can re-fold
     /// `move` over it and bit-compare to `goldenAfter`.

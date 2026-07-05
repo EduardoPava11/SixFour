@@ -163,7 +163,8 @@ final class RungDispatch {
     /// Also returns the final summed supervised loss (telemetry).
     func trainSimt(blocks: [Int32],
                    steps: Int = DeviceTrainGolden.steps,
-                   eta: Float = Float(DeviceTrainGolden.eta))
+                   eta: Float = Float(DeviceTrainGolden.eta),
+                   w0: [Float]? = nil)
         -> (pairs: [Int32], theta: [Float], committed: [Int], loss: Float)?
     {
         let n = blocks.count / 8
@@ -171,7 +172,7 @@ final class RungDispatch {
               let blocksBuf = makeBuffer(ctx.device, blocks),
               let cmd = ctx.queue.makeCommandBuffer()
         else { return nil }
-        return runSimtPass(cmd: cmd, blocksBuf: blocksBuf, n: n, steps: steps, eta: eta)
+        return runSimtPass(cmd: cmd, blocksBuf: blocksBuf, n: n, steps: steps, eta: eta, w0: w0)
     }
 
     // ── B2.3: the capture fusion ────────────────────────────────────────────
@@ -202,7 +203,8 @@ final class RungDispatch {
     /// `RungDispatchTests`.
     func trainOnVolume(volume: [Int32], frames: Int, side: Int, channel: Int = 0,
                        steps: Int = DeviceTrainGolden.steps,
-                       eta: Float = Float(DeviceTrainGolden.eta))
+                       eta: Float = Float(DeviceTrainGolden.eta),
+                       w0: [Float]? = nil)
         -> (pairs: [Int32], theta: [Float], committed: [Int], loss: Float)?
     {
         guard steps > 0,
@@ -216,7 +218,7 @@ final class RungDispatch {
         // Second encoder on the SAME command buffer: tracked-resource hazard
         // ordering makes the gathered blocks visible to the trainer, no CPU stop.
         return runSimtPass(cmd: cmd, blocksBuf: staged.blocksBuf, n: staged.nOct,
-                           steps: steps, eta: eta)
+                           steps: steps, eta: eta, w0: w0)
     }
 
     // ── plumbing ────────────────────────────────────────────────────────────
@@ -270,16 +272,20 @@ final class RungDispatch {
     /// and read back. Shared by `trainSimt` (blocks from the host) and
     /// `trainOnVolume` (blocks from the in-buffer gather stage).
     private func runSimtPass(cmd: any MTLCommandBuffer, blocksBuf: any MTLBuffer,
-                             n: Int, steps: Int, eta: Float)
+                             n: Int, steps: Int, eta: Float, w0: [Float]? = nil)
         -> (pairs: [Int32], theta: [Float], committed: [Int], loss: Float)?
     {
         let device = ctx.device
+        // The meta-INIT W₀ the descent starts from (buffer 7). Default = the zero floor,
+        // so the un-meta path is byte-identical to the old `th = 0` init (the golden holds).
+        let initTheta = (w0?.count == 21) ? w0! : [Float](repeating: 0, count: 21)
         guard
             let pairsBuf = device.makeBuffer(length: n * 8 * 4, options: .storageModeShared),
             let thetaBuf = device.makeBuffer(length: 21 * 4, options: .storageModeShared),
             let committedBuf = device.makeBuffer(length: 7 * 4, options: .storageModeShared),
             let scratchBuf = device.makeBuffer(length: n * 10 * 4, options: .storageModeShared),
             let lossBuf = device.makeBuffer(length: 4, options: .storageModeShared),
+            let initBuf = initTheta.withUnsafeBytes({ device.makeBuffer(bytes: $0.baseAddress!, length: 21 * 4, options: .storageModeShared) }),
             let enc = cmd.makeComputeCommandEncoder()
         else { return nil }
 
@@ -292,6 +298,7 @@ final class RungDispatch {
         enc.setBytes(&params, length: MemoryLayout<FusedTrainParams>.stride, index: 4)
         enc.setBuffer(scratchBuf, offset: 0, index: 5)
         enc.setBuffer(lossBuf, offset: 0, index: 6)
+        enc.setBuffer(initBuf, offset: 0, index: 7)
         // ONE threadgroup — the whole problem synchronizes on threadgroup barriers.
         enc.dispatchThreadgroups(
             MTLSize(width: 1, height: 1, depth: 1),

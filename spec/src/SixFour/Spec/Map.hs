@@ -1199,6 +1199,12 @@ unchanged on the unsupervised @64³→256³@ rung — self-similar transfer. @ze
 floor BY ARITHMETIC@ (no sentinel): @lawZeroParamsIsFloorArithmetic@ has four teeth
 (floor / non-constant / step-decreases / differs-from-floor), each killing a different
 wrong @f@),
+"SixFour.Spec.GatedResidual" (the determinism-SAFE way to introduce the learned float
+gene over the byte-exact floor: the "SixFour.Spec.DetailPredictor" residual scaled by a
+gate @s = tanh α@ before the Q16 crossing. @lawZeroGateIsFloor@ (@α=0 ⇒ floor@, dial the
+gene to lossless without touching weights) + @lawGateContractive@ (@|s·raw| ≤ |raw|@, only
+pulls TOWARD the floor, never overshoots — the safe-insertion property) + monotone-earn
+laws; the @tanh α@, α-init-0 wrapper from the per-capture-learning research),
 "SixFour.Spec.SuperResPalette" (★ the per-frame ≤K-colour constraint on the 256³, as a
 TYPE + a verified requantizer over "SixFour.Spec.Upscale256". @PaletteFrame@ (hidden-ctor
 brand, value-level — build via @mkPaletteFrame@: Just iff ≤K distinct) + @requantizeSlice@
