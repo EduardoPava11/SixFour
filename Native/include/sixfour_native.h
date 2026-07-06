@@ -442,6 +442,27 @@ int32_t s4_palette16_gct(const uint8_t *rgb, int32_t side, uint8_t *out_gct768);
 // isotropic ladder at 64.
 int32_t s4_ladder_delay_cs(int32_t side);
 
+// ── MULTI-SCALE CAPTURE (The Loom) — the 16/32/64 scales are INDEPENDENT ──
+// exposure reads on the shared 4:2:1 clock, not pools of one source.
+// Spec: SixFour.Spec.MultiScaleCapture / MultiScaleIntegrate / RenderSelect.
+
+// THE INTEGRATOR: assemble the three independent volumes from the raw laddered
+// capture. Each sub-exposure is OWNED by exactly one scale (owner[s], a disjoint
+// schedule); out[scale*n_cells + cell] receives the exact i64 sum of that scale's
+// owned sub-exposures. photons laid out cell-major (photons[cell*n_subslices+s]),
+// u16 10-bit samples. rc 0 == ok, 1 == bad args (non-positive sizes / bad owner).
+int32_t s4_multiscale_integrate(int64_t *out, const uint16_t *photons,
+                                const int32_t *owner, int32_t n_scales,
+                                int32_t n_cells, int32_t n_subslices);
+
+// THE SELECT RENDER (rung 1): fill out[side^3] by per-region select from the
+// three INDEPENDENT volumes v16 ((side/4)^3), v32 ((side/2)^3), v64 (side^3).
+// depth[region] (0/1/2, region grid side = side/4) chooses the scale; the chosen
+// volume is read directly (NOT pooled) and block-replicated on the 4:2:1 clock.
+// side must be a positive multiple of 4. rc 0 == ok, 1 == bad args.
+int32_t s4_render_select(int32_t *out, const int32_t *v16, const int32_t *v32,
+                         const int32_t *v64, const int32_t *depth, int32_t side);
+
 // Inverse-EOTF LUT lookups (literal golden tables; scene-linear u16 scale).
 uint16_t s4_srgb8_to_linear16(uint8_t v);
 int32_t s4_hlg10_to_linear16(uint16_t v); // >=0 linear value, or -3 OOR

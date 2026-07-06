@@ -56,6 +56,20 @@ enum Feature {
     /// starts from zero exactly as today.
     static let metaInitW0 = false
 
+    /// The Loom's multi-scale INDEPENDENT capture (16³/32³/64³ = three independent
+    /// exposure reads, not pools of one source). **OFF — device-only, in bring-up.**
+    ///
+    /// With this on, `MultiScaleLadder` configures the interleaved EV/gain exposure
+    /// ladder (`CaptureDiversity` recipe: coarse long-exposure-high-gain → fine
+    /// short-exposure-low-gain, tiled to cover the scene DR) and routes the frames
+    /// into `SixFourNative.multiScaleIntegrate` → three independent volumes →
+    /// `SixFourNative.renderSelect`. The whole pure-math floor is golden-gated
+    /// (Haskell ≡ Zig), but the AVFoundation exposure scheduling only runs on a real
+    /// device (custom exposure is unavailable/ignored in the Simulator), so this
+    /// stays OFF until validated on an iPhone 17 Pro. With it off, capture is exactly
+    /// today's single-exposure path — the ladder is statically unreachable.
+    static let multiScaleLadder = false
+
     /// The yin-yang circuit LIVE at the capture seam. **ON while the color head ships.**
     ///
     /// With this on, every burst tick also runs the 16/32/64 ladder (`ColorHead`:

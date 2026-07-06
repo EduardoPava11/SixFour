@@ -145,6 +145,11 @@ library
         SixFour.Spec.CubeBrush
         SixFour.Spec.MixSKI
         SixFour.Spec.AxisSKI
+        SixFour.Spec.MultiScaleCapture
+        SixFour.Spec.CaptureDiversity
+        SixFour.Spec.MultiScaleFusion
+        SixFour.Spec.RenderSelect
+        SixFour.Spec.MultiScaleIntegrate
         SixFour.Spec.OpponentDerivation
         SixFour.Spec.YinYangCNN
         SixFour.Spec.GaugeAction
@@ -529,6 +534,11 @@ test-suite spec-tests
         Properties.CubeBrush
         Properties.MixSKI
         Properties.AxisSKI
+        Properties.MultiScaleCapture
+        Properties.CaptureDiversity
+        Properties.MultiScaleFusion
+        Properties.RenderSelect
+        Properties.MultiScaleIntegrate
         Properties.OpponentDerivation
         Properties.YinYangCNN
         Properties.ScaleFiltration

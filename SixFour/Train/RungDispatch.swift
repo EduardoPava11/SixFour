@@ -38,6 +38,14 @@ final class RungDispatch {
     private let gatherPSO: any MTLComputePipelineState
     private let expandPSO: any MTLComputePipelineState
 
+    /// GPU-only wall time (seconds) of the LAST `runSimtPass` dispatch — the command
+    /// buffer's own `gpuEndTime − gpuStartTime`, valid after `waitUntilCompleted`. This
+    /// EXCLUDES the CPU staging (buffer alloc + upload) and readback that the wall-clock
+    /// `trainMillis` includes, so it isolates the descent kernel itself. Telemetry only;
+    /// zero until the first dispatch. Read after `trainSimt`/`trainOnVolume` (queue-confined,
+    /// like the rest of this class). Used by `RungDispatchBenchmarkTests`.
+    private(set) var lastDispatchGPUSeconds: Double = 0
+
     /// Fails (nil) where Metal compute is unavailable — the failable-hook
     /// house pattern.
     init?() {
@@ -307,6 +315,8 @@ final class RungDispatch {
         cmd.commit()
         cmd.waitUntilCompleted()
         guard cmd.status == .completed else { return nil }
+        // GPU-only time of the descent (excludes CPU staging/readback) — benchmark telemetry.
+        lastDispatchGPUSeconds = cmd.gpuEndTime - cmd.gpuStartTime
 
         let pairs = readInts(pairsBuf, count: n * 8)
         let theta = readFloats(thetaBuf, count: 21)

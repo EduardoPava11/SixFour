@@ -39,5 +39,8 @@ test {
     _ = @import("gif_fixture_test.zig"); // cross-language full-burst GIF golden (Stage 6)
     _ = @import("lut_fixture_test.zig"); // cross-language look transfer + LUT-extraction golden
     _ = @import("palette16_test.zig"); // GIF89a-camera color head: 16x16 bin -> GCT (sums-carrier transitivity + means-don't-compose teeth + centisecond time law)
+    _ = @import("multiscale_test.zig"); // independence contract: 16³/32³/64³ are independent world reads (slow-pool==dead-time; not derivable; 10-bit×3 absorbed) — mirrors Spec.MultiScaleCapture
+    _ = @import("render_select_test.zig"); // rung-1 select render: per-region pick the chosen independent scale, block-replicated; independence-preserving — mirrors Spec.RenderSelect
+    _ = @import("multiscale_integrate_test.zig"); // integrator: assemble 3 independent volumes from disjoint sub-exposures (conservation + independence + 10-bit×3) — mirrors Spec.MultiScaleIntegrate
     _ = @import("kinematic_test.zig"); // kinematic certification: certified order / Newton-Mahler prediction / residual loss (mirrors Spec.KinematicLadder + KinematicHaltPrior)
 }
