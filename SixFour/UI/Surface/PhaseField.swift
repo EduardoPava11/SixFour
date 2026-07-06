@@ -4,11 +4,13 @@ import SwiftUI
 /// cell-field CONFIGURATION, not a screen: `field(for:_:)` routes each `ABPhase` to its
 /// per-phase renderer, all drawing onto the ONE surface.
 ///
-/// The lifecycle is **capture → export → done**. The post-capture A/B game was retired, so
-/// the `.captured` + `.picked` phases now route to the inert `BootstrapPhaseField` placeholder
-/// pending the new review surface. Routed renderers: `BootstrapPhaseField` /
-/// `UnauthorizedPhaseField` / `LivePhaseField` / `ErrorPhaseField`, plus minimal exporting/done
-/// fields. The cut renderers (Settings / Capturing / Browsing / Rendering / Review) are no
+/// The lifecycle is **capture → review → (decide / curate) → export → done**. The post-capture
+/// A/B game was retired; `.captured` + `.picked` now route to `CapturedReviewPhaseField` (the
+/// review bench — the captured 64³ beside its 16³ octree coarse, EXPORT / RETAKE / DECIDE / CURATE),
+/// and `.deciding` / `.curating` are the V3.0 gene excursions off it. Routed renderers:
+/// `BootstrapPhaseField` / `UnauthorizedPhaseField` / `LivePhaseField` / `CapturedReviewPhaseField`
+/// / `DecidingPhaseField` / `Curating256PhaseField` / `ErrorPhaseField`, plus minimal exporting/done
+/// fields. The cut renderers (Settings / Capturing / Browsing / Rendering / old Review) are no
 /// longer routed but left in place. A phase change re-draws cells on the ONE surface — no view swap.
 /// WHAT THE ENGINE IS COMPUTING RIGHT NOW, rendered by the live surface (QoL
 /// 2026-07-03): the pipeline stages (lock → burst → refine → encode) were

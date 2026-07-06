@@ -135,6 +135,11 @@ import qualified Properties.FidelityLadder as FidelityLadder
 import qualified Properties.CubeBrush as CubeBrush
 import qualified Properties.MixSKI as MixSKI
 import qualified Properties.AxisSKI as AxisSKI
+import qualified Properties.MultiScaleCapture as MultiScaleCapture
+import qualified Properties.CaptureDiversity as CaptureDiversity
+import qualified Properties.MultiScaleFusion as MultiScaleFusion
+import qualified Properties.RenderSelect as RenderSelect
+import qualified Properties.MultiScaleIntegrate as MultiScaleIntegrate
 import qualified Properties.OpponentDerivation as OpponentDerivation
 import qualified Properties.YinYangCNN as YinYangCNN
 import qualified Properties.GaugeAction as GaugeAction
@@ -362,6 +367,11 @@ main = defaultMain $ testGroup "sixfour-spec"
   , CubeBrush.tests
   , MixSKI.tests
   , AxisSKI.tests
+  , MultiScaleCapture.tests
+  , CaptureDiversity.tests
+  , MultiScaleFusion.tests
+  , RenderSelect.tests
+  , MultiScaleIntegrate.tests
   , OpponentDerivation.tests
   , YinYangCNN.tests
   , GaugeAction.tests

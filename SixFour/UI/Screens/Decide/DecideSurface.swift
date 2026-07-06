@@ -23,7 +23,7 @@ import Combine
 /// The preview shows the REAL reconstruction: the 16³ proposal
 /// (`Surface.coarseSubstrate`) up-rung'd to 64³ by `OctantCube.expandProposal` —
 /// the deterministic floor, or the gene's invention when the toggle rides θ_up.
-/// Never a faked image (the `NudgePaintView` honesty rule); without a substrate
+/// Never a faked image (the paint-honesty rule); without a substrate
 /// it falls back to the capture frame.
 ///
 /// PAINT IS LIVE (W1, 2026-07-03): painting gates WHERE the gene invents —

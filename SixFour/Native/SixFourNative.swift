@@ -196,6 +196,62 @@ enum SixFourNative {
         return out
     }
 
+    // ── MULTI-SCALE CAPTURE (The Loom) ──────────────────────────────────────
+
+    /// THE INTEGRATOR: assemble the three INDEPENDENT volumes from the raw laddered
+    /// sub-exposures. `photons` is cell-major (`nCells × nSubslices`) 10-bit samples;
+    /// `owner[s]` names the scale each sub-exposure belongs to (a disjoint schedule,
+    /// so the volumes are built from disjoint photons). Returns `nScales × nCells`
+    /// Int64 volumes (`out[scale*nCells + cell]`), or nil on bad args. Mirrors
+    /// `Spec.MultiScaleIntegrate` — conservation-gated, byte-exact.
+    static func multiScaleIntegrate(photons: [UInt16], owner: [Int32],
+                                    nScales: Int, nCells: Int, nSubslices: Int) -> [Int64]? {
+        guard nScales > 0, nCells > 0, nSubslices > 0,
+              photons.count == nCells * nSubslices, owner.count == nSubslices else { return nil }
+        var out = [Int64](repeating: 0, count: nScales * nCells)
+        let rc = out.withUnsafeMutableBufferPointer { o in
+            photons.withUnsafeBufferPointer { p in
+                owner.withUnsafeBufferPointer { ow in
+                    s4_multiscale_integrate(o.baseAddress, p.baseAddress, ow.baseAddress,
+                                            Int32(nScales), Int32(nCells), Int32(nSubslices))
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_multiscale_integrate rc=\(rc)"); return nil }
+        return out
+    }
+
+    /// THE SELECT RENDER (rung 1): per-region pick the chosen INDEPENDENT scale,
+    /// block-replicated to `side`³. `v16`/`v32`/`v64` are the three independent
+    /// volumes (`(side/4)³` / `(side/2)³` / `side³`); `depth` is one 0/1/2 per 4×4×4
+    /// region (region grid side = `side/4` = the 16³ paint grid). Returns the fused
+    /// `side³` Int32 volume, or nil on bad args. Mirrors `Spec.RenderSelect` —
+    /// independence-preserving: a coarse region reads V16 alone, never a pool of V64.
+    static func renderSelect(v16: [Int32], v32: [Int32], v64: [Int32], depth: [Int32],
+                             side: Int) -> [Int32]? {
+        guard side >= 4, side % 4 == 0 else { return nil }
+        let half = side / 2, quarter = side / 4
+        guard v16.count == quarter * quarter * quarter,
+              v32.count == half * half * half,
+              v64.count == side * side * side,
+              depth.count == quarter * quarter * quarter else { return nil }
+        var out = [Int32](repeating: 0, count: side * side * side)
+        let rc = out.withUnsafeMutableBufferPointer { o in
+            v16.withUnsafeBufferPointer { a in
+                v32.withUnsafeBufferPointer { b in
+                    v64.withUnsafeBufferPointer { c in
+                        depth.withUnsafeBufferPointer { d in
+                            s4_render_select(o.baseAddress, a.baseAddress, b.baseAddress,
+                                             c.baseAddress, d.baseAddress, Int32(side))
+                        }
+                    }
+                }
+            }
+        }
+        guard rc == S4_RC_OK else { log.error("s4_render_select rc=\(rc)"); return nil }
+        return out
+    }
+
     /// Dither one frame against fixed centroids → indices. mode 0=FS 1=Atkinson
     /// 2=blueNoise 3=frozen; `stbnSlice` is the per-frame STBN3D mask for 2/3.
     static func ditherFrame(oklabQ16: [Int32], centroids: [Int32], k: Int,

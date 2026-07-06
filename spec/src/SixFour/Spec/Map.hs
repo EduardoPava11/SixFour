@@ -593,6 +593,59 @@ lie to the 16-view), @lawMixesAreDistinguishable@ (witness: 3^8 distinct outputs
 together: the mix is exactly the K-fiber, pure gene, no marginal content. CORRECTION RECORDED: v1
 ships real bins (pull of measured data), network learns the FIELD not the content; invention stays
 the W1-gated upgrade path. Additive),
+"SixFour.Spec.MultiScaleCapture" (★ THE INDEPENDENCE CONTRACT — 16³/32³/64³ are INDEPENDENT world
+reads, NEVER pool of one source (a derived pyramid has H(coarse|fine)=0, zero new info; The Loom
+needs H(16,32,64)>H(64)). Shared ONE clock 64@20/32@10/16@5 with nested windows
+(@lawSharedTimeIsNested@); independence lives in the EXPOSURE not resolution (spatial binning is
+derivable) — the long read exceeds the pooled short reads by EXACTLY the readout dead-time photons
+(@lawSlowMinusPoolIsDeadTime@ keystone, @lawScalesAreNotDerivable@, @lawIndependentScalesAddInformation@
+= same fast read / different slow read so H(coarse|fine)>0). 10-bit×3 absorbed exactly, 3 channels
+independent (@lawTenBitAbsorbed@); u64 carrier width contract for the Zig floor
+(@lawCarrierWidthSuffices@). SUPERSEDES the derived-source framing of MixSKI/FidelityLadder AT CAPTURE
+(they stay true as pooling math); the current derived ColorHead FAILS this by construction — the point.
+Zig floor + renderSelect next),
+"SixFour.Spec.CaptureDiversity" (★ HOW TO BUILD IT FOR THE MOST DIVERSE SIGNAL — the constructive
+proof. Each scale's exposure = a usable WINDOW of windowW stops on the scene DR, shifted by its EV
+(exposure×gain); captured diversity = COVERAGE of the union, redundancy = OVERLAP. RECIPE:
+edge-to-edge TILING (evs=[0,W,2W]) achieves the coverage ceiling min(sceneDR,nScales·W) with zero
+overlap (@lawTilingMaximizesCoverage@ keystone, @lawTilingIsAtLeastAnyAssignment@); convergent
+exposures collapse to one window (@lawConvergenceMinimizesDiversity@); separability rank = distinct
+windows, full at tiling / singular at convergence (@lawDistinctExposuresFullRank@ = the fusion
+conditioning). HONEST LIMITS as THEOREMS: coverage ≤ sceneDR so easy scenes cap diversity
+(@lawDiversityCappedByScene@ = the collapse proven); the 4:2:1 cadence forces nested distinct
+exposures but only log2(fastPerSlow)=2 stops (@lawCadenceForcesNestedExposures@), so GAIN is REQUIRED
+to reach the tiling spread (@lawCadenceSpreadNeedsGainToTile@) — long-exposure-high-gain coarse →
+short-exposure-low-gain fine. Feeds the fusion trainer where it is well-posed. Additive),
+"SixFour.Spec.MultiScaleFusion" (★ THE LOOP CLOSED — capture diversity IS trainability. The
+exposure-tiled observations UNIQUELY DETERMINE the latent scene on exactly the covered (diverse)
+stops: recoverable IFF covered (@lawRecoverableIffCovered@), |recoverable| == coverage
+(@lawRecoverableCountIsDiversity@ — recoverability and diversity are ONE quantity), tiling recovers
+the whole scene when it fits (@lawTilingRecoversFullScene@), convergent exposures are non-identifiable
+(@lawConvergenceLosesScene@). KEYSTONE @lawFusionFreedomIsExactlyUncovered@: the only freedom
+consistent with the observations is OFF the covered set, so the measurement-consistency minimizer is
+UNIQUE on the recoverable set — the self-supervised fusion trainer converges to the truth exactly
+where the capture is diverse, and leaves undetermined exactly where it is not. Overlap = agreeing
+redundant reads = the consistency/denoising signal (@lawOverlapObservationsAgree@). Models the
+dynamic-range axis (where independence lives); spatial fusion is the separate derivable axis. Additive),
+"SixFour.Spec.RenderSelect" (★ RUNG 1 OF THE LOOM — the SELECT render that keeps the scales
+independent. Given three INDEPENDENT volumes (V16/V32/V64) + a per-region depth field (CubeBrush,
+= the 16³ paint grid), each region shows its CHOSEN scale's OWN measurement block-replicated to 64³
+on the shared 4:2:1 clock. NOT a pool (contrast PullField which pools ONE volume assuming coarse is
+derived): reads V_d directly, so @lawSelectReadsChosenSourceOnly@ (KEYSTONE) — a coarse region's
+output depends ONLY on V16, invariant to V64: the coarse pixels come from the outside world, not a
+derived pool. @lawCoarseSelectsIndependentCoarse@ pins it on a scene where pool(V64)≠V16.
+@lawFineIsIdentity@ (depth2=V64), @lawSelectIsLocal@, @lawTemporalReplicateOnSharedClock@ (coarse
+constant across its 4-frame window). Deterministic/byte-exact/no-NN; Zig twin s4_render_select. Additive),
+"SixFour.Spec.MultiScaleIntegrate" (★ THE INTEGRATOR — assemble the 3 INDEPENDENT volumes from the
+raw laddered capture; independence made PHYSICAL: each scale integrates a DISJOINT set of sub-exposures
+(an @owner@ schedule partitions every photon to one scale), strengthening MultiScaleCapture from
+not-derivable to fully-independent-by-conservation. KEYSTONE @lawConservesPhotons@: the 3 volumes sum
+to the raw photons per cell — every photon counted EXACTLY once (no sharing=double-count, no loss);
+@lawVolumeUsesOnlyOwnedPhotons@ = a scale's volume invariant to another scale's photons (independence);
+@lawScheduleCoversAllScales@ (well-formed disjoint cover); @lawIntegrate10BitAbsorbed@ (ceiling →
+ownedCount·1023 exact, 3 channels independent); @lawIntegrateCarrierWidthSuffices@ (i64 width). Produces
+exactly what RenderSelect consumes; Zig twin s4_multiscale_integrate. Last pure-math kernel; the
+AVFoundation interleaved-EV scheduler is the device-only half. Additive),
 "SixFour.Spec.AxisSKI" (â SKI RECONSIDERED DIMENSIONALLY — the combinators are AXIS-INDEXED over
 x:y:t: three K's (K_x,K_y,K_t — the freedom SpineRing's product ring bought) and three S's; MixSKI's
 scale chain is this algebra's DIAGONAL (@lawIsotropicPullFactors@ — the isotropic pull = the three

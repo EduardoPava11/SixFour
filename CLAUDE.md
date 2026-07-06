@@ -161,8 +161,11 @@ The camera's COLOR HEAD and its exact-arithmetic learning gates (landed 2026-07-
   construction; the Zig kernel is the authority, parity gated in `ColorHeadTests`.
 - **`SixFour/Capture/ColorHead.swift`**: the per-tick circuit — poolSums64 → ingest derives the
   32/16 rungs by exact u64 adds at the GIF-exact cadences → GCT + 256 particle L-streams →
-  `haltFloor()` per-slot certified order. AVFoundation-free; CaptureSession integration point =
-  `poolSums64` + `ingest` per tick (not yet wired).
+  `haltFloor()` per-slot certified order. AVFoundation-free. WIRED into CaptureSession (2026-07-04):
+  constructed per burst when `Feature.yinYangBands` (`CaptureSession.finishBurst` gate), fed per tick
+  via `poolSums64(fromX420:)` + `ingest`, drained at burst end into the `BandHeadTrainer`. Telemetry
+  /learning only — no GIF byte depends on it. NOTE: the live x420 path sets `lastCropArea = 0`, so
+  `latestGCT` stays nil on device (GCT realization is the 32BGRA `poolSums64` path, not the camera's).
 - **Spec gates**: `Spec.OctantViews` (2×2×2 grading 1+3+3+1 = Walsh–Hadamard; latents = mixed
   derivatives), `Spec.PaletteKinetics` (256 particles; entropy as exact microstate counts W),
   `Spec.KinematicLadder` (Δ^k coarsens by Pascal row k+1; Newton = Mahler basis; budget law),

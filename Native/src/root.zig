@@ -21,6 +21,9 @@ comptime {
     _ = @import("synth.zig"); // synthetic-burst training-data generator (s4_synth_burst)
     _ = @import("palette16.zig"); // GIF89a-camera color head: 16x16 bins -> GCT, ladder time law, EOTF LUT pooling
     _ = @import("kinematic.zig"); // kinematic certification: certified order / Newton prediction / residual loss
+    _ = @import("multiscale.zig"); // multi-scale independence reads (The Loom): fast/mid/slow exposure reads + dead-time
+    _ = @import("multiscale_integrate.zig"); // integrator: disjoint sub-exposures -> 3 independent volumes (conservation)
+    _ = @import("render_select.zig"); // rung-1 select render: per-region pick the chosen independent scale, block-replicated
 }
 
 // ── toolchain/link smoke test ───────────────────────────────────────────────

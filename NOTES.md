@@ -7,6 +7,101 @@ newest first.
 
 ---
 
+## 2026-07-05: THE LOOM — the pivot to pure-64³ color + INDEPENDENT multi-scale capture, because we train on the iPhone
+
+> **Session theme (Daniel):** the app changed. SixFour is now **pure 64³ creation with COLOR as the
+> substrate** — super-resolution is retired (64³ is the honest ceiling; nothing above it is ever
+> invented). The named direction is **"THE LOOM"**: you weave color into the 64³ at coarse/mid/fine
+> granularity, overlapping strands, and the model constructs the weave inside the granted region.
+> This session proved the capture→trainable pipeline end-to-end and wired it to the device.
+
+### The pivot, and WHY (the reason is on-device training)
+
+The forcing function is that **we train the model ON THE iPHONE** (per-capture / on-device), and that
+requires careful consideration of where the *information* comes from. The chain of reasoning:
+
+1. **On-device training needs data that carries real information.** The per-capture trainer floors on
+   data with no learnable structure (the standing `floored-is-data-not-architecture` result). So the
+   capture must deliver genuine signal to learn from, per shot, on the phone.
+2. **A derived multi-scale pyramid carries ZERO new information.** If 16³ = pool(64³), then
+   H(16³ | 64³) = 0 — the coarse scale is a *lens* on the fine one, not evidence. Training on it learns
+   nothing the fine scale didn't already commit to. (This is exactly what the old `ColorHead` does —
+   it derives the 32/16 rungs from the 64-rung sums stream. That path is now known-insufficient for
+   training.)
+3. **Therefore the scales MUST be INDEPENDENT measurements of the outside world** (Daniel's hard
+   constraint). Independent capture makes H(16³,32³,64³) > H(64³): each scale is real evidence, so
+   there is genuine cross-scale signal to fuse and to teach a model. This is the whole reason for the
+   multi-scale independent-capture architecture.
+4. **Independence comes from EXPOSURE, not resolution.** Spatial downsampling is derivable (an analog
+   4×4 bin equals the digital pool in the noiseless limit); only *different temporal integration*
+   (long vs short exposure, readout dead-time, saturation) is independent. So the capture is an
+   **interleaved EV/gain exposure ladder** on the shared 64@20 / 32@10 / 16@5 clock: coarse =
+   long-exposure + high-gain (shadows), fine = short + low-gain (highlights + motion).
+5. **On-device training is delicate — hence the careful consideration.** (a) The coarse stream is only
+   4,096 voxels per capture — too starved to fit a fusion net from scratch on-device, so the plan is a
+   corpus-trained base + per-capture fine-tune. (b) Genes/weights must stay cross-device deterministic
+   (the fp32 theta re-enters the Q16 integer floor before any output byte; `zero-gene == floor`). (c)
+   There is no clean ground truth — training is self-supervised by **measurement-consistency**
+   (re-degrade the fused estimate, match every observation), which is well-posed *exactly* where the
+   capture is diverse.
+
+### What LANDED (all green, both tiers)
+
+The whole PURE-MATH pipeline is proven and gated: **spec 1676 tests, Zig 112 tests, 0 failures.**
+Five spec modules + three byte-exact Zig twins + the device scheduler & bridge:
+
+- `Spec.MultiScaleCapture` (6 laws) + Zig `multiscale.zig` — the INDEPENDENCE contract (shared 4:2:1
+  clock; `slow − pool == dead-time`; H(coarse|fine) > 0; 10-bit×3 absorbed; u64 carrier width).
+- `Spec.CaptureDiversity` (8 laws) — HOW to capture the MOST DIVERSE signal: diversity = coverage of
+  EV-tiled exposure windows; TILING maximizes it (full separability rank); HONEST LIMITS as theorems
+  (coverage ≤ sceneDR ⇒ easy scenes collapse; cadence gives only 2 stops ⇒ GAIN is required to tile).
+- `Spec.MultiScaleFusion` (6 laws) — **diversity IS trainability**: recoverable ⟺ covered,
+  |recoverable| == coverage, and the measurement-consistency minimizer is UNIQUE on the covered set.
+  So `|recoverable| == coverage == separability-rank` — "independent enough" and "trainable" are the
+  same quantity.
+- `Spec.RenderSelect` (5 laws) + Zig `render_select.zig` (`s4_render_select`) — rung-1 render: per
+  region SELECT the chosen independent scale, block-replicated to 64³; KEYSTONE = a coarse region
+  reads V16 ALONE (independence preserved through the render, NOT a pool of V64).
+- `Spec.MultiScaleIntegrate` (5 laws) + Zig `multiscale_integrate.zig` (`s4_multiscale_integrate`) —
+  the integrator: each scale sums a DISJOINT set of sub-exposures (owner schedule), so independence is
+  made PHYSICAL by CONSERVATION (every photon counted once — strengthens the dead-time argument).
+- **Device scheduler + bridge:** kernels aggregated into the shipped lib (`root.zig`), C-declared
+  (`sixfour_native.h`), Swift-wrapped (`SixFourNative.multiScaleIntegrate` / `renderSelect`);
+  `SixFour/Capture/MultiScaleLadder.swift` (the EV-tiled schedule + volume assembly + fuse + device
+  custom-exposure application), gated by `Feature.multiScaleLadder = false`. App builds arm64;
+  7 Swift tests pass INCLUDING the Swift↔Zig bridge (renderSelect + integrator match the goldens).
+
+Also this session: an MPS/Metal learning benchmark (`RungDispatchBenchmarkTests` + a GPU-time hook on
+`RungDispatch`; confirmed the single-threadgroup θ_up descent is ~0.04 ms/step and converges by ~600
+steps — validating the shipped step count); verified-safe dead-code cleanup (deleted the truly-orphan
+`CameraPreview.swift` and the dead `NudgePaintView` view struct — the review's other "orphans" were
+load-bearing, kept); doc-rot fixes (CLAUDE.md ColorHead-is-wired, PhaseField routing).
+
+### GAPS — remaining device-only work (needs the iPhone 17 Pro; compile-only here)
+
+1. **The CaptureSession interleaved-capture LOOP is NOT written.** `MultiScaleLadder` is built as
+   callable, tested pieces (`schedule` / `applyExposure` / `assembleVolume` / `fuse`) but the live
+   loop that cycles `applyExposure` per cadence tick, tags each frame with its scale, and routes to
+   `assembleVolume` is not spliced into `CaptureSession` — deliberately, because it can't be validated
+   on the Simulator (no camera; custom exposure ignored) and cutting the 1,117-line live path blind is
+   the wrong call. This is where `lawScalesAreNotDerivable` goes red→green on real hardware. NEXT.
+2. **The AVFoundation format that permits per-frame custom exposure + on-sensor binning** must be
+   selected/validated on device (exposure timing, `setExposureModeCustom` cadence, the 10-bit x420
+   feed at three binnings). Device-only.
+3. **The select-brush UI is not wired.** `NudgePaintModel.deviceMask` (binary) must become a depth
+   field feeding `s4_render_select`, with the three-position view toggle + in-view painting
+   (form-follows-function). The Zig fuse is ready; the SwiftUI is not.
+4. **The fusion trainer does not exist yet**, and needs a CORPUS of real EV-laddered captures first
+   (the per-capture coarse stream is too starved for from-scratch training → base + fine-tune).
+   Objective = measurement-consistency self-supervision (`MultiScaleFusion`).
+
+Canon for the direction lives in the memory `sixfour-color-substrate-direction` (The Loom) and the
+`Spec.Map` entries for the five modules above. FidelityLadder/AxisSKI were briefly mis-struck as
+super-res artifacts and CORRECTED back in — FidelityLadder is the color-mix fidelity math MixSKI
+imports; AxisSKI is anisotropic (per-axis) color granularity.
+
+---
+
 ## 2026-07-02: the gene-swap laws + the entropy/scale architecture (spec-first, adversarially verified)
 
 > **Session theme (Daniel):** turn the S/K/I combinator reading and the gene-swap economy into
