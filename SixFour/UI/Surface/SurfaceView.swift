@@ -160,6 +160,24 @@ struct SurfaceView: View {
                     surface.previewPalette = engine.settings.captureLook.apply(to: engine.previewPalette)
                 }
             }
+            // LIVE-LADDER (Feature.liveLadder only): the realized 32²/16² ladder rungs → σ,
+            // LOOK-graded exactly like the hero palette so the pyramid's rungs track the
+            // active grade. Only while `.live`. With the flag off these arrays stay empty
+            // (the engine's ladderCallback never fires), so σ.previewTile32/16 never mutate
+            // and InvertedPyramidField falls back to the in-view pooling.
+            .onChange(of: engine.previewLadder32) { _, tile in
+                if surface.phase == .live {
+                    surface.previewTile32 = engine.settings.captureLook.apply(to: tile)
+                }
+            }
+            .onChange(of: engine.previewLadder16) { _, tile in
+                if surface.phase == .live {
+                    surface.previewTile16 = engine.settings.captureLook.apply(to: tile)
+                }
+            }
+            // OPTICAL-EV σ folds — extracted to a ViewModifier so the (already long) body
+            // stays under the SwiftUI type-checker's expression-complexity limit.
+            .modifier(OpticalTileFolds(engine: engine, surface: surface))
             // The finished GIFA → σ. If the engine's `.done` edge raced ahead of this
             // observer the commit already ran in `mapEnginePhase`; folding again is
             // idempotent (it overwrites σ with the same bytes) and `.burstComplete` is a

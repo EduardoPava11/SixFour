@@ -164,8 +164,12 @@ The camera's COLOR HEAD and its exact-arithmetic learning gates (landed 2026-07-
   `haltFloor()` per-slot certified order. AVFoundation-free. WIRED into CaptureSession (2026-07-04):
   constructed per burst when `Feature.yinYangBands` (`CaptureSession.finishBurst` gate), fed per tick
   via `poolSums64(fromX420:)` + `ingest`, drained at burst end into the `BandHeadTrainer`. Telemetry
-  /learning only — no GIF byte depends on it. NOTE: the live x420 path sets `lastCropArea = 0`, so
-  `latestGCT` stays nil on device (GCT realization is the 32BGRA `poolSums64` path, not the camera's).
+  /learning only — no GIF byte depends on it. NOTE (updated 2026-07-05): the x420 measurement path now
+  populates `latestGCT` on device — its linear16 BT.2020 sums realize through the inverse-EOTF kernel
+  `s4_sums_bt2020_to_srgb8` (`Spec.RadiometricRealize`: area-mean → golden BT.2020→sRGB linear matrix +
+  clamp → sRGB OETF; grey preserved bit-exactly). The 32BGRA feed still realizes via the gamma-byte
+  `s4_sums_to_srgb8`; `ColorHead.sumsAreLinear` selects between them. (The HLG→SDR luminance is a
+  documented peak-normalized tone-map choice, not colorimetrically-exact HDR→SDR.)
 - **Spec gates**: `Spec.OctantViews` (2×2×2 grading 1+3+3+1 = Walsh–Hadamard; latents = mixed
   derivatives), `Spec.PaletteKinetics` (256 particles; entropy as exact microstate counts W),
   `Spec.KinematicLadder` (Δ^k coarsens by Pascal row k+1; Newton = Mahler basis; budget law),

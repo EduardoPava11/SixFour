@@ -80,4 +80,44 @@ enum Feature {
     /// on the phone. Telemetry-only for now (log + `bandHeadCallback`); no GIF
     /// byte depends on it, so flipping this off degrades to exactly today's output.
     static let yinYangBands = true
+
+    /// The LIVE-LADDER preview realization — the inverted-pyramid's 32²/16² rungs
+    /// read the REAL device ladder instead of view-pooling the 64² index tile.
+    /// **OFF — device-only, in bring-up (mirrors `multiScaleLadder`).**
+    ///
+    /// With this on, a persistent preview-side `ColorHead` ingests the idle x420
+    /// preview buffers on the delegate queue, realizes its `latest32` / `latest16`
+    /// linear16 BT.2020 sums to sRGB8 via the inverse-EOTF kernel
+    /// (`s4_sums_bt2020_to_srgb8`, `Spec.RadiometricRealize`), and publishes them as
+    /// two direct RGB tiles onto σ; `InvertedPyramidField` reads those for its 32²/16²
+    /// tiles. With it OFF the preview head is never constructed, the ladder callback
+    /// never fires, `surface.previewTile32/16` stay empty, and the pyramid's 32²/16²
+    /// rungs fall through BYTE-FOR-BYTE to today's in-view `ColorHead.poolSpatial2`
+    /// pooling + digital gain. The shipped 64-frame burst→GIF path (the separate
+    /// per-burst `colorHead`, `finishBurst`, v21/θ_up) is unaffected either way.
+    ///
+    /// Display-only: no GIF byte depends on it. The x420 sums are HLG-linearized
+    /// telemetry, so the realized 32²/16² tiles are a gauge, not a colorimetric
+    /// match to the GPU 64² index-palette preview — flip on and confirm on an
+    /// iPhone 17 Pro before considering the default.
+    static let liveLadder = false
+
+    /// OPTICAL-EV — REAL exposure bracketing, NO digital gain. When true the live preview
+    /// runs `ExposureBracketDriver`: it cycles `setExposureModeCustom` across three real
+    /// exposures and routes each settled frame to
+    /// its tile — a monotonic light ladder (64²=base / 32²=+1 stop / 16²=+2 stops, so the 16²
+    /// gets 4× the light of the 64², mirroring its 4-frame temporal pooling).
+    /// DEVICE-ONLY (the Simulator has no camera; the driver no-ops without a real
+    /// sensor). Preview-only — the shipped 64-frame burst→GIF path is untouched. Takes
+    /// precedence over `liveLadder`/in-view pooling in `InvertedPyramidField`.
+    static let opticalEV = false
+
+    /// MULTISCALE RENDER — the always-on adaptive 16/32/64 GIF. When true, `renderOnce` swaps the
+    /// uniform 64³ tiles for the halt-floor multiscale cube (fused via `MultiScaleRender` →
+    /// `s4_render_select`): motion regions stay 64³, static regions collapse to chunky block-16³.
+    /// DERIVED capture (the three volumes pooled from one 64³ burst; independent EV-bracketed
+    /// capture is the `multiScaleLadder` device upgrade). SAFETY: an all-depth-2 field reproduces
+    /// the current renderer bit-for-bit (`MultiScaleRenderTests`), so the default (flag off) path
+    /// is untouched.
+    static let multiScaleRender = false
 }

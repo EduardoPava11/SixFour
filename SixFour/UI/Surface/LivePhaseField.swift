@@ -4,28 +4,37 @@ import Foundation
 import simd
 
 /// Π for the `live` family of phases (`.live`, `.locking`, `.capturing`) — the capture
-/// face of the ONE surface. Ported from `CaptureView.latticeScene`: a palette-tinted
-/// live checker ground + the 64-cell preview hero + the 16-cell live palette that IS the
-/// shutter (tapping it fires the burst) + the build stamp.
+/// face of the ONE surface. The composition is the INVERTED-PYRAMID THREE-VIEW
+/// (`InvertedPyramidField`): 64² (widest) over 32² over the 16² point, each pooled from the
+/// ONE live camera tile via the shipped `ColorHead.poolSpatial2` (64→32→16) and shown at its
+/// own DIGITAL EV. The 16² vertex IS the shutter (tapping it fires the burst); tapping the
+/// 64² meters. All three are three resolutions of one live feed, so the funnel is the pooling
+/// factor drawn to scale at the ONE 4 pt atom.
+///
+/// LIVE-LADDER (Feature.liveLadder): when on, the 32²/16² rungs read the REAL device ladder
+/// (`surface.previewTile32/16`, realized from the persistent preview `ColorHead` via the
+/// inverse-EOTF kernel) instead of view-pooling the 64². OFF (default) ⇒ those tiles are empty
+/// and the pyramid pools the 64² in-view, byte-identical to today. The 64² stays the GPU
+/// index-palette preview either way (the meter-tap normalization needs it).
 ///
 /// This is the seam fulfilment for `PhaseField`: a pure `(Surface, SurfaceClock) -> View`
 /// that reads σ and emits CELLS only — no `Text`, no glass, no SF-Symbol, no UIKit
-/// `Slider`/`Picker` on chrome. The two heroes are `.place(_:)`-d by the proven
-/// `GridLayoutContract.captureScene` (the same contention-free regions the old capture
-/// scene used), so the surface keeps its single uniform 4 pt lattice.
+/// `Slider`/`Picker` on chrome. The pyramid SELF-CENTERS (`.frame(maxWidth:.infinity…)`, no
+/// `.position`/`.offset`), so it is grid-lint clean without a `GridLayoutContract` region —
+/// the surface keeps its single uniform 4 pt lattice.
 ///
 /// What it reads from σ:
-///   - `surface.palette`  — the 256 live colours: tints the checker AND fills the 16×16
-///                          shutter (the GIF's first abstraction = the capture button).
-///   - `surface.phase`    — `.live` is tappable (fires `.shutterTap`); `.locking` /
-///                          `.capturing` are inert (a state is a cell transform, never an
-///                          opacity fade — the grid simply stops being a `Button`).
+///   - `surface.previewTile` / `surface.previewPalette` — the live 64×64 index tile + its 256
+///                          colours the engine publishes each frame; the pyramid pools these.
+///   - `surface.phase`    — `.live` is tappable (fires the shutter); `.locking` / `.capturing`
+///                          are inert (a state is a cell transform, never an opacity fade —
+///                          the shutter simply stops being tappable via `shutterEnabled`).
 ///   - `clock.heartbeat`  — the 20 fps inversion bit that proves the canvas is live.
 ///
-/// The 64×64 camera tile and the granular capture progress live on the camera engine
-/// (`CaptureViewModel`), which a later stage folds into σ; until then the hero renders a
-/// palette-derived live field from the data σ already carries. The shape (preview region
-/// + palette-as-shutter) is final and the engine hook drops straight in.
+/// The digital EVs are display-only (the burst stays one locked exposure); v2 promotes them
+/// to real optical EV. LOOK-swipe / EV-drag stay on the clear ground layer behind the tiles.
+/// NOTE: the ground influence-field still radiates from the retired field64/palette16 anchors,
+/// so its glow no longer tracks the centered pyramid — cosmetic, fixed when it gains regions.
 struct LivePhaseField: View {
     let surface: Surface
     let clock: SurfaceClock
@@ -52,10 +61,6 @@ struct LivePhaseField: View {
     /// The EV the current vertical drag started from (nil = no EV drag in flight).
     @State private var evDragBase: Float?
 
-    /// The current shared placement (identity → position). Re-read every body so a move in
-    /// any phase is visible here (one global position across phases).
-    private var placement: [ColorIdentity: (col: Int, row: Int)] { settings.widgetPlacement }
-
     var body: some View {
         ZStack(alignment: .topLeading) {
             // The influence-field ground is the ONE persistent surface hoisted to `SurfaceView`
@@ -71,25 +76,29 @@ struct LivePhaseField: View {
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(lookSwipeAndExposureDrag)
-                .simultaneousGesture(meterTap)
 
-            // Field64 — the 64-cell preview hero, placed at its SHARED global position and
-            // movable (long-press to lift). The data source is the live camera tile; the
-            // POSITION is the same `field64Position` review/render read.
-            // `.movable` BEFORE `.place`: `.place` ends in a greedy `.position` that fills
-            // the parent, so the gesture/contentShape MUST be applied to the sized widget
-            // first — else each widget's hit area becomes the whole screen and the top one
-            // swallows every touch (only one widget grabbable). Scoped here to the footprint.
-            previewHero
-                .movable(.field64, settings: settings, surface: surface, clock: clock)
-                .place(region(for: .field64, at: placement))
-
-            // Palette16 — the 16-cell live palette = THE capture button, at its shared
-            // position. The tap (`onTap`) and the long-press lift are ONE composed gesture
-            // (no Button wrapper) so they don't fight: a clean tap fires the burst, a hold
-            // lifts it to move. Both gated to `.live` (a busy palette is inert).
-            paletteShutter
-                .place(region(for: .palette16, at: placement))
+            // THE THREE-VIEW: 64² (widest) / 32² / 16² (the point = the shutter), each pooled
+            // from the ONE live tile via ColorHead.poolSpatial2 and shown at its own digital EV.
+            // Self-centering (no .place) — the funnel is the pooling factor at the ONE 4 pt atom.
+            // Tap the 16² to fire the burst; tap the 64² to meter; the ground behind still
+            // LOOK-swipes / EV-drags. Reuses the shipped onShutter (→ engine.capture()) + onMeter.
+            InvertedPyramidField(
+                tile64: surface.previewTile,
+                palette: surface.previewPalette,
+                tile32: surface.previewTile32,
+                tile16: surface.previewTile16,
+                useLiveLadder: Feature.liveLadder,
+                opticalTile64: surface.opticalTile64,
+                opticalTile32: surface.opticalTile32,
+                opticalTile16: surface.opticalTile16,
+                useOptical: Feature.opticalEV,
+                ev64: 0, ev32: 0.5, ev16: 1.0,
+                stageActive: stage.active,
+                shutterProgress: stage.progress ?? 0,
+                shutterEnabled: surface.phase == .live && !stage.active,
+                onShutter: onShutter,
+                onMeter64: onMeter
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
@@ -153,95 +162,6 @@ struct LivePhaseField: View {
             }
     }
 
-    /// Tap the HERO to meter (QoL 2026-07-03): a tap inside the preview's footprint
-    /// one-shot meters focus + exposure at that point (normalized to the 64² tile).
-    /// The hero itself is `allowsHitTesting(false)`, so the tap lands here on the
-    /// ground layer and is mapped into the hero's placed region.
-    private var meterTap: some Gesture {
-        SpatialTapGesture()
-            .onEnded { tap in
-                // Inert while the engine works: a mid-burst meter would fight the
-                // locked AE (σ stays `.live` through the pipeline, so gate on stage).
-                guard surface.phase == .live, !stage.active else { return }
-                let r = region(for: .field64, at: placement)
-                let atom = CGFloat(SixFourLattice.gifPx)
-                let rect = CGRect(x: CGFloat(r.col) * atom, y: CGFloat(r.row) * atom,
-                                  width: CGFloat(r.w) * atom, height: CGFloat(r.h) * atom)
-                guard rect.contains(tap.location) else { return }
-                onMeter(CGPoint(x: (tap.location.x - rect.minX) / rect.width,
-                                y: (tap.location.y - rect.minY) / rect.height))
-                Haptics.selection()
-            }
-    }
-
-    // MARK: - The preview hero (64 × 64 cells)
-
-    /// The canvas: ALWAYS a 64×64 cell tile (the cube law — 1 GIF pixel per cell), never a
-    /// raw camera feed; you live inside the 64³ world. Rendered as one `CellSprite` bitmap
-    /// at the gifPx atom (64 × 4 = 256 pt). Source = σ's live camera tile (`previewTile`, the
-    /// real quantized 64×64 the engine produces every frame) read through its paired
-    /// `previewPalette`. The camera's own ~10 fps cadence drives the liveness — no synthetic
-    /// scroll, no second clock. Falls back to the ghost ink before the first frame arrives.
-    /// No interpolation, no AA — flat indexed cells.
-    private var previewHero: some View {
-        let side = GlobalLattice.gif(GlobalLattice.previewCells)   // 64 × 4 = 256 pt
-        let tile = surface.previewTile
-        let pal = surface.previewPalette
-        let ghost = SIMD3<UInt8>(20, 20, 24)
-        return CellSprite(cols: 64, rows: 64, cellPt: side / 64) { c, r in
-            let i = r * 64 + c
-            guard i < tile.count, Int(tile[i]) < pal.count else { return ghost }
-            return pal[Int(tile[i])]
-        }
-        .frame(width: side, height: side)
-        .clipped()
-        .allowsHitTesting(false)   // the engine's focus layer (later) sits underneath
-    }
-
-    // MARK: - The palette-as-shutter (16 × 16 cells)
-
-    /// The 256-colour live palette as a 16×16 grid (64 pt, 4 pt/cell) — the GIF's first
-    /// abstraction AND the capture button itself: tap the palette to shoot the 64-frame
-    /// burst (`surface.step(.shutterTap)`). Colour + position ARE the button; there is no
-    /// separate shutter glyph. The 256 colours are placed through the centralized
-    /// `GridScript.capture` (row-major / identity order — no per-frame re-sort jitter), so
-    /// both render backends resolve a cell via the one `surfaceColors` (Spec.GridScript).
-    ///
-    /// Inert when the surface is busy (`.locking` / `.capturing`): a state is a cell
-    /// transform, not an opacity fade — the grid simply stops being a `Button`.
-    private var paletteShutter: some View {
-        let ghost = SIMD3<UInt8>(20, 20, 24)
-        // Pad to a full 256 so the order is a total permutation, then permute into screen
-        // rank via the capture script (identity for capture).
-        let padded: [SIMD3<UInt8>] = (0 ..< 256).map { $0 < surface.palette.count ? surface.palette[$0] : ghost }
-        let ordered = GridScript.capture(side: 16).surfaceColors(palette: padded)
-
-        // THE PROGRESS FIELD (QoL 2026-07-03): while the engine works, the shutter the
-        // user tapped fills cell by cell — completed work at full palette colour,
-        // pending work dimmed. 256 cells over progress ∈ [0,1]; an indeterminate stage
-        // (LOCK) shows all-dimmed + the label. Idle renders the plain live palette.
-        let filled = stage.active ? Int(((stage.progress ?? 0) * 256).rounded()) : 256
-        let working = stage.active
-
-        // ONE composed gesture (no Button): a clean TAP fires `.shutterTap`, a long-press
-        // LIFTS it to move. `.movable` composes them with `.exclusively` so they never fight
-        // — the prior Button-wrapping swallowed the tap. Gated INERT while σ is busy OR the
-        // engine pipeline is running (pre-QoL the shutter looked tappable mid-burst because
-        // σ stays `.live` — an honest surface may not advertise a dead verb).
-        return CellSprite(cols: 16, rows: 16, cellPt: GlobalLattice.gif(1)) { c, r in
-            let rank = r * 16 + c
-            let base = rank < ordered.count ? ordered[rank] : ghost
-            guard working else { return base }
-            return rank < filled
-                ? base
-                : SIMD3<UInt8>(base.x / 4, base.y / 4, base.z / 4)
-        }
-        .movable(.palette16, settings: settings, surface: surface, clock: clock,
-                 enabled: surface.phase == .live && !stage.active,
-                 onTap: { onShutter() })   // kick the burst directly; σ stays .live until done
-        .accessibilityLabel(stage.active ? "Working: \(stage.label)" : "Capture 64-frame burst")
-        .accessibilityHint("Tap to capture sixty-four frames; long-press to move the palette")
-    }
 }
 
 #if DEBUG

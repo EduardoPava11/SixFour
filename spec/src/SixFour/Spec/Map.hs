@@ -37,6 +37,9 @@ index cross-cut; physically the modules stay where they are, gated by golden vec
     DOWNWARD, and whose @16²=256@ coarse bins ARE the realisable palette basis for the barycentric-coordinate
     value head),
     "SixFour.Spec.ByteCarrier", "SixFour.Spec.QuantFixed", "SixFour.Spec.ColorFixed",
+    "SixFour.Spec.RadiometricRealize" (the inverse-EOTF realization that closes the linear16
+    measurement path back to sRGB8 bytes: @s4_sums_to_srgb8_linear@ + the BT.2020→sRGB gamut
+    @s4_sums_bt2020_to_srgb8@; encode = exact quantizer-inverse of the @srgb_to_linear16@ decode),
     "SixFour.Spec.LeafOverride", + the @safeNudge@/domain half of "SixFour.Spec.RelationalResidual" and
     the Held rung of "SixFour.Spec.SelfSimilarReconstruct". @liftOct@ (the @2x2x2->1@ octant edge, the
     learned-token substrate) HAS its floor kernel @s4_octant_lift@\/@s4_octant_unlift@ (kernels.zig:857,
@@ -568,6 +571,108 @@ mask can produce — the ternary family strictly extends W1 paint. Post-capture 
 of the bin data (ColorHead derives all rungs/GCT/particles/halt floor from the 64-rung sums —
 referenced, gated by ColorHeadTests). Byte realization rounds ONCE at the end; the rational law is
 the structure. Additive),
+"SixFour.Spec.RadiometricRealize" (★ THE INVERSE-EOTF REALIZATION — closes the linear16 measurement
+path back to sRGB8 bytes (@s4_sums_to_srgb8_linear@ / @s4_sums_bt2020_to_srgb8@), the twin of the
+gamma-byte @s4_sums_to_srgb8@: area-MEAN each linear16 bin sum then inverse-EOTF ENCODE. KEYSTONE
+@lawEncodeInvertsEotf@: the 8-bit encode is the EXACT quantizer-inverse of the decode golden
+@srgb_to_linear16@ (one transfer 'SixFour.Spec.Color.linearToSRGB', two quantizations — Q16 in
+"SixFour.Spec.CubeLut", 8-bit here). PRIMARIES: the x420 feed is BT.2020, so the realization first
+applies the golden Q15 BT.2020→sRGB linear matrix (@lawGrayAxisPreserved@: rows sum to 32768 ⇒ grey is
+a bit-exact fixed point) with a deterministic @[0,65535]@ clamp (@lawBt2020InGamut@) BEFORE the sRGB
+OETF. @lawRealizeIsMeanThenEncode@ TEETH: non-linear encode ⇒ realize does not compose across rungs.
+HONEST BOUNDARY: transfer + primaries exact; the HLG→SDR luminance is a chosen peak-normalized
+tone-map (no inverse-OOTF), documented not claimed exact. Additive),
+"SixFour.Spec.ColorTime" (★ THE COLOR-TIME MEASURE — τ_c of a spatiotemporal cell = total open-shutter
+duration over which LINEAR chromatic flux is accumulated (@τ_c = T_k·Δ_k@, the t-marginal of the sampling
+kernel). Shot noise ⇒ @SNR_color ∝ √τ_c@ (@lawSnrSqrtPowerLaw@, exact on squares; Fano 1 @lawFanoUnity@;
+@Var ∝ 1/N@ @lawChromaVarianceInverse@) — the exposure-theoretic proof that coarse rungs are more
+colour-accurate. Integration must be LINEAR: convex-γ Jensen @lawLinearBeatsGamma@ (mean(γ) ≥ γ(mean), gap
+= variance) is the theorem under "sums compose, means don't" (@lawSumsCompose@ / @lawMeansDoNotCompose@),
+carrier "SixFour.Spec.V21Pyramid", realized via "SixFour.Spec.RadiometricRealize". LADDER UNIFICATION: the
+light ladder @Δ_k = 2^k Δ₀@ gives @τ_c(k) = 4^k Δ₀@ (@lawColorTimeQuartic@) with optical stop == temporal
+pool factor (@lawStopEqualsPoolIndex@) — one integer k for coarsening, pooling, and stops. A finitely-
+additive measure (@lawColorTimeAdditive@) whose reported colour is the temporal MEAN, so motion is averaged
+(@lawMotionAverageInHull@). Pure-spec, exact @Rational@. Additive),
+"SixFour.Spec.GaussianLadder" (★ THE ARITHMETIC OF THE LADDER — the spatial sample lattice is the Gaussian
+integers @ℤ[i]@; the atomic "halve resolution" is division by the RAMIFIED prime squared @π²@ (2 = −i·(1+i)²,
+@lawTwoRamifies@; @N(1+i)=2@). The rung-k ideal @π^{2k}=(2^k)@ has norm @4^k@ (pooled cell AREA,
+@lawRungNormIsFour@) = the color-time factor (@lawNormIsColorTime@ → "SixFour.Spec.ColorTime"), and
+norm-multiplicativity makes the ladder a monoid hom @(ℕ,+)→(ℕ,×)@ @k↦4^k@ (@lawNormIsMonoidHom@, the
+number-theoretic shadow of @lawSumsCompose@). SIMT UNIFICATION: the MORTON/Z-order enumerates the residue
+system @ℤ[i]/π^{2k}@ bijectively onto @[0,4^k)@ (@lawMortonBijection@) AND is the GPU memory index; coarsening
+is a 2-bit shift (@lawParentIsShift@, the quotient) and the four geometric children are CONTIGUOUS codes
+@{4m..4m+3}@ (@lawFiberContiguous@, one coalesced warp fiber), so the flat contiguous-quad reduction equals
+the geometric 2×2 pool cell-for-cell (@lawSimtEqualsGeometric@). 2-D spatial slice of the 2×2×2 octant; the
+temporal 2-adic factor gives the @(Z_2)^3@ Morton gene of "SixFour.Spec.ModelAlgebra". Pure-spec, exact. Additive),
+"SixFour.Spec.EventEncoding" (★ THE CAPTURE AS AN ENCODED EVENT — a high-precision signal is written into the
+GIF89a's 8-bit frame stack by TEMPORAL ordered dither @xᵢ=⌊s+i/T⌋@, which RAISES per-frame entropy (off-grid ⇒
+two codes, @lawEncodingRaisesEntropy@) while the temporal mean (the color-time integral / SIMT quad-reduce of
+"SixFour.Spec.GaussianLadder") recovers @s@ EXACTLY: Hermite's identity @Σ⌊s+i/T⌋=⌊T·s⌋@ (@lawHermiteDither@).
+Rate–distortion made exact — rate = frames = entropy budget, distortion @<1/T@ (@lawDecodeRecoversSignal@),
+decode on the @1/T@-grid so @T@ frames buy @log₂T@ bits (@lawDecodeOnFineGrid@); the ladder @T=2^k@ adds @k@
+bits (@lawLadderDitherBits@ → "SixFour.Spec.ColorTime"). Deterministic given context ⇒ LEARNABLE: @H(xᵢ|s,i)=0@,
+so a model conditioned on (signal, phase) has zero irreducible loss and can GENERATE meaningful frames. The
+entropy the encoder injects is exactly what color-time removes — matched encoder/decoder. Pure-spec, exact. Additive),
+"SixFour.Spec.Gif89aDecode" (★ THE THREE COLOR-TIME RUNGS → GIF89a PRIMITIVES — the ladder's 3 resolutions factor
+EXACTLY into a per-frame PALETTE + an INDEX MAP: PALETTE ← 16² (256 cells, MAX color-time, the codebook →
+"SixFour.Spec.CoarseIsPalette", @lawPaletteIsCoarse@); INDEX MAP ← 64² (4096 pixels quantised to NEAREST palette
+entry, @lawIndexIsNearest@/@lawIndexInRange@); per-frame DITHER ← 32² (@32²=4·16²@, 2 bits, @lawMidRungRefines@).
+PLAYBACK = temporal mean = the color-time decode: per-frame ordered-dither indices recover colour to @1/T@ of the
+palette spacing (Hermite via "SixFour.Spec.EventEncoding", @lawGifPlaybackRecovers@), landing on the @1/T@ grid so
+256 entries + T frames = @8+log₂T@ bits (T=64 ⇒ 14-bit colour from 8-bit GIF, @lawEffectiveBitsGrid@). CONSERVATION
+@64²/16²=16=4²@ = the "SixFour.Spec.GaussianLadder" ideal norm (@lawSKConservation@, @S=16·K@). Pure-spec, exact. Additive),
+"SixFour.Spec.HaltDepth" (★ THE HALT→DEPTH BRIDGE — the certified kinematic order ("SixFour.Spec.KinematicHaltPrior"
+@certifiedOrder@) of a region becomes its render DEPTH for the always-on multiscale GIF: order≤1→depth 0 (16³), =2→1
+(32³), ≥3→2 (64³) (@haltDepth@; monotone @lawHaltDepthMonotone@; bounded to the "SixFour.Spec.RenderSelect" alphabet,
+@lawDepthDrivesValidBlock@ = exact block side @4/2^d@). UNCERTIFIED (order<0) → coarsest (@lawUncertifiedIsCoarsest@ —
+never invent detail you cannot certify). Co-driven with the user cube-brush by FINEST-WINS @mergeDepth@=max (semilattice
+@lawMergeSemilattice@; the brush can only refine, @lawUserCanOnlyRefine@ — "SixFour.Spec.CubeBrush"). COLOR-TIME TRADEOFF:
+depth is INVERSE color-time, factor @4^(2−d)@, so more motion order spends strictly LESS color-time (@lawMotionSpendsColorTime@
+→ "SixFour.Spec.ColorTime") — spatial detail on motion, temporal color-time on stillness. All-order≥3 ⇒ all-depth-2 =
+"SixFour.Spec.RenderSelect" identity on V64 (@lawAllHighIsAllFine@), the "all-fine == uniform 64³ renderer" safety hook.
+The Swift @HaltDepthBridge@ mirrors it byte-exact. Pure-spec, exact @Integer@. Additive),
+"SixFour.Spec.LabTransition" (★ THE ONE-WAY VALVE — LAB connects the color-time densities at the PERCEPTUAL layer only.
+Pool the radiometric density in LINEAR RGB (sums compose, "SixFour.Spec.ColorTime"), convert to OKLab
+('SixFour.Spec.Color.linearSRGBToOKLab', the valve) for gene/palette/look. The valve is NONLINEAR so it does NOT commute
+with pooling (Jensen, @lawValveNonlinearNeedsPoolFirst@ = ColorTime's linear-beats-gamma) — POOL FIRST, look after. What
+crosses the valve SCALE-EQUIVARIANTLY = only the discrete/rational LINEAR hue: the S₃ RGB-permutation
+("SixFour.Spec.OpponentDerivation" @swapRG@/@cycleRGB@ = Eisenstein ω) commutes with the pool
+(@lawLinearHueCommutesWithPool@), preserves DC/mass @R+G+B@ (@lawS3PreservesMass@) + the gray axis
+(@lawGrayFixedByLinearHue@); the exact C₄ quarter-turn (@quarterTurn@, "SixFour.Spec.ChromaRotation" @rotateQuarter@)
+likewise (@lawQuarterTurnCommutesWithPool@). LAYERED: rational hue = the EXACT valve, pool-equivariant; arbitrary-angle
+OKLab (@ChromaRotation.rotateChroma@, irrational cos/sin) = FLOAT post-pool, re-enters Q16. @lawLinearHueVsNonlinearValve@
+witnesses the split. The S₃ that crosses = the pool-equivariant part of "SixFour.Spec.GeneDensity3D" @B₃=(Z₂)³⋊S₃@.
+Pure-spec, exact @Integer@/@Rational@. Additive),
+"SixFour.Spec.GeneDensity" (★ A GENE IS A MASS-PRESERVING-UP-TO-WARP PUSHFORWARD on the 64³ colour density —
+closing photons→heritable-look. Density ρ = the byte-exact integer histogram "SixFour.Spec.V21Transport" @Hist@;
+a gene ("SixFour.Spec.GeneHash" @GenePreimage@) manufactures a ρ-INDEPENDENT value point-map @φ@ whose pushforward
+@(φ#ρ)[y]=Σ_{φ(x)=y}ρ[x]@ (@pushDensity@) re-buckets a finite integer multiset — total mass conserved EXACTLY in ℤ
+(@lawGeneMassConserved@) while colour is redistributed. A MONOID ACTION: @composeWarp@/@identityWarp@
+(@lawActionComposes@ non-abelian, @lawIdentityGeneIsIdentityWarp@); @lawActionIsPushforward@ = single-target Monge;
+@lawWarpCommutesWithK@ (@dcOf@=Σρ = the "SixFour.Spec.CombinatorExactSequence" coarse DC is invariant) ⇒ mass IS the
+K-functional; @lawScaleEquivariant@ warp∘pool = pool∘warp across 64/32/16 ("SixFour.Spec.V21Pyramid"). NO-COLLAPSE is
+a GATE not a law: @admissible@ (the two-sided integer bi-Lipschitz of "SixFour.Spec.DescriptorQuasiIsometry",
+@lawWarpBiLipschitz@) — K conserves mass but is INADMISSIBLE; the exact admissible warps are the L¹ isometry group
+@Z₂={id,reversal}@, the PURE-SPEC standin for the real 21-word θ_up→colour-index MLX-MODEL seam behind @warpOf@.
+@lawRecombinationClosed@ = displacement-interpolation breeding stays a valid warp. Deliberately REJECTS V21Transport's
+rank-indexed pushforward (ρ-dependent, drops out-of-gamut mass ⇒ not a monoid action); distinct from
+"SixFour.Spec.GeneRecombination" ECONOMIC mass. Pure-spec, exact @Integer@. Additive),
+"SixFour.Spec.GeneDensity3D" (★ THE 3-D ROOF over "SixFour.Spec.GeneDensity" — a gene is a JOINT
+mass-preserving pushforward on the coupled RGB colour cube @{0..L-1}³@, extending the 1-D per-value
+axis to the whole colour density. The exact-arithmetic admissible joint warps (mass-preserving,
+no-collapse, κ=1 L¹ isometry) are EXACTLY the hyperoctahedral group B3 (order 48 = @(Z₂)³⋊S3@):
+the S3 axis-permutation face REUSES "SixFour.Spec.OpponentDerivation" @swapRG@/@cycleRGB@, the
+@(Z₂)³@ per-axis-sign face REUSES "SixFour.Spec.GeneDensity" @reverseWarp@. @hueRotate@ = the 120°
+C3 hue rotation (@= cycleRGB@ lifted, @Φ(r,g,b)=(b,r,g)@) fixes the achromatic grey diagonal yet is
+PROVABLY NOT any product-of-marginals — the CROWN pair (@lawHueRotationIsChannelCoupled@ +
+@lawHueRotationNotMarginal@) witnesses @GeneDensity ⊊ GeneDensity3D@ via the axis-marginal-support
+invariant (a product map can merge but never SPLIT an axis marginal). @marginalToJoint@ embeds
+GeneDensity's warps as the NORMAL product subgroup @(Z₂)³@ with quotient S3 (@lawMarginalEmbedsInJoint@).
+@admissible3@ is the EXACT L¹-cube-isometry gate (κ=1, dc==dq for all pairs — NOT the loose DQI band),
+for which B3 is EXACTLY the passing set (order 48, exhaustively verified at L=2). @composeWarp3@ is the
+genuinely NON-ABELIAN semidirect product; @invertB3@ makes it a group. @warpOf3@ is the PURE-SPEC-WALL
+standin ranging over B3, the real θ_up→B3-element realization behind it as the MLX-MODEL seam. All nine
+GeneDensity laws lift byte-exact at small L (2/3/4). Pure-spec, exact @Integer@. Additive),
 "SixFour.Spec.CubeBrush" (★ FORM FOLLOWS FUNCTION — paint returns carrying RESOLUTION: rung-typed
 brushes lay OVERLAPPING CUBES (16-brush = 4×4×4, 32 = 2×2×2, 64 = voxel) and the NETWORK constructs
 the 64³. Semantics = pointwise MAX (finest wins, @lawFinestWinsAtOverlap@); semilattice ⇒ strokes

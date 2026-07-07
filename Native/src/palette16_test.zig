@@ -276,6 +276,138 @@ test "LAW: linear sums keep the transitive carrier property, 64->16 == 64->32->1
     try std.testing.expectEqualSlices(u64, &direct, &twostep);
 }
 
+// ── The inverse-EOTF realization: linear16 sums → sRGB8 (Spec.RadiometricRealize) ──
+
+test "GOLDEN SPOTS: srgb_encode_thresh16 matches the reference math" {
+    // thresh[v] = round(srgbToLinear((v-0.5)/255)*65535); thresh[0]=0.
+    try std.testing.expectEqual(@as(u16, 0), p16.srgb_encode_thresh16[0]);
+    try std.testing.expectEqual(@as(u16, 10), p16.srgb_encode_thresh16[1]);
+    try std.testing.expectEqual(@as(u16, 30), p16.srgb_encode_thresh16[2]);
+    try std.testing.expectEqual(@as(u16, 189), p16.srgb_encode_thresh16[10]);
+    try std.testing.expectEqual(@as(u16, 3309), p16.srgb_encode_thresh16[64]);
+    try std.testing.expectEqual(@as(u16, 14027), p16.srgb_encode_thresh16[128]);
+    try std.testing.expectEqual(@as(u16, 65243), p16.srgb_encode_thresh16[255]);
+}
+
+test "LAW: srgb_encode_thresh16 is monotone nondecreasing" {
+    for (0..255) |i| {
+        try std.testing.expect(p16.srgb_encode_thresh16[i] <= p16.srgb_encode_thresh16[i + 1]);
+    }
+}
+
+test "KEYSTONE LAW: encode is the EXACT inverse of the decode (round-trips all 256 codes)" {
+    for (0..256) |v| {
+        try std.testing.expectEqual(@as(u8, @intCast(v)), p16.s4_linear16_to_srgb8(p16.srgb_to_linear16[v]));
+    }
+    // Endpoints and the mid-gray witness.
+    try std.testing.expectEqual(@as(u8, 0), p16.s4_linear16_to_srgb8(0));
+    try std.testing.expectEqual(@as(u8, 255), p16.s4_linear16_to_srgb8(65535));
+    try std.testing.expectEqual(@as(u8, 128), p16.s4_linear16_to_srgb8(14146));
+    try std.testing.expectEqual(@as(u8, 188), p16.s4_linear16_to_srgb8(32768));
+}
+
+test "end-to-end sRGB-primary realization: hand-mean sums = count*14146 → byte 128" {
+    const count: i64 = 256;
+    var sums: [16 * 16 * 3]u64 = undefined;
+    for (&sums) |*s| s.* = @as(u64, 14146) * @as(u64, @intCast(count));
+    var out: [768]u8 = undefined;
+    try std.testing.expectEqual(p16.S4_RC_OK, p16.s4_sums_to_srgb8_linear(&sums, 16, count, &out));
+    for (out) |b| try std.testing.expectEqual(@as(u8, 128), b);
+}
+
+test "constant-frame realization: pool_linear_srgb8 then realize == the byte back" {
+    // A constant sRGB byte 200: linearize → pool → mean == srgb_to_linear16[200]
+    // → encode round-trips to 200 (encode∘decode identity).
+    var frame: [32 * 32 * 3]u8 = undefined;
+    @memset(&frame, 200);
+    var sums: [16 * 16 * 3]u64 = undefined;
+    try std.testing.expectEqual(p16.S4_RC_OK, p16.s4_pool_sums_linear_srgb8(&frame, 32, 16, &sums));
+    var out: [768]u8 = undefined;
+    const area: i64 = 4; // (32/16)^2
+    try std.testing.expectEqual(p16.S4_RC_OK, p16.s4_sums_to_srgb8_linear(&sums, 16, area, &out));
+    for (out) |b| try std.testing.expectEqual(@as(u8, 200), b);
+}
+
+test "EDGE/TOTALITY: count<=0 and mean>65535 refuse; black→0, saturation→255" {
+    var sums: [3]u64 = .{ 0, 0, 0 };
+    var out: [3]u8 = undefined;
+    // count<=0 → BAD_ARGS (uninitialized-crop / black case).
+    try std.testing.expectEqual(p16.S4_RC_BAD_ARGS, p16.s4_sums_to_srgb8_linear(&sums, 1, 0, &out));
+    try std.testing.expectEqual(p16.S4_RC_BAD_ARGS, p16.s4_sums_bt2020_to_srgb8(&sums, 1, 0, &out));
+    // black: sum 0, count 4 → mean 0 → byte 0.
+    try std.testing.expectEqual(p16.S4_RC_OK, p16.s4_sums_to_srgb8_linear(&sums, 1, 4, &out));
+    try std.testing.expectEqual(@as(u8, 0), out[0]);
+    // saturation: sum = count*65535 → mean 65535 → byte 255.
+    sums = .{ 4 * 65535, 4 * 65535, 4 * 65535 };
+    try std.testing.expectEqual(p16.S4_RC_OK, p16.s4_sums_to_srgb8_linear(&sums, 1, 4, &out));
+    try std.testing.expectEqual(@as(u8, 255), out[0]);
+    // mean>65535 (byte-sums fed by mistake, or too-small count) → BAD_ARGS.
+    sums = .{ 4 * 65535 + 4, 0, 0 };
+    try std.testing.expectEqual(p16.S4_RC_BAD_ARGS, p16.s4_sums_to_srgb8_linear(&sums, 1, 4, &out));
+    try std.testing.expectEqual(p16.S4_RC_BAD_ARGS, p16.s4_sums_bt2020_to_srgb8(&sums, 1, 4, &out));
+}
+
+test "TEETH: realize (mean-then-encode) does NOT compose across rungs" {
+    // Same style as the gamma teeth: search small linear16 frames where the
+    // round-half-up linear MEAN encoded once differs from encoding the mid rung
+    // then re-meaning the codes. Non-linear encode ⇒ a witness must exist.
+    var found = false;
+    var seed: u64 = 1;
+    while (seed < 300 and !found) : (seed += 1) {
+        // 4 linear16 leaves in one channel (a 2x2 bin), values in [0,65535].
+        var leaves: [4]u64 = undefined;
+        var s: u64 = seed;
+        for (&leaves) |*v| {
+            s = s *% 6364136223846793005 +% 1442695040888963407;
+            v.* = (s >> 40) & 0xFFFF;
+        }
+        // direct: mean of 4 → encode once.
+        const direct = p16.s4_linear16_to_srgb8(@intCast((leaves[0] + leaves[1] + leaves[2] + leaves[3] + 2) / 4));
+        // staged: encode each pair-mean (2 sub-bins), decode back, re-mean, encode.
+        const m0: u16 = @intCast((leaves[0] + leaves[1] + 1) / 2);
+        const m1: u16 = @intCast((leaves[2] + leaves[3] + 1) / 2);
+        const b0 = p16.s4_linear16_to_srgb8(m0);
+        const b1 = p16.s4_linear16_to_srgb8(m1);
+        const staged = p16.s4_linear16_to_srgb8(@intCast((@as(u64, p16.srgb_to_linear16[b0]) + p16.srgb_to_linear16[b1] + 1) / 2));
+        if (direct != staged) found = true;
+    }
+    try std.testing.expect(found);
+}
+
+test "BT.2020→sRGB gamut: grey axis is a bit-exact fixed point; endpoints hold" {
+    // Row sums == 32768 ⇒ grey (r==g==b) maps to itself exactly. Realize a
+    // constant BT.2020-grey bin and confirm the byte equals the sRGB round-trip.
+    const greys = [_]u16{ 0, 14146, 32768, 65535 };
+    for (greys) |gval| {
+        var sums: [3]u64 = .{ 4 * @as(u64, gval), 4 * @as(u64, gval), 4 * @as(u64, gval) };
+        var out: [3]u8 = undefined;
+        try std.testing.expectEqual(p16.S4_RC_OK, p16.s4_sums_bt2020_to_srgb8(&sums, 1, 4, &out));
+        const want = p16.s4_linear16_to_srgb8(gval);
+        try std.testing.expectEqual(want, out[0]);
+        try std.testing.expectEqual(want, out[1]);
+        try std.testing.expectEqual(want, out[2]);
+    }
+}
+
+test "BT.2020→sRGB gamut: Q15 rows sum to 32768 (grey-preserving invariant)" {
+    const m = p16.bt2020_to_srgb_q15;
+    try std.testing.expectEqual(@as(i32, 32768), m[0] + m[1] + m[2]);
+    try std.testing.expectEqual(@as(i32, 32768), m[3] + m[4] + m[5]);
+    try std.testing.expectEqual(@as(i32, 32768), m[6] + m[7] + m[8]);
+}
+
+test "BT.2020→sRGB gamut: a saturated BT.2020 primary does NOT refuse (clamp, not BAD_ARGS)" {
+    // Pure BT.2020 red bin (R=65535, G=B=0) is in-gamut for BT.2020 but out of
+    // the sRGB gamut; the deterministic clamp keeps it legal (RC_OK, R byte 255)
+    // instead of tripping the mean>65535 totality guard.
+    var sums: [3]u64 = .{ 4 * 65535, 0, 0 };
+    var out: [3]u8 = undefined;
+    try std.testing.expectEqual(p16.S4_RC_OK, p16.s4_sums_bt2020_to_srgb8(&sums, 1, 4, &out));
+    try std.testing.expectEqual(@as(u8, 255), out[0]); // 54411/32768 > 1 → clamps to 255
+    try std.testing.expectEqual(@as(u8, 0), out[1]); //  negative G → clamps to 0
+    try std.testing.expectEqual(@as(u8, 0), out[2]); //  negative B → clamps to 0
+}
+
 test "BGRA camera pooling == RGB pooling on the same pixels (stride + crop respected)" {
     // Build a 40-wide x 36-tall BGRA image with stride 192 (> 40*4 = 160),
     // pool the 32x32 window at offset (4, 2), and compare against

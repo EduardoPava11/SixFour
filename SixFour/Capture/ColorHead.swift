@@ -20,8 +20,10 @@ import Metal
 ///   mass = L-sum); per-slot trajectories feed `s4_certified_order`
 ///   (Spec.KinematicHaltPrior): the certified kinematic order per slot is the
 ///   PonderNet halting-prior FLOOR — computed in exact integer arithmetic
-///   before any learning runs. The GCT (768 bytes, `s4_sums_to_srgb8`) falls
-///   out of the same 16-rung sums: color out of the way.
+///   before any learning runs. The GCT (768 bytes) falls out of the same
+///   16-rung sums: color out of the way — realized by `s4_sums_to_srgb8` on the
+///   gamma-byte (32BGRA) feed, or `s4_sums_bt2020_to_srgb8` (BT.2020 gamut hop +
+///   inverse-EOTF, Spec.RadiometricRealize) on the linear16 x420 feed.
 ///
 /// This type is deliberately free of AVFoundation: `CaptureSession` (or any
 /// frame source) calls `poolSums64(from:)` + `ingest(_:)` per tick and reads
@@ -54,6 +56,11 @@ final class ColorHead {
     private var pending16: [UInt64]?
     private var pendingRaw64: [UInt64]?
     private var lastCropArea: Int64 = 0
+    /// Whether the current sums are LINEAR16 BT.2020 (x420 measurement path) vs
+    /// gamma sRGB8 bytes (32BGRA path). Selects the emit16 GCT realization:
+    /// linear → `s4_sums_bt2020_to_srgb8` (gamut hop + inverse-EOTF), byte →
+    /// `s4_sums_to_srgb8`. Set by whichever `poolSums64` produced the tick.
+    private var sumsAreLinear = false
 
     /// Accumulated S_t training pairs (the 32→64 transition's t-bands), drained
     /// by the trainer. Exact integers until the drain converts to Float.
@@ -101,6 +108,7 @@ final class ColorHead {
         }
         guard rc == 0 else { return nil }
         lastCropArea = Int64(crop.side / 16) * Int64(crop.side / 16)
+        sumsAreLinear = false // gamma sRGB8 bytes → s4_sums_to_srgb8 in emit16
         return sums
     }
 
@@ -156,11 +164,13 @@ final class ColorHead {
     /// `s4_pool_sums_linear_hlg10` linearizes through the HLG golden LUT and
     /// block-sums, so bin sums are ∝ scene light in linear16 units.
     ///
-    /// NOTE: on this path `lastCropArea` stays 0, deliberately skipping the GCT
-    /// realization in `emit16` — `s4_sums_to_srgb8` is byte-sum-only and would
-    /// refuse linear16 means; realizing a GCT from linear sums needs an
-    /// inverse-EOTF realization kernel that does not exist yet. The ladder,
-    /// t-band pairs, and halt floor are unit-agnostic and unaffected.
+    /// NOTE: on this path the sums are LINEAR16 in BT.2020 primaries, so `emit16`
+    /// realizes the GCT via `s4_sums_bt2020_to_srgb8` (the inverse-EOTF kernel,
+    /// Spec.RadiometricRealize): area-mean the linear16 sums, apply the golden
+    /// BT.2020→sRGB linear matrix + clamp, then the sRGB OETF. `lastCropArea` is
+    /// the per-tick spatial area (side/16)²; `emit16` uses `lastCropArea*4` (×4
+    /// temporal ticks) as the exact pixel `count`. `sumsAreLinear = true` selects
+    /// that path over the gamma-byte `s4_sums_to_srgb8`.
     func poolSums64(fromX420 pixelBuffer: CVPixelBuffer) -> [UInt64]? {
         guard CVPixelBufferGetPixelFormatType(pixelBuffer)
                 == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange else { return nil }
@@ -214,7 +224,8 @@ final class ColorHead {
             }
         }
         guard rc == 0 else { return nil }
-        lastCropArea = 0
+        lastCropArea = Int64(side / 16) * Int64(side / 16)
+        sumsAreLinear = true // linear16 BT.2020 → s4_sums_bt2020_to_srgb8 in emit16
         return sums
     }
 
@@ -307,9 +318,14 @@ final class ColorHead {
         // area per bin = (cropSide/16)² pixels × 4 ticks of temporal pooling.
         if lastCropArea > 0 {
             var gct = [UInt8](repeating: 0, count: 768)
+            let count = lastCropArea * 4 // spatial area × 4 temporal ticks = pixels/bin
             let rc = frame16.withUnsafeBufferPointer { sums in
                 gct.withUnsafeMutableBufferPointer { out in
-                    s4_sums_to_srgb8(sums.baseAddress, 16, lastCropArea * 4, out.baseAddress)
+                    sumsAreLinear
+                        // linear16 BT.2020 measurement sums → gamut hop + inverse-EOTF
+                        ? s4_sums_bt2020_to_srgb8(sums.baseAddress, 16, count, out.baseAddress)
+                        // gamma sRGB8 byte sums → round-half-up mean
+                        : s4_sums_to_srgb8(sums.baseAddress, 16, count, out.baseAddress)
                 }
             }
             if rc == 0 { latestGCT = gct }
@@ -323,6 +339,68 @@ final class ColorHead {
                 slotHistory[slot].removeFirst()
             }
         }
+    }
+
+    // MARK: - The display realization (LIVE-LADDER preview, Feature.liveLadder)
+
+    /// Realize the current 32-rung and 16-rung sums into direct sRGB8 RGB tiles for
+    /// the live inverted-pyramid preview — the inverse-EOTF kernel the header names
+    /// (`s4_sums_bt2020_to_srgb8` / `s4_sums_to_srgb8`, `Spec.RadiometricRealize`)
+    /// applied at the 32² and 16² rungs (not just the 16² GCT `emit16` already does).
+    ///
+    /// Each rung is area-meaned over its exact pixel `count`, matching `emit16`'s
+    /// `lastCropArea*4` for the 16-rung: the 16-bin pools (side/16)² spatial pixels ×
+    /// 4 temporal ticks = `lastCropArea*4`; the 32-bin pools (side/32)² × 2 ticks =
+    /// `lastCropArea/2`. Linear x420 sums realize via the BT.2020 gamut-hop kernel;
+    /// gamma-byte sums (32BGRA feed) via `s4_sums_to_srgb8`. Nil until both rungs
+    /// exist. Display-only — no GIF byte depends on it (the burst path is untouched).
+    func realizeLadderSrgb8() -> (rgb32: [SIMD3<UInt8>], rgb16: [SIMD3<UInt8>])? {
+        guard lastCropArea > 0, let l32 = latest32, let l16 = latest16 else { return nil }
+        // INVARIANT: lastCropArea == (crop.side/16)² — the 16-RUNG per-bin spatial area (set in
+        // poolSums64). The rung counts below depend on it; re-basing lastCropArea would silently
+        // mis-scale both by a constant factor (×4 / ×256). Balance = spatial pixels × temporal ticks:
+        let count32 = lastCropArea / 2   // (crop.side/32)² spatial × 2 temporal ticks = S²/512
+        let count16 = lastCropArea * 4   // (crop.side/16)² spatial × 4 temporal ticks = S²/64
+        guard count32 > 0 else { return nil }
+        guard let rgb32 = realizeRung(l32, side: 32, count: count32),
+              let rgb16 = realizeRung(l16, side: 16, count: count16) else { return nil }
+        return (rgb32, rgb16)
+    }
+
+    /// One rung of `realizeLadderSrgb8`: sums → sRGB8 via the inverse-EOTF kernel
+    /// (selected by `sumsAreLinear`, exactly as `emit16`), packed to SIMD3<UInt8>.
+    private func realizeRung(_ sums: [UInt64], side: Int, count: Int64) -> [SIMD3<UInt8>]? {
+        var out = [UInt8](repeating: 0, count: side * side * 3)
+        let rc = sums.withUnsafeBufferPointer { s in
+            out.withUnsafeMutableBufferPointer { o in
+                sumsAreLinear
+                    ? s4_sums_bt2020_to_srgb8(s.baseAddress, Int32(side), count, o.baseAddress)
+                    : s4_sums_to_srgb8(s.baseAddress, Int32(side), count, o.baseAddress)
+            }
+        }
+        guard rc == 0 else { return nil }
+        return (0..<(side * side)).map {
+            SIMD3<UInt8>(out[$0 * 3], out[$0 * 3 + 1], out[$0 * 3 + 2])
+        }
+    }
+
+    /// OPTICAL-EV single-frame realize (NO temporal pooling): pool ONE frame's 64² linear
+    /// sums spatially down to `side` (64/32/16) and realize to sRGB8. Unlike
+    /// `realizeLadderSrgb8`, each optical exposure is a DISTINCT frame, so there is no temporal
+    /// mixing — the per-bin count is purely spatial, `(crop.side/side)²`. Same inverse-EOTF
+    /// kernel selection (`sumsAreLinear`) as `emit16`. Display-only; the burst path is untouched.
+    func realizeSingleFrame(sums64: [UInt64], side: Int) -> [SIMD3<UInt8>]? {
+        guard side == 64 || side == 32 || side == 16 else { return nil }
+        guard lastCropArea > 0 else { return nil }
+        var sums = sums64
+        var s = 64
+        while s > side { sums = ColorHead.poolSpatial2(sums, side: s); s /= 2 }
+        // Per-bin spatial pixel count = (crop.side/side)², derived from the ACTUAL crop the sums
+        // were pooled over (`lastCropArea == (crop.side/16)²`, set in poolSums64), NOT the instance
+        // `cropSide` — so a `crop.side < cropSide` (camera min-dim below cropSide) stays balanced:
+        // (crop.side/side)² = lastCropArea·(16/side)² = lastCropArea·256/side², exact for 16/32/64.
+        let count = lastCropArea * 256 / Int64(side * side)
+        return realizeRung(sums, side: side, count: count)
     }
 
     /// 2×2 spatial block-sum: side×side×3 sums → (side/2)×(side/2)×3.

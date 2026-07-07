@@ -142,6 +142,13 @@ library
         SixFour.Spec.LabBleed
         SixFour.Spec.ChoiceTraining
         SixFour.Spec.FidelityLadder
+        SixFour.Spec.RadiometricRealize
+        SixFour.Spec.ColorTime
+        SixFour.Spec.GaussianLadder
+        SixFour.Spec.EventEncoding
+        SixFour.Spec.Gif89aDecode
+        SixFour.Spec.GeneDensity
+        SixFour.Spec.GeneDensity3D
         SixFour.Spec.CubeBrush
         SixFour.Spec.MixSKI
         SixFour.Spec.AxisSKI
@@ -149,6 +156,8 @@ library
         SixFour.Spec.CaptureDiversity
         SixFour.Spec.MultiScaleFusion
         SixFour.Spec.RenderSelect
+        SixFour.Spec.HaltDepth
+        SixFour.Spec.LabTransition
         SixFour.Spec.MultiScaleIntegrate
         SixFour.Spec.OpponentDerivation
         SixFour.Spec.YinYangCNN
@@ -531,6 +540,15 @@ test-suite spec-tests
         Properties.LabBleed
         Properties.ChoiceTraining
         Properties.FidelityLadder
+        Properties.RadiometricRealize
+        Properties.ColorTime
+        Properties.GaussianLadder
+        Properties.EventEncoding
+        Properties.Gif89aDecode
+        Properties.HaltDepth
+        Properties.LabTransition
+        Properties.GeneDensity
+        Properties.GeneDensity3D
         Properties.CubeBrush
         Properties.MixSKI
         Properties.AxisSKI

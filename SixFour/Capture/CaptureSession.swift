@@ -110,6 +110,31 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// the receiver is responsible for dispatching UI updates.
     var previewCallback: (@Sendable (OKLabTile) -> Void)?
 
+    /// LIVE-LADDER (Feature.liveLadder only): a persistent preview-side ColorHead that
+    /// ingests the SAME idle x420 preview buffers as `previewCallback` (on `delegateQueue`,
+    /// at the same 10 fps throttle) and realizes its 32²/16² rungs to sRGB8 for the
+    /// inverted-pyramid preview. Constructed in `startPreview` when the flag is on, nil'd
+    /// on `stopPreview`. INDEPENDENT of the per-burst `colorHead` (line 67): this one runs
+    /// only while idle (`collecting == false`); the burst head runs only while collecting.
+    /// nil ⇒ the whole live-ladder path is statically inert and the preview is exactly
+    /// today's in-view pooling.
+    private var previewColorHead: ColorHead?
+
+    /// The realized-ladder twin of `previewCallback` (Feature.liveLadder only): the
+    /// 32² (1024 RGB) and 16² (256 RGB) realized tiles, fired on `delegateQueue` after
+    /// each throttled preview ingest. nil (or the flag off) keeps the shipped path
+    /// untouched. Display-only — no GIF byte depends on it.
+    var ladderCallback: (@Sendable ([SIMD3<UInt8>], [SIMD3<UInt8>]) -> Void)?
+
+    /// OPTICAL-EV (Feature.opticalEV only): the single-camera exposure-bracket driver + its
+    /// display-only ColorHead. Constructed in `startPreview` when the flag is on, fed every
+    /// idle preview frame in `captureOutput`, torn down in `stopPreview`. nil ⇒ inert. The
+    /// callback delivers one realized rung tile (side ∈ {64,32,16}) per SETTLED real exposure;
+    /// fires on `delegateQueue`, receiver marshals to the main actor.
+    private var exposureDriver: ExposureBracketDriver?
+    private var opticalColorHead: ColorHead?
+    var opticalTileCallback: (@Sendable (Int, [SIMD3<UInt8>]) -> Void)?
+
     /// Callback fired once per captured frame DURING a burst (`collecting ==
     /// true`), with the just-collected tile and the running count
     /// (`1...targetFrameCount`). Runs on the Metal completion queue (like
@@ -548,12 +573,38 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     // MARK: - Run / stop
 
     func startPreview() {
+        // LIVE-LADDER (Feature.liveLadder): construct the persistent preview head BEFORE
+        // frames flow. Display-only, so a smaller crop (256) halves the per-frame
+        // colorimetry + the persistent rgb10Scratch vs the burst head's crop. OFF ⇒ nil
+        // ⇒ the ladder ingest in `tryEnqueuePreviewFrame` is statically inert.
+        if Feature.liveLadder, previewColorHead == nil {
+            previewColorHead = ColorHead(cropSide: 256)
+        }
+        // OPTICAL-EV (Feature.opticalEV): build the real exposure-bracket driver + its
+        // display-only head BEFORE frames flow. OFF ⇒ both nil ⇒ the optical branch in
+        // captureOutput is statically inert and the normal preview path runs unchanged.
+        if Feature.opticalEV, exposureDriver == nil, let device {
+            exposureDriver = ExposureBracketDriver(device: device)
+            opticalColorHead = ColorHead(cropSide: 256)
+        }
+        // One-time device capability report for optical-EV bracketing (Console: "SF-probe").
+        // Pure query, real-device only; tells us this iPhone's actual shutter/ISO envelope so
+        // the duration-bracket driver calibrates to real limits, not guessed ones.
+        NSLog("%@", probeCameraCapabilities())
         Task.detached { [session] in
             if !session.isRunning { session.startRunning() }
         }
     }
 
     func stopPreview() {
+        // Drop the preview head on `delegateQueue` (its only mutation site) so a nil
+        // never races an in-flight ingest.
+        delegateQueue.async { [weak self] in
+            self?.previewColorHead = nil
+            self?.exposureDriver?.end()   // restore continuous AE
+            self?.exposureDriver = nil
+            self?.opticalColorHead = nil
+        }
         Task.detached { [session] in
             if session.isRunning { session.stopRunning() }
         }
@@ -979,6 +1030,19 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
         // `collecting == true` we skip preview entirely to keep the
         // GPU free for the burst pipeline.
         if !collecting {
+            // OPTICAL-EV: when on, the exposure-bracket driver OWNS the preview — it cycles
+            // real exposures and routes each settled frame to its tile. The normal index
+            // preview is skipped (its per-frame exposure would flicker through the bracket).
+            // onFrame() must be called every frame to advance the settle counter; it returns
+            // a rung only on the settled frame of each exposure.
+            if Feature.opticalEV, let driver = exposureDriver, let ch = opticalColorHead {
+                if let rung = driver.onFrame(),
+                   let sums = ch.poolSums64(fromX420: pixelBuffer),
+                   let tile = ch.realizeSingleFrame(sums64: sums, side: rung.side) {
+                    opticalTileCallback?(rung.side, tile)
+                }
+                return
+            }
             tryEnqueuePreviewFrame(pixelBuffer: pixelBuffer)
             return
         }
@@ -1112,6 +1176,19 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
             // Preview failures are non-fatal — burst capture still
             // works. Log once per error to avoid spam.
             Self.log.debug("[capture] preview submit failed: \(String(describing: error), privacy: .public)")
+        }
+
+        // LIVE-LADDER (Feature.liveLadder): ingest the SAME x420 buffer into the persistent
+        // preview head at the same throttle, realize the 32²/16² rungs, and publish them.
+        // Guarded on `previewColorHead != nil` so with the flag OFF (head nil) nothing runs
+        // — `ladderCallback` never fires and the pyramid stays the in-view pooling verbatim.
+        // Independent of the per-burst `colorHead`; runs only on this idle preview path.
+        if let ch = previewColorHead, let ladder = ladderCallback,
+           let sums = ch.poolSums64(fromX420: pixelBuffer) {
+            ch.ingest(sums)
+            if let (rgb32, rgb16) = ch.realizeLadderSrgb8() {
+                ladder(rgb32, rgb16)
+            }
         }
     }
 }

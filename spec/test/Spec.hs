@@ -132,6 +132,15 @@ import qualified Properties.PullField as PullField
 import qualified Properties.LabBleed as LabBleed
 import qualified Properties.ChoiceTraining as ChoiceTraining
 import qualified Properties.FidelityLadder as FidelityLadder
+import qualified Properties.RadiometricRealize as RadiometricRealize
+import qualified Properties.ColorTime         as ColorTime
+import qualified Properties.GaussianLadder    as GaussianLadder
+import qualified Properties.EventEncoding     as EventEncoding
+import qualified Properties.Gif89aDecode      as Gif89aDecode
+import qualified Properties.HaltDepth         as HaltDepth
+import qualified Properties.LabTransition     as LabTransition
+import qualified Properties.GeneDensity       as GeneDensity
+import qualified Properties.GeneDensity3D     as GeneDensity3D
 import qualified Properties.CubeBrush as CubeBrush
 import qualified Properties.MixSKI as MixSKI
 import qualified Properties.AxisSKI as AxisSKI
@@ -364,6 +373,15 @@ main = defaultMain $ testGroup "sixfour-spec"
   , LabBleed.tests
   , ChoiceTraining.tests
   , FidelityLadder.tests
+  , RadiometricRealize.tests
+  , ColorTime.tests
+  , GaussianLadder.tests
+  , EventEncoding.tests
+  , Gif89aDecode.tests
+  , HaltDepth.tests
+  , LabTransition.tests
+  , GeneDensity.tests
+  , GeneDensity3D.tests
   , CubeBrush.tests
   , MixSKI.tests
   , AxisSKI.tests

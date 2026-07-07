@@ -228,6 +228,30 @@ final class CaptureViewModel {
     /// screen's 16×16 palette grid + the 4×4 Haar shutter (the abstraction cascade,
     /// ADR-5). Empty until the first throttled compute lands.
     var livePalette: [SIMD3<UInt8>] = []
+
+    /// LIVE-LADDER (Feature.liveLadder only): the realized 32² (1024 RGB) and 16² (256
+    /// RGB) ladder rungs from the persistent preview `ColorHead`, published from the
+    /// session's `ladderCallback`. `SurfaceView` folds these into σ so
+    /// `InvertedPyramidField` reads the REAL device ladder instead of view-pooling the
+    /// 64² tile. Empty while the flag is off (the callback never fires) ⇒ the pyramid
+    /// falls back to today's in-view pooling. Display-only.
+    var previewLadder32: [SIMD3<UInt8>] = []
+    var previewLadder16: [SIMD3<UInt8>] = []
+
+    /// OPTICAL-EV (Feature.opticalEV only): the three REAL-exposure rung tiles from the
+    /// exposure-bracket driver (64²=base / 32²=+1 / 16²=+2 stops), each a distinct optical
+    /// exposure realized to sRGB8, published from the session's `opticalTileCallback`.
+    /// `SurfaceView` folds these into σ. Empty while the flag is off. Display-only.
+    var opticalTile64: [SIMD3<UInt8>] = []
+    var opticalTile32: [SIMD3<UInt8>] = []
+    var opticalTile16: [SIMD3<UInt8>] = []
+
+    /// MULTISCALE: the per-region render DEPTH field (region-major `(gridSide)³`, one depth 0/1/2
+    /// per 4×4×4 region) the always-on multiscale render (`MultiScaleLadder.renderSelect`) consumes,
+    /// produced from the burst's certified halt orders via the spec-mirrored `HaltDepthBridge`.
+    /// Empty until the first burst drains its `bandHeadCallback`. The allocator output: motion → 64³,
+    /// stillness → 16³. (Not yet fed to the renderer — that is the encode-bridge wiring.)
+    var haltDepthField: [Int32] = []
     /// Throttle for `livePalette` (~3 fps; the maximin-256 is cheap but not free).
     @ObservationIgnored nonisolated(unsafe) private var lastLivePaletteNanos: UInt64 = 0
 
@@ -445,6 +469,42 @@ final class CaptureViewModel {
                 }
             }
 
+            // LIVE-LADDER (Feature.liveLadder only): the realized 32²/16² ladder rungs.
+            // Fires on the session's delegateQueue; marshal to the main actor to publish.
+            // Off ⇒ the session never constructs its preview head, so this never fires.
+            session.ladderCallback = { [weak self] rgb32, rgb16 in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.previewLadder32 = rgb32
+                    self.previewLadder16 = rgb16
+                }
+            }
+
+            // OPTICAL-EV (Feature.opticalEV only): one realized rung tile per settled real
+            // exposure (side ∈ {64,32,16}). Fires on delegateQueue; marshal to the main actor.
+            // Off ⇒ the session never builds the driver, so this never fires.
+            session.opticalTileCallback = { [weak self] side, rgb in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    switch side {
+                    case 64: self.opticalTile64 = rgb
+                    case 32: self.opticalTile32 = rgb
+                    default: self.opticalTile16 = rgb
+                    }
+                }
+            }
+
+            // MULTISCALE (halt→depth): the per-slot certified order (haltFloor, 256 = the 16×16
+            // region face) drained at burst end → the per-region depth field via the spec-mirrored
+            // `HaltDepthBridge` (order≤1→16³, =2→32³, ≥3→64³). Fires on delegateQueue; marshal to
+            // publish. The band-head training result is not consumed here.
+            session.bandHeadCallback = { [weak self] _, haltOrders, _ in
+                let g = Int(Double(haltOrders.count).squareRoot())
+                guard g > 0, g * g == haltOrders.count else { return }
+                let field = HaltDepthBridge.depthField(fromHaltOrders: haltOrders, gridSide: g)
+                Task { @MainActor [weak self] in self?.haltDepthField = field }
+            }
+
             NSLog("SF-H: starting preview")
             session.startPreview()                  // already Task.detached internally
             NSLog("SF-I: bootstrap complete -> idle")
@@ -643,6 +703,12 @@ final class CaptureViewModel {
         engines: PaletteEngines,
         summary: String
     ) async throws -> RenderResult {
+        // MULTISCALE (Feature.multiScaleRender): swap the uniform 64³ tiles for the halt-floor
+        // adaptive multiscale cube (fused via s4_render_select). Falls back to the uniform tiles
+        // when off or the depth field is unavailable/wrong-shape. The render kernels are unchanged.
+        let renderTiles: [OKLabTile] = Feature.multiScaleRender
+            ? (MultiScaleRender.fusedTiles(from: tiles, depthField: haltDepthField) ?? tiles)
+            : tiles
         let baseURL = makeOutputURL(extension: "gif")
         let sheetURL = baseURL.deletingPathExtension().appendingPathExtension("contact.png")
 
@@ -652,7 +718,7 @@ final class CaptureViewModel {
         if settings.useDeterministicCore {
             do {
                 return try await renderDeterministic(
-                    tiles: tiles, dither: dither, baseURL: baseURL, sheetURL: sheetURL, summary: summary
+                    tiles: renderTiles, dither: dither, baseURL: baseURL, sheetURL: sheetURL, summary: summary
                 )
             } catch {
                 deterministicStage = nil
@@ -672,7 +738,7 @@ final class CaptureViewModel {
 
         let renderer = GIFRenderer(dither: dither, engines: engines)
         let report = try await Task.detached(priority: .userInitiated) {
-            try await renderer.render(tiles: tiles, to: baseURL, fps: SFTheme.gifFrameRate, onPhase: onPhase)
+            try await renderer.render(tiles: renderTiles, to: baseURL, fps: SFTheme.gifFrameRate, onPhase: onPhase)
         }.value
 
         // Contact sheet is best-effort.

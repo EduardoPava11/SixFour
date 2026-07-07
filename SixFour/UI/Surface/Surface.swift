@@ -103,6 +103,19 @@ final class Surface {
     var previewTile: [UInt8] = []
     var previewPalette: [SIMD3<UInt8>] = []
 
+    /// LIVE-LADDER (Feature.liveLadder only): the realized 32² (1024) and 16² (256) RGB
+    /// ladder tiles from the persistent preview `ColorHead`, LOOK-graded like
+    /// `previewPalette`. `InvertedPyramidField` reads these for its 32²/16² rungs when the
+    /// flag is on; empty (the flag off ⇒ the callback never fires) ⇒ the pyramid falls
+    /// back to in-view `poolSpatial2`. Display-only; not a per-capture stash to clear.
+    var previewTile32: [SIMD3<UInt8>] = []
+    var previewTile16: [SIMD3<UInt8>] = []
+    /// OPTICAL-EV (Feature.opticalEV only): three REAL-exposure rung tiles, each a distinct
+    /// optical exposure realized to sRGB8 (64²=base / 32²=+1 / 16²=+2 stops). Empty while off.
+    var opticalTile64: [SIMD3<UInt8>] = []
+    var opticalTile32: [SIMD3<UInt8>] = []
+    var opticalTile16: [SIMD3<UInt8>] = []
+
     /// The Z₆₄ playback cursor — the current frame `0..<64`. Advanced by κ each tick.
     var cursor: Int = 0
 

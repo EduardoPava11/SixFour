@@ -475,6 +475,19 @@ int32_t s4_pool_sums_linear_srgb8(const uint8_t *rgb, int32_t side,
 int32_t s4_pool_sums_linear_hlg10(const uint16_t *rgb10, int32_t side,
                                   int32_t out_side, uint64_t *out_sums);
 
+// INVERSE-EOTF REALIZATION: linear16 bin sums -> sRGB8. Area-mean each linear16
+// bin sum (round-half-up over `count` px), then sRGB OETF encode. Refuses
+// count<=0 and mean>65535 (mirrors s4_sums_to_srgb8's area<=0 / v>255 guards).
+// s4_linear16_to_srgb8: the scalar encode = exact quantizer-inverse of the
+// srgb_to_linear16 decode. s4_sums_to_srgb8_linear: sRGB-PRIMARY feeds. The x420
+// feed is BT.2020, so s4_sums_bt2020_to_srgb8 applies the golden BT.2020->sRGB
+// linear matrix + [0,65535] clamp BEFORE the OETF (grey preserved bit-exactly).
+uint8_t s4_linear16_to_srgb8(uint16_t lin);
+int32_t s4_sums_to_srgb8_linear(const uint64_t *sums, int32_t out_side,
+                                int64_t count, uint8_t *out_rgb);
+int32_t s4_sums_bt2020_to_srgb8(const uint64_t *sums, int32_t out_side,
+                                int64_t count, uint8_t *out_rgb);
+
 // ── KINEMATIC CERTIFICATION (kinematic.zig) ──────────────────────────────────
 // Exact observables of a slot trajectory f(0..n-1) (one palette particle's
 // channel over the capture window); the PonderNet halting-prior floor.

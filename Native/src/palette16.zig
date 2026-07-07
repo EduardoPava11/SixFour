@@ -363,6 +363,161 @@ pub export fn s4_pool_sums_linear_hlg10(
     return S4_RC_OK;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// THE INVERSE-EOTF REALIZATION: linear16 bin sums -> sRGB8 (Spec.RadiometricRealize).
+//
+// The measurement path leaves bin sums in LINEAR light on the 65535=1.0 scale;
+// s4_sums_to_srgb8 is byte-sum-only and refuses them. These kernels close that
+// path: area-MEAN each linear16 bin sum (round-half-up over `count` pixels),
+// then inverse-EOTF ENCODE the linear mean to an sRGB 8-bit code. The gamma-byte
+// realization s4_sums_to_srgb8 is the sibling; this differs only by the encode.
+//
+// ENCODE = one transfer, 8-bit quantization. srgb_encode_thresh16 is the sRGB
+// OETF quantizer-boundary table: thresh[0]=0; for v in 1..255,
+//   thresh[v] = round( srgbToLinear((v-0.5)/255) * 65535 )
+// with srgbToLinear the SAME inverse EOTF that generated srgb_to_linear16 above
+// (Spec.Color.srgbToLinear; c<=0.04045 -> c/12.92 else ((c+0.055)/1.055)^2.4).
+// s4_linear16_to_srgb8(lin) = largest v with thresh[v] <= lin, i.e. round-to-
+// nearest sRGB code in ENCODED space — the EXACT quantizer-inverse of the decode
+// golden: s4_linear16_to_srgb8(srgb_to_linear16[v]) == v for every v (the
+// round-trip LAW, Spec.RadiometricRealize lawEncodeInvertsEotf). It is NOT
+// round(encode·255) and NOT a binary search of srgb_to_linear16 (round-in-
+// linear); the boundary table is the perceptually-correct sRGB quantizer.
+//
+// PRIMARIES: the x420 feed is BT.2020 (ColorHead does BT.2020 Y'CbCr->R'G'B';
+// hlg_to_linear16 inverts only the HLG transfer, never the gamut). Feeding it
+// straight to the sRGB OETF would mis-hue every non-neutral colour, so
+// s4_sums_bt2020_to_srgb8 FIRST applies the golden Q15 BT.2020->sRGB(Rec.709)
+// linear matrix with a deterministic clamp to [0,65535] (in-gamut BT.2020 maps
+// OUT of the sRGB gamut, so the clamp is mandatory), THEN the sRGB OETF. The Q15
+// rows sum to EXACTLY 32768, so the neutral axis is a bit-exact fixed point
+// (grey stays grey). The sRGB-primary feed (s4_pool_sums_linear_srgb8) needs no
+// matrix and uses s4_sums_to_srgb8_linear directly. TONE note: HLG is scene-
+// referred; treating peak-normalized HLG linear directly as sRGB display-linear
+// (no inverse-OOTF / reference-white 0.75) is a deterministic display-referred
+// tone-map CHOICE, documented like the sRGB-feed 'tone-mapped, accepted' note.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// sRGB OETF quantizer-boundary table (linear16 lower bound per 8-bit code);
+/// literal golden, reference math in the section header. Monotone nondecreasing.
+pub const srgb_encode_thresh16 = [256]u16{
+        0,    10,    30,    50,    70,    90,   109,   129,   149,   169,   189,   209,   230,   252,   276,   300,
+      326,   353,   382,   411,   442,   475,   508,   543,   580,   618,   657,   697,   739,   783,   828,   874,
+      922,   971,  1022,  1075,  1129,  1184,  1241,  1300,  1360,  1422,  1485,  1550,  1617,  1685,  1755,  1826,
+     1900,  1975,  2051,  2130,  2210,  2292,  2375,  2460,  2547,  2636,  2727,  2819,  2914,  3010,  3107,  3207,
+     3309,  3412,  3517,  3624,  3733,  3844,  3957,  4071,  4188,  4306,  4427,  4549,  4673,  4800,  4928,  5058,
+     5190,  5325,  5461,  5599,  5739,  5881,  6026,  6172,  6320,  6471,  6623,  6778,  6935,  7093,  7254,  7417,
+     7582,  7750,  7919,  8090,  8264,  8440,  8618,  8798,  8980,  9165,  9351,  9540,  9731,  9925, 10120, 10318,
+    10518, 10720, 10924, 11131, 11340, 11551, 11765, 11981, 12199, 12419, 12642, 12867, 13094, 13324, 13556, 13790,
+    14027, 14266, 14508, 14751, 14998, 15246, 15497, 15750, 16006, 16264, 16525, 16788, 17053, 17321, 17591, 17864,
+    18139, 18416, 18696, 18979, 19264, 19551, 19841, 20134, 20429, 20726, 21026, 21329, 21634, 21941, 22251, 22564,
+    22879, 23197, 23517, 23840, 24165, 24493, 24824, 25157, 25493, 25831, 26172, 26516, 26862, 27211, 27562, 27916,
+    28273, 28632, 28994, 29359, 29726, 30096, 30469, 30844, 31222, 31603, 31986, 32372, 32761, 33153, 33547, 33944,
+    34344, 34746, 35151, 35559, 35970, 36383, 36799, 37218, 37640, 38064, 38492, 38922, 39354, 39790, 40228, 40670,
+    41114, 41560, 42010, 42463, 42918, 43376, 43837, 44301, 44768, 45237, 45709, 46185, 46663, 47144, 47628, 48114,
+    48604, 49097, 49592, 50091, 50592, 51096, 51603, 52113, 52626, 53142, 53661, 54183, 54707, 55235, 55766, 56299,
+    56836, 57375, 57918, 58463, 59012, 59563, 60118, 60675, 61235, 61799, 62365, 62935, 63507, 64083, 64661, 65243,
+};
+
+/// The BT.2020 -> sRGB(Rec.709) linear 3x3 matrix in Q15 (row-major), golden.
+/// Each row sums to EXACTLY 32768, so the neutral axis is a bit-exact fixed
+/// point (Spec.RadiometricRealize lawGrayAxisPreserved).
+pub const bt2020_to_srgb_q15 = [9]i32{
+    54411, -19256, -2387,
+    -4081, 37123,  -274,
+    -595,  -3296,  36659,
+};
+
+/// Inverse-EOTF ENCODE: linear16 -> sRGB 8-bit code (largest v with
+/// srgb_encode_thresh16[v] <= lin). Exact quantizer-inverse of srgb_to_linear16.
+pub export fn s4_linear16_to_srgb8(lin: u16) u8 {
+    var v: u8 = 0;
+    var i: usize = 0;
+    while (i < 256) : (i += 1) {
+        if (srgb_encode_thresh16[i] <= lin) {
+            v = @intCast(i);
+        } else break;
+    }
+    return v;
+}
+
+/// One BT.2020 linear16 triple -> sRGB linear16 triple: the Q15 matrix with
+/// round-half (floor of (dot + 16384) / 32768 on i64) and a deterministic clamp
+/// to [0,65535]. Grey (r==g==b) is preserved bit-exactly by the 32768 row sums.
+fn bt2020ToSrgbLinear16(r: u16, g: u16, b: u16) [3]u16 {
+    const rr: i64 = r;
+    const gg: i64 = g;
+    const bb: i64 = b;
+    var out: [3]u16 = undefined;
+    var row: usize = 0;
+    while (row < 3) : (row += 1) {
+        const j = row * 3;
+        const dot: i64 = @as(i64, bt2020_to_srgb_q15[j]) * rr +
+            @as(i64, bt2020_to_srgb_q15[j + 1]) * gg +
+            @as(i64, bt2020_to_srgb_q15[j + 2]) * bb;
+        const scaled: i64 = @divFloor(dot + 16384, 32768);
+        const clamped: i64 = if (scaled < 0) 0 else if (scaled > 65535) 65535 else scaled;
+        out[row] = @intCast(clamped);
+    }
+    return out;
+}
+
+/// REALIZE sRGB-PRIMARY linear16 bin sums -> sRGB8 GCT bytes: area-mean each
+/// channel over `count` pixels (round-half-up), then s4_linear16_to_srgb8. The
+/// measurement-path twin of s4_sums_to_srgb8; same layout (out_side x out_side
+/// bins, row-major bin = slot, R,G,B per bin). For feeds whose primaries are
+/// already sRGB (s4_pool_sums_linear_srgb8). count<=0 refuses (the
+/// uninitialized-crop/black case). mean>65535 refuses (inputs were not linear16
+/// / wrong count) — the totality guard mirroring s4_sums_to_srgb8's v>255.
+pub export fn s4_sums_to_srgb8_linear(
+    sums: [*c]const u64,
+    out_side: i32,
+    count: i64,
+    out_rgb: [*c]u8,
+) i32 {
+    if (sums == null or out_rgb == null) return S4_RC_BAD_ARGS;
+    if (out_side <= 0 or count <= 0) return S4_RC_BAD_ARGS;
+    const o: usize = @intCast(out_side);
+    const n: u64 = @intCast(count);
+    var i: usize = 0;
+    while (i < o * o * 3) : (i += 1) {
+        const mean: u64 = (sums[i] + n / 2) / n;
+        if (mean > 65535) return S4_RC_BAD_ARGS;
+        out_rgb[i] = s4_linear16_to_srgb8(@intCast(mean));
+    }
+    return S4_RC_OK;
+}
+
+/// REALIZE BT.2020 linear16 bin sums -> sRGB8 GCT bytes (the x420 realization):
+/// per bin, area-mean the three channels over `count` (round-half-up), apply the
+/// golden BT.2020->sRGB linear matrix + clamp, then s4_linear16_to_srgb8 each.
+/// Same guards/layout as s4_sums_to_srgb8_linear; the gamut clamp means legal
+/// saturated BT.2020 colours never spuriously trip the mean>65535 refusal.
+pub export fn s4_sums_bt2020_to_srgb8(
+    sums: [*c]const u64,
+    out_side: i32,
+    count: i64,
+    out_rgb: [*c]u8,
+) i32 {
+    if (sums == null or out_rgb == null) return S4_RC_BAD_ARGS;
+    if (out_side <= 0 or count <= 0) return S4_RC_BAD_ARGS;
+    const o: usize = @intCast(out_side);
+    const n: u64 = @intCast(count);
+    var bin: usize = 0;
+    while (bin < o * o) : (bin += 1) {
+        const base = bin * 3;
+        const mr: u64 = (sums[base] + n / 2) / n;
+        const mg: u64 = (sums[base + 1] + n / 2) / n;
+        const mb: u64 = (sums[base + 2] + n / 2) / n;
+        if (mr > 65535 or mg > 65535 or mb > 65535) return S4_RC_BAD_ARGS;
+        const lin = bt2020ToSrgbLinear16(@intCast(mr), @intCast(mg), @intCast(mb));
+        out_rgb[base] = s4_linear16_to_srgb8(lin[0]);
+        out_rgb[base + 1] = s4_linear16_to_srgb8(lin[1]);
+        out_rgb[base + 2] = s4_linear16_to_srgb8(lin[2]);
+    }
+    return S4_RC_OK;
+}
+
 /// CAMERA-FACING pooling: pool an sRGB-encoded BGRA8 rect (the CVPixelBuffer
 /// 32BGRA layout: 4 bytes/px in memory order B,G,R,A; rows `stride` bytes
 /// apart) into out_side × out_side bins of R,G,B u64 sums, reading the square
