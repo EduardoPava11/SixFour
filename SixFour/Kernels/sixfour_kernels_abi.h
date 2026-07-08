@@ -60,6 +60,12 @@ uint32_t s4_probe(uint32_t x);
 typedef void (*S4LogCallback)(const uint8_t *msg, size_t len);
 void s4_set_log_callback(S4LogCallback cb);
 
+// Optional gate consulted BEFORE a log line is formatted: return 0 to drop the
+// line (the caller pays no formatting cost). No gate installed = every line
+// passes (the pre-gate behavior). Pass NULL to clear.
+typedef int32_t (*S4LogGate)(void);
+void s4_set_log_gate(S4LogGate gate);
+
 // Upper bound on the GIF89a byte length for a burst of `frame_count` frames,
 // each `side`×`side`, with `k`-entry local colour tables. 0 on a bad shape.
 size_t s4_gif_encode_burst_bound(int32_t frame_count, int32_t side, int32_t k);

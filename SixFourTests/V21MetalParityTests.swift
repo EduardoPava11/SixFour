@@ -73,12 +73,13 @@ struct V21MetalParityTests {
         let luma = try uniformLuma(pipe.device, side: src, value: 0x8000)
         let chroma = try uniformChroma(pipe.device, side: src / 2, cb: 0x8000, cr: 0x8000)
         let count = coarse * coarse * 3 * nLevels
-        let outBuf = try #require(pipe.device.makeBuffer(length: count * 4, options: [.storageModeShared]))
+        // u16 counts (PERF 2026-07-08): the kernel writes ushort, so the buffer is 2 B/cell.
+        let outBuf = try #require(pipe.device.makeBuffer(length: count * 2, options: [.storageModeShared]))
 
         try dispatch(pipe, luma: luma, chroma: chroma, outBuf: outBuf,
                      scale: scale, nLevels: nLevels, coarse: coarse, coarseFrame: 0)
 
-        let ptr = outBuf.contents().bindMemory(to: Int32.self, capacity: count)
+        let ptr = outBuf.contents().bindMemory(to: UInt16.self, capacity: count)
         var total = 0
         for v in 0 ..< coarse * coarse {
             for ch in 0 ..< 3 {
@@ -138,12 +139,13 @@ struct V21MetalParityTests {
         let luma = try uniformLuma(pipe.device, side: src, value: 0x5000)     // mid-ish, likely between levels
         let chroma = try uniformChroma(pipe.device, side: src / 2, cb: 0x8000, cr: 0x8000)
         let count = coarse * coarse * 3 * nLevels
-        let outBuf = try #require(pipe.device.makeBuffer(length: count * 4, options: [.storageModeShared]))
+        // u16 counts (PERF 2026-07-08): 2 B/cell; cell mass scale²·budget = 64 ≪ 65535.
+        let outBuf = try #require(pipe.device.makeBuffer(length: count * 2, options: [.storageModeShared]))
 
         try dispatchSoft(pipe, luma: luma, chroma: chroma, outBuf: outBuf,
                          scale: scale, nLevels: nLevels, coarse: coarse, coarseFrame: 0, budget: budget)
 
-        let ptr = outBuf.contents().bindMemory(to: Int32.self, capacity: count)
+        let ptr = outBuf.contents().bindMemory(to: UInt16.self, capacity: count)
         var total = 0
         let cellMass = scale * scale * Int(budget)
         for v in 0 ..< coarse * coarse {
@@ -174,16 +176,16 @@ struct V21MetalParityTests {
         let chroma = try uniformChroma(pipe.device, side: src / 2, cb: 0x8000, cr: 0x8000)
         // Allocate to our small coarse dims directly (makeV21HistBuffer is sized to the 64 tile).
         let count = frames * coarse * coarse * 3 * nLevels
-        let outBuf = try #require(pipe.device.makeBuffer(length: count * 4, options: [.storageModeShared]))
+        let outBuf = try #require(pipe.device.makeBuffer(length: count * 2, options: [.storageModeShared]))
         for t in 0 ..< frames {
             try dispatch(pipe, luma: luma, chroma: chroma, outBuf: outBuf,
                          scale: scale, nLevels: nLevels, coarse: coarse, coarseFrame: t)
         }
-        // Pool over t into [coarse², 3, nLevels].
+        // Pool over t into [coarse², 3, nLevels] — widening u16 → Int32 like poolV21Counts.
         let spatial = coarse * coarse * 3 * nLevels
         var pooled = [Int32](repeating: 0, count: spatial)
-        let ptr = outBuf.contents().bindMemory(to: Int32.self, capacity: count)
-        for t in 0 ..< frames { for i in 0 ..< spatial { pooled[i] &+= ptr[t * spatial + i] } }
+        let ptr = outBuf.contents().bindMemory(to: UInt16.self, capacity: count)
+        for t in 0 ..< frames { for i in 0 ..< spatial { pooled[i] &+= Int32(ptr[t * spatial + i]) } }
 
         for v in 0 ..< coarse * coarse {
             for ch in 0 ..< 3 {
@@ -197,13 +199,13 @@ struct V21MetalParityTests {
     /// `poolV21Counts` sums the t slices exactly (pure-logic check, no GPU).
     @Test func poolV21CountsSumsSlices() throws {
         let pipe = try MetalPipeline()
-        // tileSide 1, nLevels 2, frames 2 -> spatial = 1·1·3·2 = 6, buffer = 12 Int32.
+        // tileSide 1, nLevels 2, frames 2 -> spatial = 1·1·3·2 = 6, buffer = 12 UInt16.
         let frames = 2, nLevels = 2, tileSide = 1
         let spatial = tileSide * tileSide * 3 * nLevels
-        let buf = try #require(pipe.device.makeBuffer(length: frames * spatial * 4, options: [.storageModeShared]))
-        let p = buf.contents().bindMemory(to: Int32.self, capacity: frames * spatial)
-        let frame0: [Int32] = [1, 0, 2, 0, 3, 0]
-        let frame1: [Int32] = [0, 1, 0, 2, 0, 3]
+        let buf = try #require(pipe.device.makeBuffer(length: frames * spatial * 2, options: [.storageModeShared]))
+        let p = buf.contents().bindMemory(to: UInt16.self, capacity: frames * spatial)
+        let frame0: [UInt16] = [1, 0, 2, 0, 3, 0]
+        let frame1: [UInt16] = [0, 1, 0, 2, 0, 3]
         for i in 0 ..< spatial { p[i] = frame0[i]; p[spatial + i] = frame1[i] }
         let pooled = MetalPipeline.poolV21Counts(buffer: buf, frames: frames, tileSide: tileSide, nLevels: nLevels)
         #expect(pooled == [1, 1, 2, 2, 3, 3])

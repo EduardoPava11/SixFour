@@ -148,6 +148,20 @@ targets:
           # resources — gamma_lut.bin would collide with SixFour/Resources/gamma_lut.bin
           # at the bundle root ("Multiple commands produce").
           - Kernels/LUTGoldens
+          # PERF-MAP §3.5 Batch 0 (2026-07-08): dead weight OUT of the app binary,
+          # files KEPT on disk (goldens/codegen intact; reversible by deleting a
+          # line). Every entry mechanically verified ZERO-REFERENCE across BOTH
+          # SixFour/ and SixFourTests/ (type + top-level declarations) — the test
+          # bundle is TEST_HOST-hosted, so an app-target exclude removes the symbol
+          # from @testable import too; anything a test references stays IN.
+          - Generated/DerivationLogGolden.swift
+          - Generated/Ed25519Golden.swift
+          - Generated/GeneHashGolden.swift
+          - Generated/Sha512Golden.swift
+          - Generated/SigChainGolden.swift
+          - Capture/FrameBuffer.swift
+          - Encoder/NetSynth256.swift
+          - UI/Components/CellGlyph.swift
     # Game Center + CloudKit entitlements — DISABLED 2026-07-02 for on-device
     # testing. The swap-economy code that needs them (GeneLibrary/: CreatorIdentity
     # GKLocalPlayer auth, GeneExchange CKContainer.default()) is dormant — nothing

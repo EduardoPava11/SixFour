@@ -19,7 +19,17 @@ import Metal
 /// on-simulator replication of the training-occurs proof (structured targets
 /// learn to ~zero; noise targets floor; the design's claims, running on the
 /// phone's own compute path).
-final class BandHeadTrainer {
+/// @unchecked Sendable: both stored properties are immutable after init and the
+/// Metal objects they hold (queue, PSO) are documented thread-safe; every
+/// `train` call's mutable state is local buffers. That is what lets `shared`
+/// cross into the per-burst detached task.
+final class BandHeadTrainer: @unchecked Sendable {
+
+    /// PERF 2026-07-08: the process-wide instance. The trainer used to be
+    /// constructed fresh inside every burst's detached task — a new GPUContext
+    /// (device + queue + library) and a PSO compile per capture for identical
+    /// state. nil where Metal compute is unavailable, exactly like `init?`.
+    static let shared = BandHeadTrainer()
 
     private struct BandHeadParams {
         var nPairs: UInt32

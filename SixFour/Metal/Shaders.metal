@@ -266,10 +266,16 @@ kernel void cropDownsampleLinearizeKernel(
 // (the same bounds discipline as `cropDownsampleLinearizeKernel`), which only
 // arises at the crop margin; the Zig assumes divisible, fully-in-bounds boxes.
 
+// PERF 2026-07-08: counts are u16, not i32 — this buffer is the app's largest
+// allocation (64 frames × 64² × 3 × 256 levels; i32 made it 768 MiB, u16 is
+// 384 MiB). Capacity: a (voxel,channel,level) cell holds at most scale² (hard)
+// or scale²·wBudget (soft) — ≤ 65535 for every scale ≤ 63 (crop min-dim ≤ ~4K;
+// the host guards and skips the dispatch above that). No atomics needed (one
+// thread owns its cells), so the narrower type is free.
 kernel void v21AccumulateHistKernel(
     texture2d<float, access::read> luma   [[texture(0)]],
     texture2d<float, access::read> chroma [[texture(1)]],
-    device int*    outCounts        [[buffer(0)]],
+    device ushort* outCounts        [[buffer(0)]],
     constant int2  &srcOffset       [[buffer(1)]],
     constant int   &scale           [[buffer(2)]],
     constant uchar &colorSpaceTag   [[buffer(3)]],
@@ -347,7 +353,7 @@ kernel void v21AccumulateHistKernel(
 kernel void v21AccumulateHistSoftKernel(
     texture2d<float, access::read> luma   [[texture(0)]],
     texture2d<float, access::read> chroma [[texture(1)]],
-    device int*    outCounts        [[buffer(0)]],
+    device ushort* outCounts        [[buffer(0)]],   // u16 counts — see the capacity note above
     constant int2  &srcOffset       [[buffer(1)]],
     constant int   &scale           [[buffer(2)]],
     constant uchar &colorSpaceTag   [[buffer(3)]],
@@ -403,9 +409,9 @@ kernel void v21AccumulateHistSoftKernel(
                 int vlo  = hi[ch] / wBudget;
                 int frac = hi[ch] % wBudget;
                 int chBase = cellBase + ch * nLevels;
-                outCounts[chBase + vlo] += (wBudget - frac);
+                outCounts[chBase + vlo] += (ushort)(wBudget - frac);
                 if (frac != 0 && vlo + 1 < nLevels) {
-                    outCounts[chBase + vlo + 1] += frac;
+                    outCounts[chBase + vlo + 1] += (ushort)frac;
                 }
             }
         }

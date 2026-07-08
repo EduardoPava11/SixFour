@@ -40,6 +40,12 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// silent ~2× interval. Counted here so the burst timing can report it.
     /// Only mutated on `delegateQueue`.
     private var droppedFrameCount = 0
+    /// TROUBLESHOOT (2026-07-08): per-burst CPU cost of the yin-yang ladder tick
+    /// (poolSums64 + ingest, synchronous on the delegate queue) — aggregated per
+    /// tick, logged ONCE in `finishBurst`, reset with the other burst counters.
+    private var tickCpuTotalUs: UInt64 = 0
+    private var tickCpuMaxUs: UInt64 = 0
+    private var tickCpuCount = 0
     private var pipelineRef: MetalPipeline?
     /// V2.1 (Feature.v21Capture only): the persistent burst histogram buffer the GPU accumulates the
     /// camera-box probability field into, one slice per frame. Allocated at burst start, pooled and
@@ -52,6 +58,14 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// is the BURST GENERATION the flow belongs to — the receiver MUST drop deliveries
     /// whose generation is not the current one (the stale-flow corruption gate).
     var flowCallback: (@Sendable (V21Flow?, Int) -> Void)?
+
+    /// The camera-box-field twin of `flowCallback` (perf 2026-07-08): the field
+    /// pool (~201M Int32 adds over the hist buffer) left the shutter seam — it
+    /// used to run synchronously in `finishBurst` before the continuation
+    /// resumed. The pooled `[y,x,3,256]` counts now arrive here (generation-
+    /// tagged) from the same detached task that owns the buffer, ahead of the
+    /// flow encode. `BurstResult.v21Counts` is nil by design, like `flow`.
+    var v21CountsCallback: (@Sendable ([Int32]?, Int) -> Void)?
 
     /// The somatic-train twin of `flowCallback` (QoL 2026-07-03): θ_up training left
     /// the burst seam — it used to run synchronously in `finishBurst`, holding the
@@ -857,30 +871,48 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             droppedFrameCount: droppedFrameCount
         )
         Self.log.debug("Burst complete: \(timing.summary)")
+        // [perf] the delegate-queue CPU spent inside the ladder tick, against the
+        // 50 ms tick budget — the first number to read when frames start dropping.
+        if tickCpuCount > 0 {
+            let meanMs = Double(tickCpuTotalUs) / Double(tickCpuCount) / 1000.0
+            let maxMs = Double(tickCpuMaxUs) / 1000.0
+            Self.log.log("[perf] yin-yang tick CPU: \(self.tickCpuCount) ticks, mean \(meanMs, format: .fixed(precision: 2)) ms, max \(maxMs, format: .fixed(precision: 2)) ms (50 ms tick budget)")
+        }
+        tickCpuTotalUs = 0
+        tickCpuMaxUs = 0
+        tickCpuCount = 0
         // V2.1 (gated): pool the camera-box histogram over t into [y,x,3,256]. Safe to read here: the
         // last frame's command buffer (which carried the 64th hist pass) has completed, and a single
         // queue runs command buffers in order, so all 64 slices are written.
-        var v21Counts: [Int32]?
+        // Recover the time axis OFF the seam: device-measured 2026-07-01, the flow
+        // encode took ~19 s and blocked burst → review the whole time. The detached
+        // task owns the per-frame buffer (freed with it); the flow arrives via
+        // `flowCallback` → the engine publishes it → σ folds it (export is the only
+        // consumer and builds its bundle late). `BurstResult.flow` is now always nil.
+        // PERF 2026-07-08: the field pool (~201M Int32 adds) moved into the SAME
+        // detached task — it was the largest remaining synchronous cost at the
+        // shutter seam. Counts arrive via `v21CountsCallback`; `BurstResult.v21Counts`
+        // is nil by design. The skip branch now drops the field along with the flow
+        // (same memory-over-completeness call: the review bench falls back to the
+        // proxy when counts are nil).
         if let buf = v21HistBuffer, let pipe = pipelineRef {
-            v21Counts = MetalPipeline.poolV21Counts(buffer: buf, frames: targetFrameCount,
-                                                    tileSide: pipe.tileSide, nLevels: v21Levels)
-            // Recover the time axis OFF the seam: device-measured 2026-07-01, the flow
-            // encode took ~19 s and blocked burst → review the whole time. The detached
-            // task owns the per-frame buffer (freed with it); the flow arrives via
-            // `flowCallback` → the engine publishes it → σ folds it (export is the only
-            // consumer and builds its bundle late). `BurstResult.flow` is now always nil.
             if flowJobActive {
                 // A previous burst's encode still holds its buffer: skip this one
                 // (memory over completeness; the export falls back to the proxy).
-                Self.log.log("V2.1 flow: SKIPPED (previous encode still running) — pooled field \(v21Counts == nil ? "nil" : "ok")")
+                Self.log.log("V2.1 flow: SKIPPED (previous encode still running) — field + flow dropped")
             } else {
                 flowJobActive = true
                 let job = V21FlowJob(buffer: buf)
                 let frames = targetFrameCount, tile = pipe.tileSide, levels = v21Levels
                 let callback = flowCallback
+                let countsCallback = v21CountsCallback
                 let queue = delegateQueue
-                Self.log.log("V2.1 flow: encoding async gen=\(generation) (pooled field \(v21Counts == nil ? "nil" : "ok"))")
+                Self.log.log("V2.1 flow: pooling + encoding async gen=\(generation)")
                 Task.detached(priority: .userInitiated) { [weak self] in
+                    let counts = MetalPipeline.poolV21Counts(buffer: job.buffer, frames: frames,
+                                                             tileSide: tile, nLevels: levels)
+                    Self.log.log("V2.1 field (async gen=\(generation)): pooled \(counts.count) counts")
+                    countsCallback?(counts, generation)
                     let flow = MetalPipeline.encodeV21Flow(buffer: job.buffer, frames: frames,
                                                            tileSide: tile, nLevels: levels)
                     Self.log.log("V2.1 flow (async gen=\(generation)): \(flow == nil ? "nil (encode failed)" : "encoded \(flow!.maps.count) frames")")
@@ -966,8 +998,8 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                     }
                     let mean = sy.reduce(0, +) / Float(sy.count)
                     let floorVar = sy.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Float(sy.count)
-                    let r = BandHeadTrainer()?.train(features: sf, targets: sy, featureWidth: w,
-                                                     steps: 2500, eta: 0.4)
+                    let r = BandHeadTrainer.shared?.train(features: sf, targets: sy, featureWidth: w,
+                                                          steps: 2500, eta: 0.4)
                     if let r {
                         let cut = floorVar > 0 ? Int(((1 - r.finalMSE / floorVar) * 100).rounded()) : 0
                         Self.log.log("YinYang S_t (async gen=\(generation)): \(sy.count) pairs, MSE \(r.initialMSE) → \(r.finalMSE) vs var-floor \(floorVar) (−\(cut)%), halt budget \(budget) (\(certifiable)/256 certifiable)")
@@ -992,7 +1024,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         pipelineRef = nil
         continuation = nil
         collecting = false
-        cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing, v21Counts: v21Counts,
+        cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing, v21Counts: nil,
                                             flow: nil, thetaUp: nil, intervalsUs: intervalsUs,
                                             sums16: recordSums16, gct: recordGCT))
     }
@@ -1105,10 +1137,16 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
         let seconds = CMTimeGetSeconds(ts)
         let nanos = UInt64(seconds * 1_000_000_000)
 
-        // Per-frame timing log.
+        // Per-frame timing (TROUBLESHOOT 2026-07-08): the routine cadence is
+        // summarized ONCE at finishBurst (computeTiming), so the old
+        // line-per-frame debug log paid 64 formatted lines a burst and buried
+        // the signal. Only the ANOMALY logs now: a gap ≥ 1.5× the target
+        // period is the late-frame event worth a line.
         if let prev = ptsSeconds.last {
             let dtMs = (seconds - prev) * 1000.0
-            Self.log.debug("frame \(self.submittedCount): +\(dtMs, format: .fixed(precision: 2)) ms")
+            if dtMs >= 1500.0 / Double(targetFps) {
+                Self.log.warning("[tick] LATE frame \(self.submittedCount): +\(dtMs, format: .fixed(precision: 2)) ms (target \(1000.0 / Double(self.targetFps), format: .fixed(precision: 0)) ms)")
+            }
         } else {
             Self.log.debug("frame 0: t0 = \(seconds, format: .fixed(precision: 6)) s")
         }
@@ -1152,8 +1190,17 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
         // pipeline is never kept waiting on CPU colorimetry. Synchronous on
         // delegateQueue — ColorHead's tick pairing needs frame order. A nil pool
         // (unexpected geometry) just starves the ladder; the floor ships.
-        if let ch = colorHead, let sums = ch.poolSums64(fromX420: pixelBuffer) {
-            ch.ingest(sums)
+        // TROUBLESHOOT: the tick's CPU cost aggregates here and logs ONCE per
+        // burst in finishBurst — per-tick logging is itself a hot-path cost.
+        if let ch = colorHead {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            if let sums = ch.poolSums64(fromX420: pixelBuffer) {
+                ch.ingest(sums)
+            }
+            let us = (DispatchTime.now().uptimeNanoseconds - t0) / 1000
+            tickCpuTotalUs += us
+            if us > tickCpuMaxUs { tickCpuMaxUs = us }
+            tickCpuCount += 1
         }
     }
 

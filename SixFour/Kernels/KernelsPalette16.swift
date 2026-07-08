@@ -368,9 +368,25 @@ public func s4_pool_sums_linear_hlg10(
     let o = Int(out_side)
     let q = s / o
 
-    for i in 0..<(s * s * 3) {
-        if rgb10[i] > 1023 { return S4_RC_OUT_OF_RANGE }
+    // The TOTAL pre-scan, SIMD16 lanes: range violation is a property of the
+    // frame MAXIMUM, so lane-wise pointwiseMax + one reduce sees every code
+    // with ~1/16th the scalar sweep's ops. Same refuse-before-write contract
+    // (no partial output); a scalar tail covers the last < 16 codes.
+    let n = s * s * 3
+    let rawCodes = UnsafeRawPointer(rgb10)
+    var maxLane = SIMD16<UInt16>()
+    var i = 0
+    while i + 16 <= n {
+        maxLane = pointwiseMax(
+            maxLane, rawCodes.loadUnaligned(fromByteOffset: i * 2, as: SIMD16<UInt16>.self))
+        i += 16
     }
+    var maxCode = maxLane.max()
+    while i < n {
+        maxCode = Swift.max(maxCode, rgb10[i])
+        i += 1
+    }
+    if maxCode > 1023 { return S4_RC_OUT_OF_RANGE }
 
     return hlg_to_linear16.withUnsafeBufferPointer { lutBuf -> Int32 in
         let lut = lutBuf.baseAddress!

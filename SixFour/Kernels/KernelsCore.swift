@@ -30,9 +30,17 @@
 /// `void (*)(const uint8_t *msg, size_t len)`.
 public typealias S4LogCallback = @convention(c) (UnsafePointer<UInt8>?, Int) -> Void
 
+/// C-ABI log gate, consulted BEFORE the message is formatted: return 0 to drop
+/// the line. The app wires its per-thread preview suppression here so a
+/// suppressed kernel call pays ZERO formatting cost (previously the string and
+/// its UTF-8 array were built per call and only then dropped inside the sink).
+public typealias S4LogGate = @convention(c) () -> Int32
+
 /// The one global the core owns. C-style: set-once-ish from the app's logging
 /// bootstrap; reads race benignly like the Zig `g_log_cb` did.
 nonisolated(unsafe) private var gLogCallback: S4LogCallback?
+/// Optional gate beside the sink; same benign-race contract.
+nonisolated(unsafe) private var gLogGate: S4LogGate?
 
 /// Install (or clear, with nil) the log sink. Kernels format nothing until a
 /// sink is set — logging must cost zero when unobserved.
@@ -41,11 +49,20 @@ public func s4_set_log_callback(_ cb: S4LogCallback?) {
     gLogCallback = cb
 }
 
+/// Install (or clear, with nil) the log gate. With no gate installed every
+/// line passes (the pre-gate behavior, so existing callers are unchanged).
+@_cdecl("s4_set_log_gate")
+public func s4_set_log_gate(_ gate: S4LogGate?) {
+    gLogGate = gate
+}
+
 /// Internal logging helper (the Zig `s4log` twin): formats only when a sink is
-/// installed, truncates to 256 bytes like the Zig fixed buffer.
+/// installed AND the gate (if any) passes, truncates to 256 bytes like the Zig
+/// fixed buffer.
 @inline(__always)
 func s4log(_ message: @autoclosure () -> String) {
     guard let cb = gLogCallback else { return }
+    if let gate = gLogGate, gate() == 0 { return }
     var bytes = Array(message().utf8)
     if bytes.count > 256 { bytes.removeLast(bytes.count - 256) }
     bytes.withUnsafeBufferPointer { cb($0.baseAddress, $0.count) }

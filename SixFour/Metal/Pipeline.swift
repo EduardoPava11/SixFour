@@ -145,7 +145,7 @@ final class MetalPipeline: @unchecked Sendable {
         completion: @escaping @Sendable (OKLabTile) -> Void
     ) throws {
         let geom = pixelBufferGeometry(pixelBuffer)
-        let intermediates = try allocateIntermediates()
+        let intermediates = try acquireIntermediates()
 
         guard let cmd = queue.makeCommandBuffer() else {
             throw MetalPipelineError.commandFailed
@@ -161,19 +161,32 @@ final class MetalPipeline: @unchecked Sendable {
         // V2.1 (gated): additively accumulate this frame's camera-box histogram into the burst buffer
         // at slice `coarseFrame`. Same source textures, crop offset, and scale as the box-average pass,
         // so the field is the box-average's distributional sibling. Off the shipped path when nil.
+        // GUARD (u16 counts): a cell holds ≤ scale²·wBudget, so scale ≥ 64 (an ~8K-class crop that no
+        // shipping format produces) would overflow the u16 carrier — skip the pass and say so ONCE
+        // rather than accumulate corrupt training data.
         if let v21 = v21Hist {
-            try encodeV21Hist(cmd: cmd, pixelBuffer: pixelBuffer, geom: geom,
-                              histBuffer: v21.buffer, coarseFrame: v21.coarseFrame, nLevels: v21.nLevels)
+            if geom.scale > 63 {
+                if !histScaleSkipLogged {
+                    histScaleSkipLogged = true
+                    Self.logger.error("[perf] v21 hist SKIPPED: scale \(geom.scale) > 63 would overflow the u16 counts (crop \(geom.cropSide)px) — field ships empty, proxy fallback")
+                }
+            } else {
+                try encodeV21Hist(cmd: cmd, pixelBuffer: pixelBuffer, geom: geom,
+                                  histBuffer: v21.buffer, coarseFrame: v21.coarseFrame, nLevels: v21.nLevels)
+            }
         }
 
         let tileSide = self.tileSide
-        let outBox = TextureBox(intermediates.output)
+        let box = IntermediatesBox(intermediates, pool: intermediatesPool)
         cmd.addCompletedHandler { _ in
             let tile = MetalPipeline.readbackOKLabTile(
-                texture: outBox.texture,
+                texture: box.set.output,
                 side: tileSide,
                 captureNanos: captureNanos
             )
+            // Recycle ONLY after the readback — the set is free for the next
+            // submit the moment its bytes are on the CPU.
+            box.recycle()
             completion(tile)
         }
 
@@ -212,7 +225,48 @@ final class MetalPipeline: @unchecked Sendable {
         let output: any MTLTexture
     }
 
-    private func allocateIntermediates() throws -> Intermediates {
+    /// PERF 2026-07-08: the per-frame texture pool. `submitAsync` used to create
+    /// 3 fresh MTLTextures per camera frame (~20 Hz during a burst) — pure driver
+    /// object churn, since every frame's set has the identical descriptor. Sets
+    /// are checked OUT at submit and checked back IN by the command buffer's
+    /// completed handler AFTER the readback, so a set can never be rebound while
+    /// a frame in flight still owns it (the queue is serial, but frame N's
+    /// readback overlaps frame N+1's execution — naive sharing would race).
+    /// Capacity 4 covers the realistic in-flight depth; beyond it, sets are
+    /// simply released (the pre-pool behavior).
+    private final class IntermediatesPool: @unchecked Sendable {
+        private var free: [Intermediates] = []
+        private let lock = NSLock()
+        private var misses = 0
+        func take() -> Intermediates? {
+            lock.lock(); defer { lock.unlock() }
+            return free.popLast()
+        }
+        func give(_ set: Intermediates) {
+            lock.lock(); defer { lock.unlock() }
+            if free.count < 4 { free.append(set) }
+        }
+        /// Miss counter for the diagnostic log — a healthy pool misses ~2–3
+        /// times at warmup and never again; a climbing count means sets are
+        /// leaking (a completed handler that never recycled) or in-flight
+        /// depth exceeds the cap.
+        func recordMiss() -> Int {
+            lock.lock(); defer { lock.unlock() }
+            misses += 1
+            return misses
+        }
+    }
+    private let intermediatesPool = IntermediatesPool()
+
+    /// One-shot latch for the u16 hist-scale guard log (delegate-queue confined,
+    /// like every submitAsync caller).
+    private var histScaleSkipLogged = false
+
+    /// One recycled or fresh set — the pool's miss path is the old allocation.
+    private func acquireIntermediates() throws -> Intermediates {
+        if let recycled = intermediatesPool.take() { return recycled }
+        let n = intermediatesPool.recordMiss()
+        Self.logger.debug("[perf] texture pool miss #\(n) — allocating a fresh set (warms to in-flight depth)")
         return Intermediates(
             linear: try makeTileTexture(storageMode: .private),
             lab: try makeTileTexture(storageMode: .private),
@@ -264,10 +318,17 @@ final class MetalPipeline: @unchecked Sendable {
     /// nLevels` `Int32`s, `.storageModeShared` so the CPU can read it after the burst. Layout matches
     /// the Zig `s4_v21_accumulate_hist` / Metal kernel: `((coarseFrame·cy + y)·cx + x)·3·nLevels`.
     /// Returns nil if the allocation fails (the caller falls back to the index-cube proxy field).
+    /// PERF 2026-07-08: counts are UInt16 (was Int32) — this is the app's largest
+    /// allocation and the jetsam-proximity driver; halving the element halves it
+    /// (768 → 384 MiB at the 64-frame/64²/256-level shape). Capacity bound: a cell
+    /// holds ≤ scale²·wBudget, safe for every scale ≤ 63 (`submitAsync` guards).
     func makeV21HistBuffer(frames: Int, nLevels: Int) -> (any MTLBuffer)? {
         let count = frames * tileSide * tileSide * 3 * nLevels
-        let bytes = count * MemoryLayout<Int32>.stride
-        return device.makeBuffer(length: bytes, options: [.storageModeShared])
+        let bytes = count * MemoryLayout<UInt16>.stride
+        let buf = device.makeBuffer(length: bytes, options: [.storageModeShared])
+        // [perf] the burst's big allocation, on the record for memory triage.
+        Self.logger.log("[perf] v21 hist buffer: \(bytes / (1024 * 1024)) MiB (\(frames)×\(self.tileSide)²×3×\(nLevels) u16) \(buf == nil ? "FAILED — proxy fallback" : "allocated")")
+        return buf
     }
 
     /// Pool a burst histogram buffer over the `t` axis into the time-pooled field the V2.1 export uses:
@@ -276,10 +337,11 @@ final class MetalPipeline: @unchecked Sendable {
     static func poolV21Counts(buffer: any MTLBuffer, frames: Int, tileSide: Int, nLevels: Int) -> [Int32] {
         let spatial = tileSide * tileSide * 3 * nLevels
         var out = [Int32](repeating: 0, count: spatial)
-        let ptr = buffer.contents().bindMemory(to: Int32.self, capacity: frames * spatial)
+        // u16 carrier widened at the read: 64 frames × 65535 max stays well inside Int32.
+        let ptr = buffer.contents().bindMemory(to: UInt16.self, capacity: frames * spatial)
         for t in 0 ..< frames {
             let base = t * spatial
-            for i in 0 ..< spatial { out[i] &+= ptr[base + i] }
+            for i in 0 ..< spatial { out[i] &+= Int32(ptr[base + i]) }
         }
         return out
     }
@@ -299,10 +361,11 @@ final class MetalPipeline: @unchecked Sendable {
             logger.error("v21flow: bad shape frames=\(frames) side=\(side) nLevels=\(nLevels)")
             return nil
         }
-        let ptr = buffer.contents().bindMemory(to: Int32.self, capacity: frames * spatial)
+        let ptr = buffer.contents().bindMemory(to: UInt16.self, capacity: frames * spatial)
 
         // Anchor = frame 0's histogram field (cheap; the transport of every other frame is FROM it).
-        let anchor = Array(UnsafeBufferPointer(start: ptr, count: spatial))
+        // The u16 carrier widens to Int32 here — transportV21's exact-integer domain is unchanged.
+        let anchor = UnsafeBufferPointer(start: ptr, count: spatial).map { Int32($0) }
         let mass = Int(anchor[0 ..< nLevels].reduce(Int32(0), +))
         guard mass > 0 else { logger.error("v21flow: mass<=0 (frame-0 first curve empty)"); return nil }
         logger.log("v21flow: start frames=\(frames) side=\(side) nLevels=\(nLevels) mass=\(mass)")
@@ -311,7 +374,7 @@ final class MetalPipeline: @unchecked Sendable {
         maps.reserveCapacity(frames)
         var totalRuns = 0
         for t in 0 ..< frames {
-            let frame = Array(UnsafeBufferPointer(start: ptr + t * spatial, count: spatial))
+            let frame = UnsafeBufferPointer(start: ptr + t * spatial, count: spatial).map { Int32($0) }
             guard let disp = SixFourNative.transportV21(src: anchor, dst: frame, p: side * side,
                                                         nLevels: nLevels, mass: mass) else {
                 logger.error("v21flow: transportV21 returned nil at frame \(t)")
@@ -445,8 +508,16 @@ final class MetalPipeline: @unchecked Sendable {
         enc.dispatchThreads(grid, threadsPerThreadgroup: tg)
     }
 
-    private final class TextureBox: @unchecked Sendable {
-        let texture: any MTLTexture
-        init(_ t: any MTLTexture) { self.texture = t }
+    /// Sendable courier for one in-flight intermediates set + its home pool
+    /// (the completed handler is @Sendable; MTLTexture use here is the same
+    /// single-owner readback the retired TextureBox carried).
+    private final class IntermediatesBox: @unchecked Sendable {
+        let set: Intermediates
+        private let pool: IntermediatesPool
+        init(_ set: Intermediates, pool: IntermediatesPool) {
+            self.set = set
+            self.pool = pool
+        }
+        func recycle() { pool.give(set) }
     }
 }

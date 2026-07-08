@@ -644,6 +644,18 @@ final class CaptureViewModel {
                     self.v21FlowVersion += 1
                 }
             }
+            // PERF 2026-07-08: the field pool left the shutter seam like the flow
+            // before it; the counts arrive here under the same epoch guard.
+            session.v21CountsCallback = { [weak self] counts, generation in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    guard self.flowEpoch == epoch else {
+                        Self.logger.warning("[viewmodel] DROPPED stale V2.1 field (epoch \(epoch) != \(self.flowEpoch), gen \(generation))")
+                        return
+                    }
+                    self.v21Counts = counts
+                }
+            }
             // QoL 2026-07-03: the somatic train left the burst seam (the felt post-capture
             // delay). Same epoch guard as the flow: a late gene never lands on a newer burst.
             session.thetaUpCallback = { [weak self] gene, generation in
@@ -658,7 +670,7 @@ final class CaptureViewModel {
             }
             let result = try await session.captureBurst(into: pipeline)
             lastTimingSummary = result.timing.summary
-            v21Counts = result.v21Counts   // camera-box field (gated); nil keeps the proxy path
+            // result.v21Counts is nil by design — the async pool delivers via v21CountsCallback.
             // result.flow is nil by design now — the async encode delivers via flowCallback.
             burstTiles = result.tiles      // V3.0: the decide surface previews these
             thetaUp = result.thetaUp       // nil by design — the async train delivers via thetaUpCallback

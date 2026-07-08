@@ -152,7 +152,9 @@ struct DonePhaseField: View {
                 // The active Look's `.cube` LUT (only when a grade is on; it is the export form
                 // of the Look axis). Ported verbatim from Review — `LUTFile.makeShareItem` + the
                 // pooled `lutPalette` + the `ActivityView` sheet, all unchanged.
-                if settings.captureLook != .off {
+                // DEPRECATED behind Feature.lutExport (off, 2026-07-08) — also removes the
+                // main-actor 65³ build_cube hitch this button paid on tap.
+                if Feature.lutExport && settings.captureLook != .off {
                     Button {
                         lutShare = LUTFile.makeShareItem(palette: lutPalette, look: settings.captureLook)
                     } label: {

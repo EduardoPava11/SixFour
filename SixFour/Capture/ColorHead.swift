@@ -64,7 +64,11 @@ final class ColorHead {
 
     /// Accumulated S_t training pairs (the 32→64 transition's t-bands), drained
     /// by the trainer. Exact integers until the drain converts to Float.
-    private var tBandFeatures: [[Int64]] = []
+    /// PERF 2026-07-08: FLAT storage, stride 4 (p00,p01,p10,p11; the bias is
+    /// synthesized at drain) — the old `[[Int64]]` allocated 1024 small heap
+    /// arrays per pair-tick and paid an O(rows) array-of-arrays removeFirst at
+    /// the cap; flat arrays append in place and the cap drop is one memmove.
+    private var tBandFeatures: [Int64] = []
     private var tBandTargets: [Int64] = []
     private static let maxRetainedPairs = 8192
 
@@ -77,6 +81,8 @@ final class ColorHead {
         self.cropSide = cropSide
         self.historyTicks = historyTicks
         self.slotHistory = Array(repeating: [], count: 256)
+        tBandFeatures.reserveCapacity(ColorHead.maxRetainedPairs * 4)
+        tBandTargets.reserveCapacity(ColorHead.maxRetainedPairs)
     }
 
     private let historyTicks: Int
@@ -202,12 +208,22 @@ final class ColorHead {
                     let yRow = yPtr + py * yStride
                     let cRow = cPtr + (py >> 1) * cStride
                     var o = row * side * 3
+                    // 4:2:0 shares one chroma sample per horizontal pixel pair:
+                    // recompute the offsets only when the pair index advances
+                    // (crop.x0 may be odd, so track ci rather than col parity).
+                    // Values are identical to the per-pixel form; cRow changes
+                    // per row, so the cache resets with each row.
+                    var lastCi = -1
+                    var off: (r: Int32, g: Int32, b: Int32) = (0, 0, 0)
                     for col in 0..<side {
                         let px = crop.x0 + col
                         let lum = lut[Int(yRow[px] >> 6)]
                         let ci = (px >> 1) * 2
-                        let off = ColorHead.x420ChromaOffsets4096(
-                            cb: Int32(cRow[ci] >> 6), cr: Int32(cRow[ci + 1] >> 6))
+                        if ci != lastCi {
+                            off = ColorHead.x420ChromaOffsets4096(
+                                cb: Int32(cRow[ci] >> 6), cr: Int32(cRow[ci + 1] >> 6))
+                            lastCi = ci
+                        }
                         rgb[o] = UInt16(min(1023, max(0, (lum + off.r + 2048) >> 12)))
                         rgb[o + 1] = UInt16(min(1023, max(0, (lum + off.g + 2048) >> 12)))
                         rgb[o + 2] = UInt16(min(1023, max(0, (lum + off.b + 2048) >> 12)))
@@ -285,13 +301,16 @@ final class ColorHead {
                 let cSum = lum(currentTick, bx, by) + lum(currentTick, bx + 1, by)
                     + lum(currentTick, bx, by + 1) + lum(currentTick, bx + 1, by + 1)
                 let tBand = (p00 + p01 + p10 + p11) - cSum
-                tBandFeatures.append([1, p00, p01, p10, p11])
+                tBandFeatures.append(p00)
+                tBandFeatures.append(p01)
+                tBandFeatures.append(p10)
+                tBandFeatures.append(p11)
                 tBandTargets.append(tBand)
             }
         }
         if tBandTargets.count > ColorHead.maxRetainedPairs {
             let drop = tBandTargets.count - ColorHead.maxRetainedPairs
-            tBandFeatures.removeFirst(drop)
+            tBandFeatures.removeFirst(drop * 4)
             tBandTargets.removeFirst(drop)
         }
     }
@@ -302,10 +321,10 @@ final class ColorHead {
     /// the accumulator. The single exact→float boundary of the circuit.
     func drainTBandPairs(scale: Float) -> (features: [Float], targets: [Float], width: Int) {
         var f = [Float]()
-        f.reserveCapacity(tBandFeatures.count * 5)
-        for row in tBandFeatures {
+        f.reserveCapacity(tBandTargets.count * 5)
+        for i in 0 ..< tBandTargets.count {
             f.append(1)
-            for v in row.dropFirst() { f.append(Float(v) * scale) }
+            for j in 0 ..< 4 { f.append(Float(tBandFeatures[i * 4 + j]) * scale) }
         }
         let t = tBandTargets.map { Float($0) * scale }
         tBandFeatures.removeAll(keepingCapacity: true)

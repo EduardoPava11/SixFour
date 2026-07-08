@@ -31,12 +31,20 @@ enum SixFourNative {
     /// deterministic work ran, stage by stage. The closure is non-capturing
     /// (references the global `zigLogger`), so it converts to a C function pointer.
     static func installLogging() {
+        // The GATE runs BEFORE the kernel formats its line (perf 2026-07-08):
+        // a suppressed preview call now skips the String + UTF-8 array build
+        // entirely, not just the forwarding. Fires on the calling kernel's
+        // thread, so the thread-local scopes suppression exactly as before.
+        s4_set_log_gate {
+            Thread.current.threadDictionary[zigLogSuppressKey] == nil ? 1 : 0
+        }
         s4_set_log_callback { (msg: UnsafePointer<UInt8>?, len: Int) in
             guard let msg, len > 0 else { return }
             // The callback fires synchronously on the calling kernel's thread, so
             // a thread-local set by the live preview suppresses ONLY the preview's
             // lines (it calls the kernels ~10×/s); the capture render, on another
-            // thread, still logs every stage.
+            // thread, still logs every stage. (Kept as belt-and-braces behind the
+            // gate above — the gate already dropped suppressed lines unformatted.)
             if Thread.current.threadDictionary[zigLogSuppressKey] != nil { return }
             let text = String(decoding: UnsafeBufferPointer(start: msg, count: len), as: UTF8.self)
             zigLogger.debug("zig: \(text, privacy: .public)")

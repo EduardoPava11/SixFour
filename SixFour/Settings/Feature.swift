@@ -112,6 +112,16 @@ enum Feature {
     /// precedence over `liveLadder`/in-view pooling in `InvertedPyramidField`.
     static let opticalEV = false
 
+    /// The R3D `.cube` LUT export on the Exported bench. **DEPRECATED — OFF
+    /// (Daniel's call, 2026-07-08: not needed for this app).**
+    ///
+    /// With this off the EXPORT LUT button never renders, so the 65³
+    /// `s4_build_cube_q16` dispatch + ~8 MB text assembly it ran ON THE MAIN
+    /// ACTOR (the audited Review-screen hitch) is statically unreachable. The
+    /// kernels and `LUTFile` stay compiled and golden-gated
+    /// (`lut_fixture_test` battery) — gate, don't delete.
+    static let lutExport = false
+
     /// MULTISCALE RENDER — the always-on adaptive 16/32/64 GIF. When true, `renderOnce` swaps the
     /// uniform 64³ tiles for the halt-floor multiscale cube (fused via `MultiScaleRender` →
     /// `s4_render_select`): motion regions stay 64³, static regions collapse to chunky block-16³.
