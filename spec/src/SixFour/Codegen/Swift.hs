@@ -1462,6 +1462,16 @@ emitGridLayoutContract = T.unlines $
   ++ map regionLine GL.curateScene
   ++ [ "    ]"
   , ""
+  , "    /// The LIVE TELEMETRY scene, mirrored from `SixFour.Spec.GridLayout.liveScene`:"
+  , "    /// the rung-ladder instrument flanks (rung64/rung32/rung16 ride the right flank"
+  , "    /// beside their own pyramid band) + the system machine ring (tick CPU vs the"
+  , "    /// 50 ms budget, v21 hist-buffer lifecycle, thermal). All non-interactive —"
+  , "    /// meters never intercept the ground gestures or the shutter."
+  , "    public static let liveScene: [GridRegion] = ["
+  ]
+  ++ map regionLine GL.liveScene
+  ++ [ "    ]"
+  , ""
   , "    /// Look up a region by name (the composer asks for \"preview\", \"palette\", …)."
   , "    public static func region(_ name: String, in scene: [GridRegion] = captureScene) -> GridRegion? {"
   , "        scene.first { $0.name == name }"
@@ -1486,7 +1496,7 @@ emitGridLayoutContract = T.unlines $
   , "    /// Re-asserts the Haskell laws at runtime (defense-in-depth): disjoint,"
   , "    /// in-bounds, interactive regions clear the touch floor, priorities distinct."
   , "    public static func selfCheck() -> Bool {"
-  , "        [captureScene, decisionScene, curateScene].allSatisfy { s in"
+  , "        [captureScene, decisionScene, curateScene, liveScene].allSatisfy { s in"
   , "            let touch = SixFourLattice.touchFloorCells"
   , "            let inBounds = s.allSatisfy {"
   , "                $0.col >= 0 && $0.col + $0.w <= cols && $0.row >= 0 && $0.row + $0.h <= rows"

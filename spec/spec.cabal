@@ -158,6 +158,7 @@ library
         SixFour.Spec.CaptureRecord
         SixFour.Spec.MultiScaleCapture
         SixFour.Spec.CaptureDiversity
+        SixFour.Spec.RungTelemetry
         SixFour.Spec.MultiScaleFusion
         SixFour.Spec.RenderSelect
         SixFour.Spec.HaltDepth
@@ -562,6 +563,7 @@ test-suite spec-tests
         Properties.CaptureRecord
         Properties.MultiScaleCapture
         Properties.CaptureDiversity
+        Properties.RungTelemetry
         Properties.MultiScaleFusion
         Properties.RenderSelect
         Properties.MultiScaleIntegrate

@@ -97,6 +97,10 @@ struct ColorHeadTests {
         }
         #expect(f16 == direct)
         #expect(head.latestGCT?.count == 768)
+        // The derived 16-rung stream is RETAINED for the capture record's v2
+        // c16 cube: one frame after four ticks, and it IS the emitted frame.
+        #expect(head.cube16Frames == 1)
+        #expect(head.cube16 == f16)
     }
 
     /// Constant scene → every particle certifies order 0; a linearly ramping

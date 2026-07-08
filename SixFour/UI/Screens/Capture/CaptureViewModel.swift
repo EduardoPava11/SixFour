@@ -252,6 +252,20 @@ final class CaptureViewModel {
     /// Empty until the first burst drains its `bandHeadCallback`. The allocator output: motion → 64³,
     /// stillness → 16³. (Not yet fed to the renderer — that is the encode-bridge wiring.)
     var haltDepthField: [Int32] = []
+
+    /// RUNG TELEMETRY (Feature.rungTelemetry only): the latest per-rung
+    /// instrument snapshot (`Spec.RungTelemetry`) — exposure state, arrival
+    /// pulse, √N significance base, independence health — published from the
+    /// session at the 16-rung cadence (≤ 5 Hz, all three rungs in ONE delivery)
+    /// plus a final snapshot at the burst seam. The GRID's `liveScene`
+    /// rung64/rung32/rung16 regions read this. nil until a burst runs.
+    var rungTelemetry: RungTelemetry? = nil
+
+    /// SYSTEM TELEMETRY (Feature.rungTelemetry only): tick CPU vs the 50 ms
+    /// budget, v21 hist-buffer lifecycle, camera pressure — published on
+    /// change/burst boundaries only. The `liveScene` system region reads this.
+    var systemTelemetry: SystemTelemetry? = nil
+
     /// Throttle for `livePalette` (~3 fps; the maximin-256 is cheap but not free).
     @ObservationIgnored nonisolated(unsafe) private var lastLivePaletteNanos: UInt64 = 0
 
@@ -505,6 +519,17 @@ final class CaptureViewModel {
                 Task { @MainActor [weak self] in self?.haltDepthField = field }
             }
 
+            // RUNG + SYSTEM TELEMETRY (Feature.rungTelemetry only): already
+            // coalesced session-side (≤ 5 Hz / on-change), so one main-actor hop
+            // per delivery is within the publish→fold budget. Off ⇒ the session
+            // never calls these.
+            session.rungTelemetryCallback = { [weak self] snapshot in
+                Task { @MainActor [weak self] in self?.rungTelemetry = snapshot }
+            }
+            session.systemTelemetryCallback = { [weak self] snapshot in
+                Task { @MainActor [weak self] in self?.systemTelemetry = snapshot }
+            }
+
             NSLog("SF-H: starting preview")
             session.startPreview()                  // already Task.detached internally
             NSLog("SF-I: bootstrap complete -> idle")
@@ -537,8 +562,13 @@ final class CaptureViewModel {
     private func saveCaptureRecordAsync(_ record: S4CaptureRecord, pairedWith gifURL: URL) {
         Task.detached(priority: .background) {
             let url = gifURL.deletingPathExtension().appendingPathExtension("s4cr")
+            // Encode HERE, off the seam — the v2 rung cubes make the record
+            // megabytes, so both the encode and the write stay detached; the
+            // size is logged once per capture (never per tick).
+            let bytes = record.cborBytes
+            Self.logger.log("[perf] s4cr: \((bytes.count + 1023) / 1024) KiB (v\(record.version))")
             do {
-                try record.write(to: url)
+                try Data(bytes).write(to: url, options: .atomic)
                 Self.logger.debug("[viewmodel] capture record saved: \(url.lastPathComponent, privacy: .public)")
             } catch {
                 Self.logger.warning("[viewmodel] capture record save failed: \(String(describing: error), privacy: .public)")
@@ -705,14 +735,50 @@ final class CaptureViewModel {
             // proves the order is invisible to every conserved marginal, so it
             // must be persisted here or it is gone), the measured per-frame
             // intervals, and the color head's exact 16² sums + realized GCT.
-            // The shipped schedule is the uniform 64-rung word (all index 0);
-            // a woven schedule writes its own word when the mechanic lands.
-            let record = S4CaptureRecord(
-                weave: Array(repeating: 0, count: result.tiles.count),
+            // The uniform single-exposure burst writes the all-zeros 64-rung
+            // word; a woven ladder burst writes the word it actually executed.
+            // VERSION 2 (the independent rungs): when the burst produced rung
+            // evidence — telemetry and/or per-rung cubes — the record carries
+            // it: ladder mode = all three cubes + optical `ev`; derived mode =
+            // the c16 cube only + pooling-equivalent `ev` (duration/ISO zero,
+            // +k stops per rung) — the c16-only shape plus tel's 1000‰
+            // comovement is the derived-provenance signature.
+            let v2 = result.rungTelemetry != nil || result.rungCubes != nil
+            var record = S4CaptureRecord(
+                version: v2 ? 2 : 1,
+                weave: result.weaveWord.isEmpty
+                    ? Array(repeating: 0, count: result.tiles.count)
+                    : result.weaveWord,
                 frameIntervalsUs: result.intervalsUs,
                 sums16: result.sums16 ?? [],
                 gct: result.gct ?? []
             )
+            if let cubes = result.rungCubes {
+                record.cube64 = cubes.cube64
+                record.cube32 = cubes.cube32
+                record.cube16 = cubes.cube16
+            }
+            if let tel = result.rungTelemetry {
+                record.exposures = tel.rungs.map { r in
+                    S4RungExposure(durationUs: UInt64(max(0, r.exposureDurationUs)),
+                                   isoMilli: UInt64(max(0, r.isoMilli)),
+                                   evCentistops: Int64(r.evCentistops))
+                }
+                // ONE comovement scalar on the wire (`Spec.CaptureRecord.
+                // TelemetrySnapshot`): the WORST (largest) pairwise statistic —
+                // 1000 = some pair is fully determined. No measured pair reads
+                // 1000 too (no evidence of independence is not evidence of
+                // independence — the `comovementPermille` zero-total rule).
+                let worst = tel.rungs
+                    .map(\.comovementPermilleVsCoarser)
+                    .filter { $0 >= 0 }
+                    .max() ?? 1000
+                record.telemetry = S4TelemetrySnapshot(
+                    arrivals: tel.rungs.map { UInt64(max(0, $0.arrivals)) },
+                    sampleVolumes: tel.rungs.map { UInt64(max(0, $0.sampleVolume)) },
+                    comovementPermille: UInt64(worst)
+                )
+            }
             saveCaptureRecordAsync(record, pairedWith: renderResult.output.gifURL)
             phase = .done
             Haptics.notification(.success)

@@ -54,6 +54,19 @@ tests = testGroup "GridLayout (the capture-scene contention proof — every widg
   , testProperty "curateScene: cover partitions the lattice" $ once (lawCoverPartitions curateScene)
   , testProperty "curateScene: widgets clear the rounded corners" $ once (lawWidgetsClearCorners curateScene)
 
+  -- The LIVE TELEMETRY scene (the rung-ladder instrument flanks + the system
+  -- machine ring beside/below the self-centered inverted pyramid) passes the
+  -- same eight laws: every meter is a proven, contention-free, NON-interactive
+  -- claim that clears the arcs, the safe areas, and the shutter.
+  , testProperty "liveScene: disjoint" $ once (lawSceneDisjoint liveScene)
+  , testProperty "liveScene: in-bounds" $ once (lawSceneInBounds liveScene)
+  , testProperty "liveScene: interactive touch floor" $ once (lawInteractiveTouchFloor liveScene)
+  , testProperty "liveScene: safe-area clearance" $ once (lawSafeAreaClearance liveScene)
+  , testProperty "liveScene: priorities distinct" $ once (lawPriorityDistinct liveScene)
+  , testProperty "liveScene: algebraic == geometric disjointness" $ once (lawDisjointMatchesRects liveScene)
+  , testProperty "liveScene: cover partitions the lattice" $ once (lawCoverPartitions liveScene)
+  , testProperty "liveScene: widgets clear the rounded corners" $ once (lawWidgetsClearCorners liveScene)
+
   -- The laws are robust on arbitrary scenes too: an overlapping pair is BOTH
   -- contested and AABB-overlapping (the bridge holds off the canonical scene).
   , testProperty "bridge holds on an overlapping 2-region scene" $

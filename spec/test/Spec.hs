@@ -150,6 +150,7 @@ import qualified Properties.ColorMomentum as ColorMomentum
 import qualified Properties.CaptureRecord as CaptureRecord
 import qualified Properties.MultiScaleCapture as MultiScaleCapture
 import qualified Properties.CaptureDiversity as CaptureDiversity
+import qualified Properties.RungTelemetry as RungTelemetry
 import qualified Properties.MultiScaleFusion as MultiScaleFusion
 import qualified Properties.RenderSelect as RenderSelect
 import qualified Properties.MultiScaleIntegrate as MultiScaleIntegrate
@@ -395,6 +396,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , CaptureRecord.tests
   , MultiScaleCapture.tests
   , CaptureDiversity.tests
+  , RungTelemetry.tests
   , MultiScaleFusion.tests
   , RenderSelect.tests
   , MultiScaleIntegrate.tests

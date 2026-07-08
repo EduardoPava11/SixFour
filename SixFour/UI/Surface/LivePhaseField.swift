@@ -99,6 +99,18 @@ struct LivePhaseField: View {
                 onShutter: onShutter,
                 onMeter64: onMeter
             )
+
+            // THE GRID MIRRORS THE LADDER (Feature.rungTelemetry): the liveScene
+            // instrument flanks — per-rung arrival pulse / exposure state / √N
+            // significance / independence health beside each pyramid band, plus the
+            // system machine ring (tick CPU vs 50 ms, v21 buffer lifecycle, thermal)
+            // below. Placed via the spec-proven liveScene regions; hit-testing is OFF
+            // inside so the ground LOOK-swipe / EV-drag and the 16² shutter are never
+            // intercepted. `.equatable()` gates the body to the ≤ 5 Hz telemetry
+            // cadence, not the 20 fps preview publish (the pyramid bake discipline).
+            RungTelemetryFlanks(telemetry: surface.rungTelemetry,
+                                system: surface.systemTelemetry)
+                .equatable()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()

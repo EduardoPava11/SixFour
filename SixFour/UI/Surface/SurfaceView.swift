@@ -178,6 +178,9 @@ struct SurfaceView: View {
             // OPTICAL-EV σ folds — extracted to a ViewModifier so the (already long) body
             // stays under the SwiftUI type-checker's expression-complexity limit.
             .modifier(OpticalTileFolds(engine: engine, surface: surface))
+            // RUNG + SYSTEM TELEMETRY σ folds (Feature.rungTelemetry) — same
+            // extracted-ViewModifier discipline; feeds the liveScene instrument flanks.
+            .modifier(RungTelemetryFolds(engine: engine, surface: surface))
             // The finished GIFA → σ. If the engine's `.done` edge raced ahead of this
             // observer the commit already ran in `mapEnginePhase`; folding again is
             // idempotent (it overwrites σ with the same bytes) and `.burstComplete` is a

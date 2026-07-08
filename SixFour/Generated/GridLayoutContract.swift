@@ -56,6 +56,18 @@ public enum GridLayoutContract {
         GridRegion(name: "accept", col: 34, row: 176, w: 32, h: 16, widget: 5, priority: 5, interactive: true),
     ]
 
+    /// The LIVE TELEMETRY scene, mirrored from `SixFour.Spec.GridLayout.liveScene`:
+    /// the rung-ladder instrument flanks (rung64/rung32/rung16 ride the right flank
+    /// beside their own pyramid band) + the system machine ring (tick CPU vs the
+    /// 50 ms budget, v21 hist-buffer lifecycle, thermal). All non-interactive —
+    /// meters never intercept the ground gestures or the shutter.
+    public static let liveScene: [GridRegion] = [
+        GridRegion(name: "rung64", col: 84, row: 49, w: 14, h: 64, widget: 0, priority: 0, interactive: false),
+        GridRegion(name: "rung32", col: 84, row: 117, w: 14, h: 32, widget: 1, priority: 1, interactive: false),
+        GridRegion(name: "rung16", col: 84, row: 153, w: 14, h: 16, widget: 2, priority: 2, interactive: false),
+        GridRegion(name: "system", col: 18, row: 178, w: 64, h: 24, widget: 3, priority: 3, interactive: false),
+    ]
+
     /// Look up a region by name (the composer asks for "preview", "palette", …).
     public static func region(_ name: String, in scene: [GridRegion] = captureScene) -> GridRegion? {
         scene.first { $0.name == name }
@@ -80,7 +92,7 @@ public enum GridLayoutContract {
     /// Re-asserts the Haskell laws at runtime (defense-in-depth): disjoint,
     /// in-bounds, interactive regions clear the touch floor, priorities distinct.
     public static func selfCheck() -> Bool {
-        [captureScene, decisionScene, curateScene].allSatisfy { s in
+        [captureScene, decisionScene, curateScene, liveScene].allSatisfy { s in
             let touch = SixFourLattice.touchFloorCells
             let inBounds = s.allSatisfy {
                 $0.col >= 0 && $0.col + $0.w <= cols && $0.row >= 0 && $0.row + $0.h <= rows

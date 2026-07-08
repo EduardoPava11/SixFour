@@ -33,6 +33,31 @@ the 32² and 16² views are exact derivations, never stored twice), and the
 768-byte realized GCT. Keystone: 'lawWeaveSurvivesTheRecord' — the weave
 word round-trips through the bytes IN ORDER, so the record carries exactly
 the information "SixFour.Spec.WeaveOrder" proves the measure loses.
+
+== Version 2 — the independent rungs
+
+When the multi-scale ladder captures the three rungs as SEPARATE exposures
+("SixFour.Spec.MultiScaleCapture"), the derived-pyramid premise of @s16@
+("stored once, derived exactly") breaks BY DESIGN: the 64\/32\/16 streams
+are independent evidence, so storing all three is non-redundant. Version 2
+adds five keys, version-gated so version-1 bytes never change
+('lawGoldenRecordPinned' stays pinned):
+
+* @c64@ \/ @c32@ \/ @c16@ — per-rung burst volumes as u64 sums arrays.
+  Independent mode writes all three; derived mode writes @c16@ only and
+  leaves the others absent-as-empty (the record convention).
+* @ev@ — per-rung 'RungExposure' triples, fine→coarse: duration µs, ISO
+  milli-units, EV offset in CENTISTOPS. The EV offset is SIGNED (the fine
+  base may sit below the metered reference), and the subset has no major 1
+  — signed values ride the 'zigzag' convention INSIDE major 0
+  ('lawZigzagRoundTrips').
+* @tel@ — the "SixFour.Spec.RungTelemetry" snapshot ('TelemetrySnapshot'):
+  per-rung arrival counts, per-rung significance N, and the independence
+  co-movement statistic, all unsigned.
+
+'goldenRecordV2' \/ 'goldenRecordV2Bytes' pin the v2 encoding
+('lawGoldenRecordV2Pinned'); 'lawV1DecodesUnderV2Reader' pins that a v2
+reader is total over v1 records (missing keys read as absent-as-empty).
 -}
 -- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.CaptureRecord
@@ -42,20 +67,36 @@ module SixFour.Spec.CaptureRecord
   , encode
   , canonical
   , decode
+    -- * Signed values inside major 0
+  , zigzag
+  , unzigzag
     -- * The capture record
   , CaptureRecord (..)
+  , RungExposure (..)
+  , TelemetrySnapshot (..)
   , recordToCbor
   , encodeRecord
   , weaveFromCbor
+  , versionFromCbor
+  , cubeFromCbor
+  , exposuresFromCbor
+  , telemetryFromCbor
   , goldenRecord
   , goldenRecordBytes
+  , goldenRecordV2
+  , goldenRecordV2Bytes
     -- * Laws
   , lawHeadsAreMinimal
   , lawMapKeysSortedBytewise
+  , lawZigzagRoundTrips
   , lawDecodeInvertsEncode
   , lawEncodingIsCanonicallyStable
   , lawWeaveSurvivesTheRecord
+  , lawWeaveSurvivesTheRecordV2
+  , lawRungFieldsSurviveTheRecord
+  , lawV1DecodesUnderV2Reader
   , lawGoldenRecordPinned
+  , lawGoldenRecordV2Pinned
   ) where
 
 import Data.Bits (shiftR, (.&.))
@@ -188,32 +229,115 @@ decode (b : rest) =
                    pure ((k, v) : kvs, r''')
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Signed values inside major 0
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- | The subset has no major 1, so signed quantities (EV offsets below the
+-- fine reference) ride major 0 under the zigzag convention: @n ↦ 2n@ for
+-- @n ≥ 0@, @-n ↦ 2n-1@ for @n > 0@ (so 0,-1,1,-2,2 → 0,1,2,3,4). Always
+-- non-negative, always minimal-head-encodable; 'unzigzag' inverts exactly
+-- ('lawZigzagRoundTrips').
+zigzag :: Integer -> Integer
+zigzag n
+  | n >= 0    = 2 * n
+  | otherwise = negate (2 * n) - 1
+
+-- | Inverse of 'zigzag': even words are non-negative halves, odd words are
+-- negative.
+unzigzag :: Integer -> Integer
+unzigzag m
+  | even m    = m `div` 2
+  | otherwise = negate ((m + 1) `div` 2)
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- The capture record
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- | One rung's realized exposure — INTEGER micro-fields only (the
+-- no-floats rule): what the ladder's @setExposureModeCustom@ actually set,
+-- in units exact enough that no rounding ever happens twice.
+data RungExposure = RungExposure
+  { reDurationUs   :: Integer -- ^ exposure duration, µs (unsigned)
+  , reIsoMilli     :: Integer -- ^ ISO in milli-units (ISO 100 = 100000; unsigned)
+  , reEvCentistops :: Integer -- ^ EV offset vs the fine reference, CENTISTOPS —
+                              --   SIGNED; rides 'zigzag' on the wire
+  } deriving (Eq, Show)
+
+-- | The "SixFour.Spec.RungTelemetry" snapshot the burst leaves behind, all
+-- unsigned. Rung lists run fine→coarse (64, 32, 16).
+data TelemetrySnapshot = TelemetrySnapshot
+  { tsArrivals           :: [Integer] -- ^ per-rung arrival pulse counts
+  , tsSampleVolume       :: [Integer] -- ^ per-rung significance N (sample volumes)
+  , tsComovementPermille :: Integer   -- ^ independence co-movement statistic,
+                                      --   permille (1000 = fully determined =
+                                      --   the fell-back-to-derived warning)
+  } deriving (Eq, Show)
+
 -- | What the shutter writes. Empty lists are legal (a field the burst did
--- not produce is absent-as-empty, never invented).
+-- not produce is absent-as-empty, never invented). The version field GATES
+-- THE WIRE SHAPE: version 1 emits exactly the seven original keys (bytes
+-- pinned forever by 'lawGoldenRecordPinned'); version 2 adds the five
+-- independent-rung keys.
 data CaptureRecord = CaptureRecord
-  { crVersion          :: Integer     -- ^ record format version (1)
+  { crVersion          :: Integer     -- ^ record format version (1 or 2)
   , crWindowCs         :: Integer     -- ^ the burst window, cs (320)
   , crBaseDelayCs      :: Integer     -- ^ the timeline quantum, cs (5)
   , crWeave            :: [WeaveRung] -- ^ THE ORDER — rung frames, capture order
   , crFrameIntervalsUs :: [Integer]   -- ^ measured per-frame intervals, µs
   , crSums16           :: [Integer]   -- ^ 16×16×3 u64 bin sums, row-major (or [])
   , crGct              :: [Word8]     -- ^ realized 768-byte GCT (or [])
+  , crCube64           :: [Integer]   -- ^ v2: 64-rung independent volume u64 sums (or [])
+  , crCube32           :: [Integer]   -- ^ v2: 32-rung independent volume u64 sums (or [])
+  , crCube16           :: [Integer]   -- ^ v2: 16-rung volume u64 sums — derived
+                                      --   mode writes ONLY this cube (or [])
+  , crExposures        :: [RungExposure] -- ^ v2: per-rung exposure, fine→coarse (or [])
+  , crTelemetry        :: Maybe TelemetrySnapshot -- ^ v2: telemetry snapshot
+                                      --   ('Nothing' encodes as the empty array)
   } deriving (Eq, Show)
 
 -- | The record as a CBOR map. Keys are short ASCII text; the deterministic
 -- encoder sorts them bytewise, so key order here is documentation only.
+-- The v2 keys appear only when @'crVersion' ≥ 2@ — a version-1 record's
+-- bytes are exactly what they were before version 2 existed.
 recordToCbor :: CaptureRecord -> Cbor
-recordToCbor cr = CMap
-  [ (CText "v",     CUInt (crVersion cr))
-  , (CText "win",   CUInt (crWindowCs cr))
-  , (CText "d0",    CUInt (crBaseDelayCs cr))
-  , (CText "weave", CArray [ CUInt (toInteger (rungIndex p)) | p <- crWeave cr ])
-  , (CText "dtus",  CArray (map CUInt (crFrameIntervalsUs cr)))
-  , (CText "s16",   CArray (map CUInt (crSums16 cr)))
-  , (CText "gct",   CBytes (crGct cr))
+recordToCbor cr = CMap (v1Fields ++ v2Fields)
+  where
+    v1Fields =
+      [ (CText "v",     CUInt (crVersion cr))
+      , (CText "win",   CUInt (crWindowCs cr))
+      , (CText "d0",    CUInt (crBaseDelayCs cr))
+      , (CText "weave", CArray [ CUInt (toInteger (rungIndex p)) | p <- crWeave cr ])
+      , (CText "dtus",  CArray (map CUInt (crFrameIntervalsUs cr)))
+      , (CText "s16",   CArray (map CUInt (crSums16 cr)))
+      , (CText "gct",   CBytes (crGct cr))
+      ]
+    v2Fields
+      | crVersion cr >= 2 =
+          [ (CText "c64", CArray (map CUInt (crCube64 cr)))
+          , (CText "c32", CArray (map CUInt (crCube32 cr)))
+          , (CText "c16", CArray (map CUInt (crCube16 cr)))
+          , (CText "ev",  CArray (map exposureToCbor (crExposures cr)))
+          , (CText "tel", telemetryToCbor (crTelemetry cr))
+          ]
+      | otherwise = []
+
+-- | One rung's exposure as a fixed triple @[duration_us, iso_milli,
+-- zigzag(ev_centistops)]@ — the one place a signed field enters the wire.
+exposureToCbor :: RungExposure -> Cbor
+exposureToCbor e = CArray
+  [ CUInt (reDurationUs e)
+  , CUInt (reIsoMilli e)
+  , CUInt (zigzag (reEvCentistops e))
+  ]
+
+-- | The snapshot as a fixed triple @[arrivals, sampleVolumes, comovement]@;
+-- an absent snapshot is the empty array (absent-as-empty).
+telemetryToCbor :: Maybe TelemetrySnapshot -> Cbor
+telemetryToCbor Nothing   = CArray []
+telemetryToCbor (Just ts) = CArray
+  [ CArray (map CUInt (tsArrivals ts))
+  , CArray (map CUInt (tsSampleVolume ts))
+  , CUInt (tsComovementPermille ts)
   ]
 
 -- | The record's deterministic bytes — the whole point in one function.
@@ -235,6 +359,63 @@ weaveFromCbor (CMap kvs) =
     fromIdx _         = Nothing
 weaveFromCbor _ = Nothing
 
+-- | Read the version field back out of a decoded record — the first thing
+-- a v2 reader looks at.
+versionFromCbor :: Cbor -> Maybe Integer
+versionFromCbor (CMap kvs) =
+  case [ v | (CText "v", v) <- kvs ] of
+    [CUInt n] -> Just n
+    _         -> Nothing
+versionFromCbor _ = Nothing
+
+-- | Read one per-rung cube (@\"c64\"@ \/ @\"c32\"@ \/ @\"c16\"@) back out of
+-- a decoded record. A MISSING key reads as the empty cube — that one rule
+-- is what makes the v2 reader total over v1 records
+-- ('lawV1DecodesUnderV2Reader'); a PRESENT-but-malformed value still
+-- refuses.
+cubeFromCbor :: String -> Cbor -> Maybe [Integer]
+cubeFromCbor key (CMap kvs) =
+  case [ v | (CText k, v) <- kvs, k == key ] of
+    []          -> Just []
+    [CArray xs] -> traverse uintOf xs
+    _           -> Nothing
+cubeFromCbor _ _ = Nothing
+
+-- | Read the per-rung exposures back out of a decoded record, un-zigzagging
+-- the EV offsets. Missing key reads as no exposures (a v1 or derived-mode
+-- record).
+exposuresFromCbor :: Cbor -> Maybe [RungExposure]
+exposuresFromCbor (CMap kvs) =
+  case [ v | (CText "ev", v) <- kvs ] of
+    []          -> Just []
+    [CArray xs] -> traverse fromTriple xs
+    _           -> Nothing
+  where
+    fromTriple (CArray [CUInt d, CUInt i, CUInt z]) =
+      Just (RungExposure d i (unzigzag z))
+    fromTriple _ = Nothing
+exposuresFromCbor _ = Nothing
+
+-- | Read the telemetry snapshot back out of a decoded record. Missing key
+-- and the empty array both read as no snapshot; the outer 'Maybe' is parse
+-- success, the inner is presence.
+telemetryFromCbor :: Cbor -> Maybe (Maybe TelemetrySnapshot)
+telemetryFromCbor (CMap kvs) =
+  case [ v | (CText "tel", v) <- kvs ] of
+    []          -> Just Nothing
+    [CArray []] -> Just Nothing
+    [CArray [CArray as, CArray ns, CUInt c]] -> do
+      as' <- traverse uintOf as
+      ns' <- traverse uintOf ns
+      pure (Just (TelemetrySnapshot as' ns' c))
+    _           -> Nothing
+telemetryFromCbor _ = Nothing
+
+-- | The unsigned leaf every array accessor shares.
+uintOf :: Cbor -> Maybe Integer
+uintOf (CUInt n) = Just n
+uintOf _         = Nothing
+
 -- | The golden sample: version 1, the shipped window, a two-block weave
 -- @[16] ++ [32,64,64]@ (the 1-then-2:1 orders, 8 units), three measured
 -- intervals, tiny sums, a 3-byte GCT stub. Small enough to eyeball, real
@@ -248,6 +429,11 @@ goldenRecord = CaptureRecord
   , crFrameIntervalsUs = [50000, 50000, 50000]
   , crSums16           = [1, 2, 3]
   , crGct              = [0, 1, 2]
+  , crCube64           = []
+  , crCube32           = []
+  , crCube16           = []
+  , crExposures        = []
+  , crTelemetry        = Nothing
   }
 
 -- | The pinned deterministic bytes of 'goldenRecord' — a LITERAL, never
@@ -260,6 +446,67 @@ goldenRecordBytes =
   , 0x62, 0x64, 0x30, 0x05                          -- "d0": 5
   , 0x63, 0x67, 0x63, 0x74, 0x43, 0x00, 0x01, 0x02  -- "gct": h'000102'
   , 0x63, 0x73, 0x31, 0x36, 0x83, 0x01, 0x02, 0x03  -- "s16": [1,2,3]
+  , 0x63, 0x77, 0x69, 0x6E, 0x19, 0x01, 0x40        -- "win": 320
+  , 0x64, 0x64, 0x74, 0x75, 0x73                    -- "dtus":
+  , 0x83, 0x19, 0xC3, 0x50, 0x19, 0xC3, 0x50, 0x19, 0xC3, 0x50 -- [50000 ×3]
+  , 0x65, 0x77, 0x65, 0x61, 0x76, 0x65              -- "weave":
+  , 0x84, 0x02, 0x01, 0x00, 0x00                    -- [2,1,0,0] = 16,32,64,64
+  ]
+
+-- | The version-2 golden: the v1 sample plus every independent-rung field
+-- populated small-but-real — three cubes, three exposures whose durations
+-- AND ISOs double per rung (time gives some stops, gain the rest —
+-- 'SixFour.Spec.CaptureDiversity.lawCadenceSpreadNeedsGainToTile'), a
+-- NEGATIVE fine EV offset (a quarter-stop below the metered reference,
+-- pinning the zigzag odd branch on the wire), and a telemetry snapshot
+-- whose sample volumes are the 1:8:64 lattice
+-- ('SixFour.Spec.RungTelemetry.lawDerivedSignificanceLattice').
+goldenRecordV2 :: CaptureRecord
+goldenRecordV2 = goldenRecord
+  { crVersion   = 2
+  , crCube64    = [4, 5]
+  , crCube32    = [6]
+  , crCube16    = [7, 8, 9]
+  , crExposures =
+      [ RungExposure 12500  1000 (-25) -- fine:   short, low gain, below reference
+      , RungExposure 25000  2000 100   -- mid:    +1 stop
+      , RungExposure 50000  4000 200   -- coarse: +2 stops
+      ]
+  , crTelemetry = Just TelemetrySnapshot
+      { tsArrivals           = [64, 32, 16]
+      , tsSampleVolume       = [1, 8, 64]
+      , tsComovementPermille = 250
+      }
+  }
+
+-- | The pinned deterministic bytes of 'goldenRecordV2' — hand-derived like
+-- the v1 literal, never recomputed ('lawGoldenRecordV2Pinned'). Note the
+-- bytewise key order interleaves old and new keys: @v \< d0 \< ev \< c16 \<
+-- c32 \< c64 \< gct \< s16 \< tel \< win \< dtus \< weave@ (shorter encoded
+-- keys sort first, then ASCII).
+goldenRecordV2Bytes :: [Word8]
+goldenRecordV2Bytes =
+  [ 0xAC                                            -- map(12)
+  , 0x61, 0x76, 0x02                                -- "v": 2
+  , 0x62, 0x64, 0x30, 0x05                          -- "d0": 5
+  , 0x62, 0x65, 0x76                                -- "ev":
+  , 0x83                                            --   3 rung triples
+  , 0x83, 0x19, 0x30, 0xD4, 0x19, 0x03, 0xE8, 0x18, 0x31
+      -- [12500, 1000, zigzag(-25) = 49]
+  , 0x83, 0x19, 0x61, 0xA8, 0x19, 0x07, 0xD0, 0x18, 0xC8
+      -- [25000, 2000, zigzag(100) = 200]
+  , 0x83, 0x19, 0xC3, 0x50, 0x19, 0x0F, 0xA0, 0x19, 0x01, 0x90
+      -- [50000, 4000, zigzag(200) = 400]
+  , 0x63, 0x63, 0x31, 0x36, 0x83, 0x07, 0x08, 0x09  -- "c16": [7,8,9]
+  , 0x63, 0x63, 0x33, 0x32, 0x81, 0x06              -- "c32": [6]
+  , 0x63, 0x63, 0x36, 0x34, 0x82, 0x04, 0x05        -- "c64": [4,5]
+  , 0x63, 0x67, 0x63, 0x74, 0x43, 0x00, 0x01, 0x02  -- "gct": h'000102'
+  , 0x63, 0x73, 0x31, 0x36, 0x83, 0x01, 0x02, 0x03  -- "s16": [1,2,3]
+  , 0x63, 0x74, 0x65, 0x6C                          -- "tel":
+  , 0x83                                            --   [arrivals, N, comovement]
+  , 0x83, 0x18, 0x40, 0x18, 0x20, 0x10              --   [64,32,16]
+  , 0x83, 0x01, 0x08, 0x18, 0x40                    --   [1,8,64]
+  , 0x18, 0xFA                                      --   250 permille
   , 0x63, 0x77, 0x69, 0x6E, 0x19, 0x01, 0x40        -- "win": 320
   , 0x64, 0x64, 0x74, 0x75, 0x73                    -- "dtus":
   , 0x83, 0x19, 0xC3, 0x50, 0x19, 0xC3, 0x50, 0x19, 0xC3, 0x50 -- [50000 ×3]
@@ -316,3 +563,60 @@ lawWeaveSurvivesTheRecord w =
 -- byte. This is the Swift hand-port's parity gate.
 lawGoldenRecordPinned :: Bool
 lawGoldenRecordPinned = encodeRecord goldenRecord == goldenRecordBytes
+
+-- | Zigzag is a non-negative-valued exact bijection: every signed integer
+-- rides major 0 and comes back unchanged.
+lawZigzagRoundTrips :: Integer -> Bool
+lawZigzagRoundTrips n = zigzag n >= 0 && unzigzag (zigzag n) == n
+
+-- | The weave word survives a VERSION-2 record in order too — adding keys
+-- changed nothing about the keystone.
+lawWeaveSurvivesTheRecordV2 :: [WeaveRung] -> Bool
+lawWeaveSurvivesTheRecordV2 w =
+  case decode (encodeRecord goldenRecordV2 { crWeave = w }) of
+    Just (v, []) -> weaveFromCbor v == Just w
+    _            -> False
+
+-- | Every independent-rung field survives the bytes exactly: cubes as
+-- written, exposures with their SIGNED EV offsets un-zigzagged, the
+-- telemetry snapshot (or its absence) intact. Decode inverts encode on the
+-- v2 record. Unsigned fields must be non-negative (the writer's carrier is
+-- u64; the encoder clamps, it never invents sign).
+lawRungFieldsSurviveTheRecord
+  :: [Integer] -> [Integer] -> [Integer]
+  -> [RungExposure] -> Maybe TelemetrySnapshot -> Bool
+lawRungFieldsSurviveTheRecord c64 c32 c16 es tel =
+  case decode (encodeRecord r) of
+    Just (v, []) ->
+      cubeFromCbor "c64" v == Just c64
+        && cubeFromCbor "c32" v == Just c32
+        && cubeFromCbor "c16" v == Just c16
+        && exposuresFromCbor v == Just es
+        && telemetryFromCbor v == Just tel
+    _ -> False
+  where
+    r = goldenRecordV2 { crCube64 = c64, crCube32 = c32, crCube16 = c16
+                       , crExposures = es, crTelemetry = tel }
+
+-- | A v2 reader is TOTAL over v1 records: the pinned v1 golden bytes decode,
+-- the version reads 1, the weave reads back, and every v2 accessor reads
+-- absent-as-empty instead of refusing. Old records never break.
+lawV1DecodesUnderV2Reader :: Bool
+lawV1DecodesUnderV2Reader =
+  case decode goldenRecordBytes of
+    Just (v, []) ->
+      versionFromCbor v == Just 1
+        && weaveFromCbor v == Just [W16, W32, W64, W64]
+        && cubeFromCbor "c64" v == Just []
+        && cubeFromCbor "c32" v == Just []
+        && cubeFromCbor "c16" v == Just []
+        && exposuresFromCbor v == Just []
+        && telemetryFromCbor v == Just Nothing
+    _ -> False
+
+-- | The v2 golden bytes are pinned: the encoder reproduces the hand-derived
+-- literal byte for byte — the Swift v2 writer's parity gate — while the v1
+-- golden stays pinned untouched ('lawGoldenRecordPinned' still holds on the
+-- SAME bytes it always did).
+lawGoldenRecordV2Pinned :: Bool
+lawGoldenRecordV2Pinned = encodeRecord goldenRecordV2 == goldenRecordV2Bytes

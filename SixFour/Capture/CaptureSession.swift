@@ -87,6 +87,46 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// KinematicHaltPrior keystone). Empty vector = the ladder was off.
     var bandHeadCallback: (@Sendable (BandHeadTrainer.Result?, [Int32], Int) -> Void)?
 
+    /// INDEPENDENT LADDER (Feature.multiScaleLadder only): the burst-time weave
+    /// driver — cycles REAL exposures across the interleaved schedule and
+    /// accumulates the three independent per-rung volumes. Fresh per burst,
+    /// constructed AND mutated only on `delegateQueue` (unlike the idle-preview
+    /// `exposureDriver`, which predates that rule). nil keeps the shipped
+    /// single-exposure burst path untouched.
+    private var weaveDriver: BurstWeaveDriver?
+
+    /// RUNG TELEMETRY (Feature.rungTelemetry only): the per-rung instrument
+    /// snapshot, published from `delegateQueue` at the 16-rung cadence (every
+    /// 4th tick = 5 Hz, coalesced — all three rungs ride ONE delivery) plus a
+    /// final snapshot at the burst seam. The receiver marshals to the main
+    /// actor. Works in BOTH modes: independent (weave driver) and derived
+    /// (`ColorHead`, reported honestly as pooling-equivalent / maximal
+    /// correlation). Generation-tagged inside the value (`flowCallback` rules).
+    var rungTelemetryCallback: (@Sendable (RungTelemetry) -> Void)?
+
+    /// SYSTEM TELEMETRY (Feature.rungTelemetry only): tick CPU vs the 50 ms
+    /// budget, v21 hist-buffer lifecycle, camera system pressure. Published
+    /// from `delegateQueue` ON CHANGE and at burst boundaries only.
+    var systemTelemetryCallback: (@Sendable (SystemTelemetry) -> Void)?
+
+    /// Where the per-burst v21 histogram buffer is in its life (delegateQueue-
+    /// confined; feeds the system-telemetry region).
+    private var v21BufferState: SystemTelemetry.V21BufferState = .none
+    /// The burst generation `v21BufferState` belongs to — stamped at every
+    /// burst-start state write. A PREVIOUS burst's detached flow-encode job can
+    /// finish mid-next-burst; its completion may only downgrade the state to
+    /// `.freed` if the state still belongs to ITS generation, so it never
+    /// clobbers a newer burst's live `.allocated` (the ~384 MiB the meter
+    /// exists to watch would otherwise read FREED while resident).
+    private var v21BufferGeneration = 0
+
+    /// Last observed `AVCaptureDevice.SystemPressureState` level, mapped 0…4
+    /// (-1 = never observed). delegateQueue-confined.
+    private var pressureRaw = -1
+
+    /// KVO token for `device.systemPressureState` (publish on change only).
+    private var pressureObservation: NSKeyValueObservation?
+
     /// Monotonic burst counter (delegateQueue-confined): stamps every async flow
     /// delivery so a late encode can never be attributed to a newer capture.
     private(set) var burstGeneration = 0
@@ -195,6 +235,36 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         let sums16: [UInt64]?
         /// The color head's realized 768-byte GCT (Feature.yinYangBands only).
         let gct: [UInt8]?
+        /// The per-rung u64 sum volumes (owned slices only, t-major),
+        /// snapshotted at the burst seam for the capture record — the
+        /// `recordSums16` pattern. Ladder mode (Feature.multiScaleLadder)
+        /// fills all three independent cubes; derived mode fills `cube16`
+        /// only (the ColorHead's retained 16-rung stream — the record's
+        /// c16-only provenance signature). nil when neither ran.
+        let rungCubes: RungCubes?
+        /// The final per-rung telemetry snapshot (Feature.rungTelemetry only;
+        /// nil otherwise) — the record phase persists its exposure/arrival/N/
+        /// independence numbers (`Spec.CaptureRecord` v2 `ev`/`tel`).
+        let rungTelemetry: RungTelemetry?
+        /// The weave word actually executed (owner depth code per tick,
+        /// `Spec.WeaveOrder`). Empty = the uniform single-exposure burst
+        /// (today's all-zeros record word stands).
+        let weaveWord: [UInt64]
+    }
+
+    /// The three per-rung sum volumes: each is `framesN` t-major slices of
+    /// `side²·3` u64 sums. Ladder mode (Feature.multiScaleLadder) fills all
+    /// three with only the frames the weave actually OWNED (settle/dropped
+    /// ticks are skipped honestly and show up in the telemetry's `skipped`,
+    /// never as zero slices here); derived mode fills `cube16` only, from the
+    /// ColorHead's exactly-pooled 16-rung stream.
+    struct RungCubes: Sendable {
+        let cube64: [UInt64]
+        let frames64: Int
+        let cube32: [UInt64]
+        let frames32: Int
+        let cube16: [UInt64]
+        let frames16: Int
     }
 
     /// Aggregate statistics over the 63 inter-frame intervals (in ms).
@@ -321,6 +391,22 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         }
         NSLog("SF-cfg2: device=\(device.localizedName)")
         self.device = device
+        // SYSTEM TELEMETRY (Feature.rungTelemetry): observe the camera's
+        // thermal/system pressure and publish ON CHANGE only (never polled,
+        // never per-tick). The KVO handler runs on an arbitrary thread; state
+        // lives on delegateQueue, so hop there before touching it.
+        if Feature.rungTelemetry {
+            pressureObservation = device.observe(\.systemPressureState, options: [.initial, .new]) {
+                [weak self] dev, _ in
+                let raw = Self.pressureLevelRaw(dev.systemPressureState.level)
+                guard let self else { return }
+                self.delegateQueue.async {
+                    guard raw != self.pressureRaw else { return }
+                    self.pressureRaw = raw
+                    self.publishSystemTelemetry()
+                }
+            }
+        }
         Self.log.debug("[capture] Device: \(device.localizedName, privacy: .public) modelID=\(device.modelID, privacy: .public)")
 
         let input = try AVCaptureDeviceInput(device: device)
@@ -757,16 +843,44 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 self.submittedCount = 0
                 self.droppedFrameCount = 0
                 self.pipelineRef = pipeline
+                // INDEPENDENT LADDER (gated): build the burst weave driver ON-QUEUE
+                // (its confinement rule) from the metered base exposure — the
+                // viewmodel's AE lock just settled, so device.exposureDuration/iso
+                // are a stable reference — and the ACTIVE format's real envelope.
+                // The driver's first stop is programmed here so the ISP starts
+                // settling before frame 0; setExposureModeCustom simply replaces
+                // the .locked mode (the burst's continuous-AE restore in the
+                // viewmodel defer still tears everything down on every path).
+                self.weaveDriver = Feature.multiScaleLadder ? self.makeWeaveDriver() : nil
+                if let driver = self.weaveDriver, let stop = driver.firstStop,
+                   let device = self.device {
+                    _ = MultiScaleLadder.applyExposure(to: device, stop: stop)
+                }
                 // V2.1 (gated): allocate the per-burst camera-box histogram buffer. If the allocation
                 // fails (memory pressure), v21HistBuffer stays nil and the export falls back to the
                 // index-cube proxy field, so capture is never blocked by it.
-                self.v21HistBuffer = Feature.v21Capture
+                // GATED OFF while the weave driver runs: the histogram accumulates
+                // linearized values assuming ONE exposure across the burst; EV-cycled
+                // frames would silently skew the probability field (additive gate —
+                // the v21 path is untouched whenever the ladder is off).
+                self.v21HistBuffer = (Feature.v21Capture && self.weaveDriver == nil)
                     ? pipeline.makeV21HistBuffer(frames: self.targetFrameCount, nLevels: self.v21Levels)
                     : nil
+                self.v21BufferState = self.v21HistBuffer != nil ? .allocated : .none
+                // Stamp the generation this burst's finishBurst will mint (the
+                // same `burstGeneration + 1` convention the telemetry pulses
+                // use), so a stale flow-job completion can't downgrade it.
+                self.v21BufferGeneration = self.burstGeneration + 1
+                if self.v21HistBuffer != nil { self.publishSystemTelemetry() }
                 // YIN-YANG (gated): a fresh ladder per burst. cropSide 512 keeps the
                 // per-tick Swift colorimetry ≈256k px (~ms in release), well inside
                 // the 50 ms tick budget on delegateQueue.
-                self.colorHead = Feature.yinYangBands ? ColorHead(cropSide: 512) : nil
+                // GATED OFF while the weave driver runs: the derived head's exact
+                // u64 sums / t-band pairs / GCT assume uniform exposure — EV-cycled
+                // frames would corrupt them. The head is gated, never deleted; with
+                // the ladder off this line is byte-for-byte today's behaviour.
+                self.colorHead = (Feature.yinYangBands && self.weaveDriver == nil)
+                    ? ColorHead(cropSide: 512) : nil
                 self.continuation = cont
                 self.firstFrameVerified = false
                 self.collecting = true
@@ -859,6 +973,63 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         return String(chars)
     }
 
+    // MARK: - The independent ladder + telemetry (delegate queue)
+
+    /// Build the burst weave driver from the metered base exposure (the AE lock
+    /// just settled, so `exposureDuration`/`iso` are the scene's reference) and
+    /// the ACTIVE format's real sensor envelope. The exposure-TIME axis is
+    /// capped at the pinned frame duration (1/20 s — the hardware cadence is
+    /// never touched; `lawCadenceSpreadNeedsGainToTile` says the remaining
+    /// stops come from GAIN, which `MultiScaleLadder.schedule` already encodes).
+    /// Called only on `delegateQueue` (the driver's confinement rule).
+    private func makeWeaveDriver() -> BurstWeaveDriver? {
+        guard let device else { return nil }
+        let fmt = device.activeFormat
+        let frameDur = 1.0 / Double(targetFps)
+        let sensor = MultiScaleLadder.SensorLimits(
+            minISO: Double(fmt.minISO),
+            maxISO: Double(fmt.maxISO),
+            minDurationSeconds: CMTimeGetSeconds(fmt.minExposureDuration),
+            maxDurationSeconds: min(CMTimeGetSeconds(fmt.maxExposureDuration), frameDur))
+        let meteredDur = CMTimeGetSeconds(device.exposureDuration)
+        let meteredISO = Double(device.iso)
+        let stops = MultiScaleLadder.schedule(
+            evSpreadStops: 4,   // ≤2 stops of TIME headroom at 20 fps; the rest is gain
+            sensor: sensor,
+            referenceDuration: meteredDur > 0 ? meteredDur : frameDur / 4,
+            referenceISO: meteredISO > 0 ? meteredISO : Double(fmt.minISO))
+        return BurstWeaveDriver(plan: MultiScaleLadder.weavePlan(frameCount: targetFrameCount),
+                                stops: stops, cropSide: 512)
+    }
+
+    /// One SystemTelemetry snapshot from the current delegate-queue state,
+    /// delivered when `Feature.rungTelemetry` is on. Callers are the CHANGE
+    /// sites only: v21 buffer lifecycle transitions, pressure-level changes,
+    /// and the once-per-burst seam — never the per-tick path.
+    private func publishSystemTelemetry() {
+        guard Feature.rungTelemetry, let cb = systemTelemetryCallback else { return }
+        let mean = tickCpuCount > 0 ? Int(tickCpuTotalUs) / tickCpuCount : 0
+        cb(SystemTelemetry(tickCpuMeanUs: mean,
+                           tickCpuMaxUs: Int(tickCpuMaxUs),
+                           tickCount: tickCpuCount,
+                           tickBudgetUs: 50_000,
+                           v21Buffer: v21BufferState,
+                           pressureLevel: pressureRaw))
+    }
+
+    /// Map `AVCaptureDevice.SystemPressureState.Level` to the telemetry's
+    /// 0…4 scale (nominal → shutdown); -1 for anything unknown.
+    private static func pressureLevelRaw(_ level: AVCaptureDevice.SystemPressureState.Level) -> Int {
+        switch level {
+        case .nominal: return 0
+        case .fair: return 1
+        case .serious: return 2
+        case .critical: return 3
+        case .shutdown: return 4
+        default: return -1
+        }
+    }
+
     // MARK: - Burst completion (on delegate queue)
 
     private func finishBurst() {
@@ -878,9 +1049,46 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             let maxMs = Double(tickCpuMaxUs) / 1000.0
             Self.log.log("[perf] yin-yang tick CPU: \(self.tickCpuCount) ticks, mean \(meanMs, format: .fixed(precision: 2)) ms, max \(maxMs, format: .fixed(precision: 2)) ms (50 ms tick budget)")
         }
+        // SYSTEM TELEMETRY: publish the burst's tick-CPU aggregate BEFORE the
+        // counters reset (burst-boundary publish, never per tick).
+        publishSystemTelemetry()
         tickCpuTotalUs = 0
         tickCpuMaxUs = 0
         tickCpuCount = 0
+        // INDEPENDENT LADDER + RUNG TELEMETRY snapshots — the `recordSums16`
+        // pattern: take everything the record phase needs HERE, before the
+        // driver/head are released. The derived branch reads the colorHead
+        // before the yin-yang block below consumes it.
+        var recordRungCubes: RungCubes?
+        var recordRungTelemetry: RungTelemetry?
+        var recordWeaveWord: [UInt64] = []
+        if let driver = weaveDriver {
+            recordRungCubes = driver.cubesSnapshot()
+            recordWeaveWord = MultiScaleLadder.weaveWord(driver.plan)
+            if Feature.rungTelemetry {
+                recordRungTelemetry = driver.telemetrySnapshot(generation: generation)
+            }
+            // [perf] once-per-burst per-rung arrival/N summary (never per tick).
+            if let t = recordRungTelemetry {
+                for r in t.rungs {
+                    Self.log.log("[perf] rung \(r.side)²: \(r.arrivals)/\(r.expectedArrivals) owned, \(r.skipped) skipped, N=\(r.sampleVolume), EV \(r.evCentistops)c, comove \(r.comovementPermilleVsCoarser)‰")
+                }
+            }
+            weaveDriver = nil
+        } else if Feature.rungTelemetry, let ch = colorHead {
+            recordRungTelemetry = RungTelemetry.derived(
+                ticks: ch.tick, fineBinArea: ch.pixelsPerFineBin, generation: generation)
+            // DERIVED-MODE cube for the record's v2 `c16`: the ColorHead's
+            // retained 16-rung stream. cube64/cube32 stay empty — the
+            // c16-only shape is the derived-provenance signature
+            // (`Spec.CaptureRecord`: "derived mode writes c16 only").
+            if ch.cube16Frames > 0 {
+                recordRungCubes = RungCubes(cube64: [], frames64: 0,
+                                            cube32: [], frames32: 0,
+                                            cube16: ch.cube16, frames16: ch.cube16Frames)
+            }
+        }
+        if let t = recordRungTelemetry { rungTelemetryCallback?(t) }
         // V2.1 (gated): pool the camera-box histogram over t into [y,x,3,256]. Safe to read here: the
         // last frame's command buffer (which carried the 64th hist pass) has completed, and a single
         // queue runs command buffers in order, so all 64 slices are written.
@@ -917,9 +1125,31 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                                                            tileSide: tile, nLevels: levels)
                     Self.log.log("V2.1 flow (async gen=\(generation)): \(flow == nil ? "nil (encode failed)" : "encoded \(flow!.maps.count) frames")")
                     callback?(flow, generation)
-                    queue.async { [weak self] in self?.flowJobActive = false }
+                    queue.async { [weak self] in
+                        guard let self else { return }
+                        self.flowJobActive = false
+                        // SYSTEM TELEMETRY: the detached job released the last
+                        // reference to the ~384 MiB hist buffer — lifecycle event.
+                        // GENERATION-GUARDED: this can land mid-NEXT-burst; if a
+                        // newer burst already stamped its own state (allocated or
+                        // none), downgrading it to .freed here would misreport a
+                        // live buffer as released. Only this job's own generation
+                        // may be freed by this closure.
+                        guard self.v21BufferGeneration == generation else { return }
+                        self.v21BufferState = .freed
+                        self.publishSystemTelemetry()
+                    }
                 }
+                // SYSTEM TELEMETRY: the buffer is now HELD by the detached job.
+                v21BufferState = .held
+                publishSystemTelemetry()
             }
+        }
+        if v21BufferState == .allocated {
+            // Not handed to a flow job (flag off, skip branch, or no pipeline):
+            // dropping our reference below frees it — lifecycle event.
+            v21BufferState = .freed
+            publishSystemTelemetry()
         }
         v21HistBuffer = nil
         // V3.0 (gated): train this capture's somatic θ_up — burst tiles → Q16 volume →
@@ -1026,7 +1256,10 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         collecting = false
         cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing, v21Counts: nil,
                                             flow: nil, thetaUp: nil, intervalsUs: intervalsUs,
-                                            sums16: recordSums16, gct: recordGCT))
+                                            sums16: recordSums16, gct: recordGCT,
+                                            rungCubes: recordRungCubes,
+                                            rungTelemetry: recordRungTelemetry,
+                                            weaveWord: recordWeaveWord))
     }
 
     /// Pure aggregation of inter-frame timing — `static` and side-effect-free so
@@ -1121,7 +1354,9 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
                 continuation = nil
                 pipelineRef = nil
                 v21HistBuffer = nil
+                v21BufferState = .none
                 colorHead = nil
+                weaveDriver = nil   // the viewmodel's defer restores continuous AE
                 collecting = false
                 cont?.resume(throwing: CaptureError.firstFramePixelFormatMismatch(
                     expected: want10Bit,
@@ -1180,22 +1415,55 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
             continuation = nil
             pipelineRef = nil
             v21HistBuffer = nil
+            v21BufferState = .none
             colorHead = nil
+            weaveDriver = nil   // the viewmodel's defer restores continuous AE
             collecting = false
             cont?.resume(throwing: error)
             return
         }
 
-        // YIN-YANG (gated): run the ladder tick AFTER the GPU submission so the
-        // pipeline is never kept waiting on CPU colorimetry. Synchronous on
-        // delegateQueue — ColorHead's tick pairing needs frame order. A nil pool
-        // (unexpected geometry) just starves the ladder; the floor ships.
-        // TROUBLESHOOT: the tick's CPU cost aggregates here and logs ONCE per
-        // burst in finishBurst — per-tick logging is itself a hot-path cost.
-        if let ch = colorHead {
+        // INDEPENDENT LADDER (gated) or YIN-YANG (gated): run the ladder tick
+        // AFTER the GPU submission so the pipeline is never kept waiting on CPU
+        // colorimetry. Synchronous on delegateQueue — frame ORDER is the whole
+        // point (the weave word / tick pairing). A nil pool (unexpected
+        // geometry) just starves the ladder; the floor ships. The two heads are
+        // mutually exclusive by construction (captureBurst gates colorHead off
+        // while the weave driver runs). TROUBLESHOOT: the tick's CPU cost
+        // aggregates here and logs ONCE per burst in finishBurst — per-tick
+        // logging is itself a hot-path cost.
+        if let driver = weaveDriver {
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            let tick = submittedCount - 1
+            driver.ingest(tickIndex: tick, pixelBuffer: pixelBuffer)
+            // Program the NEXT dwell's exposure at the boundary so its settle
+            // ticks absorb the ISP latency (device-only; no-op in the sim).
+            if let next = driver.exposureSwitchAfter(tick: tick), let device {
+                _ = MultiScaleLadder.applyExposure(to: device, stop: next)
+            }
+            // COALESCED telemetry pulse at the 16-rung cadence (every 4th tick
+            // = 5 Hz): one delivery carries all three rungs — never a per-frame
+            // SwiftUI storm. Stamped with the generation finishBurst will mint.
+            if Feature.rungTelemetry, (tick + 1) % 4 == 0, let cb = rungTelemetryCallback {
+                cb(driver.telemetrySnapshot(generation: burstGeneration + 1))
+            }
+            let us = (DispatchTime.now().uptimeNanoseconds - t0) / 1000
+            tickCpuTotalUs += us
+            if us > tickCpuMaxUs { tickCpuMaxUs = us }
+            tickCpuCount += 1
+        } else if let ch = colorHead {
             let t0 = DispatchTime.now().uptimeNanoseconds
             if let sums = ch.poolSums64(fromX420: pixelBuffer) {
                 ch.ingest(sums)
+                // COALESCED derived-mode telemetry at the 16-rung cadence (every
+                // 4th ingested tick = 5 Hz) — constants + counters, no computation
+                // (the coarse rungs ARE exact pools; comovement is 1000‰ by
+                // construction and reported so). Inside the ingest branch so a
+                // starved ladder never republishes a stale snapshot per frame.
+                if Feature.rungTelemetry, ch.tick % 4 == 0, let cb = rungTelemetryCallback {
+                    cb(RungTelemetry.derived(ticks: ch.tick, fineBinArea: ch.pixelsPerFineBin,
+                                             generation: burstGeneration + 1))
+                }
             }
             let us = (DispatchTime.now().uptimeNanoseconds - t0) / 1000
             tickCpuTotalUs += us
@@ -1215,6 +1483,9 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
         // that punch a ~2× gap into the captured cadence.
         if collecting {
             droppedFrameCount += 1
+            // Charge the drop to the rung whose exposure was live — the
+            // telemetry's honest `skipped` accounting.
+            weaveDriver?.noteDropped(tickIndex: submittedCount)
         }
         Self.log.warning("Camera DROPPED a frame (kernel-side); dropped this burst = \(self.droppedFrameCount)")
     }

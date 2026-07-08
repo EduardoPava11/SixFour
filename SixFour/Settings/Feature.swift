@@ -70,6 +70,23 @@ enum Feature {
     /// today's single-exposure path — the ladder is statically unreachable.
     static let multiScaleLadder = false
 
+    /// RUNG TELEMETRY — the GRID's per-rung instrument feed (`Spec.RungTelemetry`).
+    /// **ON by default: it works honestly in BOTH capture modes.**
+    ///
+    /// With this on, every burst publishes a per-rung `RungTelemetry` snapshot
+    /// (coalesced at the 16-rung cadence, 5 Hz, plus one final snapshot at the
+    /// burst seam) and a `SystemTelemetry` snapshot on state changes (tick CPU vs
+    /// the 50 ms budget, v21 hist-buffer lifecycle, camera system pressure). In
+    /// DERIVED mode (the shipped ladder, `multiScaleLadder` off) it reports the
+    /// pooling-equivalent EV (+k stops per rung, `lawExposureVocabulariesAgreeOnLadder`),
+    /// the derived sample lattice N(k)=8^k·N₀, and independence health =
+    /// "derived / maximal correlation" honestly (comovement 1000‰ by construction).
+    /// In INDEPENDENT mode (`multiScaleLadder` on) it reports the optical EV/ISO/
+    /// duration per rung, actual owned-frame counts, and the measured co-movement
+    /// statistic. Telemetry-only: no GIF byte depends on it; flipping it off
+    /// silences the callbacks and nothing else changes.
+    static let rungTelemetry = true
+
     /// The yin-yang circuit LIVE at the capture seam. **ON while the color head ships.**
     ///
     /// With this on, every burst tick also runs the 16/32/64 ladder (`ColorHead`:

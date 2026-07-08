@@ -786,6 +786,22 @@ integer-exact), 16×16×3 u64 bin sums (the transitive carrier, stored once), th
 Total decoder: @lawDecodeInvertsEncode@ + @lawEncodingIsCanonicallyStable@ (equal content ⇒ identical
 bytes: records content-address and diff). Golden bytes @lawGoldenRecordPinned@ gate the hand-written
 Swift writer (Capture/CaptureRecordWriter). Additive),
+"SixFour.Spec.RungTelemetry" (★ WHAT THE GRID SHOWS PER RUNG — the exact per-rung telemetry algebra,
+BOTH modes. EXPOSURE, one vocabulary: optical light ratio (duration×ISO vs the fine reference, exact ℚ)
+vs pooling-equivalent stops (derived); they COINCIDE on the ladder's one integer k
+(@lawExposureVocabulariesAgreeOnLadder@ = ColorTime's @lawStopEqualsPoolIndex@ axis). ARRIVAL: 64/32/16
+pulses per 320 cs window at native intervals 5/10/20 cs (@lawExpectedArrivalsPinned@ = WeaveOrder's
+delays); a dropped pulse has a unique interval signature — one late + one missing, span conserved
+(@lawDroppedPulseIsDetectable@). SIGNIFICANCE: derived N(k)=8^k·N₀ COMPOSED from ColorTime poolDepth
+(2^k) × GaussianLadder rungIdealNorm (4^k), the 1:8:64 per-voxel lattice (@lawDerivedSignificanceLattice@,
+@lawRungBuysThreeBits@ ×8 = +3 bits/rung); independent N = actual owned counts (monotone
+@lawIndependentCountsMonotone@); the √N meter reads exactly on N (@lawSignificanceSqrtMonotone@, squares).
+INDEPENDENCE HEALTH: integer co-movement of per-bin deltas after pooling fine to the coarse lattice
+(pooling composes @lawPoolCompose@) — derived pooling SATURATES it at every shared scale
+(@lawDerivedPoolingIsMaximal@ foil, @lawDerivedStaysMaximalUnderSharedPool@ equivariance) while dead-time
+photons bound independent streams strictly away (@lawIndependentNoiseBoundedAway@ witness,
+@lawDisagreementIsDetected@); ratio 1 = "this rung fell back to derived pooling", the GRID's warning
+light; @isDerivedPool@ = the byte-exact provenance bit for the capture record. Additive),
 "SixFour.Spec.BitLedger" (★ THE INFORMATION LEDGER — exact bit accounting 10-bit sensor code →
 8-bit GIF89a byte: NEVER a direct 10→8 truncation. DECODE-WIDEN (strictly monotone LUT ⇒ injective,
 zero loss, @lawStrictMonotoneDecodeIsLossless@) → INTEGRATE (u64 sums; 2^k samples of b bits need

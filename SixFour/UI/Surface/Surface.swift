@@ -116,6 +116,19 @@ final class Surface {
     var opticalTile32: [SIMD3<UInt8>] = []
     var opticalTile16: [SIMD3<UInt8>] = []
 
+    /// RUNG TELEMETRY (Feature.rungTelemetry only): the latest per-rung instrument
+    /// snapshot — exposure state, arrival pulse, √N significance, independence
+    /// health — folded from the engine by `RungTelemetryFolds` at the ≤ 5 Hz rung
+    /// cadence + the burst seam. The `liveScene` rung64/rung32/rung16 flank regions
+    /// (`RungTelemetryFlanks`) read it. nil until a burst runs; the last burst's
+    /// final snapshot then persists (an instrument, not a per-capture stash).
+    var rungTelemetry: RungTelemetry?
+
+    /// SYSTEM TELEMETRY (Feature.rungTelemetry only): tick CPU vs the 50 ms budget,
+    /// the v21 hist-buffer lifecycle, thermal/system pressure — published on change
+    /// and at burst boundaries only. The `liveScene` system region reads it.
+    var systemTelemetry: SystemTelemetry?
+
     /// The Z₆₄ playback cursor — the current frame `0..<64`. Advanced by κ each tick.
     var cursor: Int = 0
 

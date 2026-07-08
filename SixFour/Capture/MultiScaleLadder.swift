@@ -55,6 +55,16 @@ enum MultiScaleLadder {
         /// positive = dimmer luminances captured (more exposure/gain). The three
         /// offsets TILE the dynamic range (`Spec.CaptureDiversity.lawTilingMaximizesCoverage`).
         let evOffsetStops: Double
+
+        /// The offset as SIGNED centistops — the integer the telemetry publishes
+        /// and the capture record's zigzag carries (`Spec.CaptureRecord` v2 units).
+        var evCentistops: Int { Int((evOffsetStops * 100).rounded()) }
+
+        /// Duration in exact integer microseconds (the record/telemetry unit).
+        var durationUs: Int64 { Int64((durationSeconds * 1_000_000).rounded()) }
+
+        /// Gain in ISO milli-units (ISO 100 = 100_000 — the record/telemetry unit).
+        var isoMilli: Int64 { Int64((iso * 1000).rounded()) }
     }
 
     /// The sensor envelope the schedule must stay within (device-reported bounds).
@@ -89,6 +99,58 @@ enum MultiScaleLadder {
             let iso = clamp(refISO * pow(2.0, gainStops), sensor.minISO, sensor.maxISO)
             return Stop(scale: scale, durationSeconds: dur, iso: iso, evOffsetStops: ev)
         }
+    }
+
+    // MARK: - The burst weave (pure — the interleaved schedule over 64 ticks)
+
+    /// One hardware tick of the woven burst plan.
+    struct WeaveTick: Equatable {
+        /// The scale whose exposure is LIVE on this tick.
+        let scale: Scale
+        /// True = the ISP has settled and this frame is OWNED by `scale`
+        /// (routed into its independent volume). False = a settle tick right
+        /// after an exposure switch — skipped honestly, counted per rung.
+        let owned: Bool
+    }
+
+    /// The deterministic 64-tick weave of the 3.2 s burst: a repeating 16-tick
+    /// super-cycle of dwells `fine64 ×8, mid32 ×5, coarse16 ×3`, the first
+    /// `settleFrames` ticks of each dwell unsettled (the ISP pipeline clears in
+    /// 1–3 frames; `ExposureBracketDriver` uses the same accounting). The dwell
+    /// weights approximate the rungs' cadence ratio 4:2:1 within one sensor's
+    /// 64 hardware ticks: with the default `settleFrames = 2` the owned counts
+    /// are 24 / 12 / 4 per burst. Deterministic and pure — the owner word for
+    /// the capture record falls straight out of it (`weaveWord`). The fine
+    /// dwell leads so the burst opens at the reference (metered) exposure.
+    static func weavePlan(frameCount: Int = 64, settleFrames: Int = 2) -> [WeaveTick] {
+        let dwells: [(Scale, Int)] = [(.fine64, 8), (.mid32, 5), (.coarse16, 3)]
+        let settle = max(1, settleFrames)
+        var plan: [WeaveTick] = []
+        plan.reserveCapacity(max(0, frameCount))
+        while plan.count < frameCount {
+            for (scale, len) in dwells {
+                for i in 0..<len where plan.count < frameCount {
+                    plan.append(WeaveTick(scale: scale, owned: i >= settle))
+                }
+            }
+        }
+        return plan
+    }
+
+    /// The weave WORD: per-tick owner depth code (0 = 16³, 1 = 32³, 2 = 64³ —
+    /// `Scale.rawValue`, the same code `RenderSelect` reads). Settle ticks carry
+    /// the scale whose exposure was live (the sensor WAS exposed at that stop;
+    /// the frame just isn't evidence). This is the temporal ORDER
+    /// `Spec.WeaveOrder` proves invisible to every conserved marginal — it must
+    /// be persisted in the capture record or it is gone.
+    static func weaveWord(_ plan: [WeaveTick]) -> [UInt64] {
+        plan.map { UInt64($0.scale.rawValue) }
+    }
+
+    /// Frames the plan OWNS for `scale` — the independent-mode
+    /// `expectedArrivals` of that rung's telemetry.
+    static func plannedOwnedCount(_ plan: [WeaveTick], scale: Scale) -> Int {
+        plan.lazy.filter { $0.scale == scale && $0.owned }.count
     }
 
     // MARK: - Assemble the three independent volumes (pure)

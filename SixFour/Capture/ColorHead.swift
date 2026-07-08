@@ -48,9 +48,25 @@ final class ColorHead {
     /// Latest 768-byte Global Color Table realized from `latest16`.
     private(set) var latestGCT: [UInt8]?
 
+    /// DERIVED-MODE 16-rung burst volume: every emitted 16-rung frame in
+    /// order, t-major (16·16·3 u64 per slice) — what the capture record's v2
+    /// `c16` cube carries when the independent ladder is OFF (the c16-only
+    /// signature IS the derived-provenance story; `Spec.CaptureRecord`).
+    /// Capacity reserved once at init (16 frames ≈ 96 KiB); appends happen at
+    /// the 5 Hz 16-rung cadence only — nothing new on the per-tick path.
+    private(set) var cube16: [UInt64] = []
+    /// Frames accumulated into `cube16` (== `tick / 4`).
+    private(set) var cube16Frames = 0
+
     /// Per-slot L-trajectories (R+G+B sum per 16-rung frame): 256 histories,
     /// newest last — the particle streams `haltFloor()` certifies.
     private(set) var slotHistory: [[Int64]]
+
+    /// Pixels pooled into ONE 64-rung bin per frame: `(crop.side/64)² =
+    /// lastCropArea/16` (exact — crop sides are multiples of 64). This is the
+    /// telemetry's fine sample count N₀ (`Spec.RungTelemetry`: the derived
+    /// lattice is `N(k) = 8^k·N₀` on exactly this base). 0 until a frame pools.
+    var pixelsPerFineBin: Int64 { lastCropArea / 16 }
 
     private var pending32: [UInt64]?
     private var pending16: [UInt64]?
@@ -83,6 +99,7 @@ final class ColorHead {
         self.slotHistory = Array(repeating: [], count: 256)
         tBandFeatures.reserveCapacity(ColorHead.maxRetainedPairs * 4)
         tBandTargets.reserveCapacity(ColorHead.maxRetainedPairs)
+        cube16.reserveCapacity(16 * 16 * 16 * 3)   // the 16 frames of a full burst
     }
 
     private let historyTicks: Int
@@ -270,6 +287,8 @@ final class ColorHead {
                 let frame16 = zip(held16, spatial16).map(+)
                 latest16 = frame16
                 pending16 = nil
+                cube16.append(contentsOf: frame16)   // the record's derived c16
+                cube16Frames += 1
                 emit16(frame16)
             } else {
                 pending16 = spatial16

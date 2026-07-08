@@ -40,6 +40,7 @@ module SixFour.Spec.GridLayout
   , captureScene
   , decisionScene
   , curateScene
+  , liveScene
     -- * Helpers
   , regionCells
   , regionsOverlap
@@ -179,6 +180,42 @@ curateScene =
                         , lrWidget = 4, lrPriority = 4, lrInteractive = True })
   , ("accept",  LRegion { lrCol = 34, lrRow = 176, lrW = 32, lrH = 16
                         , lrWidget = 5, lrPriority = 5, lrInteractive = True })
+  ]
+
+-- | THE LIVE TELEMETRY SCENE — the rung-ladder instrument regions shown WHILE the
+-- burst runs (the LivePhaseField surface). The GRID mirrors the ladder: the
+-- self-centered inverted pyramid renders its 64\/32\/16 bands at rows 49–112 \/
+-- 117–148 \/ 153–168 (columns 18–81, derived from the 480 pt centered VStack), and
+-- each rung's telemetry block rides the RIGHT FLANK beside its own band — same row
+-- span, columns 84–97 — so a rung's arrival pulse, exposure state (optical stops
+-- when the 'SixFour.Spec.MultiScaleCapture' ladder is on; pooling-equivalent stops
+-- when derived), significance (√N per 'SixFour.Spec.ColorTime' N(k) = 8^k·N₀), and
+-- independence health land AT the rung they describe, at the rung's native cadence:
+--
+--   * @rung64@ : 14×64 flank, rows 49–112 — the 20 Hz fine rung's meters.
+--   * @rung32@ : 14×32 flank, rows 117–148 — the 10 Hz mid rung's meters.
+--   * @rung16@ : 14×16 flank, rows 153–168 — the 5 Hz coarse rung's meters
+--     (kept clear of the 16² shutter vertex at columns 42–57).
+--   * @system@ : 64×24 machine ring below the pyramid, rows 178–201, columns
+--     18–81 — tick CPU vs the 50 ms budget, the 384 MiB v21 hist-buffer
+--     lifecycle (allocated\/held\/freed), and thermal pressure.
+--
+-- ALL four are non-interactive (meters, not controls): they must never intercept
+-- the ground LOOK-swipe\/EV-drag layer or the shutter tap, so the 11-cell touch
+-- floor does not bind and the slim 14-cell flank is legal. The flank columns
+-- 84–97 sit clear of the pyramid columns 18–81 and the palette (42,145,16×16);
+-- rows ≥ 49 and ≤ 201 clear both corner arcs and both OS safe areas — all
+-- re-proven by the eight laws below over this scene in @Properties.GridLayout@.
+liveScene :: Scene
+liveScene =
+  [ ("rung64", LRegion { lrCol = 84, lrRow = 49,  lrW = 14, lrH = 64
+                       , lrWidget = 0, lrPriority = 0, lrInteractive = False })
+  , ("rung32", LRegion { lrCol = 84, lrRow = 117, lrW = 14, lrH = 32
+                       , lrWidget = 1, lrPriority = 1, lrInteractive = False })
+  , ("rung16", LRegion { lrCol = 84, lrRow = 153, lrW = 14, lrH = 16
+                       , lrWidget = 2, lrPriority = 2, lrInteractive = False })
+  , ("system", LRegion { lrCol = 18, lrRow = 178, lrW = 64, lrH = 24
+                       , lrWidget = 3, lrPriority = 3, lrInteractive = False })
   ]
 
 -- | The screen cells @(col,row)@ a region claims.
