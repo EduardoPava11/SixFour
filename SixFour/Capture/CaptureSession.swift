@@ -170,6 +170,17 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         /// and the gene arrives late via `thetaUpCallback`. Its absence is the deterministic
         /// floor (zero-gene == floor); the decide surface attaches the gene when it lands.
         let thetaUp: CaptureGene.ThetaUp?
+        /// Measured per-frame intervals in integer MICROSECONDS (63 values for a
+        /// clean 64-frame burst; empty when < 2 frames landed). The capture
+        /// record (`Spec.CaptureRecord`) persists these — the one place the
+        /// float timestamps round to integers.
+        let intervalsUs: [UInt64]
+        /// The color head's final 16×16×3 u64 bin sums (Feature.yinYangBands
+        /// only; nil otherwise) — the exact transitive carrier, snapshotted
+        /// before the head is released.
+        let sums16: [UInt64]?
+        /// The color head's realized 768-byte GCT (Feature.yinYangBands only).
+        let gct: [UInt8]?
     }
 
     /// Aggregate statistics over the 63 inter-frame intervals (in ms).
@@ -914,7 +925,13 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         // runs OFF the seam like θ_up above. Verdict semantics are the
         // YinYangCircuitTests conventions: floor = target variance; learned
         // ≈ finalMSE ≪ floor, floored ≈ finalMSE near floor (honest control).
+        // Capture-record snapshot (Spec.CaptureRecord): the exact 16² sums and
+        // the realized GCT must be taken here, before the head is released.
+        var recordSums16: [UInt64]?
+        var recordGCT: [UInt8]?
         if let ch = colorHead {
+            recordSums16 = ch.latest16
+            recordGCT = ch.latestGCT
             let pxPerBin = Int64(ch.cropSide / 64) * Int64(ch.cropSide / 64)
             // linear16 L-sums per fine bin: ~pxPerBin·65535 per channel at clip —
             // 1/(pxPerBin·65535) puts features at O(1) (the drain contract).
@@ -961,6 +978,11 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 }
             }
         }
+        // Per-frame intervals for the capture record, µs-exact, taken before
+        // the timestamps are cleared. Negative gaps (PTS jitter) clamp to 0.
+        let intervalsUs: [UInt64] = zip(ptsSeconds.dropFirst(), ptsSeconds).map {
+            UInt64((Swift.max(0, $0 - $1) * 1_000_000).rounded())
+        }
         let snapshot = collected
         let cont = continuation
         collected.removeAll(keepingCapacity: true)
@@ -971,7 +993,8 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         continuation = nil
         collecting = false
         cont?.resume(returning: BurstResult(tiles: snapshot, timing: timing, v21Counts: v21Counts,
-                                            flow: nil, thetaUp: nil))
+                                            flow: nil, thetaUp: nil, intervalsUs: intervalsUs,
+                                            sums16: recordSums16, gct: recordGCT))
     }
 
     /// Pure aggregation of inter-frame timing — `static` and side-effect-free so

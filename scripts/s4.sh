@@ -13,7 +13,7 @@
 # Verbs:
 #   codegen   cabal run spec-codegen   — regen SixFour/Generated/* + trainer/generated/*
 #   verify    cabal test               — all Spec laws + per-kernel s4_* laws
-#   native    zig build test (host) + Native/build-ios.sh (device static lib)
+#   native    scripts/build-kernels-dylib.sh (host dylib for the trainer)
 #   gen       scripts/regenerate.sh    — xcodegen + pbxproj filetype patch + post-check
 #   lint      scripts/lint-grid.sh     — GRID design-language invariants
 #   build     xcodebuild (iPhone 17 Pro Simulator)
@@ -43,7 +43,7 @@ cabal_env() {
 
 verb_codegen() { cabal_env "run -v0 spec-codegen"; }
 verb_verify()  { cabal_env "test"; }
-verb_native()  { ( cd "$ROOT/Native" && zig build test ); "$ROOT/Native/build-ios.sh"; }
+verb_native()  { "$ROOT/scripts/build-kernels-dylib.sh"; }
 verb_gen()     { "$ROOT/scripts/regenerate.sh"; }
 verb_lint()    { "$ROOT/scripts/lint-grid.sh" && "$ROOT/scripts/lint-no-global-palette.sh"; }
 verb_build()   { xcodebuild -scheme SixFour -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build; }

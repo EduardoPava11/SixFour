@@ -17,7 +17,7 @@ import pathlib
 
 import numpy as np
 
-from zig_native import linear_to_oklab_q16, srgb8_to_oklab_q16
+from native_kernels import linear_to_oklab_q16, srgb8_to_oklab_q16
 
 _GOLDEN = pathlib.Path(__file__).parent / "out" / "color_golden.json"
 

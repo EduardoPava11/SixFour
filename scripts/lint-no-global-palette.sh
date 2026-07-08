@@ -17,8 +17,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-ROOTS=(SixFour Native spec)
-INCLUDES=(--include='*.swift' --include='*.zig' --include='*.hs')
+ROOTS=(SixFour spec)
+INCLUDES=(--include='*.swift' --include='*.hs')
 fail=0
 
 # check_frozen <symbol/pattern> <allowlisted-file>...
@@ -49,7 +49,7 @@ check_frozen 'globalCollapse' \
   SixFour/Native/SixFourNative.swift \
   SixFour/Encoder/DeterministicRenderer.swift \
   SixFour/Palette/PaletteCollapse.swift \
-  Native/src/kernels.zig \
+  SixFour/Kernels/KernelsQuantize.swift \
   spec/app/Fixtures.hs \
   spec/test/Properties/GroupRGBT.hs \
   spec/test/Properties/Collapse.hs \
@@ -66,8 +66,7 @@ check_frozen 's4_global_collapse' \
   SixFour/UI/Screens/Capture/CaptureViewModel.swift \
   SixFour/Native/SixFourNative.swift \
   SixFour/Encoder/DeterministicRenderer.swift \
-  Native/src/collapse_fixture_test.zig \
-  Native/src/kernels.zig \
+  SixFour/Kernels/KernelsQuantize.swift \
   spec/app/Fixtures.hs \
   spec/src/SixFour/Spec/GlobalCollapseQ16.hs \
   spec/src/SixFour/Spec/Map.hs

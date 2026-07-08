@@ -23,7 +23,7 @@ const lenses = [
     2. Map the byte-exact genome contract END TO END across all three owners:
        - Haskell: Spec.Collapse (globalCollapseQ16 / farthestPointSeedsQ16), Spec.Quad4 / Spec.SigmaPairFixed / Spec.PairTreeFixed (the b4/b2 genomes), and any Codegen that emits their goldens.
        - Swift: SixFour/Palette/BranchedPalette.swift (projectQ16), PaletteCollapse.swift (FarthestPointCollapse), SplitTree.swift.
-       - Zig: Native/src/*.zig — the s4_* kernels for collapse/genome/haar (grep s4_global_collapse, s4_haar, s4_quantize, projectQ16 equivalents).
+       - Swift kernels: SixFour/Kernels/*.swift — the s4_* kernels for collapse/genome/haar (grep s4_global_collapse, s4_haar, s4_quantize, projectQ16 equivalents).
        - Goldens: SixFour/Generated/{CollapseGolden,GenomeGolden,GenomeFixedGolden,PairTreeGolden}.swift and the Zig fixture tests that pin them.
     3. Pin down the CORE QUESTION: WHY does projectQ16 (b4/b2) require exactly 256 leaves? Is the 256-leaf structure intrinsic to the genome (Quad4 = 4⁴ = 256, σ-pair = 2⁸ = 256), or could the genome be evaluated at a shallower depth (fewer leaves)? Quote the code that assumes 256.
     Return a precise contract map: the 3-owner surface for the genome, the exact files/functions/goldens that would change, and a crisp answer to whether sub-256 / arbitrary-depth is INTRINSICALLY blocked or merely unimplemented.`,

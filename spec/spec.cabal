@@ -152,6 +152,10 @@ library
         SixFour.Spec.CubeBrush
         SixFour.Spec.MixSKI
         SixFour.Spec.AxisSKI
+        SixFour.Spec.WeaveOrder
+        SixFour.Spec.BitLedger
+        SixFour.Spec.ColorMomentum
+        SixFour.Spec.CaptureRecord
         SixFour.Spec.MultiScaleCapture
         SixFour.Spec.CaptureDiversity
         SixFour.Spec.MultiScaleFusion
@@ -552,6 +556,10 @@ test-suite spec-tests
         Properties.CubeBrush
         Properties.MixSKI
         Properties.AxisSKI
+        Properties.WeaveOrder
+        Properties.BitLedger
+        Properties.ColorMomentum
+        Properties.CaptureRecord
         Properties.MultiScaleCapture
         Properties.CaptureDiversity
         Properties.MultiScaleFusion

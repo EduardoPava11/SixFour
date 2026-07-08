@@ -7,7 +7,7 @@ the model floors (it can only learn the octant MEAN). On scenes with COHERENT sp
 the detail IS a learnable function of position/motion, so the held-out cell AND detail margins go positive.
 
 This module manufactures exactly that: `(F, side*side, 3) int32 OKLab-Q16` bursts (the SAME shape and dtype
-`zig_native.synth_burst` returns) whose content is low-frequency and temporally coherent — drifting
+`native_kernels.synth_burst` returns) whose content is low-frequency and temporally coherent — drifting
 gradients, moving blobs, translating soft edges, low-frequency waves. Routed through the SAME
 `quantize_frame` (256 colours/frame) as a real capture (jepa_synth_octants.lab_volume), so a scene clip is
 STRUCTURALLY a real capture (byte-exact GIF round-trip, 256-palette per frame) — only the content is
@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import numpy as np
 
-# The capture gamut (zig_native.py:41-43), in Q16 (×65536 == 1.0).
+# The capture gamut (native_kernels.py:41-43), in Q16 (×65536 == 1.0).
 L_MIN_Q16 = 5243
 L_MAX_Q16 = 60293
 CHROMA_MAX_Q16 = 18350
@@ -142,7 +142,7 @@ _BUILDERS = {
 def scene_burst(seed: int, kind: str, frames: int = FRAMES, side: int = SIDE) -> np.ndarray:
     """(frames, side*side, 3) int32 OKLab-Q16 — a coherent structured burst, deterministic in seed.
 
-    Drop-in shape/dtype twin of zig_native.synth_burst, so jepa_synth_octants.lab_volume can quantize it
+    Drop-in shape/dtype twin of native_kernels.synth_burst, so jepa_synth_octants.lab_volume can quantize it
     to a real-capture-shaped 256-palette clip. `scene-mixed` averages all four archetypes for diversity.
     """
     rng = np.random.default_rng(seed)

@@ -153,7 +153,7 @@ Prior evidence for removal: ${evidence}
 
 Try HARD to prove it is STILL NEEDED. Check, with grep across the WHOLE repo (not just spec/):
   • any src/ importer that itself is LIVE (reachable from app/Spec.hs codegen)
-  • any reference from the iOS Swift app, Native/ Zig kernels, trainer/ python, or golden fixtures
+  • any reference from the iOS Swift app (incl. SixFour/Kernels/), trainer/ python, or golden fixtures
   • any mention in scripts/ gate files (verify-doc-claims.sh, gate-order.txt, regenerate.sh, lint-grid.sh)
   • whether deleting it would break \`cabal build\` (re-exported types, instance modules)
   • re-exports / instance-only modules whose import looks unused but is load-bearing

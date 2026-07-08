@@ -8,8 +8,8 @@
 # settings) and let `-allowProvisioningUpdates` mint/refresh the profile.
 #
 # The native Zig core is rebuilt for the device slice automatically: the Xcode
-# preBuildScript runs Native/build-ios.sh, which keys off PLATFORM_NAME=iphoneos
-# → `zig build-obj -target aarch64-ios` → libtool static archive (verified
+# The kernel core is pure Swift (SixFour/Kernels/) — no native prebuild step.
+# (History: the former Zig core was built here via zig build-obj; ported to Swift 2026-07-06.)
 # arm64 / platform 2 = iOS device).
 #
 # Usage:

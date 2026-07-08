@@ -26,7 +26,7 @@ import numpy as np
 from PIL import Image, ImageSequence
 from tqdm import tqdm
 
-from zig_native import srgb8_to_oklab_q16
+from native_kernels import srgb8_to_oklab_q16
 
 
 # ---------- OKLab conversion (THE canonical transform, owned Zig kernel) ----------

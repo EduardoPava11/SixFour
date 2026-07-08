@@ -15,7 +15,7 @@ can stand in for a real one across the entropy range. Realness is irrelevant. Si
 from dataclasses import dataclass
 from pathlib import Path
 import numpy as np
-import zig_native as zn
+import native_kernels as zn
 
 # ── The capture shape — MUST match SixFourShape (kernels.zig FRAME_COUNT/SIDE/K) + 20 fps ──
 CAPTURE_FRAMES = 64

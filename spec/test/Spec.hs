@@ -144,6 +144,10 @@ import qualified Properties.GeneDensity3D     as GeneDensity3D
 import qualified Properties.CubeBrush as CubeBrush
 import qualified Properties.MixSKI as MixSKI
 import qualified Properties.AxisSKI as AxisSKI
+import qualified Properties.WeaveOrder as WeaveOrder
+import qualified Properties.BitLedger as BitLedger
+import qualified Properties.ColorMomentum as ColorMomentum
+import qualified Properties.CaptureRecord as CaptureRecord
 import qualified Properties.MultiScaleCapture as MultiScaleCapture
 import qualified Properties.CaptureDiversity as CaptureDiversity
 import qualified Properties.MultiScaleFusion as MultiScaleFusion
@@ -385,6 +389,10 @@ main = defaultMain $ testGroup "sixfour-spec"
   , CubeBrush.tests
   , MixSKI.tests
   , AxisSKI.tests
+  , WeaveOrder.tests
+  , BitLedger.tests
+  , ColorMomentum.tests
+  , CaptureRecord.tests
   , MultiScaleCapture.tests
   , CaptureDiversity.tests
   , MultiScaleFusion.tests

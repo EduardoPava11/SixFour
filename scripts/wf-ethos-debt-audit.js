@@ -122,7 +122,7 @@ const auditResults = await pipeline(
     `Repo root: ${ROOT}\n` +
     `Pillar: ${p.key} (canonical: ${p.source})\n` +
     `Invariants to check:\n${JSON.stringify(ethos.invariants, null, 2)}\n\n` +
-    `Search Swift (SixFour/), Zig (Native/), Haskell (spec/), and docs/ for concrete violations. ` +
+    `Search Swift (SixFour/ incl. Kernels/), Haskell (spec/), and docs/ for concrete violations. ` +
     `Also cross-reference ${ROOT}/docs/TECH-DEBT-LEDGER.md and ${ROOT}/NOTES.md for already-logged debt under this pillar. ` +
     `For each violation give file:line evidence (quote it), a proposed fix, severity, and your confidence. ` +
     `CRITICAL: many old glass-related ledger entries may now be MOOT (glass retired today) — still surface them, but you may mark low confidence. ` +

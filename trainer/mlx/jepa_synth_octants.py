@@ -46,7 +46,7 @@ def lab_volume(seed: int, kind: str) -> np.ndarray:
     real capture; only the content differs. (See the flooring diagnosis: smoothness-proportional gain.)
     """
     if kind.startswith("scene-"):
-        import zig_native as zn                          # the shared Zig codec (quantize_frame)
+        import native_kernels as zn                          # the shared Zig codec (quantize_frame)
         from scene_corpus import scene_burst
         oklab = scene_burst(seed, kind)                 # (F, 4096, 3) int32 Q16 -- synth_burst's twin
         f, s = oklab.shape[0], 64

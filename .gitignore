@@ -38,3 +38,6 @@ spec/spec.hoo
 spec/spec.warn
 spec/spec.hoo
 dist-newstyle/
+
+# Trainer-side build artifact (scripts/build-kernels-dylib.sh output)
+trainer/lib/

@@ -4,6 +4,26 @@ SixFour is an iOS camera app: a 64-frame burst becomes a 64×64 animated GIF wit
 a learned global colour palette. The defining engineering principle is
 **Haskell-verified, dependency-free, hand-written**.
 
+> **PIVOT 2026-07-06 — the native core is SWIFT, Zig is retired.** Daniel's call
+> (reversing the 2026-06 "Zig decided" ruling): the byte-exact integer core is now
+> pure Swift in `SixFour/Kernels/` — all 71 `s4_*` kernels hand-ported from
+> `Native/src/*.zig` with IDENTICAL names and C signatures (`@_cdecl`), so every
+> Swift call site and golden test compiled unchanged. `Native/` is DELETED (git
+> history is the record). The determinism contract is unchanged: bit-exactness is
+> a property of the integer algorithms + the Haskell golden vectors, not of the
+> implementation language — the port shipped only after the full suite (491 tests,
+> incl. GIF SHA-256 reproducibility, collapse goldens, Metal↔CPU parity, and the
+> ported Zig fixture batteries `SixFourTests/ZigPort*Tests.swift`) passed green.
+> Where a doc below says `Native/src/<file>.zig`, read `SixFour/Kernels/Kernels<Family>.swift`;
+> "Zig floor"/"Q16 floor" now means the Swift integer floor (same laws, same goldens).
+> The ABI contract lives at `SixFour/Kernels/sixfour_kernels_abi.h`; the LUT `.bin`
+> goldens at `SixFour/Kernels/LUTGoldens/` (embedded as base64 in the generated
+> `KernelsLUTData.swift`, regen via `scripts/gen-lut-swift.py`). The Mac trainer
+> loads the SAME Swift sources as a dylib (`scripts/build-kernels-dylib.sh` →
+> `trainer/lib/libsixfour_kernels.dylib`, ctypes binding `trainer/native_kernels.py`)
+> — no train/deploy skew, exactly as before. Haskell spec + golden vectors remain
+> the source of truth (Tier 0 unchanged). Do not reintroduce Zig.
+
 ## The dependency contract (HARD RULE)
 
 There are three tiers. The rule that matters: **the shipped product has ZERO
@@ -181,8 +201,10 @@ The camera's COLOR HEAD and its exact-arithmetic learning gates (landed 2026-07-
 ## Build / test
 ```bash
 cd spec && cabal build && cabal test && cabal run spec-codegen   # verify + regen contracts
-cd Native && zig build test                                      # owned Zig core (100 tests; runner may report 'failed command' — run the cached test binary in .zig-cache/o/*/test directly for truth)
 cd .. && xcodegen generate                                       # regen .xcodeproj (after ANY new .swift)
+# The owned kernel core is Swift (SixFour/Kernels/) — no separate native build.
+# Its former Zig test coverage lives in SixFourTests/ZigPort*Tests.swift and runs
+# with the app suite below. Trainer dylib: scripts/build-kernels-dylib.sh.
 xcodebuild -scheme SixFour -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 ```
 **Headless / no-simulator-installed machines** (compile-check only — there is no camera, so the

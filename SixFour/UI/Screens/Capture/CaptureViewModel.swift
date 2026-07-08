@@ -530,6 +530,22 @@ final class CaptureViewModel {
         }
     }
 
+    /// Best-effort background write of the per-capture CBOR record
+    /// (`Spec.CaptureRecord` — the shutter's ledger), paired with the GIF by
+    /// stem (`sixfour_<stamp>.s4cr` next to `sixfour_<stamp>.gif`). Logged on
+    /// failure; never throws into the UI (like `saveBundleAsync`).
+    private func saveCaptureRecordAsync(_ record: S4CaptureRecord, pairedWith gifURL: URL) {
+        Task.detached(priority: .background) {
+            let url = gifURL.deletingPathExtension().appendingPathExtension("s4cr")
+            do {
+                try record.write(to: url)
+                Self.logger.debug("[viewmodel] capture record saved: \(url.lastPathComponent, privacy: .public)")
+            } catch {
+                Self.logger.warning("[viewmodel] capture record save failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
     func focus(at normalized: CGPoint) {
         session?.focusAndExpose(at: normalized)
     }
@@ -671,6 +687,21 @@ final class CaptureViewModel {
                 perFrameStatistics: renderResult.perFrameStatistics
             )
             saveBundleAsync()
+            // THE SHUTTER'S LEDGER (Spec.CaptureRecord): one deterministic CBOR
+            // record per capture. It carries what the pooled sums cannot — the
+            // weave word (the temporal ORDER of rung frames; Spec.WeaveOrder
+            // proves the order is invisible to every conserved marginal, so it
+            // must be persisted here or it is gone), the measured per-frame
+            // intervals, and the color head's exact 16² sums + realized GCT.
+            // The shipped schedule is the uniform 64-rung word (all index 0);
+            // a woven schedule writes its own word when the mechanic lands.
+            let record = S4CaptureRecord(
+                weave: Array(repeating: 0, count: result.tiles.count),
+                frameIntervalsUs: result.intervalsUs,
+                sums16: result.sums16 ?? [],
+                gct: result.gct ?? []
+            )
+            saveCaptureRecordAsync(record, pairedWith: renderResult.output.gifURL)
             phase = .done
             Haptics.notification(.success)
         } catch let err as CaptureSession.CaptureError {

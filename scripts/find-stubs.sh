@@ -20,7 +20,7 @@ if [ "$#" -gt 0 ]; then
   SCOPE=("$@")
 else
   SCOPE=(
-    Native/src                      # SIMT: Zig integer core
+    SixFour/Kernels                 # the owned byte-exact Swift kernel core
     SixFour/Metal                   # SIMT: Metal kernels
     SixFour/CoreAI                  # pivot: L inference seam (orphaned audit record)
     SixFour/GeneLibrary             # gene-RAG (flat JSON -> SIMT vector RAG)

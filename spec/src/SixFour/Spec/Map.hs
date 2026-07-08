@@ -23,9 +23,10 @@ index cross-cut; physically the modules stay where they are, gated by golden vec
       pure @PixelMap@ and every reduction declares its @DetClass@ @Exact@/@Tol@ = the determinism
       hierarchy as a type). The float->byte seam is @reenterQ16@ (= @AtlasGame.quantizeQ16@).
 
-  * __ZIG FLOOR__ (tag: @DeviceTag@/@CommitSide@/@BoundedP6@ — bit-exact integer, shipped). Mechanism:
-    golden-vector-gated HAND-PORT (@Codegen.Golden@ -> ~30 @s4_*@ kernels in @Native/src/kernels.zig@;
-    NO @.zig@ emitter, by design). Modules: "SixFour.Spec.SubstrateDomain", "SixFour.Spec.BoundedP6",
+  * __NATIVE FLOOR__ (tag: @DeviceTag@/@CommitSide@/@BoundedP6@ — bit-exact integer, shipped). Mechanism:
+    golden-vector-gated HAND-PORT (@Codegen.Golden@ -> the @s4_*@ kernels in @SixFour/Kernels/*.swift@,
+    C names kept via @\@_cdecl@; formerly the Zig core @Native/src@, ported whole 2026-07-06 — same laws,
+    same goldens, no emitter by design). Modules: "SixFour.Spec.SubstrateDomain", "SixFour.Spec.BoundedP6",
     "SixFour.Spec.RGBTLift", "SixFour.Spec.CubeLadder", "SixFour.Spec.OctreeCell",
     "SixFour.Spec.V21Field" (V2.1 pre-collapse field: curves collapse to the GIF89a byte; byte-exact
     core = collapse\/opponent-delta\/metric, REUSING the OctreeCell octant spine; colour-ring-agnostic),
@@ -42,7 +43,7 @@ index cross-cut; physically the modules stay where they are, gated by golden vec
     @s4_sums_bt2020_to_srgb8@; encode = exact quantizer-inverse of the @srgb_to_linear16@ decode),
     "SixFour.Spec.LeafOverride", + the @safeNudge@/domain half of "SixFour.Spec.RelationalResidual" and
     the Held rung of "SixFour.Spec.SelfSimilarReconstruct". @liftOct@ (the @2x2x2->1@ octant edge, the
-    learned-token substrate) HAS its floor kernel @s4_octant_lift@\/@s4_octant_unlift@ (kernels.zig:857,
+    learned-token substrate) HAS its floor kernel @s4_octant_lift@\/@s4_octant_unlift@ (KernelsLattice.swift,
     built from the two quad kernels). __V2.1 GAP:__ "SixFour.Spec.V21Field" @collapseQ16@ has its floor
     kernel @s4_v21_collapse@; the bin-creation, opponent-delta and palette-delta kernels are still to add.
     "SixFour.Spec.V21Transport" is spec-green (@transportDisp@\/@pushforward@\/@reconstructFlow@) but its
@@ -86,7 +87,7 @@ THE I-JEPA MODEL COMPARTMENT makes Core AI CHECKABLE: the large head is @MacTag@
 @theta_B@ forward already passes, and "SixFour.Spec.MaskedBandTrainer" pins the descent endpoints. So
 a clean model compartment with EncoderFrozen as its lower wall and @reenterQ16@ as its only exit is
 exactly what lets the float Core AI head be verified against the integer floor. Prereqs (ordered):
-(1) @s4_octant_lift@ Zig kernel, (2) the data engine — DONE ("SixFour.Spec.JepaData" + @trainer/jepa_data.py@),
+(1) @s4_octant_lift@ native kernel (Swift, KernelsLattice.swift), (2) the data engine — DONE ("SixFour.Spec.JepaData" + @trainer/jepa_data.py@),
 (3) the @Codegen.JepaHead@ MLX emitter + Python trainer twin, (4) wire the Core AI socket to the trained weights.
 
 == ★ The core: the NN design
@@ -763,6 +764,47 @@ DECOMPOSES BY AXIS: each S_a owes a disjoint band set. @lawZeroSectionIsArrowBli
 with time reversal while the t-band it discards is reversal-ODD — the arrow enters synthesis
 exactly and only through the temporal gene; S_t â¢ S_x,S_y by algebra. UI: picks grant depth
 VECTORS; the view space is the axis lattice with the pure views on its diagonal. Additive),
+"SixFour.Spec.WeaveOrder" (★ THE TEMPORAL WEAVE — ordering the rung frames is the simple mechanic:
+a weave word = an ORDERED COMPOSITION of the 320 cs window into rung frames (64→1, 32→2, 16→4 units
+of 5 cs; one 16-block has SIX fill orders @lawBlockHasSixWeaves@, the window has 2,610,226,433,308,951
+words ≈ 2^51 @lawWindowWeaveCountPinned@, recurrence f(n)=f(n−1)+f(n−2)+f(n−4)). Every word is
+GIF89a-legal (per-frame GCE delay, @lawWeaveIsGifRepresentable@; @lawDelayMatchesFloorLaw@ bridges
+@s4_ladder_delay_cs@); every equal-span word integrates IDENTICAL color-time (@lawWeaveColorTimeConserved@
+— 1×16 = 2×32 = 4×64 = any mix; pooled-burst == long-shutter per frame @lawPartPathsEqualColorTime@);
+the ORDER is invisible to every conserved marginal (@lawOrderIsInvisibleToTheMeasure@, 2:1 vs 1:2)
+yet real information (@lawOrderCarriesInformation@) ⇒ the shutter must RECORD it (CaptureRecord).
+Energy: 16²=256=GCT ⇒ dither pressure 1 (@lawCoarsestIsPaletteExact@); pressure × 4^k color-time
+factor = 16, rung-invariant (@lawDitherPressureBalancesColorTime@). S/K/I on rungs as a term algebra:
+S 16 32 64 → 16 64 (32 64) verbatim (@lawSExpandsToTheWeaveReading@), S DUPLICATES the fine substrate
+(@lawSDuplicatesTheSubstrate@ — the S-packet), n-layer S-towers cost 2^n references
+(@lawSTowerCostsExponential@) while the semantic K-chain saturates at ladder height 2 (MixSKI). Additive),
+"SixFour.Spec.CaptureRecord" (★ THE SHUTTER'S LEDGER — one deterministic-CBOR record per capture
+(RFC 8949 core deterministic subset: majors 0/2/3/4/5, minimal heads @lawHeadsAreMinimal@, definite
+lengths, bytewise-sorted map keys @lawMapKeysSortedBytewise@, NO floats), carrying what the sums
+cannot: the weave word IN ORDER (@lawWeaveSurvivesTheRecord@, keystone), per-frame intervals (µs,
+integer-exact), 16×16×3 u64 bin sums (the transitive carrier, stored once), the 768-byte GCT.
+Total decoder: @lawDecodeInvertsEncode@ + @lawEncodingIsCanonicallyStable@ (equal content ⇒ identical
+bytes: records content-address and diff). Golden bytes @lawGoldenRecordPinned@ gate the hand-written
+Swift writer (Capture/CaptureRecordWriter). Additive),
+"SixFour.Spec.BitLedger" (★ THE INFORMATION LEDGER — exact bit accounting 10-bit sensor code →
+8-bit GIF89a byte: NEVER a direct 10→8 truncation. DECODE-WIDEN (strictly monotone LUT ⇒ injective,
+zero loss, @lawStrictMonotoneDecodeIsLossless@) → INTEGRATE (u64 sums; 2^k samples of b bits need
+exactly b+k bits @lawPoolSumWidthExact@ — the SIMT widening ladder made law; worst crop = 38 of 63
+bits @lawU64CarriesTheWorstCrop@; pooling GAINS depth: n·(2^b−1)+1 mean levels @lawPoolingGainsDepth@,
+a 4096-sample bin of 10-bit carries 22 effective bits) → REALIZE ONCE (round-half-up mean → byte,
+the SINGLE lossy step, drops exactly 14 bits at the shipped shape @lawShippedLedgerPinned@, uses all
+256 codes @lawByteCodesAllReachable@). Ladder note: POOLED rungs add zero bits (sums compose) so
+CNN-measurable rung relationships require the LOOM's photon-disjoint exposures
+(MultiScaleIntegrate); the learnable content is transition detail (TriScaleTraining). Additive),
+"SixFour.Spec.ColorMomentum" (★ COLOR-TIME HAS MASS AND IT IS IN FLUX — discovered in GHCi, pinned as law:
+MASS = the reversal-even coarse band (what K keeps); MOMENTUM = the reversal-odd t-band, @−bandOf [AxT] =
+Σ_{t=1} − Σ_{t=0}@ = mass-weighted velocity (@lawMomentumIsTheTBand@); the whole 1+3+3+1 grading splits by
+the ARROW (@lawGradingSplitsByTheArrow@: a band negates under time reversal iff it contains t). K preserves
+mass and KILLS momentum exactly (@lawKPreservesMassKillsMomentum@: a ±d t-face kick moves momentum 8d, mass 0)
+⇒ momentum lives in ker K ⇒ only a learned S can restore it (AxisSKI's arrow-blind zero section) — MOMENTUM IS
+THE TEMPORAL GENE'S CARGO. FLUX = per-tick paletteW1 (1-D Wasserstein) = impulse of colour mass through value
+space (@lawFluxChargesMassTimesDistance@), with the triangle recursion @lawFluxTriangleRecursion@ (net ≤ summed
+per-tick — burst flux telescopes). Golden vectors: pbt_golden.json "momentum" section (64 seeded blocks). Additive),
 "SixFour.Spec.OpponentDerivation" (★ THE LATENT DERIVATION OF Lab FROM RGB — the opponent transform
 is a THEOREM: (L,a,b) = the isotypic decomposition of the S₃ permutation representation on ℤ^RGB.
 @lawLumaIsTheUniqueInvariant@ (invariant iff p=q=r, the iff — L spans the trivial rep);

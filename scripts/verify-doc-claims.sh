@@ -34,8 +34,8 @@ GREP_TARGETS=(
   SixFour/Settings/Feature.swift
   SixFour/UI/Screens/Capture/CaptureViewModel.swift
   SixFour/Settings/AppSettings.swift
-  Native/src/kernels.zig
-  Native/include/sixfour_native.h
+  SixFour/Kernels/KernelsGif.swift
+  SixFour/Kernels/sixfour_kernels_abi.h
   spec/src/SixFour/Spec/PairTree.hs
   spec/test/Spec.hs
   SixFour/UI/MovableColorWidget.swift
@@ -61,7 +61,7 @@ check "theta_B forward ships hand-written (MaskedBandForward.swift)" \
 check "theta_B forward is golden-gated (MaskedBandGolden.swift)" \
   test -f SixFour/Generated/MaskedBandGolden.swift
 check "no on-device NN forward-pass symbol leaked (theta_B is the only learned object)" \
-  test -z "$(grep -rn 'look_net_forward\|lookNetForward\|forward_l' SixFour/ Native/ --include='*.swift' --include='*.zig' --include='*.h' 2>/dev/null)"
+  test -z "$(grep -rn 'look_net_forward\|lookNetForward\|forward_l' SixFour/ --include='*.swift' --include='*.h' 2>/dev/null)"
 check "the retired look-net loader has zero production callers" \
   test "$(grep -rn 'loadLookNet' SixFour/ --include='*.swift' | grep -v 'func loadLookNet' | grep -v '///' | wc -l | tr -d ' ')" -eq 0
 check "no learned-weight .blob is bundled in the app target (synthetic-only, hand-written forward)" \
@@ -81,9 +81,9 @@ check "training-data dir reference_gifs is empty/absent (synthetic corpus only)"
 
 # --- NATIVE CORE: real impls, header/export parity, deterministic default ---
 check "s4_gif_encode_burst is a real impl (folds and returns s4_gif_assemble)" \
-  grep -q 'return s4_gif_assemble' Native/src/kernels.zig
-check "header s4_* symbol set == Zig export set (no undeclared exports)" \
-  bash -c "diff <(grep -hoE 's4_[a-z_0-9]+' Native/include/sixfour_native.h | sort -u) <(grep -hoE 'export fn (s4_[a-z_0-9]+)' Native/src/*.zig | sed 's/export fn //' | sort -u) >/dev/null"
+  grep -q 'return s4_gif_assemble' SixFour/Kernels/KernelsGif.swift
+check "header s4_* symbol set == Swift @_cdecl export set (no undeclared exports)" \
+  bash -c 'diff <(grep -hoE "s4_[a-z_0-9]+" SixFour/Kernels/sixfour_kernels_abi.h | sort -u) <(grep -hoE "@_cdecl\(\"s4_[a-z_0-9]+\"\)" SixFour/Kernels/*.swift | grep -hoE "s4_[a-z_0-9]+" | sort -u) >/dev/null'
 check "useDeterministicCore defaults to true" \
   grep -qE 'useDeterministicCore\) as\? Bool \?\? true' SixFour/Settings/AppSettings.swift
 

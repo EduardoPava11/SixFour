@@ -26,7 +26,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import zig_native as zn                                                      # noqa: E402  the shared Zig codec
+import native_kernels as zn                                                      # noqa: E402  the shared Zig codec
 from generated.capture_format import (                                       # noqa: E402  spec-emitted contract
     decimate4x, replicate4x,
     CAPTURE_SIDE, CAPTURE_FRAMES, WIRE_SIDE, PALETTE_ENTRIES,
