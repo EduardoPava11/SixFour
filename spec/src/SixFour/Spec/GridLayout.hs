@@ -199,11 +199,18 @@ curateScene =
 --   * @system@ : 64×24 machine ring below the pyramid, rows 178–201, columns
 --     18–81 — tick CPU vs the 50 ms budget, the 384 MiB v21 hist-buffer
 --     lifecycle (allocated\/held\/freed), and thermal pressure.
+--   * @field64@\/@field32@\/@field16@ : the PYRAMID BANDS THEMSELVES as proven
+--     regions — 64×64 at (18,49), 32×32 centered at (34,117), 16×16 centered
+--     at (42,153), exactly the cells the self-centered VStack renders. Pinned
+--     so the influence ground anchors its radiating sources to the REAL
+--     pyramid (retiring the stale movable field64\/palette16 anchors) and any
+--     future per-band placement reads the contract, not view geometry.
 --
--- ALL four are non-interactive (meters, not controls): they must never intercept
--- the ground LOOK-swipe\/EV-drag layer or the shutter tap, so the 11-cell touch
--- floor does not bind and the slim 14-cell flank is legal. The flank columns
--- 84–97 sit clear of the pyramid columns 18–81 and the palette (42,145,16×16);
+-- ALL are non-interactive at the REGION level (meters and anchors, not
+-- controls — the pyramid's tap gestures live on its views): they must never
+-- intercept the ground LOOK-swipe\/EV-drag layer, so the 11-cell touch floor
+-- does not bind and the slim 14-cell flank is legal. The flank columns 84–97
+-- sit clear of the pyramid columns 18–81 and the palette (42,145,16×16);
 -- rows ≥ 49 and ≤ 201 clear both corner arcs and both OS safe areas — all
 -- re-proven by the eight laws below over this scene in @Properties.GridLayout@.
 liveScene :: Scene
@@ -216,6 +223,12 @@ liveScene =
                        , lrWidget = 2, lrPriority = 2, lrInteractive = False })
   , ("system", LRegion { lrCol = 18, lrRow = 178, lrW = 64, lrH = 24
                        , lrWidget = 3, lrPriority = 3, lrInteractive = False })
+  , ("field64", LRegion { lrCol = 18, lrRow = 49,  lrW = 64, lrH = 64
+                        , lrWidget = 4, lrPriority = 4, lrInteractive = False })
+  , ("field32", LRegion { lrCol = 34, lrRow = 117, lrW = 32, lrH = 32
+                        , lrWidget = 5, lrPriority = 5, lrInteractive = False })
+  , ("field16", LRegion { lrCol = 42, lrRow = 153, lrW = 16, lrH = 16
+                        , lrWidget = 6, lrPriority = 6, lrInteractive = False })
   ]
 
 -- | The screen cells @(col,row)@ a region claims.

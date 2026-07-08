@@ -66,6 +66,9 @@ public enum GridLayoutContract {
         GridRegion(name: "rung32", col: 84, row: 117, w: 14, h: 32, widget: 1, priority: 1, interactive: false),
         GridRegion(name: "rung16", col: 84, row: 153, w: 14, h: 16, widget: 2, priority: 2, interactive: false),
         GridRegion(name: "system", col: 18, row: 178, w: 64, h: 24, widget: 3, priority: 3, interactive: false),
+        GridRegion(name: "field64", col: 18, row: 49, w: 64, h: 64, widget: 4, priority: 4, interactive: false),
+        GridRegion(name: "field32", col: 34, row: 117, w: 32, h: 32, widget: 5, priority: 5, interactive: false),
+        GridRegion(name: "field16", col: 42, row: 153, w: 16, h: 16, widget: 6, priority: 6, interactive: false),
     ]
 
     /// Look up a region by name (the composer asks for "preview", "palette", …).

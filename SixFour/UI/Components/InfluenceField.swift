@@ -73,7 +73,9 @@ struct InfluenceField: View {
         // since the last lift-state change; `liftAmount` is 1 while lifted, easing back to 0 after.
         let ramp = CellEase.progress(tick, since: surface.liftChangedTick, ticks: FieldTuning.liftRampTicks)
         let liftAmount = surface.liftedWidget != nil ? ramp : (1 - ramp)
-        let model = FieldModel(sources: Self.sources(placement, extraSources, lifted: surface.liftedWidget),
+        let live: Bool = { if case .live = surface.phase { return true }; return false }()
+        let model = FieldModel(sources: Self.sources(placement, extraSources, lifted: surface.liftedWidget,
+                                                     live: live),
                                palette: tilePalette.isEmpty ? surface.palette : tilePalette,
                                tile: tile, tick: tick, phaseToken: surface.phase.token,
                                liftAmount: liftAmount)
@@ -84,10 +86,25 @@ struct InfluenceField: View {
         }
     }
 
-    /// The two persistent movable widgets as sources (Field64 = arrangement, Palette16 = set),
-    /// plus any act-specific extras. The minimal universal source set every phase shares.
+    /// The universal sources. LIVE act (UX 2026-07-08): the PYRAMID is the order —
+    /// the sources anchor to the spec-proven `liveScene` pyramid bands (the 64² band
+    /// bleeds the arrangement; the 16² vertex radiates the palette, "the palette IS
+    /// the coarse view"), so the glow finally tracks the centered pyramid instead of
+    /// the retired movable anchors. Other acts keep the movable-widget anchors
+    /// (Field64 = arrangement, Palette16 = set) plus any act-specific extras.
     private static func sources(_ placement: [ColorIdentity: (col: Int, row: Int)],
-                                _ extra: [FieldSource], lifted: ColorIdentity?) -> [FieldSource] {
+                                _ extra: [FieldSource], lifted: ColorIdentity?,
+                                live: Bool) -> [FieldSource] {
+        if live,
+           let f64 = GridLayoutContract.region("field64", in: GridLayoutContract.liveScene),
+           let f16 = GridLayoutContract.region("field16", in: GridLayoutContract.liveScene) {
+            func rect(_ r: GridRegion) -> CGRect {
+                CGRect(x: CGFloat(r.col), y: CGFloat(r.row),
+                       width: CGFloat(r.w), height: CGFloat(r.h))
+            }
+            return [FieldSource(rect: rect(f64), kind: .arrangement, lifted: false),
+                    FieldSource(rect: rect(f16), kind: .set, lifted: false)] + extra
+        }
         func rect(_ id: ColorIdentity) -> CGRect {
             let p = placement[id] ?? (MoveContract.defaultCol(id), MoveContract.defaultRow(id))
             let (w, h) = MoveContract.footprint(id)

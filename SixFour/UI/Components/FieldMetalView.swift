@@ -51,7 +51,8 @@ struct FieldMetalView: UIViewRepresentable {
         let lifted = surface.liftedWidget != nil
         let ramp = CellEase.progress(tick, since: surface.liftChangedTick, ticks: FieldTuning.liftRampTicks)
         let liftAmount = Float(lifted ? ramp : (1 - ramp))
-        v.update(sources: Self.sources(placement),
+        let live: Bool = { if case .live = surface.phase { return true }; return false }()
+        v.update(sources: Self.sources(placement, live: live),
                  palette: Self.packPalette(palSrc),
                  usage: Self.usage(tile),
                  tile: Self.packTile(tile),
@@ -60,7 +61,20 @@ struct FieldMetalView: UIViewRepresentable {
 
     // MARK: input prep (mirrors InfluenceField's, but flattened for the GPU buffers)
 
-    private static func sources(_ placement: [ColorIdentity: (col: Int, row: Int)]) -> [FieldSourceU] {
+    /// LIVE act: anchor to the spec-proven liveScene pyramid bands (the same
+    /// re-anchor as InfluenceField.sources — glow tracks the REAL pyramid);
+    /// other acts keep the movable-widget anchors.
+    private static func sources(_ placement: [ColorIdentity: (col: Int, row: Int)],
+                                live: Bool) -> [FieldSourceU] {
+        if live,
+           let f64 = GridLayoutContract.region("field64", in: GridLayoutContract.liveScene),
+           let f16 = GridLayoutContract.region("field16", in: GridLayoutContract.liveScene) {
+            func src(_ r: GridRegion, kind: Int32) -> FieldSourceU {
+                FieldSourceU(minX: Float(r.col), minY: Float(r.row),
+                             maxX: Float(r.col + r.w), maxY: Float(r.row + r.h), kind: kind, pad0: 0)
+            }
+            return [src(f64, kind: 0), src(f16, kind: 1)]   // arrangement, set
+        }
         func src(_ id: ColorIdentity, kind: Int32) -> FieldSourceU {
             let p = placement[id] ?? (MoveContract.defaultCol(id), MoveContract.defaultRow(id))
             let (w, h) = MoveContract.footprint(id)

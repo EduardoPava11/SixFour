@@ -33,8 +33,9 @@ import simd
 ///
 /// The digital EVs are display-only (the burst stays one locked exposure); v2 promotes them
 /// to real optical EV. LOOK-swipe / EV-drag stay on the clear ground layer behind the tiles.
-/// NOTE: the ground influence-field still radiates from the retired field64/palette16 anchors,
-/// so its glow no longer tracks the centered pyramid — cosmetic, fixed when it gains regions.
+/// NOTE (resolved 2026-07-08): the ground influence-field's LIVE sources now anchor to the
+/// spec-proven `liveScene` pyramid bands (field64/field16 regions) — the glow tracks the
+/// centered pyramid; the retired movable anchors remain only for the non-live acts.
 struct LivePhaseField: View {
     let surface: Surface
     let clock: SurfaceClock
