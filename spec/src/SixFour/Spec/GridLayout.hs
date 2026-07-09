@@ -41,6 +41,7 @@ module SixFour.Spec.GridLayout
   , decisionScene
   , curateScene
   , liveScene
+  , scrollScene
     -- * Helpers
   , regionCells
   , regionsOverlap
@@ -272,6 +273,48 @@ liveScene =
                        , lrWidget = 10, lrPriority = 10, lrInteractive = False })
   , ("lookStrip", LRegion { lrCol = 18, lrRow = 44, lrW = 64, lrH = 4
                           , lrWidget = 11, lrPriority = 11, lrInteractive = False })
+  ]
+
+-- | THE SCROLL SCENE — the infinite-tube viewport (a @.live@ self-excursion, render
+-- state only: the FSM is untouched, exactly as lock\/burst are internal to @.live@).
+-- The tube is the Jeandel–Rao aperiodic weave ("SixFour.Spec.WangTiling"): 64² pour
+-- groups of 4 frames ('SixFour.Spec.WangTiling.sliceRows'), scrolled vertically,
+-- coarse-first with refine-on-linger on the SAME reveal ladder as boot
+-- ('SixFour.Spec.WangTiling.revealAt' — trust is EARNED per slice, never animated):
+--
+--   * @hero@   : 64×64 at (18,49) — the tube viewport, on EXACTLY the 'liveScene'
+--     @field64@ band (the scroll takes over the pyramid's fine band, so entering\/
+--     leaving the tube never moves the eye). INTERACTIVE: vertical drag scrolls the
+--     tube (16 cells = one slice). Wears the D1 BRACKETS in its own gutter (cols
+--     16–17\/82–83, rows 47–48\/113–114 — cells no region claims, by construction;
+--     the @pour@ rail at row 114 sits between the bottom bracket arms, cols 42–57).
+--   * @pour@   : 16×2 at (42,114) — the intake-tally idiom (4 slots of 3 cells +
+--     1-cell gaps, the exact 'liveScene' @intake16@ geometry) counting the 4-frame
+--     pour group the viewport loops at 20 Hz. Display-only.
+--   * @rail@   : 2×128 at (84,49) — the tube-position rail on the right flank: a
+--     ±32-slice ruler ticked at pour-group pitch scrolling under a fixed centre
+--     cursor, materialized slices marked. Display-only (the scroll gesture lives on
+--     the hero), so the 2-cell width is legal.
+--   * @exit@   \/ @reseed@ : 20×12 verb pair at (18,184) \/ (62,184) — leave the
+--     tube (back to the live pyramid) \/ jump to a fresh tube seed. FRAME faces
+--     ('SixFour.Spec.CellMechanics.controlFaces'), both over the touch floor.
+--
+-- Geometry: rows 47–196 (island + home-indicator + corner arcs cleared — the same
+-- envelope 'liveScene' proves for rows 44–201), hero centre columns 18–81, rail
+-- columns 84–85 (inside the proven rung-flank columns 84–97). All eight laws below
+-- are @once@-tested over this scene in @Properties.GridLayout@.
+scrollScene :: Scene
+scrollScene =
+  [ ("hero",   LRegion { lrCol = 18, lrRow = 49,  lrW = 64, lrH = 64
+                       , lrWidget = 0, lrPriority = 0, lrInteractive = True })
+  , ("pour",   LRegion { lrCol = 42, lrRow = 114, lrW = 16, lrH = 2
+                       , lrWidget = 1, lrPriority = 1, lrInteractive = False })
+  , ("rail",   LRegion { lrCol = 84, lrRow = 49,  lrW = 2,  lrH = 128
+                       , lrWidget = 2, lrPriority = 2, lrInteractive = False })
+  , ("exit",   LRegion { lrCol = 18, lrRow = 184, lrW = 20, lrH = 12
+                       , lrWidget = 3, lrPriority = 3, lrInteractive = True })
+  , ("reseed", LRegion { lrCol = 62, lrRow = 184, lrW = 20, lrH = 12
+                       , lrWidget = 4, lrPriority = 4, lrInteractive = True })
   ]
 
 -- | The screen cells @(col,row)@ a region claims.

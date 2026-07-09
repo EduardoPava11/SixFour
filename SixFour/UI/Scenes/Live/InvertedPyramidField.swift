@@ -79,6 +79,26 @@ struct InvertedPyramidField: View {
     /// itself is content, not decoration, and keeps running.
     var reduceMotion: Bool = false
 
+    /// BOOT RESOLVE — ticks since `.live` was entered (`clock.tick − σ.phaseEnteredTick`).
+    /// The pyramid CRYSTALLIZES coarse→fine on the √N significance ladder
+    /// (`S4WangTiling.revealTick` 4/8/16, the pour played in reverse — the Haskell spec's
+    /// `Spec.WangTiling.revealAt`, zero invented constants): a rung renders as the
+    /// quarter-ink GHOST (the existing unbanked b/4 idiom — an ink transform, never
+    /// alpha) until its reveal tick has been EARNED by banked intake, then swaps to full
+    /// ink at its crossing (`resolveBootCrossings` — a one-shot `>=` latch per rung, with
+    /// the mod-2/mod-4 realizes and the publish path unghosting on their own cadence
+    /// too). The intake tallies bank from tick 0 either way, so
+    /// the tally→reveal sequence reads as the instrument warming up. Reduce-motion: the
+    /// reveal steps still occur (they are content, not decoration) and no beat is added.
+    /// Default `Int.max` = fully revealed (previews and non-boot mounts are untouched).
+    var bootTicks: Int = Int.max
+
+    /// THE SCROLL entry (`Feature.scrollTube`): fired by a LONG-PRESS on the 64² hero —
+    /// the least-invasive documented entry (render state inside `.live`, the FSM and the
+    /// capture flow untouched; tap-to-meter keeps working). `nil` = no gesture semantics
+    /// (non-live mounts and the flag-off build behave exactly as before).
+    var onScrollTube: (() -> Void)? = nil
+
     /// Fired by a tap on the 16² vertex — the shutter kick (`engine.capture()`).
     var onShutter: () -> Void = {}
     /// Fired by a tap on the 64² — one-shot meter that point (normalized 0..1 over the tile).
@@ -126,6 +146,13 @@ struct InvertedPyramidField: View {
         var opticalKey = 0
         var opticalDisplay = false
 
+        // BOOT RESOLVE — the reveal crossings already fired this boot epoch
+        // (one-shot latches; `resolveBootCrossings` compares with `>=`, never
+        // exact `==`) plus the last `bootTicks` seen, so a DECREASING value
+        // (re-entering `.live` restamps `phaseEnteredTick`) re-arms the latches.
+        var revealFired: Set<Int> = []
+        var lastBootTicks = Int.min
+
         // E4 — the meter crosshair (inverted 3×3 cross, 20-tick linger).
         var meterCell: (col: Int, row: Int)?
         var meterSince = Int.min
@@ -148,6 +175,12 @@ struct InvertedPyramidField: View {
 
     /// The ledger key: −1 when idle, else the EXACT landed-frame count (never a float).
     private var shutterKey: Int { stageActive ? min(64, max(0, landedFrames)) : -1 }
+
+    /// BOOT RESOLVE — whether rung `p` has earned its reveal (`bootTicks ≥ revealTick p`,
+    /// the spec's `revealAt` membership). `Int.max` (the default) reveals everything.
+    private func revealed(_ p: S4WangTiling.TubeRung) -> Bool {
+        bootTicks >= S4WangTiling.revealTick(p)
+    }
 
     /// The shutter's control-state ordinal (`SixFourCellMechanics.controlStates`):
     /// busy while a stage runs; pressed for 2 ticks after the tap; disabled when the
@@ -207,6 +240,13 @@ struct InvertedPyramidField: View {
                     rebake64()
                     onMeter64(CGPoint(x: nx, y: ny))
                     Haptics.selection()
+                })
+                // THE SCROLL entry: a long-press on the hero (distinct from the meter
+                // tap — a quick tap still meters). No-op when the caller passed nil.
+                .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                    guard let enter = onScrollTube else { return }
+                    Haptics.selection()
+                    enter()
                 })
 
             Color.clear.frame(width: atom, height: GlobalLattice.gif(1))
@@ -315,7 +355,8 @@ struct InvertedPyramidField: View {
             baked.opticalKey = key
             baked.opticalDisplay = true
             rebake64()   // optical-aware: bakes from opticalTile64 (+ any live crosshair)
-            baked.img32 = Self.rgbImage(tile: opticalTile32, side: 32, gainStops: 0)
+            baked.img32 = Self.rgbImage(tile: opticalTile32, side: 32, gainStops: 0,
+                                        ghost: !revealed(.r32))
             baked.base16 = Self.rgbBase(tile: opticalTile16, side: 16, gainStops: 0)
             rebakeShutter()
             return
@@ -359,10 +400,54 @@ struct InvertedPyramidField: View {
             realize16()
         }
         rebakeTallies(tick: t)
+        resolveBootCrossings()
         if t == baked.pressedUntil { rebakeShutter() }               // pressed inversion ends
         if baked.meterCell != nil, t == baked.meterSince + 20 {      // crosshair linger ends
             baked.meterCell = nil
             rebake64()
+        }
+    }
+
+    /// BOOT RESOLVE crossings: each rung's face rebakes ONCE when `bootTicks`
+    /// reaches its reveal tick — `>=` with a one-shot latch, never exact `==`
+    /// (SwiftUI coalesces `tick` onChange values under main-thread load, so an
+    /// exact comparison can skip a crossing entirely and latch the ghost). The
+    /// publish-driven paths would self-heal within a tick, but the OPTICAL
+    /// branch rebakes only when the optical fingerprint changes — a static or
+    /// covered scene never changes it, and its accumulators never fill, so the
+    /// 32² had NO unghost path at all without its explicit crossing here. A
+    /// decreasing `bootTicks` (a `.live` re-entry) re-arms the latches; the
+    /// `Int.max` default (previews / non-boot mounts) fires nothing, keeping
+    /// those byte-identical.
+    private func resolveBootCrossings() {
+        if bootTicks < baked.lastBootTicks { baked.revealFired = [] }   // new boot epoch
+        baked.lastBootTicks = bootTicks
+        guard bootTicks != Int.max else { return }
+        if bootTicks >= S4WangTiling.revealTick(.r16), baked.revealFired.insert(16).inserted {
+            rebakeShutter()
+        }
+        if bootTicks >= S4WangTiling.revealTick(.r32), baked.revealFired.insert(32).inserted {
+            reveal32()
+        }
+        if bootTicks >= S4WangTiling.revealTick(.r64), baked.revealFired.insert(64).inserted {
+            rebake64()
+        }
+    }
+
+    /// Unghost the 32² at its reveal crossing, from whichever source is live:
+    /// the OPTICAL tile (the branch whose accumulators never fill — no other
+    /// unghost path exists there), the live-ladder tile, or — when frames are
+    /// banked — its own realize. With nothing banked the next mod-2 realize
+    /// (≤ 2 ticks away) unghosts; only the pre-realized branches need the bake.
+    private func reveal32() {
+        if baked.opticalDisplay, opticalTile32.count == 32 * 32 {
+            baked.img32 = Self.rgbImage(tile: opticalTile32, side: 32, gainStops: 0,
+                                        ghost: !revealed(.r32))
+        } else if useLiveLadder, !stageActive, tile32.count == 32 * 32 {
+            baked.img32 = Self.rgbImage(tile: tile32, side: 32, gainStops: ev32,
+                                        ghost: !revealed(.r32))
+        } else if baked.frames32 > 0 {
+            realize32()
         }
     }
 
@@ -374,11 +459,12 @@ struct InvertedPyramidField: View {
     /// pre-burst freeze and the honest banked accumulators own the realize (E7).
     private func realize32() {
         if useLiveLadder && !stageActive && tile32.count == 32 * 32 {
-            baked.img32 = Self.rgbImage(tile: tile32, side: 32, gainStops: ev32)
+            baked.img32 = Self.rgbImage(tile: tile32, side: 32, gainStops: ev32,
+                                        ghost: !revealed(.r32))
         } else {
             let count = UInt64(max(1, 4 * baked.frames32))
             baked.img32 = Self.pooledImage(sums: baked.acc32, side: 32, count: count,
-                                           gainStops: ev32)
+                                           gainStops: ev32, ghost: !revealed(.r32))
         }
         baked.acc32 = [UInt64](repeating: 0, count: 32 * 32 * 3)
         baked.frames32 = 0
@@ -415,12 +501,14 @@ struct InvertedPyramidField: View {
     private func rebake64() {
         if baked.opticalDisplay, opticalTile64.count == 64 * 64 {
             baked.img64 = Self.rgbImage(tile: opticalTile64, side: 64, gainStops: 0,
-                                        invertCross: activeMeterCell)
+                                        invertCross: activeMeterCell,
+                                        ghost: !revealed(.r64))
             return
         }
         guard !baked.lastS64.isEmpty else { baked.img64 = nil; return }
         baked.img64 = Self.pooledImage(sums: baked.lastS64, side: 64, count: 1,
-                                       gainStops: ev64, invertCross: activeMeterCell)
+                                       gainStops: ev64, invertCross: activeMeterCell,
+                                       ghost: !revealed(.r64))
     }
 
     // MARK: - the intake tallies (E2)
@@ -546,8 +634,12 @@ struct InvertedPyramidField: View {
             }
         } else {
             let inverted = tick < baked.pressedUntil
+            // BOOT RESOLVE: before the 16²'s reveal is earned the face is the
+            // quarter-ink ghost of the realized base (the b/4 unbanked idiom).
+            let ghost = !revealed(.r16)
             baked.img16 = CellBitmap.image(cols: 16, rows: 16) { c, r in
-                let b = base[r * 16 + c]
+                var b = base[r * 16 + c]
+                if ghost { b = SIMD3<UInt8>(b.x / 4, b.y / 4, b.z / 4) }
                 return inverted ? SIMD3<UInt8>(255 &- b.x, 255 &- b.y, 255 &- b.z) : b
             }
         }
@@ -574,9 +666,12 @@ struct InvertedPyramidField: View {
     /// Realize one rung's sums into a baked bitmap: divide each bin by its sample `count`
     /// (means don't compose, so divide only at the display boundary), apply digital EV
     /// gain (2^stops), clamp to sRGB8. `invertCross` draws the E4 meter crosshair — a 3×3
-    /// cross of INVERTED cells (an ink transform, never an overlay).
+    /// cross of INVERTED cells (an ink transform, never an overlay). `ghost` renders the
+    /// whole tile at quarter ink (the unbanked b/4 idiom) — the BOOT RESOLVE pre-reveal
+    /// treatment, an exact integer ink transform, never alpha.
     static func pooledImage(sums: [UInt64], side: Int, count: UInt64, gainStops: Float,
-                            invertCross: (col: Int, row: Int)? = nil) -> UIImage? {
+                            invertCross: (col: Int, row: Int)? = nil,
+                            ghost: Bool = false) -> UIImage? {
         let gain = pow(2.0, Double(gainStops))
         let k = Double(count)
         return CellBitmap.image(cols: side, rows: side) { c, r in
@@ -586,6 +681,7 @@ struct InvertedPyramidField: View {
                 return UInt8(max(0, min(255, v.rounded())))
             }
             var px = SIMD3<UInt8>(ch(0), ch(1), ch(2))
+            if ghost { px = SIMD3<UInt8>(px.x / 4, px.y / 4, px.z / 4) }
             if let x = invertCross, onCross(c, r, x.col, x.row) {
                 px = SIMD3<UInt8>(255 &- px.x, 255 &- px.y, 255 &- px.z)
             }
@@ -621,7 +717,8 @@ struct InvertedPyramidField: View {
     /// kernel) into a baked bitmap: digital EV gain + clamp. The `rgbImage` twin of
     /// `pooledImage` — no `/count` divide, since the means are already realized.
     static func rgbImage(tile: [SIMD3<UInt8>], side: Int, gainStops: Float,
-                         invertCross: (col: Int, row: Int)? = nil) -> UIImage? {
+                         invertCross: (col: Int, row: Int)? = nil,
+                         ghost: Bool = false) -> UIImage? {
         let gain = pow(2.0, Double(gainStops))
         return CellBitmap.image(cols: side, rows: side) { c, r in
             let px = tile[r * side + c]
@@ -629,6 +726,7 @@ struct InvertedPyramidField: View {
                 UInt8(max(0, min(255, (Double(v) * gain).rounded())))
             }
             var out = SIMD3<UInt8>(ch(px.x), ch(px.y), ch(px.z))
+            if ghost { out = SIMD3<UInt8>(out.x / 4, out.y / 4, out.z / 4) }
             if let x = invertCross, onCross(c, r, x.col, x.row) {
                 out = SIMD3<UInt8>(255 &- out.x, 255 &- out.y, 255 &- out.z)
             }

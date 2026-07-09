@@ -145,6 +145,13 @@ final class Surface {
     /// Transient; never persisted; never a δ event (mirrors the out-of-band UI-state discipline).
     var faultMessage: String? = nil
 
+    /// OUT-OF-BAND UI state (NOT in the FSM alphabet): THE SCROLL self-excursion flag —
+    /// `.live` shows `ScrollPhaseField` (the infinite tube) instead of the pyramid while
+    /// this is true (`Feature.scrollTube` gated). Pure render state, exactly like the
+    /// Decide fold: never a δ event, never persisted; cleared by `SurfaceView` whenever
+    /// the phase leaves `.live`, so a fault/capture can never strand the surface here.
+    var scrollTube: Bool = false
+
     /// OUT-OF-BAND UI state (NOT in the FSM alphabet): which ColorWidget is currently LIFTED for
     /// a move, or `nil`. The influence-field ground reads this to CALM the radiation while a
     /// widget is being lifted out of the field (order is being rearranged → the chaos recedes).

@@ -54,10 +54,18 @@ enum PhaseField {
         case .unauthorized:
             UnauthorizedPhaseField(surface: surface, clock: clock)
         case .live:
-            LivePhaseField(surface: surface, clock: clock, settings: settings,
-                           onShutter: onShutter, onMeter: onMeter,
-                           onExposureBias: onExposureBias, exposureBias: exposureBias,
-                           stage: stage)
+            // THE SCROLL self-excursion (Feature.scrollTube): pure render state inside
+            // `.live` — the FSM is untouched (the documented lock/burst-internal-to-live
+            // precedent), so the capture flow cannot be reached from (or disturbed by)
+            // the tube. Entered by a long-press on the live 64² hero; EXIT returns here.
+            if Feature.scrollTube && surface.scrollTube {
+                ScrollPhaseField(surface: surface, clock: clock)
+            } else {
+                LivePhaseField(surface: surface, clock: clock, settings: settings,
+                               onShutter: onShutter, onMeter: onMeter,
+                               onExposureBias: onExposureBias, exposureBias: exposureBias,
+                               stage: stage)
+            }
         case .deciding:
             // The D3 two-verb decide surface (GridLayoutContract.decisionScene widgets);
             // κ drives the control beats + the advanced-fold reveal.

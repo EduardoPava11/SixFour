@@ -120,7 +120,7 @@ import SixFour.Spec.PlaybackClock
   ( FrameCount, frameAfter )
 
 import SixFour.Spec.GridLayout
-  ( LRegion(..), captureScene, decisionScene, curateScene, liveScene )
+  ( LRegion(..), captureScene, decisionScene, curateScene, liveScene, scrollScene )
 
 import SixFour.Spec.WeaveOrder (WeaveRung(W16), unitsOf)
 
@@ -513,7 +513,9 @@ checkerAt (c, r) = even (c `div` 2 + r `div` 2)
 -- E10 palette retirement removed @palette@ with its captureScene region.
 controlFaces :: [(String, FaceKind)]
 controlFaces =
-  [ ("hero",     FaceBrackets)   -- decisionScene + curateScene: the scrubbable heroes
+  [ ("hero",     FaceBrackets)   -- decision/curate/scroll scenes: the image heroes
+                                 -- (THE SCROLL's tube viewport is an image-content
+                                 -- control too, so it reuses this BRACKETS row)
   , ("fold",     FaceFrame)      -- decisionScene: the advanced-fold chevron (D3)
   , ("advanced", FaceFrame)      -- decisionScene: the demoted W1 bench behind the fold
   , ("again",    FaceFrame)
@@ -522,6 +524,8 @@ controlFaces =
   , ("source",   FaceFrame)
   , ("repaint",  FaceFrame)
   , ("rebuild",  FaceFrame)
+  , ("exit",     FaceFrame)      -- scrollScene: leave the tube (back to the pyramid)
+  , ("reseed",   FaceFrame)      -- scrollScene: jump to a fresh tube seed
   ]
 
 -- | Look up the declared face of an interactive region name ('controlFaces').
@@ -589,7 +593,7 @@ goldenIdleFaceTrace = map (faceTreatment FaceIdle) [0 .. 7]
 -- generated contracts).
 lawControlFaceTotal :: Bool
 lawControlFaceTotal =
-  all faced (captureScene ++ decisionScene ++ curateScene ++ liveScene)
+  all faced (captureScene ++ decisionScene ++ curateScene ++ liveScene ++ scrollScene)
   where
     faced (nm, r) = not (lrInteractive r) || isJust (controlFaceOf nm)
 

@@ -105,6 +105,44 @@ tests = testGroup "GridLayout (the capture-scene contention proof — every widg
         [ maybe False (not . lrInteractive) (lookup nm liveScene)
         | nm <- ["intake32", "intake16", "fluxBar", "evRail", "lookStrip"] ]
 
+  -- THE SCROLL scene (the infinite-tube viewport, a `.live` render-state
+  -- self-excursion) passes the same eight laws: the tube hero rides EXACTLY the
+  -- liveScene field64 band, the pour tally reuses the intake16 geometry, the
+  -- position rail is a display-only 2-cell flank, and the two verbs clear the
+  -- touch floor.
+  , testProperty "scrollScene: disjoint" $ once (lawSceneDisjoint scrollScene)
+  , testProperty "scrollScene: in-bounds" $ once (lawSceneInBounds scrollScene)
+  , testProperty "scrollScene: interactive touch floor" $ once (lawInteractiveTouchFloor scrollScene)
+  , testProperty "scrollScene: safe-area clearance" $ once (lawSafeAreaClearance scrollScene)
+  , testProperty "scrollScene: priorities distinct" $ once (lawPriorityDistinct scrollScene)
+  , testProperty "scrollScene: algebraic == geometric disjointness" $ once (lawDisjointMatchesRects scrollScene)
+  , testProperty "scrollScene: cover partitions the lattice" $ once (lawCoverPartitions scrollScene)
+  , testProperty "scrollScene: widgets clear the rounded corners" $ once (lawWidgetsClearCorners scrollScene)
+
+  -- THE SCROLL witnesses: the hero is pinned to the liveScene field64 band (the
+  -- scroll takes over the pyramid's fine band — entering/leaving the tube never
+  -- moves the eye), the pour tally shares the intake16 slot geometry, and only
+  -- the hero + the two verbs are controls.
+  , testProperty "scrollScene witness: hero/pour/rail/exit/reseed at the pinned rects" $
+      once $ and
+        [ pin scrollScene "hero"   (18, 49,  64, 64)
+        , pin scrollScene "pour"   (42, 114, 16, 2)
+        , pin scrollScene "rail"   (84, 49,  2, 128)
+        , pin scrollScene "exit"   (18, 184, 20, 12)
+        , pin scrollScene "reseed" (62, 184, 20, 12)
+        ]
+  , testProperty "scrollScene: hero rides the liveScene field64 band exactly" $
+      once $ case (lookup "hero" scrollScene, lookup "field64" liveScene) of
+        (Just h, Just f) ->
+          (lrCol h, lrRow h, lrW h, lrH h) == (lrCol f, lrRow f, lrW f, lrH f)
+        _ -> False
+  , testProperty "scrollScene: pour + rail are display-only; hero/exit/reseed are controls" $
+      once $ and
+        (  [ maybe False (not . lrInteractive) (lookup nm scrollScene)
+           | nm <- ["pour", "rail"] ]
+        ++ [ maybe False lrInteractive (lookup nm scrollScene)
+           | nm <- ["hero", "exit", "reseed"] ] )
+
   -- The laws are robust on arbitrary scenes too: an overlapping pair is BOTH
   -- contested and AABB-overlapping (the bridge holds off the canonical scene).
   , testProperty "bridge holds on an overlapping 2-region scene" $

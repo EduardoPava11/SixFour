@@ -154,6 +154,7 @@ library
         SixFour.Spec.MixSKI
         SixFour.Spec.AxisSKI
         SixFour.Spec.WeaveOrder
+        SixFour.Spec.WangTiling
         SixFour.Spec.BitLedger
         SixFour.Spec.ColorMomentum
         SixFour.Spec.CaptureRecord
@@ -560,6 +561,7 @@ test-suite spec-tests
         Properties.MixSKI
         Properties.AxisSKI
         Properties.WeaveOrder
+        Properties.WangTiling
         Properties.BitLedger
         Properties.ColorMomentum
         Properties.CaptureRecord

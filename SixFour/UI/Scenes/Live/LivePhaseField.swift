@@ -89,6 +89,17 @@ struct LivePhaseField: View {
                 shutterEnabled: surface.phase == .live && !stage.active,
                 tick: clock.tick,
                 reduceMotion: clock.reduceMotion,
+                // BOOT RESOLVE: ticks since `.live` was entered — the pyramid
+                // crystallizes 16²→32²→64² on the reveal ladder (4/8/16), the pour
+                // played in reverse. σ.phaseEnteredTick is stamped by SurfaceView on
+                // every phase edge, so a retake replays the warm-up honestly.
+                bootTicks: clock.tick - surface.phaseEnteredTick,
+                // THE SCROLL entry (Feature.scrollTube): long-press the hero to enter
+                // the tube — render state only, the FSM stays `.live`.
+                onScrollTube: Feature.scrollTube ? { [weak surface] in
+                    guard let surface, surface.phase == .live, !stage.active else { return }
+                    surface.scrollTube = true
+                } : nil,
                 onShutter: onShutter,
                 onMeter64: onMeter
             )

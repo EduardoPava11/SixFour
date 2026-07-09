@@ -1479,6 +1479,16 @@ emitGridLayoutContract = T.unlines $
   ++ map regionLine GL.liveScene
   ++ [ "    ]"
   , ""
+  , "    /// THE SCROLL scene, mirrored from `SixFour.Spec.GridLayout.scrollScene`: the"
+  , "    /// infinite-tube viewport (a `.live` self-excursion — render state, FSM untouched):"
+  , "    /// the 64² tube hero on the liveScene field64 band (vertical drag scrolls the"
+  , "    /// Jeandel-Rao weave), its 4-slot pour tally, the tube-position rail, and the"
+  , "    /// EXIT / RESEED verb pair."
+  , "    public static let scrollScene: [GridRegion] = ["
+  ]
+  ++ map regionLine GL.scrollScene
+  ++ [ "    ]"
+  , ""
   , "    /// Look up a region by name (the composer asks for \"preview\", \"palette\", …)."
   , "    public static func region(_ name: String, in scene: [GridRegion] = captureScene) -> GridRegion? {"
   , "        scene.first { $0.name == name }"
@@ -1503,7 +1513,7 @@ emitGridLayoutContract = T.unlines $
   , "    /// Re-asserts the Haskell laws at runtime (defense-in-depth): disjoint,"
   , "    /// in-bounds, interactive regions clear the touch floor, priorities distinct."
   , "    public static func selfCheck() -> Bool {"
-  , "        [captureScene, decisionScene, curateScene, liveScene].allSatisfy { s in"
+  , "        [captureScene, decisionScene, curateScene, liveScene, scrollScene].allSatisfy { s in"
   , "            let touch = SixFourLattice.touchFloorCells"
   , "            let inBounds = s.allSatisfy {"
   , "                $0.col >= 0 && $0.col + $0.w <= cols && $0.row >= 0 && $0.row + $0.h <= rows"

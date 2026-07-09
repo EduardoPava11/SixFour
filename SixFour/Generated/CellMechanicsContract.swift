@@ -197,6 +197,8 @@ public enum SixFourCellMechanics {
         "source": "frame",
         "repaint": "frame",
         "rebuild": "frame",
+        "exit": "frame",
+        "reseed": "frame",
     ]
     /// The 16-tick golden BEAT vector (lit on tick ≡ 0 mod 4) — the cadence pin.
     public static let goldenBeat: [Bool] = [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false]

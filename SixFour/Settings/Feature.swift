@@ -139,6 +139,20 @@ enum Feature {
     /// (`lut_fixture_test` battery) — gate, don't delete.
     static let lutExport = false
 
+    /// THE SCROLL — the infinite procedurally-generated tube of 64² pour groups
+    /// (`SixFour/Tube/`: the Jeandel–Rao aperiodic weave as syntax, the gene as
+    /// attention, `s4_synth_burst` as substrate). **ON while THE SCROLL is built.**
+    ///
+    /// With this on, a LONG-PRESS on the live 64² hero enters `ScrollPhaseField`
+    /// (the tube viewport on the proven `scrollScene` lattice) as a `.live`
+    /// SELF-EXCURSION: pure render state (`surface.scrollTube`), the ABSurface FSM
+    /// is untouched — exactly the documented precedent of lock + burst being
+    /// internal to `.live` and the Decide fold being render state. EXIT returns to
+    /// the pyramid; leaving `.live` for any reason clears the excursion. With it
+    /// off the gesture is never attached and the scroll surface is statically
+    /// unreachable — the capture flow is byte-identical either way.
+    static let scrollTube = true
+
     /// MULTISCALE RENDER — the always-on adaptive 16/32/64 GIF. When true, `renderOnce` swaps the
     /// uniform 64³ tiles for the halt-floor multiscale cube (fused via `MultiScaleRender` →
     /// `s4_render_select`): motion regions stay 64³, static regions collapse to chunky block-16³.

@@ -120,6 +120,10 @@ struct SurfaceView: View {
                 if new == .live && old != .bootstrap {
                     engine.reset()
                 }
+                // THE SCROLL is a `.live`-only render-state excursion: any phase edge
+                // away from `.live` (fault, capture completing, …) clears it, so the
+                // surface can never be stranded in the tube outside the live act.
+                if new != .live { surface.scrollTube = false }
             }
             // Lift state changed → stamp the tick so the influence field RAMPS the lift-dim (F3)
             // over a few 20 fps ticks instead of snapping.

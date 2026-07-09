@@ -306,3 +306,77 @@ Drop in this order, nothing else: ground pour-ramp → meter crosshair linger
 the charter's whole point. If the 5 Hz vertex reads as jank rather than
 integration, the fallback is honest-cadence-during-capture-only (idle keeps
 smooth pooling) — but judge the true design on device first.
+
+## THE SCROLL (tiling round)
+
+Flag as committed: `Feature.scrollTube = true`. THE SCROLL is a self-excursion
+inside `.live` — pure render state (`surface.scrollTube`), the FSM and the
+capture flow untouched. Substrate: the Jeandel–Rao aperiodic Wang tiling as the
+op syntax (`Spec.WangTiling`, exact ℤ[φ] oracle — random access, never repeats),
+the θ_up gene as attention over it, `TubeSynth` slices generated off-main.
+
+### S1. Scroll entry
+
+- LONG-PRESS (0.5 s) on the 64² hero enters the tube (selection haptic); a
+  quick tap on the hero still METERS — confirm the two gestures never collide.
+- Entry is refused while a burst is staging (`!stage.active`) and outside
+  `.live` — try both; nothing should happen.
+- EXIT verb returns to the live pyramid; any phase change away from `.live`
+  force-drops the tube (`surface.scrollTube = false` in SurfaceView). Confirm
+  the shutter and EV/LOOK verbs behave identically after an exit round-trip.
+
+### S2. Aperiodic novelty check
+
+- Drag through 20+ consecutive slices: NO frame window may visibly repeat —
+  the tiling is aperiodic by theorem (11 tiles, arXiv:1506.06492), so any
+  perceived loop = a bug in the oracle window or the slice cache, not taste.
+- RESEED: the whole tube changes character; the same seed after relaunch
+  replays the SAME tube (deterministic SplitMix64 derivation — the floor is
+  bit-exact). Fling far (±10⁹-scale coordinates are in-contract): no hitch,
+  no edge tearing — edge-matching is automatic by construction.
+
+### S3. 4-slice playback (the pour group)
+
+- The viewport loops the current slice's 4 fine frames at 20 Hz — four fine
+  frames = ONE coarse frame, the `Spec.ColorTimeDisplay` 4-into-1 pour. The
+  SLICE readout (transient CellText, EV-overlay idiom) tracks the drag.
+- One viewport of vertical travel = one slice; drag up = deeper. A slow drag
+  must not drift (absolute from the drag's base slice); a fast fling must
+  never block on neighbours — unmaterialized slices show an HONEST BLACK
+  void, then fill when the `TubeLoader` actor delivers (visible ± prefetch).
+- The tube-position rail (±32-slice ruler under a fixed cursor) stays in
+  lock-step with the slice index.
+
+### S4. Refine-on-linger
+
+- A fresh slice arrives as its 16² pool INSTANTLY, then crystallizes up the
+  reveal ladder where you linger: 32² at 8 linger ticks, 64² at 16
+  (`S4WangTiling.revealTick`, reciprocity `revealTick·unitsOf = 16`) —
+  decode-compute is spent where the user lingers, the gene-compute-economy
+  read made visible.
+- Scrolling away RESETS the linger; returning to a slice re-runs its ladder.
+  A fast scroll should read as a river of coarse 16² pours — coarse-first is
+  the design, not a loading artifact.
+
+### S5. BOOT RESOLVE on Live (the warm-up crystallization)
+
+- Cold-launch into `.live`: the pyramid warms up through the SAME reveal
+  ladder — 16² first, 32² and 64² earn their reveal as `bootTicks` cross
+  `revealTick` (one-shot `>=` latches, each rung's face rebakes ONCE at its
+  crossing). The boot should read as crystallization, not pop-in.
+- Re-enter `.live` (from Decide, or after an app background): a DECREASING
+  `bootTicks` re-arms the latches — the ladder replays, no rung is stuck
+  hidden and none double-fires. Previews and non-boot mounts (`Int.max`
+  default) are fully revealed and untouched.
+
+### S6. Gene-attention look changes
+
+- The gene reaches the generator as the committed θ_up words through the ONE
+  sanctioned float→Q16 crossing; no gene ⇒ the deterministic floor
+  (zero-gene == floor). Compare pre-training vs post-training entry: the tube
+  should change LOOK (weights + palette warp), NEVER structure — the tiling
+  schedule is theorem-fixed (`lawAttentionModulatesNotMutates`).
+- The gene is captured ONCE per tube entry — commit a new θ_up mid-scroll and
+  confirm nothing shifts until you EXIT and re-enter; then the same slices
+  wear the new look at the same positions (attention modulates, the oracle
+  decides).

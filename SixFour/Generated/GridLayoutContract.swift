@@ -75,6 +75,19 @@ public enum GridLayoutContract {
         GridRegion(name: "lookStrip", col: 18, row: 44, w: 64, h: 4, widget: 11, priority: 11, interactive: false),
     ]
 
+    /// THE SCROLL scene, mirrored from `SixFour.Spec.GridLayout.scrollScene`: the
+    /// infinite-tube viewport (a `.live` self-excursion — render state, FSM untouched):
+    /// the 64² tube hero on the liveScene field64 band (vertical drag scrolls the
+    /// Jeandel-Rao weave), its 4-slot pour tally, the tube-position rail, and the
+    /// EXIT / RESEED verb pair.
+    public static let scrollScene: [GridRegion] = [
+        GridRegion(name: "hero", col: 18, row: 49, w: 64, h: 64, widget: 0, priority: 0, interactive: true),
+        GridRegion(name: "pour", col: 42, row: 114, w: 16, h: 2, widget: 1, priority: 1, interactive: false),
+        GridRegion(name: "rail", col: 84, row: 49, w: 2, h: 128, widget: 2, priority: 2, interactive: false),
+        GridRegion(name: "exit", col: 18, row: 184, w: 20, h: 12, widget: 3, priority: 3, interactive: true),
+        GridRegion(name: "reseed", col: 62, row: 184, w: 20, h: 12, widget: 4, priority: 4, interactive: true),
+    ]
+
     /// Look up a region by name (the composer asks for "preview", "palette", …).
     public static func region(_ name: String, in scene: [GridRegion] = captureScene) -> GridRegion? {
         scene.first { $0.name == name }
@@ -99,7 +112,7 @@ public enum GridLayoutContract {
     /// Re-asserts the Haskell laws at runtime (defense-in-depth): disjoint,
     /// in-bounds, interactive regions clear the touch floor, priorities distinct.
     public static func selfCheck() -> Bool {
-        [captureScene, decisionScene, curateScene, liveScene].allSatisfy { s in
+        [captureScene, decisionScene, curateScene, liveScene, scrollScene].allSatisfy { s in
             let touch = SixFourLattice.touchFloorCells
             let inBounds = s.allSatisfy {
                 $0.col >= 0 && $0.col + $0.w <= cols && $0.row >= 0 && $0.row + $0.h <= rows

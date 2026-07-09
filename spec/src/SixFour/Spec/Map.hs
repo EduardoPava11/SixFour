@@ -778,6 +778,19 @@ factor = 16, rung-invariant (@lawDitherPressureBalancesColorTime@). S/K/I on run
 S 16 32 64 → 16 64 (32 64) verbatim (@lawSExpandsToTheWeaveReading@), S DUPLICATES the fine substrate
 (@lawSDuplicatesTheSubstrate@ — the S-packet), n-layer S-towers cost 2^n references
 (@lawSTowerCostsExponential@) while the semantic K-chain saturates at ladder height 2 (MixSKI). Additive),
+"SixFour.Spec.WangTiling" (★ THE SCROLL's substrate — the Jeandel–Rao 11-tile aperiodic Wang tiling
+(arXiv:1506.06492, both-ways minimal) as a RANDOM-ACCESS oracle: Labbé's toral coding (arXiv:1903.06137,
+24-atom ℚ(φ) partition transcribed exactly from the companion slabbe package) computed in exact ℤ[φ]
+arithmetic — no floats, O(1) @tileAt@, @lawOracleWindowsValid@ = the keystone edge-match gate,
+@lawGoldenWindowPinned@ = the transcription golden. The 11 tiles ARE the 11 landed ops
+{I}∪{K_a}∪{S_A} (1+3+3+3+1 = the OctantViews grading; AxisSKI/CombinatorExactSequence delegation,
+@lawKKillsItsBands@/@lawSFloorIsZeroDetail@): horizontal colors = 4 carrier STATES, a row = a legal op
+pipeline (@lawTilingRowIsLegalPipeline@) — the tiling IS the state machine. The gene (θ_up 21-word Q16)
+maps to an 11-op ATTENTION row (@attentionOf@, exact; @lawZeroGeneIsUniform@) that MODULATES expression
+but never the schedule (@lawAttentionModulatesNotMutates@ — syntax theorem-fixed, semantics gene-owned).
+Boot resolve: @revealTick p = framesPerRealize W16 · unitsOf (bootMirror p)@ = 4/8/16, reveal × pool
+depth = 16 constant (@lawBootResolveIsPourInverse@ — the pour played backwards, zero new constants).
+Tube slices of 4 = the pour group (@lawSliceIsRandomAccess@, @lawSliceNeverRepeats@). Additive),
 "SixFour.Spec.CaptureRecord" (★ THE SHUTTER'S LEDGER — one deterministic-CBOR record per capture
 (RFC 8949 core deterministic subset: majors 0/2/3/4/5, minimal heads @lawHeadsAreMinimal@, definite
 lengths, bytewise-sorted map keys @lawMapKeysSortedBytewise@, NO floats), carrying what the sums
