@@ -142,6 +142,37 @@ struct TelemetryMeterTests {
         #expect(TelemetryMeterMath.isoLabel(independent: false, isoMilli: 0) == "")
     }
 
+    /// THE DESIGN E8 goldens: derived-mode EV lines carry the pooling
+    /// FRAME-equivalent — "+1.0 =2F" / "+2.0 =4F" (`unitsOf` = 64/side) — while
+    /// the fine rung (units 1) and every INDEPENDENT rung stay the plain stops.
+    @Test func evFrameEquivalentLabels() {
+        // The two derived pooled rungs: stops AND frames, one equivalence.
+        #expect(TelemetryMeterMath.evLabel(centistops: 100, independent: false, side: 32)
+                == "+1.0 =2F")
+        #expect(TelemetryMeterMath.evLabel(centistops: 200, independent: false, side: 16)
+                == "+2.0 =4F")
+        // The fine rung pools 1 frame — the trivial equivalence carries no suffix.
+        #expect(TelemetryMeterMath.evLabel(centistops: 0, independent: false, side: 64)
+                == "+0.0")
+        // Independent rungs are real optical stops — never a frame-equivalent.
+        #expect(TelemetryMeterMath.evLabel(centistops: 100, independent: true, side: 32)
+                == "+1.0")
+        #expect(TelemetryMeterMath.evLabel(centistops: -50, independent: true, side: 16)
+                == "-0.5")
+        // Off-ladder / degenerate sides fall back to the plain label (total).
+        #expect(TelemetryMeterMath.evLabel(centistops: 100, independent: false, side: 0)
+                == "+1.0")
+        #expect(TelemetryMeterMath.evLabel(centistops: 100, independent: false, side: 48)
+                == "+1.0")
+        // The shipped derived snapshot reads the whole E8 vocabulary end-to-end.
+        let tel = RungTelemetry.derived(ticks: 64, fineBinArea: 100, generation: 1)
+        let lines = tel.rungs.map {
+            TelemetryMeterMath.evLabel(centistops: $0.evCentistops,
+                                       independent: $0.independent, side: $0.side)
+        }
+        #expect(lines == ["+0.0", "+1.0 =2F", "+2.0 =4F"])
+    }
+
     // MARK: - The machine ring quantizers
 
     @Test func budgetFill() {

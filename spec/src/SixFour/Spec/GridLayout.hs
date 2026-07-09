@@ -89,58 +89,70 @@ type Scene = [(String, LRegion)]
 -- | THE capture scene — the as-built WIP layout in 4 pt cells (100 × 218 field):
 --
 --   * @preview@ : 64×64 (256 pt) hero, centered (@(100-64)/2 = 18@), top row 16
---     (64 pt — clears the 62 pt Dynamic Island). Non-interactive. This is the
---     LOCKED SCENE ANCHOR: identical @(col 18, row 16, 64×64)@ in 'captureScene',
---     'decisionScene', and the review field, so the scene never jumps or resizes
---     across capture → captured → decide. Matches 'MovableLayout' Field64 default.
---   * @palette@ : 16×16 (64 pt) live palette = the capture button, centered
---     (@(100-16)/2 = 42@), top row 145 (thumb zone). Interactive (64 ≥ 44 floor).
+--     (64 pt — clears the 62 pt Dynamic Island). Non-interactive. This was the
+--     LOCKED SCENE ANCHOR across capture → captured → decide; the D3 Decide
+--     rebuild moved 'decisionScene''s hero to its own judged placement, so the
+--     anchor now pins capture ↔ the review field only.
+--   * @palette@ : RETIRED (THE DESIGN E10, 2026-07-08). The 16² live-palette
+--     widget's last render site was demolished — the pyramid vertex IS the
+--     realized palette and the shutter ('liveScene' @field16@ + the D1 BRACKETS)
+--     — so the region leaves the proven scene with it.
 --
--- Disjoint (preview rows 16–79, palette rows 145–160), in-bounds, and safe-area
--- clearing — all proven below.
+-- In-bounds and safe-area clearing — all proven below (a one-region scene is
+-- trivially disjoint).
 captureScene :: Scene
 captureScene =
   [ ("preview", LRegion { lrCol = 18, lrRow = 16,  lrW = 64, lrH = 64
                         , lrWidget = 0, lrPriority = 0, lrInteractive = False })
-  , ("palette", LRegion { lrCol = 42, lrRow = 145, lrW = 16, lrH = 16
-                        , lrWidget = 1, lrPriority = 1, lrInteractive = True })
   ]
 
--- | THE V3.0 DECISION SCENE — the post-capture surface where the user iterates the
--- 16³ proposal until they like it. Every widget is a user-CHANGEABLE model-boundary
--- knob (grounded in "SixFour.Spec.ModelIO" @ModelInput@ + the V3 somatic gene), on
--- the same proven lattice as 'captureScene':
+-- | THE DECISION SCENE — rebuilt around the TWO VERBS (THE DESIGN D3, 2026-07-08,
+-- @docs/UI-FORM-FOLLOWS-FUNCTION.md@). The scene shows a DECISION, not machinery:
+-- the judgment view is the hero, ACCEPT and AGAIN are the two clearest controls in
+-- the app, and the W1 paint\/channel\/gauge\/gene world is DEMOTED behind one fold
+-- (fully functional, just no longer first-class):
 --
---   * @preview@  : 64×64 hero — the rendered result (@renderFrame@, palette[index]).
---     INTERACTIVE: horizontal drag scrubs the frame (and derives the paint layer).
---   * @paint@    : 64×64 — the 16³ control grid at 4 atoms per control cell (16 pt,
---     paintable): the @miNudge@ 'CellBudget' surface (one cell → 4096-leaf subtree).
---   * @channels@ : 64×12 strip — the 9 ChannelProduct colour×space pairs (which
---     channel the brush paints).
---   * @gauge@    : 20×12 — the φ6 toggle (@miGauge@: colour-by-space vs the dual).
---   * @gene@     : 20×12 — the SOMATIC θ_up toggle (learned invention vs the
---     deterministic floor; zero-gene == floor makes OFF always safe).
---   * @again@    : 20×12 — reject: recapture / re-propose (the decision stream).
---   * @accept@   : 32×16 thumb hero — commit this 16³ (ends the loop).
+--   * @hero@     : 64×64 at (14,30) — the 64³ reconstruction (floor or gene): what
+--     accepting would ship. INTERACTIVE: horizontal drag scrubs the frame (and
+--     derives the paint layer). Wears the D1 BRACKETS in its own gutter (cols
+--     12–13\/78–79, rows 28–29\/94–95 — cells no region claims, by construction).
+--   * @coarse@   : 16×16 at (82,30), beside the hero — the RAW 16³ coarse tier at
+--     the scrubbed layer: the 64-vs-16 judgment read at a glance. Display-only.
+--   * @tally@    : 16×2 at (82,26), above the coarse — the STATIC intake-tally
+--     idiom (4 slots of 3 cells + 1-cell gaps, the exact 'liveScene' @intake16@
+--     geometry) naming the 4-cells-per-frame ledger structure, so the
+--     pour-equivalence language crosses scenes. Display-only.
+--   * @fold@     : 12×12 at (44,98), centred between hero and verbs — THE advanced
+--     fold chevron (FRAME face). Opening reveals @advanced@ top-down as a
+--     cell-row reveal; closing removes it.
+--   * @advanced@ : 64×76 at (18,112) — the demoted W1 bench (9-channel strip, the
+--     16³ paint grid at 3 atoms per control cell, φ6 gauge, somatic-gene toggle)
+--     INSIDE one proven region. Rendered only while the fold is open — the region
+--     is static so the reveal can never contend; the fold state is render state.
+--   * @again@ \/ @accept@ : the bottom verb band, rows 188–203 — 44×16 each
+--     (176×64 pt, 4× the touch floor), 4-cell gaps (4+44+4+44+4 = 100 cols).
+--     AGAIN = hollow FRAME + retake glyph; ACCEPT = filled control-ink face +
+--     seal glyph. The clearest controls on any scene.
 --
--- Geometry: rows 16–193 (top 64 pt clears the 62 pt island; bottom 772 pt clears
--- 874−34=840); centre columns 18–81 stay clear of the 14-cell corner arcs. All
--- eight laws below are @once@-tested over this scene in @Properties.GridLayout@.
+-- Geometry: rows 26–203 (top 104 pt clears the 62 pt island; bottom 812 pt clears
+-- 874−34 = 840; rows ≤ 203 sit fully above the 14-cell bottom corner arcs, so even
+-- the col-4\/col-95 verb corners are on-screen). All eight laws below are
+-- @once@-tested over this scene in @Properties.GridLayout@.
 decisionScene :: Scene
 decisionScene =
-  [ ("preview",  LRegion { lrCol = 18, lrRow = 16,  lrW = 64, lrH = 64
+  [ ("hero",     LRegion { lrCol = 14, lrRow = 30,  lrW = 64, lrH = 64
                          , lrWidget = 0, lrPriority = 0, lrInteractive = True })
-  , ("paint",    LRegion { lrCol = 18, lrRow = 82,  lrW = 64, lrH = 64
-                         , lrWidget = 1, lrPriority = 1, lrInteractive = True })
-  , ("channels", LRegion { lrCol = 18, lrRow = 148, lrW = 64, lrH = 12
-                         , lrWidget = 2, lrPriority = 2, lrInteractive = True })
-  , ("gauge",    LRegion { lrCol = 18, lrRow = 162, lrW = 20, lrH = 12
+  , ("coarse",   LRegion { lrCol = 82, lrRow = 30,  lrW = 16, lrH = 16
+                         , lrWidget = 1, lrPriority = 1, lrInteractive = False })
+  , ("tally",    LRegion { lrCol = 82, lrRow = 26,  lrW = 16, lrH = 2
+                         , lrWidget = 2, lrPriority = 2, lrInteractive = False })
+  , ("fold",     LRegion { lrCol = 44, lrRow = 98,  lrW = 12, lrH = 12
                          , lrWidget = 3, lrPriority = 3, lrInteractive = True })
-  , ("gene",     LRegion { lrCol = 40, lrRow = 162, lrW = 20, lrH = 12
+  , ("advanced", LRegion { lrCol = 18, lrRow = 112, lrW = 64, lrH = 76
                          , lrWidget = 4, lrPriority = 4, lrInteractive = True })
-  , ("again",    LRegion { lrCol = 62, lrRow = 162, lrW = 20, lrH = 12
+  , ("again",    LRegion { lrCol = 4,  lrRow = 188, lrW = 44, lrH = 16
                          , lrWidget = 5, lrPriority = 5, lrInteractive = True })
-  , ("accept",   LRegion { lrCol = 34, lrRow = 178, lrW = 32, lrH = 16
+  , ("accept",   LRegion { lrCol = 52, lrRow = 188, lrW = 44, lrH = 16
                          , lrWidget = 6, lrPriority = 6, lrInteractive = True })
   ]
 
@@ -206,13 +218,34 @@ curateScene =
 --     pyramid (retiring the stale movable field64\/palette16 anchors) and any
 --     future per-band placement reads the contract, not view geometry.
 --
--- ALL are non-interactive at the REGION level (meters and anchors, not
--- controls — the pyramid's tap gestures live on its views): they must never
--- intercept the ground LOOK-swipe\/EV-drag layer, so the 11-cell touch floor
--- does not bind and the slim 14-cell flank is legal. The flank columns 84–97
--- sit clear of the pyramid columns 18–81 and the palette (42,145,16×16);
--- rows ≥ 49 and ≤ 201 clear both corner arcs and both OS safe areas — all
--- re-proven by the eight laws below over this scene in @Properties.GridLayout@.
+-- THE POUR instruments (THE DESIGN D2, 2026-07-08) ride the same lattice —
+-- display-only overlays whose QUANTITIES live in "SixFour.Spec.ColorTimeDisplay"
+-- (slot counts = @unitsOf@ by @lawTallyEqualsUnits@; only geometry is proven here):
+--
+--   * @intake32@ : 32×2 tally rail at (34,114) — 2 slots of 15 cells + a 2-cell
+--     gap, in the rows-113–116 gutter between the 64² and 32² bands.
+--   * @intake16@ : 16×2 tally rail at (42,149) — 4 slots of 3 cells + 1-cell
+--     gaps, in the rows-149–152 gutter; clear of the shutter-bracket top row 151
+--     by construction (the brackets live at the field16 gutter, cols 40–59).
+--   * @fluxBar@  : 16×1 at (42,172), directly under the shutter brackets — the
+--     paletteW1 wave meter (log₂ fill, 5 Hz).
+--   * @evRail@   : 2×26 at (2,120), cols 2–3 — 13 detent blocks of 2×2 (⅓ stops,
+--     ±2 EV), vertically centered on field32 (117 + (32−26)\/2 = 120); the LEFT
+--     edge because the right flank belongs to the rung meters. Materializes only
+--     while the EV drag is live; the region pins where.
+--   * @lookStrip@: 64×4 at (18,44), the gutter above the 64² band — one 4×4
+--     graded swatch per LOOK; materializes only while the LOOK swipe is live.
+--
+-- ALL are non-interactive at the REGION level (meters, anchors, and display-only
+-- gesture rails — the pyramid's tap gestures live on its views; the LOOK\/EV
+-- gestures stay on the clear ground layer): they must never intercept the ground
+-- LOOK-swipe\/EV-drag layer, so the 11-cell touch floor does not bind and the
+-- slim 14-cell flank \/ 2-cell rail are legal. The flank columns 84–97 sit clear
+-- of the pyramid columns 18–81; the pour instruments sit in the pyramid's real
+-- VStack gutters (rows 44–47 \/ 114–115 \/ 149–150 \/ 172) and the left margin
+-- (cols 2–3); rows ≥ 44 and ≤ 201 clear both corner arcs and both OS safe
+-- areas — all re-proven by the eight laws below over this scene in
+-- @Properties.GridLayout@.
 liveScene :: Scene
 liveScene =
   [ ("rung64", LRegion { lrCol = 84, lrRow = 49,  lrW = 14, lrH = 64
@@ -229,6 +262,16 @@ liveScene =
                         , lrWidget = 5, lrPriority = 5, lrInteractive = False })
   , ("field16", LRegion { lrCol = 42, lrRow = 153, lrW = 16, lrH = 16
                         , lrWidget = 6, lrPriority = 6, lrInteractive = False })
+  , ("intake32", LRegion { lrCol = 34, lrRow = 114, lrW = 32, lrH = 2
+                         , lrWidget = 7, lrPriority = 7, lrInteractive = False })
+  , ("intake16", LRegion { lrCol = 42, lrRow = 149, lrW = 16, lrH = 2
+                         , lrWidget = 8, lrPriority = 8, lrInteractive = False })
+  , ("fluxBar", LRegion { lrCol = 42, lrRow = 172, lrW = 16, lrH = 1
+                        , lrWidget = 9, lrPriority = 9, lrInteractive = False })
+  , ("evRail", LRegion { lrCol = 2, lrRow = 120, lrW = 2, lrH = 26
+                       , lrWidget = 10, lrPriority = 10, lrInteractive = False })
+  , ("lookStrip", LRegion { lrCol = 18, lrRow = 44, lrW = 64, lrH = 4
+                          , lrWidget = 11, lrPriority = 11, lrInteractive = False })
   ]
 
 -- | The screen cells @(col,row)@ a region claims.

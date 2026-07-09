@@ -1,21 +1,44 @@
 import Testing
 @testable import SixFour
 
-/// Gates for the V3.0 decision surface (`DecideSurface` over
-/// `GridLayoutContract.decisionScene` — workflow C1).
+/// Gates for the decision surface (`DecideSurface` over
+/// `GridLayoutContract.decisionScene` — rebuilt around the TWO VERBS, THE DESIGN D3).
 @MainActor
 struct DecideSurfaceTests {
 
-    /// Every knob the surface composes resolves in the PROVEN scene, and the
-    /// runtime self-check (now spanning both scenes) holds.
-    @Test func decisionSceneResolvesEveryKnob() {
+    /// Every widget the surface composes resolves in the PROVEN scene, and the
+    /// runtime self-check (spanning all scenes) holds.
+    @Test func decisionSceneResolvesEveryWidget() {
         let scene = GridLayoutContract.decisionScene
-        for name in ["preview", "paint", "channels", "gauge", "gene", "again", "accept"] {
+        for name in ["hero", "coarse", "tally", "fold", "advanced", "again", "accept"] {
             #expect(GridLayoutContract.region(name, in: scene) != nil, "missing \(name)")
         }
         #expect(scene.count == 7)
         #expect(GridLayoutContract.isDisjoint(scene))
         #expect(GridLayoutContract.selfCheck())
+    }
+
+    /// D3: the two verbs are the clearest controls in the app — 44×16 cells each
+    /// (4× the 11-cell touch floor in width), and every interactive region of the
+    /// rebuilt scene declares a control face (the lawControlFaceTotal mirror the
+    /// lint also polices). The coarse/tally judgment aids are display-only.
+    @Test func verbsAndFacesFollowTheDesign() throws {
+        let scene = GridLayoutContract.decisionScene
+        for name in ["again", "accept"] {
+            let r = try #require(GridLayoutContract.region(name, in: scene))
+            #expect(r.w == 44 && r.h == 16, "\(name) is not the 44×16 verb face")
+            #expect(r.interactive)
+        }
+        for r in scene where r.interactive {
+            #expect(SixFourCellMechanics.controlFaces[r.name] != nil,
+                    "interactive \(r.name) has no control face")
+        }
+        #expect(SixFourCellMechanics.controlFaces["hero"] == "brackets")
+        #expect(SixFourCellMechanics.controlFaces["fold"] == "frame")
+        for name in ["coarse", "tally"] {
+            let r = try #require(GridLayoutContract.region(name, in: scene))
+            #expect(!r.interactive, "\(name) must be display-only")
+        }
     }
 
     /// The paint knob reaches the model boundary: painting one control cell on a

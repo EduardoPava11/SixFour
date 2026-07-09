@@ -160,6 +160,47 @@ public enum SixFourCellMechanics {
         }
     }
 
+    // MARK: the control face (the control language — Spec.CellMechanics D1)
+    /// Face kinds (geometry): frame = 1-cell inset ring (solid controls);
+    /// brackets = four corner brackets outside the tile (image-content controls).
+    public static let faceKinds: [String] = ["frame", "brackets"]
+    /// Control states, ordinals == Haskell fromEnum: idle, pressed, busy, disabled.
+    public static let controlStates: [String] = ["idle", "pressed", "busy", "disabled"]
+    /// Face treatments (the closed OPAQUE ink transforms — never alpha):
+    /// ghost, lit, inverted, busy, checker.
+    public static let faceTreatments: [String] = ["ghost", "lit", "inverted", "busy", "checker"]
+    /// BEAT period in surface-clock ticks: the 16-rung pool depth (unitsOf W16 —
+    /// Spec.CellMechanics.lawBeatIsPoolCadence). 4 ticks at 20 Hz = the 5 Hz realize.
+    public static let beatPeriodTicks: Int = 4
+    /// Treatment ordinal for (state, beat-lit?) — flat [state*2 + (beat ? 1 : 0)].
+    static let faceTreatmentTable: [Int] = [0, 1, 2, 2, 3, 3, 4, 4]
+    /// The face treatment of a control state at a clock tick: only IDLE reads the
+    /// tick (the BEAT — lit for exactly 1 tick on every 16-rung realize,
+    /// lawBeatDerivedFromOneClock); pressed/busy/disabled are tick-invariant.
+    @inline(__always)
+    public static func faceTreatment(state: Int, tick: Int) -> Int {
+        let beat = ((tick % beatPeriodTicks) + beatPeriodTicks) % beatPeriodTicks == 0
+        return faceTreatmentTable[state * 2 + (beat ? 1 : 0)]
+    }
+    /// The control ink (sRGB8) every FRAME ring / BRACKET arm draws in.
+    public static let faceControlInk: (r: Int, g: Int, b: Int) = (235, 235, 235)
+    /// interactive region name -> face kind — the CLOSED table scripts/lint-grid.sh
+    /// polices (LINT-CONTROL-FACE): every `interactive: true` GridLayoutContract
+    /// region must appear here (Spec.CellMechanics.lawControlFaceTotal).
+    public static let controlFaces: [String: String] = [
+        "hero": "brackets",
+        "fold": "frame",
+        "advanced": "frame",
+        "again": "frame",
+        "accept": "frame",
+        "slabs": "frame",
+        "source": "frame",
+        "repaint": "frame",
+        "rebuild": "frame",
+    ]
+    /// The 16-tick golden BEAT vector (lit on tick ≡ 0 mod 4) — the cadence pin.
+    public static let goldenBeat: [Bool] = [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false]
+
     // MARK: golden cross-language pins (re-derived by selfCheck)
     public static let goldenGestureEvents: [Int] = [0, 1, 2, 2, 3, 4]
     public static let goldenPhaseTrace: [Int] = [0, 1, 2, 2, 2, 3, 0]

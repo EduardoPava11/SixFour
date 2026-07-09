@@ -42,7 +42,8 @@ struct SurfaceView: View {
             // the whole app lifetime — the GPU CAMetalLayer is never torn down/rebuilt per phase
             // (the act1→act2 transition flash). Every phase field renders its widgets + chrome on a
             // CLEAR background ON TOP of this. (docs/SIXFOUR-DIMENSIONAL-FIELD-ARCHITECTURE.md S5.)
-            StageGround(surface: surface, placement: engine.settings.widgetPlacement, tick: clock.tick)
+            StageGround(surface: surface, placement: engine.settings.widgetPlacement,
+                        tick: clock.tick, capturing: isCapturing)
                 .ignoresSafeArea()
             // THE SCENE CANVAS is centred in the REAL screen, not pinned top-leading.
             // Every widget places by absolute cell → point inside a coordinate space
@@ -241,16 +242,26 @@ struct SurfaceView: View {
     private var engineStage: EngineStage {
         switch engine.phase {
         case .locking:
-            return EngineStage(label: "LOCK", progress: nil)
+            return EngineStage(label: "LOCK", progress: nil, landed: 0)
         case .capturing(let p):
-            return EngineStage(label: "BURST \(Int((p * 64).rounded()))/64", progress: p)
+            // `landed` is the EXACT banked-frame count the 16² ledger consumes (E7):
+            // frame n permanently owns raster cells 4(n−1)…4n−1 (lawLedgerConserves).
+            let n = min(64, max(0, Int((p * 64).rounded())))
+            return EngineStage(label: "BURST \(n)/64", progress: p, landed: n)
         case .renderingStageA:
-            return EngineStage(label: "REFINE", progress: engine.loadingProgress)
+            return EngineStage(label: "REFINE", progress: engine.loadingProgress, landed: 64)
         case .renderingEncode:
-            return EngineStage(label: "ENCODE", progress: engine.loadingProgress)
+            return EngineStage(label: "ENCODE", progress: engine.loadingProgress, landed: 64)
         default:
             return .idle
         }
+    }
+
+    /// True exactly while burst frames are landing — the ground's CAPTURE-ENERGY pour
+    /// ramp (E9) glows only when photons are being banked, and only then.
+    private var isCapturing: Bool {
+        if case .capturing = engine.phase { return true }
+        return false
     }
 
     // MARK: - engine.phase → σ event

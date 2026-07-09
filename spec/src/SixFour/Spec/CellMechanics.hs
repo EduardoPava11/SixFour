@@ -39,7 +39,22 @@ verdict + how far the finger has travelled (farther ⇒ faster, 'lawReactiveFast
 lerp the cell tint between its base and the verdict accent ('verdictInk' / 'tintLerpQ16').
 Accept = a calm green breath; reject = an urgent red flit.
 
-GHC-boot-only: base, containers, plus "SixFour.Spec.MovableLayout".
+== The control face (the control language — added for THE DESIGN D1, 2026-07-08)
+
+CONTROLS MUST READ AS CONTROLS, in one pixelated vocabulary. A control wears a 'FaceKind'
+(FRAME for solid controls, BRACKETS for controls whose content is an image — the 16²
+shutter, the Decide hero) and its 'ControlState' is rendered by 'faceTreatment' as an
+OPAQUE cell\/ink transform ('FaceTreatment') — never alpha ('lawFaceNoAlpha'; the
+transform's very type admits no blend factor). The idle INVITE is the BEAT: the face goes
+lit ink for exactly one tick on every 16-rung refresh ('beatAt' == 'realizesAt' 'W16' —
+the affordance and the cadence teacher are ONE element, 'lawBeatDerivedFromOneClock',
+period = the coarse pool depth, 'lawBeatIsPoolCadence'). 'controlFaces' is the closed
+interactive-region → face table; 'lawControlFaceTotal' proves every interactive
+'SixFour.Spec.GridLayout' region declares a face, and @scripts\/lint-grid.sh@
+(LINT-CONTROL-FACE) polices the same totality over the generated contracts.
+
+GHC-boot-only: base, containers, plus "SixFour.Spec.MovableLayout",
+"SixFour.Spec.GridLayout", "SixFour.Spec.WeaveOrder", "SixFour.Spec.ColorTimeDisplay".
 -}
 -- COMPARTMENT: SWIFT-COREAI | tag:DisplaySide
 module SixFour.Spec.CellMechanics
@@ -62,10 +77,24 @@ module SixFour.Spec.CellMechanics
   , reactivePulse, tintLerpQ16
     -- * Per-widget mechanics
   , Mechanics(..), mechanicsFor
+    -- * The control face (the control language)
+  , FaceKind(..), allFaceKinds, faceKindName
+  , ControlState(..), allControlStates, controlStateName
+  , FaceTreatment(..), allTreatments, treatmentName
+  , beatPeriodTicks, beatAt
+  , faceTreatment
+  , controlInk, treatmentInk, checkerAt
+  , controlFaces, controlFaceOf
     -- * The golden cross-language trace
   , goldenGesture, goldenPhaseTrace, goldenHaptics
   , goldenPulse, goldenDragMag, goldenTickFrames
+  , goldenBeat, goldenIdleFaceTrace
     -- * Laws
+  , lawControlFaceTotal
+  , lawFaceNoAlpha
+  , lawFaceStatesDistinct
+  , lawBeatIsPoolCadence
+  , lawBeatDerivedFromOneClock
   , lawGestureTotal
   , lawGestureNoOrphan
   , lawDragRequiresHold
@@ -82,12 +111,20 @@ module SixFour.Spec.CellMechanics
   ) where
 
 import Data.List (nub)
+import Data.Maybe (isJust)
 
 import SixFour.Spec.MovableLayout
   ( ColorIdentity(..), allIdentities, Placement, move )
 
 import SixFour.Spec.PlaybackClock
   ( FrameCount, frameAfter )
+
+import SixFour.Spec.GridLayout
+  ( LRegion(..), captureScene, decisionScene, curateScene, liveScene )
+
+import SixFour.Spec.WeaveOrder (WeaveRung(W16), unitsOf)
+
+import SixFour.Spec.ColorTimeDisplay (realizesAt)
 
 -- | A playback frame index — the @Z_N@ cursor the 20 fps clock advances
 -- ('SixFour.Spec.Display.logicRateHz'). A bare 'Int' (no newtype: it is the same
@@ -353,6 +390,145 @@ mechanicsFor Palette16     = Mechanics 6 LiftPop 1 (PulseSpec 30 (q16One `div` 5
 mechanicsFor DiversityRing = Mechanics 6 LiftPop 1 (PulseSpec 34 (q16One `div` 5) (q16One * 9 `div` 16))
 
 -- =============================================================================
+-- The control face — the control language (THE DESIGN D1, 2026-07-08)
+-- =============================================================================
+
+-- | The two face GEOMETRIES a control can wear (both drawn in cells, in the gutter or
+-- as an inset ring — zero content pixels obscured):
+--
+--   * 'FaceFrame'    — a 1-cell inset ring in 'controlInk': solid controls
+--                      (the CellButton\/CellSelector treatment, promoted to law).
+--   * 'FaceBrackets' — four corner brackets (arms 3×1 cells) OUTSIDE the tile, for
+--                      controls whose content IS an image (the 16² shutter, the Decide
+--                      hero); the bracket rect IS the hit rect.
+data FaceKind = FaceFrame | FaceBrackets
+  deriving (Eq, Ord, Enum, Bounded, Show)
+
+-- | Every 'FaceKind', in 'Enum' order.
+allFaceKinds :: [FaceKind]
+allFaceKinds = [minBound .. maxBound]
+
+-- | Stable cross-language face-kind token (the generated contract and the lint key).
+faceKindName :: FaceKind -> String
+faceKindName FaceFrame    = "frame"
+faceKindName FaceBrackets = "brackets"
+
+-- | The states a control face renders. The idle INVITE is not a fifth state — it is
+-- 'FaceIdle' on a beat tick ('beatAt'): the face goes lit for exactly one tick per
+-- 16-rung refresh, so the invitation teaches the pool cadence.
+data ControlState
+  = FaceIdle      -- ^ resting; ghost face, BEAT-lit on the pool cadence (the invite)
+  | FacePressed   -- ^ finger down: full ink inversion of the face
+  | FaceBusy      -- ^ the operation runs: the CellButton red on the face
+  | FaceDisabled  -- ^ not available: the 2×2 checker over the face only
+  deriving (Eq, Ord, Enum, Bounded, Show)
+
+-- | Every 'ControlState', in 'Enum' order.
+allControlStates :: [ControlState]
+allControlStates = [minBound .. maxBound]
+
+-- | Stable cross-language state token.
+controlStateName :: ControlState -> String
+controlStateName FaceIdle     = "idle"
+controlStateName FacePressed  = "pressed"
+controlStateName FaceBusy     = "busy"
+controlStateName FaceDisabled = "disabled"
+
+-- | The CLOSED set of face renderings — each an OPAQUE cell\/ink transform
+-- ('treatmentInk'). There is no blend\/alpha constructor, so translucency is
+-- unrepresentable by type ('lawFaceNoAlpha' checks the transforms stay exact).
+data FaceTreatment
+  = TreatGhost     -- ^ quarter-ink ghost (the existing @b\/4@ idiom)
+  | TreatLit       -- ^ full 'controlInk' (the BEAT tick \/ an active FRAME)
+  | TreatInverted  -- ^ exact ink inversion (pressed)
+  | TreatBusy      -- ^ the CellButton red ('verdictInk' 'Reject')
+  | TreatChecker   -- ^ the 2×2 checker mask ('checkerAt') — geometry, ink unchanged
+  deriving (Eq, Ord, Enum, Bounded, Show)
+
+-- | Every 'FaceTreatment', in 'Enum' order.
+allTreatments :: [FaceTreatment]
+allTreatments = [minBound .. maxBound]
+
+-- | Stable cross-language treatment token.
+treatmentName :: FaceTreatment -> String
+treatmentName TreatGhost    = "ghost"
+treatmentName TreatLit      = "lit"
+treatmentName TreatInverted = "inverted"
+treatmentName TreatBusy     = "busy"
+treatmentName TreatChecker  = "checker"
+
+-- | The BEAT period in surface-clock ticks: the coarse rung's display period =
+-- 'unitsOf' 'W16' = 4 (5 Hz at the 20 Hz clock). DELEGATION, never a free animation
+-- constant ('lawBeatIsPoolCadence').
+beatPeriodTicks :: Int
+beatPeriodTicks = unitsOf W16
+
+-- | True iff the idle face is BEAT-lit at tick @t@ — literally the 16-rung realize
+-- predicate ('SixFour.Spec.ColorTimeDisplay.realizesAt' 'W16'): the shutter
+-- heartbeats at the cadence its own frames land at ('lawBeatDerivedFromOneClock').
+-- Suppression under reduce-motion is a Swift-side render decision, not a schedule.
+beatAt :: Int -> Bool
+beatAt = realizesAt W16
+
+-- | δ of the face: the treatment a control state renders at tick @t@. TOTAL over the
+-- closed alphabets; only 'FaceIdle' reads the tick (the beat) — every other state is
+-- tick-invariant, so a pressed\/busy\/disabled face can never flicker.
+faceTreatment :: ControlState -> Int -> FaceTreatment
+faceTreatment FaceIdle     t = if beatAt t then TreatLit else TreatGhost
+faceTreatment FacePressed  _ = TreatInverted
+faceTreatment FaceBusy     _ = TreatBusy
+faceTreatment FaceDisabled _ = TreatChecker
+
+-- | The control ink (sRGB8): the white-235 every FRAME ring and BRACKET arm draws in.
+controlInk :: (Int, Int, Int)
+controlInk = (235, 235, 235)
+
+-- | The OPAQUE ink transform of a treatment over the face's base ink — pure integer,
+-- no blend factor in the type (the structural half of 'lawFaceNoAlpha'):
+-- ghost = exact quarter ('div' 4), lit = 'controlInk', inverted = @255 − x@ (an exact
+-- involution), busy = 'verdictInk' 'Reject', checker = ink UNCHANGED (the mask is
+-- geometry, 'checkerAt').
+treatmentInk :: FaceTreatment -> (Int, Int, Int) -> (Int, Int, Int)
+treatmentInk TreatGhost    (r, g, b) = (r `div` 4, g `div` 4, b `div` 4)
+treatmentInk TreatLit      _         = controlInk
+treatmentInk TreatInverted (r, g, b) = (255 - r, 255 - g, 255 - b)
+treatmentInk TreatBusy     _         = verdictInk Reject
+treatmentInk TreatChecker  ink       = ink
+
+-- | The 2×2 checker mask for 'TreatChecker': True = the cell keeps its ink, False =
+-- it drops to the void — a geometric half-cover at 2-cell pitch (exactly the existing
+-- disabled-checker idiom), never a translucency.
+checkerAt :: (Int, Int) -> Bool
+checkerAt (c, r) = even (c `div` 2 + r `div` 2)
+
+-- | THE CLOSED interactive-region → face table: every interactive
+-- 'SixFour.Spec.GridLayout' region (by name) declares the face it wears. Image-content
+-- controls (the Decide and Curate heroes; the live shutter vertex wears its BRACKETS
+-- directly on the view — 'SixFour.Spec.GridLayout.liveScene' @field16@ is a
+-- non-interactive band region, its tap lives on the pyramid) wear BRACKETS; every
+-- solid control wears FRAME. Adding an interactive region without a row here fails
+-- 'lawControlFaceTotal' (and LINT-CONTROL-FACE over the contracts). The D3 Decide
+-- rebuild (2026-07-08) retired the old @preview@\/@paint@\/@channels@\/@gauge@\/@gene@
+-- region rows (the W1 controls now live INSIDE the @advanced@ fold region) and the
+-- E10 palette retirement removed @palette@ with its captureScene region.
+controlFaces :: [(String, FaceKind)]
+controlFaces =
+  [ ("hero",     FaceBrackets)   -- decisionScene + curateScene: the scrubbable heroes
+  , ("fold",     FaceFrame)      -- decisionScene: the advanced-fold chevron (D3)
+  , ("advanced", FaceFrame)      -- decisionScene: the demoted W1 bench behind the fold
+  , ("again",    FaceFrame)
+  , ("accept",   FaceFrame)
+  , ("slabs",    FaceFrame)
+  , ("source",   FaceFrame)
+  , ("repaint",  FaceFrame)
+  , ("rebuild",  FaceFrame)
+  ]
+
+-- | Look up the declared face of an interactive region name ('controlFaces').
+controlFaceOf :: String -> Maybe FaceKind
+controlFaceOf nm = lookup nm controlFaces
+
+-- =============================================================================
 -- The golden cross-language trace (the cabal-gated, Swift-pinned witness)
 -- =============================================================================
 
@@ -391,9 +567,79 @@ goldenPulse = [ pulseSampleQ16 (mcPulse (mechanicsFor Field64)) t | t <- [0 .. 7
 goldenTickFrames :: [FrameIndex]
 goldenTickFrames = tickFrames 64 0 (0, 0) (7, 0)
 
+-- | The 16-tick golden BEAT vector (lit on tick ≡ 0 mod 4) — mirrored into the Swift
+-- contract so the shutter heartbeat is pinned to the pool cadence cross-language.
+goldenBeat :: [Bool]
+goldenBeat = map beatAt [0 .. 15]
+
+-- | The idle face over the first 8 ticks:
+-- @[Lit, Ghost, Ghost, Ghost, Lit, Ghost, Ghost, Ghost]@ — the one moving invitation,
+-- cadence-locked (re-derived by the Swift port).
+goldenIdleFaceTrace :: [FaceTreatment]
+goldenIdleFaceTrace = map (faceTreatment FaceIdle) [0 .. 7]
+
 -- =============================================================================
 -- Laws
 -- =============================================================================
+
+-- | CONTROL-FACE TOTALITY — every interactive region of every proven
+-- 'SixFour.Spec.GridLayout' scene declares a control face in 'controlFaces'. An
+-- interactive region with no face is an unmarked control — the exact drift the
+-- device review flagged — and fails the build here (the lint mirrors this over the
+-- generated contracts).
+lawControlFaceTotal :: Bool
+lawControlFaceTotal =
+  all faced (captureScene ++ decisionScene ++ curateScene ++ liveScene)
+  where
+    faced (nm, r) = not (lrInteractive r) || isJust (controlFaceOf nm)
+
+-- | NO ALPHA — every face treatment is an EXACT opaque integer ink transform: all
+-- outputs stay in sRGB8 range, ghost is the exact quarter (@div 4@, the existing
+-- idiom), lit is 'controlInk', busy is 'verdictInk' 'Reject' (spec-owned, not a free
+-- literal), inversion is a strict involution (a fractional blend would not return),
+-- checker leaves ink untouched (its dimming is 'checkerAt' geometry: exactly half of
+-- any aligned 4×4 block), and the transform's type takes no blend factor. Stated over
+-- any in-range base ink.
+lawFaceNoAlpha :: (Int, Int, Int) -> Bool
+lawFaceNoAlpha (r0, g0, b0) =
+  let clamp x = max 0 (min 255 x)
+      base@(r, g, b) = (clamp r0, clamp g0, clamp b0)
+      inRange (x, y, z) = all (\v -> v >= 0 && v <= 255) [x, y, z]
+  in all (\t -> inRange (treatmentInk t base)) allTreatments
+     && treatmentInk TreatGhost base == (r `div` 4, g `div` 4, b `div` 4)
+     && treatmentInk TreatLit base == controlInk
+     && treatmentInk TreatBusy base == verdictInk Reject
+     && treatmentInk TreatInverted (treatmentInk TreatInverted base) == base
+     && treatmentInk TreatChecker base == base
+     && length [ () | c <- [0 .. 3], rr <- [0 .. 3], checkerAt (c, rr) ] == 8
+
+-- | STATES DISTINGUISHABLE — at EVERY tick the four control states render four
+-- pairwise-distinct treatments (beat tick included: idle-lit is still not inverted,
+-- busy, or checkered). A state change is always visible; no two states can be
+-- confused at any instant.
+lawFaceStatesDistinct :: Int -> Bool
+lawFaceStatesDistinct t =
+  let ts = [ faceTreatment s t | s <- allControlStates ]
+  in length (nub ts) == length ts
+
+-- | BEAT = POOL CADENCE — the invite period is the coarse rung's pool depth
+-- ('unitsOf' 'W16' = 4 ticks = 5 Hz), and the face is lit for EXACTLY one tick per
+-- period window (one heartbeat, never a shimmer). The affordance and the cadence
+-- teacher are one element.
+lawBeatIsPoolCadence :: Int -> Bool
+lawBeatIsPoolCadence t =
+     beatPeriodTicks == unitsOf W16
+  && beatPeriodTicks == 4
+  && length (filter beatAt [t .. t + beatPeriodTicks - 1]) == 1
+
+-- | ONE CLOCK — the beat is DERIVED from the one 20 Hz tick: it equals the 16-rung
+-- realize predicate ('SixFour.Spec.ColorTimeDisplay.realizesAt' 'W16' — the shutter
+-- heartbeats exactly when its own frames land) and is periodic in 'beatPeriodTicks'.
+-- No second timer, no phase drift, by law.
+lawBeatDerivedFromOneClock :: Int -> Bool
+lawBeatDerivedFromOneClock t =
+     beatAt t == realizesAt W16 t
+  && beatAt (t + beatPeriodTicks) == beatAt t
 
 -- | @gestureStep@ is TOTAL: defined (no ⊥) for every (phase, event) pair.
 lawGestureTotal :: Bool

@@ -23,6 +23,8 @@ struct FieldMetalView: UIViewRepresentable {
     let surface: Surface
     let placement: [ColorIdentity: (col: Int, row: Int)]
     let tick: Int
+    /// True while burst frames are landing — drives the E9 CAPTURE-ENERGY pour ramp.
+    var capturing: Bool = false
 
     /// GPU field on iff the off-main core build has landed (`.ready`). A computed var (NOT a
     /// cached static let) so it flips true once the background build finishes — StageGround is
@@ -56,7 +58,21 @@ struct FieldMetalView: UIViewRepresentable {
                  palette: Self.packPalette(palSrc),
                  usage: Self.usage(tile),
                  tile: Self.packTile(tile),
-                 tick: tick, liftAmount: liftAmount)
+                 tick: tick, liftAmount: liftAmount,
+                 energyScale: Self.energyScale(live: live, capturing: capturing, tick: tick))
+    }
+
+    /// E9 CAPTURE ENERGY — the ground's ONE named function on Live. Idle `.live` dims to
+    /// the spec-pinned near-void (`SixFourFieldTuning.liveIdleEnergy`); while burst frames
+    /// land it rises to FULL energy scaled by the (tick mod 4 + 1)/4 pour ramp (peaking on
+    /// each 16-rung realize — the ground glows exactly when photons are being banked).
+    /// Non-live phases keep full energy (their grounds already earn or suppress it).
+    static func energyScale(live: Bool, capturing: Bool, tick: Int) -> Float {
+        guard live else { return 1 }
+        guard capturing else { return Float(SixFourFieldTuning.liveIdleEnergy) }
+        let n = max(1, SixFourFieldTuning.capturePourRampTicks)
+        let phase = ((tick % n) + n) % n
+        return Float(phase + 1) / Float(n)
     }
 
     // MARK: input prep (mirrors InfluenceField's, but flattened for the GPU buffers)
@@ -132,6 +148,9 @@ struct StageGround: View {
     let surface: Surface
     let placement: [ColorIdentity: (col: Int, row: Int)]
     let tick: Int
+    /// True while burst frames land (E9): the field's named function is CAPTURE ENERGY —
+    /// dim idle near-void on Live, full energy on the pour ramp while banking photons.
+    var capturing: Bool = false
     var body: some View {
         // Tri-state on the off-main build so the FIRST-PAINT window paints nothing (the Color.black
         // base in SurfaceView shows through as the intended black) instead of running the InfluenceField
@@ -140,13 +159,16 @@ struct StageGround: View {
         switch FieldMetalCore.state {
         case .ready:
             if FieldMetalView.enabled {
-                FieldMetalView(surface: surface, placement: placement, tick: tick)
+                FieldMetalView(surface: surface, placement: placement, tick: tick,
+                               capturing: capturing)
                     .ignoresSafeArea()
             } else {
-                InfluenceField(surface: surface, placement: placement, tick: tick)
+                InfluenceField(surface: surface, placement: placement, tick: tick,
+                               capturing: capturing)
             }
         case .failed:
-            InfluenceField(surface: surface, placement: placement, tick: tick)
+            InfluenceField(surface: surface, placement: placement, tick: tick,
+                           capturing: capturing)
         case .pending:
             Color.clear
         }
@@ -161,7 +183,7 @@ struct FieldSourceU {
     var kind: Int32; var pad0: Int32
 }
 
-/// Mirror of `FieldUniforms` in field.metal — 48 bytes (2 floats + 10 int32, all 4-byte).
+/// Mirror of `FieldUniforms` in field.metal — 48 bytes (3 floats + 9 int32, all 4-byte).
 struct FieldUniformsU {
     var cellSizePx: Float
     var liftAmount: Float
@@ -170,7 +192,8 @@ struct FieldUniformsU {
     var cornerCells: Int32
     var sourceCount: Int32
     var tick: Int32
-    var pad0: Int32
+    /// E9 CAPTURE-ENERGY multiplier (idle-live near-void / capture pour ramp / 1 elsewhere).
+    var energyScale: Float
 }
 
 // MARK: - The CAMetalLayer-backed view (draws once per κ tick)
@@ -286,6 +309,7 @@ final class FieldUIView: UIView {
     private var tile: [UInt8] = []
     private var tick: Int = 0
     private var liftAmount: Float = 0
+    private var energyScale: Float = 1
 
     /// κ-gate: the last tick we actually drew on, so multiple `updateUIView` calls within one 20 fps
     /// tick (σ mutates several times — palette, captured frames, cursor) collapse to ONE draw.
@@ -330,9 +354,10 @@ final class FieldUIView: UIView {
     }
 
     func update(sources: [FieldSourceU], palette: [UInt8], usage: [Float],
-                tile: [UInt8], tick: Int, liftAmount: Float) {
+                tile: [UInt8], tick: Int, liftAmount: Float, energyScale: Float) {
         self.sources = sources; self.palette = palette; self.usage = usage
         self.tile = tile; self.tick = tick; self.liftAmount = liftAmount
+        self.energyScale = energyScale
         // κ-gate: exactly ONE draw per tick. σ mutates several times per tick (palette, captured
         // frames, cursor), each re-firing updateUIView; collapse them so nextDrawable is called once.
         guard tick != lastDrawnTick else { return }
@@ -354,7 +379,8 @@ final class FieldUIView: UIView {
             minC: Int32(SixFourBoundary.minC), maxC: Int32(SixFourBoundary.maxC),
             minR: Int32(SixFourBoundary.minR), maxR: Int32(SixFourBoundary.maxR),
             cornerCells: Int32(SixFourBoundary.cornerCells),
-            sourceCount: Int32(sources.count), tick: Int32(truncatingIfNeeded: tick), pad0: 0)
+            sourceCount: Int32(sources.count), tick: Int32(truncatingIfNeeded: tick),
+            energyScale: energyScale)
 
         let rpd = MTLRenderPassDescriptor()
         rpd.colorAttachments[0].texture = drawable.texture

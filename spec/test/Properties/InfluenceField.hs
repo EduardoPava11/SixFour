@@ -4,6 +4,7 @@ import Test.Tasty
 import Test.Tasty.QuickCheck
 
 import SixFour.Spec.InfluenceField
+import SixFour.Spec.WeaveOrder (WeaveRung (W16), unitsOf)
 
 tests :: TestTree
 tests = testGroup "InfluenceField (radiation-ground tunables — FieldTuning source of truth)"
@@ -49,4 +50,19 @@ tests = testGroup "InfluenceField (radiation-ground tunables — FieldTuning sou
            .&&. (seamMute === 0.85) .&&. (liftDim === 0.4)
            .&&. (liftRampTicks === 4)
            .&&. (neutralInk === (11, 11, 16)) .&&. (farDarkInk === (6, 6, 10))
+
+  , testProperty "E9: live-idle energy genuinely dims (0 < e < 1)" $
+      once lawLiveIdleDims
+
+  , testProperty "E9: capture pour ramp beats at the 16-rung pool cadence" $
+      once lawPourRampIsPoolCadence
+
+  -- NON-VACUITY: the ramp period is not a free constant — it must equal the
+  -- coarse rung's weave units (the same 4 the ControlFace BEAT reads), so the
+  -- ground's capture pulse and the intake tallies provably share ONE clock.
+  , testProperty "E9: pour ramp == unitsOf W16 (one clock, cross-module)" $
+      once $ capturePourRampTicks === unitsOf W16
+
+  , testProperty "E9 golden: liveIdleEnergy pinned" $
+      once $ liveIdleEnergy === 0.25
   ]

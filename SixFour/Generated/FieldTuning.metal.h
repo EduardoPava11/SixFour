@@ -15,5 +15,7 @@ constant float kFieldUsageReachMin = 0.22;
 constant float kFieldSeamMute = 0.85;
 constant float kFieldLiftDim = 0.4;
 constant int   kFieldLiftRampTicks = 4;
+constant float kFieldLiveIdleEnergy = 0.25;
+constant int   kFieldCapturePourRampTicks = 4;
 constant float3 kFieldNeutral = float3(11.0/255.0, 11.0/255.0, 16.0/255.0);
 constant float3 kFieldFarDark = float3(6.0/255.0, 6.0/255.0, 10.0/255.0);

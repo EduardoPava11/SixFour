@@ -110,6 +110,12 @@ final class Surface {
     /// back to in-view `poolSpatial2`. Display-only; not a per-capture stash to clear.
     var previewTile32: [SIMD3<UInt8>] = []
     var previewTile16: [SIMD3<UInt8>] = []
+    /// THE FLUX BAR (THE DESIGN E6): the freshest 768-byte GCT (256 slots × RGB) from
+    /// whichever ColorHead is live, at the ≤ 5 Hz 16-rung cadence. `FluxBar` differences
+    /// consecutive values through `s4_v21_wdist1d` (paletteW1 — the wave meter). nil until
+    /// a head realizes one; the last value then persists (an instrument, not a stash).
+    var latestGCT: [UInt8]? = nil
+
     /// OPTICAL-EV (Feature.opticalEV only): three REAL-exposure rung tiles, each a distinct
     /// optical exposure realized to sRGB8 (64²=base / 32²=+1 / 16²=+2 stops). Empty while off.
     var opticalTile64: [SIMD3<UInt8>] = []

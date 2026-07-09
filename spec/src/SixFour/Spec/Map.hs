@@ -1486,7 +1486,13 @@ GIF89a Application-Extension, CRC32-checked, total Absent\/Corrupt\/VersionMisma
 
 == 7. UI — the cell-field / display / grid
 "SixFour.Spec.Display", "SixFour.Spec.PlaybackClock", "SixFour.Spec.Lattice", "SixFour.Spec.Boundary", "SixFour.Spec.InfluenceField", "SixFour.Spec.CellFiber",
-"SixFour.Spec.CellGrid", "SixFour.Spec.CellShapes", "SixFour.Spec.CellMechanics", "SixFour.Spec.GridLayout",
+"SixFour.Spec.CellGrid", "SixFour.Spec.CellShapes", "SixFour.Spec.CellMechanics" (+ the ControlFace
+control language: FRAME\/BRACKETS faces, BEAT invite at the pool cadence, opaque treatments —
+every interactive GridLayout region declares a face, @lawControlFaceTotal@), "SixFour.Spec.GridLayout",
+"SixFour.Spec.ColorTimeDisplay" (★ THE POUR — the cadence-honest display beat: 4:2:1 rung refresh from
+ONE 20 Hz tick (@lawDisplayCadenceIsPoolDepth@ = WeaveOrder @unitsOf@), intake-tally slots = pool depth
+(@lawTallyEqualsUnits@), the 256-cell banked capture ledger @64×4@ (@lawLedgerConserves@), the 5 cs
+banked window, and the flux-bar log₂ quantizer — the spec home of the live pyramid's honest cadences),
 "SixFour.Spec.GridAxis",
 "SixFour.Spec.GridScript", "SixFour.Spec.MovableLayout", "SixFour.Spec.WidgetDescriptor", "SixFour.Spec.Ownership", "SixFour.Spec.Order",
 "SixFour.Spec.CloudProjection", "SixFour.Spec.SevenSeg", "SixFour.Spec.Pipeline", "SixFour.Spec.Obfuscation".

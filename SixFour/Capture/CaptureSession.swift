@@ -180,6 +180,14 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// untouched. Display-only — no GIF byte depends on it.
     var ladderCallback: (@Sendable ([SIMD3<UInt8>], [SIMD3<UInt8>]) -> Void)?
 
+    /// THE FLUX BAR seam (THE DESIGN E6): the freshest 768-byte GCT (`ColorHead
+    /// .latestGCT`), fired at the 16-rung realize cadence (every 4th ingested tick =
+    /// 5 Hz) from whichever head is live — the per-burst `colorHead` during a burst,
+    /// the preview head while idle (Feature.liveLadder). The UI differences
+    /// CONSECUTIVE deliveries through `s4_v21_wdist1d` (paletteW1) — the wave meter.
+    /// Fires on `delegateQueue`; the receiver marshals. Display-only.
+    var gctCallback: (@Sendable ([UInt8]) -> Void)?
+
     /// OPTICAL-EV (Feature.opticalEV only): the single-camera exposure-bracket driver + its
     /// display-only ColorHead. Constructed in `startPreview` when the flag is on, fed every
     /// idle preview frame in `captureOutput`, torn down in `stopPreview`. nil ⇒ inert. The
@@ -1464,6 +1472,11 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
                     cb(RungTelemetry.derived(ticks: ch.tick, fineBinArea: ch.pixelsPerFineBin,
                                              generation: burstGeneration + 1))
                 }
+                // FLUX BAR (E6): the fresh GCT at the same 16-rung realize cadence —
+                // ≤ 5 Hz, one 768-byte value, inside the ingest branch (never stale).
+                if ch.tick % 4 == 0, let gct = ch.latestGCT, let cb = gctCallback {
+                    cb(gct)
+                }
             }
             let us = (DispatchTime.now().uptimeNanoseconds - t0) / 1000
             tickCpuTotalUs += us
@@ -1529,6 +1542,10 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
             ch.ingest(sums)
             if let (rgb32, rgb16) = ch.realizeLadderSrgb8() {
                 ladder(rgb32, rgb16)
+            }
+            // FLUX BAR (E6): the idle-path GCT pulse at the same 16-rung cadence.
+            if ch.tick % 4 == 0, let gct = ch.latestGCT, let cb = gctCallback {
+                cb(gct)
             }
         }
     }

@@ -15,7 +15,8 @@ import simd
 ///      pulsing (the honest gap read) and any evidence-free tick
 ///      (`skipped > 0`) tints it.
 ///   2. EXPOSURE STATE — EV (one vocabulary: optical centistops when the ladder is
-///      independent, pooling-equivalent +k stops when derived) + duration/ISO as
+///      independent; pooling-equivalent +k stops WITH the frame-equivalent when
+///      derived — "+1.0 =2F" / "+2.0 =4F", THE DESIGN E8) + duration/ISO as
 ///      compact `CellText` lines ("1/20" + "800" optical, "POOL" derived).
 ///   3. SIGNIFICANCE — a √N fill bar (cell fill COUNT, never alpha), normalized
 ///      against the most-significant rung this snapshot, so the derived 1:8:64
@@ -137,6 +138,19 @@ enum TelemetryMeterMath {
         String(format: "%+.1f", Double(centistops) / 100)
     }
 
+    /// The FULL EV line (THE DESIGN E8, one vocabulary): derived-mode rungs append
+    /// the pooling FRAME-equivalent — "+1.0 =2F" / "+2.0 =4F" — because pooling
+    /// `unitsOf` fine frames (2 for the 32², 4 for the 16²; `Spec.WeaveOrder.unitsOf`
+    /// = 64/side on the ladder) IS the pooling-equivalent stops, stated in both
+    /// currencies. Independent rungs (real optical stops, no pooling) and the fine
+    /// rung itself (units 1 — the trivial equivalence) carry the plain stop label.
+    static func evLabel(centistops: Int, independent: Bool, side: Int) -> String {
+        let label = evLabel(centistops: centistops)
+        guard !independent, side > 0, 64 % side == 0 else { return label }
+        let units = 64 / side          // unitsOf: 1 / 2 / 4 on the 64/32/16 ladder
+        return units > 1 ? label + " =\(units)F" : label
+    }
+
     /// The shutter-time line: "1/20" from the optical duration (µs); "POOL" in
     /// derived mode (no per-rung shutter exists — the stops are pooling); "-"
     /// when independent but unmetered.
@@ -230,7 +244,12 @@ struct RungMeterCell: View {
                 Self.image(baked.pulse, cols: Self.glyphSub, rows: Self.glyphSub)
                 Self.image(baked.health, cols: Self.glyphSub, rows: Self.glyphSub)
             }
-            CellText(TelemetryMeterMath.evLabel(centistops: rung.evCentistops))
+            // E8: derived mode carries the frame-equivalent ("+2.0 =4F") — the longer
+            // string drops to the 5-row glyph so the line stays inside the 14-cell flank.
+            CellText(TelemetryMeterMath.evLabel(centistops: rung.evCentistops,
+                                                independent: rung.independent,
+                                                side: rung.side),
+                     rows: rung.independent ? 7 : 5)
             CellText(TelemetryMeterMath.durationLabel(independent: rung.independent,
                                                       durationUs: rung.exposureDurationUs),
                      rows: 5)
@@ -255,7 +274,7 @@ struct RungMeterCell: View {
         case .correlated: health = "correlated"
         case .derived: health = "derived pooling"
         }
-        return "Rung \(rung.side): \(mode), EV \(TelemetryMeterMath.evLabel(centistops: rung.evCentistops)), "
+        return "Rung \(rung.side): \(mode), EV \(TelemetryMeterMath.evLabel(centistops: rung.evCentistops, independent: rung.independent, side: rung.side)), "
             + "\(rung.arrivals) of \(rung.expectedArrivals) arrivals, \(health)"
     }
 

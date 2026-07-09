@@ -28,20 +28,19 @@ public enum GridLayoutContract {
     /// The widget regions composing the capture screen.
     public static let captureScene: [GridRegion] = [
         GridRegion(name: "preview", col: 18, row: 16, w: 64, h: 64, widget: 0, priority: 0, interactive: false),
-        GridRegion(name: "palette", col: 42, row: 145, w: 16, h: 16, widget: 1, priority: 1, interactive: true),
     ]
 
-    /// The V3.0 DECISION-scene layout, mirrored from `SixFour.Spec.GridLayout.decisionScene`:
-    /// the post-capture surface of user-changeable model-boundary knobs (preview scrub,
-    /// 16³ paint, channel strip, φ6 gauge, somatic-gene toggle, again/accept verdicts).
+    /// The DECISION-scene layout, mirrored from `SixFour.Spec.GridLayout.decisionScene`
+    /// (THE DESIGN D3, 2026-07-08): the judgment hero + its 16³ coarse/tally, the
+    /// advanced fold (chevron + demoted W1 bench region), and the ACCEPT/AGAIN verb band.
     public static let decisionScene: [GridRegion] = [
-        GridRegion(name: "preview", col: 18, row: 16, w: 64, h: 64, widget: 0, priority: 0, interactive: true),
-        GridRegion(name: "paint", col: 18, row: 82, w: 64, h: 64, widget: 1, priority: 1, interactive: true),
-        GridRegion(name: "channels", col: 18, row: 148, w: 64, h: 12, widget: 2, priority: 2, interactive: true),
-        GridRegion(name: "gauge", col: 18, row: 162, w: 20, h: 12, widget: 3, priority: 3, interactive: true),
-        GridRegion(name: "gene", col: 40, row: 162, w: 20, h: 12, widget: 4, priority: 4, interactive: true),
-        GridRegion(name: "again", col: 62, row: 162, w: 20, h: 12, widget: 5, priority: 5, interactive: true),
-        GridRegion(name: "accept", col: 34, row: 178, w: 32, h: 16, widget: 6, priority: 6, interactive: true),
+        GridRegion(name: "hero", col: 14, row: 30, w: 64, h: 64, widget: 0, priority: 0, interactive: true),
+        GridRegion(name: "coarse", col: 82, row: 30, w: 16, h: 16, widget: 1, priority: 1, interactive: false),
+        GridRegion(name: "tally", col: 82, row: 26, w: 16, h: 2, widget: 2, priority: 2, interactive: false),
+        GridRegion(name: "fold", col: 44, row: 98, w: 12, h: 12, widget: 3, priority: 3, interactive: true),
+        GridRegion(name: "advanced", col: 18, row: 112, w: 64, h: 76, widget: 4, priority: 4, interactive: true),
+        GridRegion(name: "again", col: 4, row: 188, w: 44, h: 16, widget: 5, priority: 5, interactive: true),
+        GridRegion(name: "accept", col: 52, row: 188, w: 44, h: 16, widget: 6, priority: 6, interactive: true),
     ]
 
     /// The LAUNCH CURATE-scene layout, mirrored from `SixFour.Spec.GridLayout.curateScene`:
@@ -69,6 +68,11 @@ public enum GridLayoutContract {
         GridRegion(name: "field64", col: 18, row: 49, w: 64, h: 64, widget: 4, priority: 4, interactive: false),
         GridRegion(name: "field32", col: 34, row: 117, w: 32, h: 32, widget: 5, priority: 5, interactive: false),
         GridRegion(name: "field16", col: 42, row: 153, w: 16, h: 16, widget: 6, priority: 6, interactive: false),
+        GridRegion(name: "intake32", col: 34, row: 114, w: 32, h: 2, widget: 7, priority: 7, interactive: false),
+        GridRegion(name: "intake16", col: 42, row: 149, w: 16, h: 2, widget: 8, priority: 8, interactive: false),
+        GridRegion(name: "fluxBar", col: 42, row: 172, w: 16, h: 1, widget: 9, priority: 9, interactive: false),
+        GridRegion(name: "evRail", col: 2, row: 120, w: 2, h: 26, widget: 10, priority: 10, interactive: false),
+        GridRegion(name: "lookStrip", col: 18, row: 44, w: 64, h: 4, widget: 11, priority: 11, interactive: false),
     ]
 
     /// Look up a region by name (the composer asks for "preview", "palette", …).

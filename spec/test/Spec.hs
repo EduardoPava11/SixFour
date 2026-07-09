@@ -134,6 +134,7 @@ import qualified Properties.ChoiceTraining as ChoiceTraining
 import qualified Properties.FidelityLadder as FidelityLadder
 import qualified Properties.RadiometricRealize as RadiometricRealize
 import qualified Properties.ColorTime         as ColorTime
+import qualified Properties.ColorTimeDisplay  as ColorTimeDisplay
 import qualified Properties.GaussianLadder    as GaussianLadder
 import qualified Properties.EventEncoding     as EventEncoding
 import qualified Properties.Gif89aDecode      as Gif89aDecode
@@ -380,6 +381,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , FidelityLadder.tests
   , RadiometricRealize.tests
   , ColorTime.tests
+  , ColorTimeDisplay.tests
   , GaussianLadder.tests
   , EventEncoding.tests
   , Gif89aDecode.tests

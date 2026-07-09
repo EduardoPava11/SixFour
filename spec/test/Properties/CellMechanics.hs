@@ -120,4 +120,51 @@ tests = testGroup "CellMechanics (grid-cell interaction: lifetime, detent, hapti
 
   , testProperty "golden haptics: the lift pops and the valid drop confirms" $
       once (goldenHaptics == [Nothing, Just LiftPop, Nothing, Nothing, Just DropAccept, Nothing])
+
+    -- The control face (the control language — THE DESIGN D1) ---------------------
+  , testProperty "lawControlFaceTotal: every interactive GridLayout region declares a face" $
+      once lawControlFaceTotal
+
+  , testProperty "FOIL (non-vacuity): an undeclared interactive region name has no face" $
+      once (controlFaceOf "shinyNewButton" == Nothing)
+
+  , testProperty "lawFaceNoAlpha: every treatment is an exact opaque ink transform (no blend)" $
+      forAll genInk lawFaceNoAlpha
+
+  , testProperty "lawFaceStatesDistinct: the four states render distinct treatments at every tick" $
+      forAll genTick lawFaceStatesDistinct
+
+  , testProperty "lawBeatIsPoolCadence: beat period = unitsOf W16 = 4; lit exactly once per window" $
+      forAll genTick lawBeatIsPoolCadence
+
+  , testProperty "lawBeatDerivedFromOneClock: beat == the 16-rung realize predicate; periodic" $
+      forAll genTick lawBeatDerivedFromOneClock
+
+  , testProperty "golden beat: lit on ticks 0/4/8/12 of the 16-tick window" $
+      once (goldenBeat == [ t `mod` 4 == 0 | t <- [0 .. 15 :: Int] ])
+
+  , testProperty "golden idle face: [lit, ghost, ghost, ghost] x2 (the one cadence-locked invite)" $
+      once (goldenIdleFaceTrace ==
+        [ TreatLit, TreatGhost, TreatGhost, TreatGhost
+        , TreatLit, TreatGhost, TreatGhost, TreatGhost ])
+
+  , testProperty "face WITNESS: the Decide hero wears BRACKETS, accept wears FRAME" $
+      once (controlFaceOf "hero" == Just FaceBrackets
+              && controlFaceOf "accept" == Just FaceFrame)
+
+    -- The D3 rebuild's new controls declare faces (and the retired rows are GONE —
+    -- the table stays closed over exactly the interactive region names).
+  , testProperty "face WITNESS (D3): fold + advanced wear FRAME; the retired palette row is gone" $
+      once (controlFaceOf "fold" == Just FaceFrame
+              && controlFaceOf "advanced" == Just FaceFrame
+              && controlFaceOf "palette" == Nothing
+              && controlFaceOf "preview" == Nothing)
   ]
+
+-- | An arbitrary (possibly out-of-range) base ink — lawFaceNoAlpha clamps internally.
+genInk :: Gen (Int, Int, Int)
+genInk = (,,) <$> choose (-40, 300) <*> choose (-40, 300) <*> choose (-40, 300)
+
+-- | A surface-clock tick (non-negative; the clock is a monotonic counter).
+genTick :: Gen Int
+genTick = choose (0, 4096)

@@ -165,12 +165,40 @@ for f in spec/src/SixFour/Spec/Lattice.hs \
          spec/src/SixFour/Spec/GridLayout.hs \
          SixFour/Generated/LatticeContract.swift \
          SixFour/Generated/CellShapesContract.swift \
-         SixFour/Generated/GridLayoutContract.swift; do
+         SixFour/Generated/GridLayoutContract.swift \
+         spec/src/SixFour/Spec/CellMechanics.hs \
+         spec/src/SixFour/Spec/ColorTimeDisplay.hs \
+         SixFour/Generated/CellMechanicsContract.swift; do
   if [ -f "$f" ]; then ok "present: $f"; else note "MISSING golden: $f"; fi
 done
-for m in SixFour.Spec.Lattice SixFour.Spec.CellShapes SixFour.Spec.GridLayout; do
+for m in SixFour.Spec.Lattice SixFour.Spec.CellShapes SixFour.Spec.GridLayout \
+         SixFour.Spec.CellMechanics SixFour.Spec.ColorTimeDisplay; do
   if grep -q "$m" spec/spec.cabal; then ok "exposed: $m"; else note "NOT in spec.cabal: $m"; fi
 done
+
+# ── LINT-CONTROL-FACE ──────────────────────────────────────────────────────
+# The control language (Spec.CellMechanics ControlFace, THE DESIGN D1): every
+# INTERACTIVE region in the generated GridLayoutContract must declare a control
+# face in the generated CellMechanicsContract `controlFaces` table — "interactive
+# region ⇒ control face", the lint mirror of lawControlFaceTotal (which proves the
+# same totality over the Haskell scenes at `cabal test` time). An interactive
+# region with no face is an unmarked control — the exact device-review drift.
+echo "GRID lint — LINT-CONTROL-FACE (interactive region ⇒ declared control face)"
+GLC="SixFour/Generated/GridLayoutContract.swift"
+CMC="SixFour/Generated/CellMechanicsContract.swift"
+if [ -f "$GLC" ] && [ -f "$CMC" ]; then
+  face_fail=0
+  while IFS= read -r nm; do
+    [ -z "$nm" ] && continue
+    if ! grep -q "\"$nm\": \"" "$CMC"; then
+      note "interactive region '$nm' has no control face (add it to Spec.CellMechanics controlFaces)"
+      face_fail=1
+    fi
+  done < <(grep 'interactive: true' "$GLC" | sed -E 's/.*name: "([^"]+)".*/\1/' | sort -u)
+  [ "$face_fail" -eq 0 ] && ok "every interactive region declares a control face (lawControlFaceTotal mirror)"
+else
+  note "MISSING contracts for the control-face check: $GLC / $CMC"
+fi
 
 # ── LINT-LAUNCH-PLIST ──────────────────────────────────────────────────────
 # The pre-main null-deref keys. An EMPTY `UILaunchStoryboardName: ""` makes UIKit call

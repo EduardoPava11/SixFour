@@ -288,6 +288,10 @@ emitFieldTuningContract = T.unlines
   , "    public static let liftDim: Double = " <> tshowF IF.liftDim
   , "    /// Ticks over which the lift-dim ramps in/out."
   , "    public static let liftRampTicks: Int = " <> tshow IF.liftRampTicks
+  , "    /// E9 CAPTURE ENERGY — idle-live energy multiplier (the calm near-void)."
+  , "    public static let liveIdleEnergy: Double = " <> tshowF IF.liveIdleEnergy
+  , "    /// E9 CAPTURE ENERGY — the pour-ramp period in ticks (= the 16-rung pool depth)."
+  , "    public static let capturePourRampTicks: Int = " <> tshow IF.capturePourRampTicks
   , "    /// The neutral a seam mutes toward, and the calm unlit ink."
   , "    public static let neutral = " <> simd3Literal IF.neutralInk
   , "    /// The far-field calm ink — darker than the neutral."
@@ -299,6 +303,7 @@ emitFieldTuningContract = T.unlines
   , "        && usageReachMin > 0 && usageReachMin <= 1"
   , "        && seamMute >= 0 && seamMute <= 1 && liftDim >= 0 && liftDim < 1"
   , "        && liftRampTicks > 0 && driftPerTick > 0"
+  , "        && liveIdleEnergy > 0 && liveIdleEnergy < 1 && capturePourRampTicks > 0"
   , "        && (Int(farDark.x) + Int(farDark.y) + Int(farDark.z))"
         <> " < (Int(neutral.x) + Int(neutral.y) + Int(neutral.z))"
   , "    }"
@@ -331,6 +336,8 @@ emitFieldTuningMetalHeader = T.unlines
   , "constant float kFieldSeamMute = "         <> tshowF IF.seamMute        <> ";"
   , "constant float kFieldLiftDim = "          <> tshowF IF.liftDim         <> ";"
   , "constant int   kFieldLiftRampTicks = "    <> tshow IF.liftRampTicks    <> ";"
+  , "constant float kFieldLiveIdleEnergy = "   <> tshowF IF.liveIdleEnergy  <> ";"
+  , "constant int   kFieldCapturePourRampTicks = " <> tshow IF.capturePourRampTicks <> ";"
   , "constant float3 kFieldNeutral = " <> normFloat3 IF.neutralInk <> ";"
   , "constant float3 kFieldFarDark = " <> normFloat3 IF.farDarkInk <> ";"
   ]
@@ -1446,9 +1453,9 @@ emitGridLayoutContract = T.unlines $
   ++ map regionLine GL.captureScene
   ++ [ "    ]"
   , ""
-  , "    /// The V3.0 DECISION-scene layout, mirrored from `SixFour.Spec.GridLayout.decisionScene`:"
-  , "    /// the post-capture surface of user-changeable model-boundary knobs (preview scrub,"
-  , "    /// 16³ paint, channel strip, φ6 gauge, somatic-gene toggle, again/accept verdicts)."
+  , "    /// The DECISION-scene layout, mirrored from `SixFour.Spec.GridLayout.decisionScene`"
+  , "    /// (THE DESIGN D3, 2026-07-08): the judgment hero + its 16³ coarse/tally, the"
+  , "    /// advanced fold (chevron + demoted W1 bench region), and the ACCEPT/AGAIN verb band."
   , "    public static let decisionScene: [GridRegion] = ["
   ]
   ++ map regionLine GL.decisionScene
@@ -1857,6 +1864,39 @@ emitCellMechanicsContract = T.unlines $
   [ "        }"
   , "    }"
   , ""
+  , "    // MARK: the control face (the control language — Spec.CellMechanics D1)"
+  , "    /// Face kinds (geometry): frame = 1-cell inset ring (solid controls);"
+  , "    /// brackets = four corner brackets outside the tile (image-content controls)."
+  , "    public static let faceKinds: [String] = " <> strLit (map CM.faceKindName CM.allFaceKinds)
+  , "    /// Control states, ordinals == Haskell fromEnum: idle, pressed, busy, disabled."
+  , "    public static let controlStates: [String] = " <> strLit (map CM.controlStateName CM.allControlStates)
+  , "    /// Face treatments (the closed OPAQUE ink transforms — never alpha):"
+  , "    /// ghost, lit, inverted, busy, checker."
+  , "    public static let faceTreatments: [String] = " <> strLit (map CM.treatmentName CM.allTreatments)
+  , "    /// BEAT period in surface-clock ticks: the 16-rung pool depth (unitsOf W16 —"
+  , "    /// Spec.CellMechanics.lawBeatIsPoolCadence). 4 ticks at 20 Hz = the 5 Hz realize."
+  , "    public static let beatPeriodTicks: Int = " <> tshow CM.beatPeriodTicks
+  , "    /// Treatment ordinal for (state, beat-lit?) — flat [state*2 + (beat ? 1 : 0)]."
+  , "    static let faceTreatmentTable: [Int] = " <> intListLiteral faceTable
+  , "    /// The face treatment of a control state at a clock tick: only IDLE reads the"
+  , "    /// tick (the BEAT — lit for exactly 1 tick on every 16-rung realize,"
+  , "    /// lawBeatDerivedFromOneClock); pressed/busy/disabled are tick-invariant."
+  , "    @inline(__always)"
+  , "    public static func faceTreatment(state: Int, tick: Int) -> Int {"
+  , "        let beat = ((tick % beatPeriodTicks) + beatPeriodTicks) % beatPeriodTicks == 0"
+  , "        return faceTreatmentTable[state * 2 + (beat ? 1 : 0)]"
+  , "    }"
+  , "    /// The control ink (sRGB8) every FRAME ring / BRACKET arm draws in."
+  , "    public static let faceControlInk: (r: Int, g: Int, b: Int) = " <> inkLit CM.controlInk
+  , "    /// interactive region name -> face kind — the CLOSED table scripts/lint-grid.sh"
+  , "    /// polices (LINT-CONTROL-FACE): every `interactive: true` GridLayoutContract"
+  , "    /// region must appear here (Spec.CellMechanics.lawControlFaceTotal)."
+  , "    public static let controlFaces: [String: String] = ["
+  ] ++ map controlFaceLine CM.controlFaces ++
+  [ "    ]"
+  , "    /// The 16-tick golden BEAT vector (lit on tick ≡ 0 mod 4) — the cadence pin."
+  , "    public static let goldenBeat: [Bool] = " <> boolListLit CM.goldenBeat
+  , ""
   , "    // MARK: golden cross-language pins (re-derived by selfCheck)"
   , "    public static let goldenGestureEvents: [Int] = " <> intListLiteral (map fromEnum CM.goldenGesture)
   , "    public static let goldenPhaseTrace: [Int] = " <> intListLiteral (map fromEnum CM.goldenPhaseTrace)
@@ -1902,6 +1942,11 @@ emitCellMechanicsContract = T.unlines $
     producesTapTable = [ CM.producesTap p e            | p <- CM.allPhases, e <- CM.allEvents ]
     hapticTable v    = [ maybe (-1) fromEnum (CM.hapticOnTransition p e v)
                        | p <- CM.allPhases, e <- CM.allEvents ]
+    -- (state, beat) -> treatment ordinal; tick 1 is a beat-off witness, tick 0 beat-on.
+    faceTable        = [ fromEnum (CM.faceTreatment s t)
+                       | s <- CM.allControlStates, t <- [1, 0] ]
+    controlFaceLine (nm, k) = T.concat
+      [ "        \"", T.pack nm, "\": \"", T.pack (CM.faceKindName k), "\"," ]
     strLit xs   = "[" <> T.intercalate ", " [ "\"" <> T.pack s <> "\"" | s <- xs ] <> "]"
     boolListLit bs = "[" <> T.intercalate ", " [ if b then "true" else "false" | b <- bs ] <> "]"
     inkLit (r, g, b) = T.concat [ "(", tshow r, ", ", tshow g, ", ", tshow b, ")" ]

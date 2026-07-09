@@ -188,3 +188,121 @@ the seam.
   session notes before flipping anything permanently.
 - Any failure: flip `multiScaleLadder` back to `false` — with it off the
   capture path is byte-for-byte the shipped single-exposure burst.
+
+---
+
+## UX round (proposition + controls)
+
+THE DESIGN (docs/UI-FORM-FOLLOWS-FUNCTION.md, 2026-07-08) landed sim-green:
+all gates pass (spec 1851, app 430, lint-grid, verify-doc-claims). Everything
+below beats off the ONE 20 Hz `SurfaceClock.tick`; every cadence is a theorem
+of the ladder (`Spec.ColorTimeDisplay` → `ColorTimeDisplayMath`), never an
+animation constant. This is what to LOOK AT on the phone.
+
+### U1. The color-time gathering beat (the proposition itself)
+
+- **Honest rung cadence**: the 64² streams at ~20 Hz as before, but the 32²
+  now swaps whole-tile at 10 Hz and the 16² at 5 Hz — each coarse tile is a
+  TRUE temporal integral (u64 accumulators over 2 / 4 fine frames, divisors
+  1 : 8 : 64), not a downscaled copy of the latest frame. Pan the phone: the
+  16² should visibly smear motion across its 4-frame window. The smear is
+  the lesson (4× the time, same photons), not a bug.
+- **Intake tallies**: 2 slots above the 32², 4 slots above the 16², drawn in
+  the pyramid gutters. Each tick a slot fills with that frame's mean colour;
+  on the realize tick the filled slots flash lit for 1 tick and clear as the
+  coarse tile swaps — that emptying + swap together are the 4-into-1 pour,
+  at 5 Hz, forever. If the tally clear and the 16² swap ever come apart,
+  the one-clock derivation is broken.
+- **The BEAT**: the shutter brackets go lit-ink for exactly 1 tick on every
+  16-rung realize (tick ≡ 0 mod 4). The affordance heartbeats at the cadence
+  its own frames land at. With Reduce Motion on, the BEAT must be OFF
+  (steady ghost brackets) and the tallies/ground ramp calm down.
+
+### U2. The live burst — no freeze (E7, the critical path)
+
+- The old bug: the non-quantized preview branch published empty indices and
+  starved the pyramid, so firing a burst froze the surface. FIX: during
+  `.capturing` the renderer is FORCED onto the quantized path.
+- Fire a burst and confirm the surface stays alive all ~3.2 s: the 64² keeps
+  streaming landed frames, the 32² keeps integrating at 10 Hz, the tallies
+  keep beating (now counting landed frames). Capture is visibly the same
+  machine, recording — never a frozen picture.
+- **The banked ledger**: during the burst the 16² fills PERMANENTLY — landed
+  frame n takes raster cells 4(n−1)…4n−1 with that frame's 16²-pooled
+  colours; unfilled cells stay ghost-dim. 64 frames × 4 cells = 256: the
+  WeaveOrder arithmetic drawn live. The finished tile is a genuine
+  time-woven image (each 4-cell strip 5 cs apart). A transient "…/320cs"
+  CellText steps in the tally row, burst only.
+- **Haptics**: one frame-locked detent per completed pour group — 16 felt
+  ticks across the 64-frame burst, the 4:1 banking rhythm. Count them.
+- Watch for dropped burst frames from the forced quantize (the [perf] lines
+  + arrivals count). If frames drop, the pre-agreed fallback is publishing
+  raw-RGB tiles — NEVER back to freezing.
+
+### U3. The shutter affordance (E3)
+
+- The 16² wears corner BRACKETS in the gutter outside the tile (zero content
+  pixels obscured); the bracket rect IS the hit rect (~80 pt, over the touch
+  floor — noticeably easier to hit than the old bare tile tap).
+- States to see: idle = ghost + BEAT; pressed = bracket + tile inversion for
+  2 ticks; busy = CellButton red brackets with the banked ledger filling
+  inside. All opaque ink — if anything looks translucent, that's a bug.
+- TAP the 64² = meter: a 3×3 inverted-cell crosshair at the metered point
+  for 20 ticks (the 64² deliberately has NO control face — it is a surface
+  you point at, not a button).
+
+### U4. LOOK / EV visibility (E5 rails + E6 flux bar)
+
+- **EV rail** (left edge, vertical drag): 13 detent blocks, one per ⅓ stop,
+  ±2 EV, centre ghost = 0 EV. It materializes outward from centre while the
+  drag is live (≤6 ticks) and dematerializes 8 ticks after release; one felt
+  detent per ⅓-stop crossing. Idle it collapses to a 3-cell ghost notch
+  spine — nearly nothing, but discoverable.
+- **LOOK strip** (above the 64², horizontal swipe): one 4×4 swatch per look
+  = that look's OKLab grade on a fixed probe; the active look wears the
+  1-cell FRAME; swipe slides the frame, commit on release as before; the
+  strip lingers 20 ticks then dematerializes. This replaces the deleted
+  palette widget's only defensible job (LOOK indicator) — grade shown ON
+  colours, no flicker.
+- **Flux bar** (16×1, directly under the shutter brackets): log₂-scaled
+  paletteW1 between consecutive 5 Hz GCTs (`s4_v21_wdist1d`) — the wave
+  meter, the instrument framing's single number. Wave the phone at a
+  colourful scene: it should surge; hold still on a wall: it should sit
+  near empty. All-ghost = no GCT feed (expected when the head is off).
+- The four verbs of Live, total: DRAG the ground = grade (LOOK ↔ / EV ↕),
+  TAP the 64² = meter, TAP the 16² = fire. Everything else watches.
+
+### U5. The Decide rebuild (D3)
+
+- HERO: the 64 reconstruction wearing BRACKETS (brackets invert while
+  scrubbing — horizontal drag scrubs the burst frame), with the raw 16³
+  coarse tier beside it carrying the same tally idiom (static ledger
+  structure — the equivalence language crosses scenes).
+- TWO VERBS at the bottom, the clearest controls in the app (44×16 cells
+  each, 4× the touch floor): ACCEPT = filled control-ink face + seal glyph
+  (heavy haptic); AGAIN = hollow FRAME + retake glyph (light haptic).
+  Confirm both are hittable without looking.
+- ADVANCED FOLD: paint / channels / gauge / gene-toggle all live behind one
+  12-cell chevron; opening paints the advanced rows in top-down, 1 row/tick.
+  Their W1 semantics are untouched — placement demotion only; nothing
+  golden-gated was deleted.
+
+### U6. What got deleted (confirm the absences)
+
+- The legacy 16×16 palette widget is GONE from Live (authorized 2026-07-08):
+  its region crowded the 32/16 bands and its rebake flicker dies with it.
+  Its LOOK-indicator function moved to the LOOK strip. Mounts remain on
+  non-live acts only.
+- The idle marching shimmer is gone — the BEAT is the one moving invitation.
+- The ground no longer blazes at idle: `liveIdleEnergy` dims it to a calm
+  near-void; during `.capturing` it rises with a (tick mod 4)/4 pour ramp —
+  the ground glows exactly when photons are being banked, and only then.
+- PAINT is gone from Live (it lives in Decide, behind the fold).
+
+### U7. If the surface reads busy (pre-agreed drop order)
+
+Drop in this order, nothing else: ground pour-ramp → meter crosshair linger
+→ the BEAT. The intake tallies and the honest cadence go LAST — they carry
+the charter's whole point. If the 5 Hz vertex reads as jank rather than
+integration, the fallback is honest-cadence-during-capture-only (idle keeps
+smooth pooling) — but judge the true design on device first.

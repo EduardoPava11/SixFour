@@ -238,6 +238,13 @@ final class CaptureViewModel {
     var previewLadder32: [SIMD3<UInt8>] = []
     var previewLadder16: [SIMD3<UInt8>] = []
 
+    /// THE FLUX BAR (THE DESIGN E6): the freshest 768-byte GCT from the session's
+    /// `gctCallback` (≤ 5 Hz — the 16-rung realize cadence; the burst head during a
+    /// burst, the preview head while idle under Feature.liveLadder). `SurfaceView`
+    /// folds it into σ; `FluxBar` differences consecutive values through
+    /// `s4_v21_wdist1d` (paletteW1). nil until a head realizes one. Display-only.
+    var previewGCT: [UInt8]? = nil
+
     /// OPTICAL-EV (Feature.opticalEV only): the three REAL-exposure rung tiles from the
     /// exposure-bracket driver (64²=base / 32²=+1 / 16²=+2 stops), each a distinct optical
     /// exposure realized to sRGB8, published from the session's `opticalTileCallback`.
@@ -494,6 +501,12 @@ final class CaptureViewModel {
                 }
             }
 
+            // FLUX BAR (E6): the ≤ 5 Hz GCT pulse — one 768-byte palette per 16-rung
+            // realize. Fires on delegateQueue; marshal to the main actor to publish.
+            session.gctCallback = { [weak self] gct in
+                Task { @MainActor [weak self] in self?.previewGCT = gct }
+            }
+
             // OPTICAL-EV (Feature.opticalEV only): one realized rung tile per settled real
             // exposure (side ∈ {64,32,16}). Fires on delegateQueue; marshal to the main actor.
             // Off ⇒ the session never builds the driver, so this never fires.
@@ -622,14 +635,21 @@ final class CaptureViewModel {
         let burstTotal = session.targetFrameCount
         // Snapshot the preview look ONCE (constant for the burst) so the renderer's
         // @Sendable closure doesn't reach back into main-actor state per frame.
-        let quantized = previewQuantized
+        //
+        // THE FREEZE FIX (THE DESIGN E7, 2026-07-08): during `.capturing` the burst
+        // renderer ALWAYS runs the quantized path. The old non-quantized branch published
+        // `frame.indices = []`, the guard in `onFrame` then skipped `previewIndexTile` /
+        // `previewPalette`, and the pyramid starved for the whole 3.2 s burst — the exact
+        // freeze reported on device. The index tile + palette are the pyramid's ONLY
+        // food (σ carries no UIImage); the burst is the show, never a freeze-frame.
+        // (If a device profile ever shows dropped burst frames from the per-frame
+        // quantize, the fix moves to publishing raw-RGB tiles the pyramid can pool —
+        // NEVER back to an unquantized publish that starves the surface.)
         let mode = previewDitherMode
         let serpentine = previewSerpentine
         let renderer = CoalescingFrameRenderer(
             render: { tile in
-                quantized
-                    ? Self.makeQuantizedPreviewImage(from: tile, mode: mode, serpentine: serpentine)
-                    : PreviewFrame(image: Self.makePreviewImage(from: tile), indices: [], palette: [])
+                Self.makeQuantizedPreviewImage(from: tile, mode: mode, serpentine: serpentine)
             },
             onFrame: { [weak self] frame in
                 Task { @MainActor [weak self] in
@@ -1210,8 +1230,11 @@ final class CaptureViewModel {
         let palette: [SIMD3<UInt8>]       // the tile's own sRGB palette (paired with `indices`)
     }
 
-    nonisolated private static func makeQuantizedPreviewImage(from tile: OKLabTile,
-                                                               mode: Int, serpentine: Bool) -> PreviewFrame {
+    /// Internal (not private) so `BurstPreviewPublishTests` can pin the publish path:
+    /// the burst renderer feeds the pyramid THROUGH this function, and its `indices`
+    /// must be non-empty for the surface to stay alive during a burst (E7).
+    nonisolated static func makeQuantizedPreviewImage(from tile: OKLabTile,
+                                                      mode: Int, serpentine: Bool) -> PreviewFrame {
         let side = tile.side
         let pixelCount = side * side
         let k = SixFourShape.K

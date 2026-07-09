@@ -24,6 +24,10 @@ public enum SixFourFieldTuning {
     public static let liftDim: Double = 0.4
     /// Ticks over which the lift-dim ramps in/out.
     public static let liftRampTicks: Int = 4
+    /// E9 CAPTURE ENERGY — idle-live energy multiplier (the calm near-void).
+    public static let liveIdleEnergy: Double = 0.25
+    /// E9 CAPTURE ENERGY — the pour-ramp period in ticks (= the 16-rung pool depth).
+    public static let capturePourRampTicks: Int = 4
     /// The neutral a seam mutes toward, and the calm unlit ink.
     public static let neutral = SIMD3<UInt8>(11, 11, 16)
     /// The far-field calm ink — darker than the neutral.
@@ -35,6 +39,7 @@ public enum SixFourFieldTuning {
         && usageReachMin > 0 && usageReachMin <= 1
         && seamMute >= 0 && seamMute <= 1 && liftDim >= 0 && liftDim < 1
         && liftRampTicks > 0 && driftPerTick > 0
+        && liveIdleEnergy > 0 && liveIdleEnergy < 1 && capturePourRampTicks > 0
         && (Int(farDark.x) + Int(farDark.y) + Int(farDark.z)) < (Int(neutral.x) + Int(neutral.y) + Int(neutral.z))
     }
 }

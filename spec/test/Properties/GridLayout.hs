@@ -42,6 +42,27 @@ tests = testGroup "GridLayout (the capture-scene contention proof — every widg
   , testProperty "decisionScene: cover partitions the lattice" $ once (lawCoverPartitions decisionScene)
   , testProperty "decisionScene: widgets clear the rounded corners" $ once (lawWidgetsClearCorners decisionScene)
 
+  -- THE TWO VERBS (THE DESIGN D3, 2026-07-08): the rebuilt Decide layout is
+  -- pinned — the judgment hero with its 16³ coarse + static tally beside it,
+  -- the advanced fold (chevron + demoted W1 bench region), and the verb band
+  -- at 4× the touch floor (44×16 each, 4-cell gaps: 4+44+4+44+4 = 100 cols).
+  , testProperty "decisionScene D3 witness: hero/coarse/tally/fold/advanced/again/accept at the pinned rects" $
+      once $ and
+        [ pin decisionScene "hero"     (14, 30,  64, 64)
+        , pin decisionScene "coarse"   (82, 30,  16, 16)
+        , pin decisionScene "tally"    (82, 26,  16,  2)
+        , pin decisionScene "fold"     (44, 98,  12, 12)
+        , pin decisionScene "advanced" (18, 112, 64, 76)
+        , pin decisionScene "again"    ( 4, 188, 44, 16)
+        , pin decisionScene "accept"   (52, 188, 44, 16)
+        ]
+  , testProperty "decisionScene D3: coarse + tally are display-only; the other five are controls" $
+      once $ and
+        (  [ maybe False (not . lrInteractive) (lookup nm decisionScene)
+           | nm <- ["coarse", "tally"] ]
+        ++ [ maybe False lrInteractive (lookup nm decisionScene)
+           | nm <- ["hero", "fold", "advanced", "again", "accept"] ] )
+
   -- The LAUNCH CURATE scene (the 256³ curation loop surface) passes the same
   -- eight laws: the hero inspection pane, the t-slab rail, and the three
   -- iterate knobs are proven, contention-free claims.
@@ -67,6 +88,23 @@ tests = testGroup "GridLayout (the capture-scene contention proof — every widg
   , testProperty "liveScene: cover partitions the lattice" $ once (lawCoverPartitions liveScene)
   , testProperty "liveScene: widgets clear the rounded corners" $ once (lawWidgetsClearCorners liveScene)
 
+  -- THE POUR instruments (THE DESIGN D2, 2026-07-08): the intake tallies, flux
+  -- bar, and gesture rails are pinned at their designed gutter coordinates —
+  -- non-interactive display overlays whose quantities live in
+  -- Spec.ColorTimeDisplay (slot counts = unitsOf by lawTallyEqualsUnits).
+  , testProperty "liveScene POUR witness: intake32/intake16/fluxBar/evRail/lookStrip at the pinned rects" $
+      once $ and
+        [ pin liveScene "intake32"  (34, 114, 32, 2)
+        , pin liveScene "intake16"  (42, 149, 16, 2)
+        , pin liveScene "fluxBar"   (42, 172, 16, 1)
+        , pin liveScene "evRail"    ( 2, 120,  2, 26)
+        , pin liveScene "lookStrip" (18,  44, 64, 4)
+        ]
+  , testProperty "liveScene POUR: all five instruments are non-interactive (gestures stay on the ground layer)" $
+      once $ and
+        [ maybe False (not . lrInteractive) (lookup nm liveScene)
+        | nm <- ["intake32", "intake16", "fluxBar", "evRail", "lookStrip"] ]
+
   -- The laws are robust on arbitrary scenes too: an overlapping pair is BOTH
   -- contested and AABB-overlapping (the bridge holds off the canonical scene).
   , testProperty "bridge holds on an overlapping 2-region scene" $
@@ -77,3 +115,7 @@ tests = testGroup "GridLayout (the capture-scene contention proof — every widg
         [ ("a", LRegion 0 0 10 10 0 0 False)
         , ("b", LRegion 5 5 10 10 1 1 False) ])
   ]
+  where
+    pin scene nm (c, r, w, h) = case lookup nm scene of
+      Just lr -> (lrCol lr, lrRow lr, lrW lr, lrH lr) == (c, r, w, h)
+      Nothing -> False

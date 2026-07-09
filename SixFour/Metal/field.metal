@@ -33,7 +33,7 @@ struct FieldUniforms {
     int   cornerCells;                // Stage corner radius (cells)
     int   sourceCount;                // active sources
     int   tick;                       // κ monotonic tick (drives the breathing drift)
-    int   _pad0;                      // pad to 16-byte multiple (matched in Swift)
+    float energyScale;                // E9 CAPTURE ENERGY (idle-live void / pour ramp; 1 elsewhere)
 };
 
 // --- pure helpers (byte-/tolerance-faithful to FieldModel) ---
@@ -128,7 +128,8 @@ fragment float4 fieldFragment(VOut in [[stage_in]],
     }
     if (sum <= 0.001) return float4(kFieldFarDark, 1.0);       // far calm
 
-    float E = min(1.0, sum) * (1.0 - u.liftAmount * (1.0 - kFieldLiftDim));
+    // energyScale is E9 CAPTURE ENERGY: the idle-live near-void / the capture pour ramp.
+    float E = min(1.0, sum) * (1.0 - u.liftAmount * (1.0 - kFieldLiftDim)) * u.energyScale;
     float interplay = (w1 > 0.0) ? (w2 / w1) : 0.0;
     float3 lit = mix(domColor, kFieldNeutral, kFieldSeamMute * interplay);
 

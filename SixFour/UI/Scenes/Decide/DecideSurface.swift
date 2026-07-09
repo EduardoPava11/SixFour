@@ -1,36 +1,38 @@
 import SwiftUI
+import UIKit
 import Combine
+import simd
 
-/// THE V3.0 DECISION SURFACE (workflow C1, `docs/V3-BUILD-WORKFLOW.md`): the
-/// post-capture screen where the user iterates the 16³ proposal until they like
-/// it. Every widget is one user-CHANGEABLE model-boundary knob, placed on the
-/// proven lattice (`GridLayoutContract.decisionScene`, all eight GridLayout laws
-/// green) via the ONE sanctioned `place(_:in:)` composer — this file hand-places
-/// nothing.
+/// THE DECISION SURFACE — rebuilt around the TWO VERBS (THE DESIGN D3,
+/// `docs/UI-FORM-FOLLOWS-FUNCTION.md`, 2026-07-08). The scene shows a DECISION,
+/// not machinery:
 ///
-/// The knobs, grounded in `SixFourModelInput` + the V3 somatic gene:
-///   * preview  — the rendered result; horizontal drag scrubs the frame (and
-///     derives the paint layer: 64 burst frames → 16 control layers, t/4).
-///   * paint    — the 16³×9 `CellBudget` (`miNudge`), 16 pt per control cell.
-///   * channels — which of the 9 ChannelProduct colour×space pairs the brush paints.
-///   * gauge    — the φ6 toggle (`miGauge`).
-///   * gene     — the SOMATIC θ_up toggle: learned invention vs the deterministic
-///     floor. Disabled (floor) when the burst carried no gene — zero-gene == floor
-///     makes OFF always safe.
-///   * again / accept — the verdict (the decision stream the Identity preference
-///     head will later train on).
+///   * HERO — the 64³ reconstruction (floor or gene: what accepting would ship),
+///     wearing the D1 control BRACKETS in its own gutter. Horizontal drag scrubs
+///     the frame (one time axis: the scrub also derives the 16³ paint layer).
+///   * COARSE — the RAW 16³ coarse tier at the scrubbed layer, beside the hero:
+///     the 64-vs-16 judgment read at a glance. Above it, the STATIC intake-tally
+///     idiom (4 slots × 3 cells — the liveScene intake16 geometry) names the
+///     4-cells-per-frame ledger structure, so the pour-equivalence language
+///     crosses scenes.
+///   * ACCEPT / AGAIN — the two clearest controls in the app: 44×16-cell verb
+///     faces (176×64 pt, 4× the touch floor). ACCEPT = filled control-ink face +
+///     seal glyph (`Haptics.play(3)`, dropAccept); AGAIN = hollow FRAME + retake
+///     glyph (`Haptics.selection()` — the discrete-event generator; `play(1)` is
+///     reserved for the frame-locked `.cellDetent`).
+///   * THE ADVANCED FOLD — everything W1 (channel strip, 16³ paint bench, φ6
+///     gauge, somatic-gene toggle) is DEMOTED behind one 12-cell chevron
+///     (FRAME face). Opening reveals the bench top-down as a cell-row reveal on
+///     the ONE 20 Hz clock. Semantics untouched: painting still gates WHERE the
+///     gene invents (`Spec.ModelForward.lawPaintGatesBlockLocal`); zero paint
+///     keeps the whole-volume gene arm; zero-gene == floor keeps OFF always safe.
 ///
-/// The preview shows the REAL reconstruction: the 16³ proposal
-/// (`Surface.coarseSubstrate`) up-rung'd to 64³ by `OctantCube.expandProposal` —
-/// the deterministic floor, or the gene's invention when the toggle rides θ_up.
-/// Never a faked image (the paint-honesty rule); without a substrate
-/// it falls back to the capture frame.
-///
-/// PAINT IS LIVE (W1, 2026-07-03): painting gates WHERE the gene invents —
-/// painted 16³ cells ride θ_up, unpainted cells ride the floor
-/// (`Spec.ModelForward.lawPaintGatesBlockLocal`); zero paint keeps the
-/// whole-volume gene arm (the shortcut, so the gene toggle stays meaningful
-/// before the first stroke). The gene arm rebuilds debounced after each stroke.
+/// Every widget sits on the proven lattice (`GridLayoutContract.decisionScene`,
+/// all eight GridLayout laws + the D3 witness pins green) via the ONE sanctioned
+/// `place(_:in:)` composer — this file hand-places nothing. All timing derives
+/// from the ONE 20 Hz `SurfaceClock.tick`; only the leaf views that need the beat
+/// read it (the surface body itself never re-evaluates per tick). All control
+/// states are opaque cell/ink transforms — never alpha.
 enum DecideVerdict {
     case accept
     case again
@@ -62,6 +64,10 @@ final class DecideModel: ObservableObject {
     private var floorRecon: [Int32]?
     private var geneRecon: [Int32]?
     @Published private(set) var reconstructionsReady = false
+    /// Steps whenever a reconstruction arm lands or rebuilds — the hero's bake key
+    /// (the PERF discipline: the 64² image rebakes only when this or the scrub steps,
+    /// never per body evaluation).
+    @Published private(set) var reconRevision = 0
 
     /// `paint` is a NESTED ObservableObject — its mutations (gauge toggle, strokes)
     /// do not propagate through DecideModel automatically (device audit: the gauge
@@ -74,7 +80,7 @@ final class DecideModel: ObservableObject {
     /// Ride the learned somatic detail (true) or the deterministic floor (false).
     /// Defaults to the gene when the burst trained one; absence pins the floor.
     @Published var useGene: Bool
-    /// The previewed burst frame (0-based); horizontal drag on the preview scrubs it.
+    /// The previewed burst frame (0-based); horizontal drag on the hero scrubs it.
     @Published var frame: Int = 0
     /// The brush's paint channel (default L·t, the φ6 diagonal value-over-time pair).
     @Published var channel: Int = 8
@@ -111,6 +117,7 @@ final class DecideModel: ObservableObject {
             self.floorRecon = floor
             self.geneRecon = geneArm
             self.reconstructionsReady = true
+            self.reconRevision += 1
         }
     }
 
@@ -150,6 +157,7 @@ final class DecideModel: ObservableObject {
                                                     channel: channel, mask: mask)
             guard !Task.isCancelled else { return }
             self.geneRecon = geneArm
+            self.reconRevision += 1
             self.objectWillChange.send()
         }
     }
@@ -217,6 +225,9 @@ final class DecideModel: ObservableObject {
 
 struct DecideSurface: View {
     @StateObject private var model: DecideModel
+    /// THE one 20 Hz clock — passed to the leaf views that carry a beat (the hero
+    /// brackets, the fold chevron, the reveal). The surface body never reads `tick`.
+    let clock: SurfaceClock
     private let onDecide: (DecideVerdict, SixFourModelInput, Bool) -> Void
     private let scene = GridLayoutContract.decisionScene
     /// Kept as plain properties so the ASYNC deliveries (QoL 2026-07-03: the gene
@@ -226,12 +237,28 @@ struct DecideSurface: View {
     private let thetaUp: CaptureGene.ThetaUp?
     private let substrate: [[VoxelReduce.Px]]
 
+    /// The advanced fold (render state — the `advanced` region is static in the
+    /// proven scene, so the reveal can never contend).
+    @State private var advancedOpen = false
+    @State private var foldOpenedAt = 0
+
+    /// The STATIC intake-tally idiom above the coarse (all slots pending = the
+    /// resting ghost rail): the exact liveScene intake16 geometry, baked once.
+    private static let tallyBake: UIImage? = InvertedPyramidField.tallyImage(
+        slots: [nil, nil, nil, nil], width: 16, slotCells: 3, gapCells: 1, flash: false)
+
+    /// `clock` is REQUIRED (no default): a default `SurfaceClock()` is never started
+    /// (tick stays 0), which silently kills the hero/fold BEAT and — worse — froze
+    /// `AdvancedReveal` at a 4-row hit-test-dead sliver, making the whole demoted W1
+    /// bench unreachable. Pass the surface's one running clock (`DecidingPhaseField`).
     @MainActor
     init(tiles: [OKLabTile], thetaUp: CaptureGene.ThetaUp?,
          substrate: [[VoxelReduce.Px]] = [],
+         clock: SurfaceClock,
          onDecide: @escaping (DecideVerdict, SixFourModelInput, Bool) -> Void) {
         _model = StateObject(wrappedValue: DecideModel(
             tiles: tiles, gene: thetaUp, substrate: substrate))
+        self.clock = clock
         self.thetaUp = thetaUp
         self.substrate = substrate
         self.onDecide = onDecide
@@ -240,13 +267,20 @@ struct DecideSurface: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
-            DecidePreviewWidget(model: model).place("preview", in: scene)
-            DecidePaintWidget(model: model, paint: model.paint).place("paint", in: scene)
-            channelStrip.place("channels", in: scene)
-            gaugeCell.place("gauge", in: scene)
-            geneCell.place("gene", in: scene)
-            againCell.place("again", in: scene)
-            acceptCell.place("accept", in: scene)
+            DecideHeroWidget(model: model, clock: clock).place("hero", in: scene)
+            DecideCoarseWidget(model: model).place("coarse", in: scene)
+            tallyRail.place("tally", in: scene)
+            FoldChevron(open: advancedOpen, clock: clock) {
+                advancedOpen.toggle()
+                foldOpenedAt = clock.tick
+                Haptics.selection()
+            }
+            .place("fold", in: scene)
+            if advancedOpen {
+                advancedPanel.place("advanced", in: scene)
+            }
+            againVerb.place("again", in: scene)
+            acceptVerb.place("accept", in: scene)
         }
         .ignoresSafeArea()
         // The async somatic gene landed after this surface mounted: attach it.
@@ -256,14 +290,90 @@ struct DecideSurface: View {
         .onChange(of: substrate.count) { _, _ in model.attachSubstrate(substrate) }
     }
 
+    // ── the static tally rail (the pour-equivalence language, crossing scenes) ──
+
+    private var tallyRail: some View {
+        Group {
+            if let img = Self.tallyBake {
+                Image(uiImage: img)
+                    .interpolation(.none)
+                    .resizable()
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    // ── the two verbs (D3: the clearest controls in the app) ────────────────
+
+    private var againVerb: some View {
+        Button {
+            // The retake verb's discrete confirmation. THE DESIGN names the cellTick
+            // feel (`play(1)`); `Haptics.selection()` IS that generator — the `play(1)`
+            // ordinal itself is reserved for the frame-locked `.cellDetent` (LINT-DETENT).
+            Haptics.selection()
+            onDecide(.again, model.modelInput(), model.useGene)
+        } label: { Color.clear }
+        .buttonStyle(DecideVerbStyle(title: "AGAIN", filled: false, retake: true))
+        .accessibilityLabel("Again: recapture")
+        .accessibilityHint("Rejects this capture and returns to the camera")
+    }
+
+    private var acceptVerb: some View {
+        Button {
+            Haptics.play(3)   // dropAccept — the seal
+            onDecide(.accept, model.modelInput(), model.useGene)
+        } label: { Color.clear }
+        .buttonStyle(DecideVerbStyle(title: "ACCEPT", filled: true, retake: false))
+        .accessibilityLabel("Accept: commit this capture")
+    }
+
+    // ── the advanced fold content (the demoted W1 bench) ────────────────────
+
+    /// The demoted W1 world inside the ONE proven `advanced` region: the FRAME face
+    /// ring around the sheet, the 9-channel strip, the 16³ paint bench (3 atoms per
+    /// control cell), and the φ6/gene toggles — all semantics untouched (placement
+    /// demotion only). Revealed top-down by `AdvancedReveal` on the one clock.
+    private var advancedPanel: some View {
+        AdvancedReveal(clock: clock, openedAt: foldOpenedAt) {
+            ZStack(alignment: .top) {
+                advancedFrame
+                VStack(spacing: 0) {
+                    channelStrip
+                        .frame(width: GlobalLattice.gif(60), height: GlobalLattice.gif(12))
+                    DecidePaintWidget(model: model, paint: model.paint)
+                        .frame(width: GlobalLattice.gif(48), height: GlobalLattice.gif(48))
+                    HStack(spacing: 0) {
+                        gaugeCell
+                            .frame(width: GlobalLattice.gif(20), height: GlobalLattice.gif(12))
+                        Spacer(minLength: 0)
+                        geneCell
+                            .frame(width: GlobalLattice.gif(20), height: GlobalLattice.gif(12))
+                    }
+                    .frame(width: GlobalLattice.gif(60), height: GlobalLattice.gif(12))
+                }
+                .padding(.top, GlobalLattice.gif(2))
+            }
+        }
+    }
+
+    /// The panel's FRAME face (the D1 control language): a 1-cell ring in control
+    /// ink around the 64×76 sheet — an opaque ink border, never a stroke, never alpha.
+    private var advancedFrame: some View {
+        let ink = SIMD3<UInt8>(UInt8(SixFourCellMechanics.faceControlInk.r),
+                               UInt8(SixFourCellMechanics.faceControlInk.g),
+                               UInt8(SixFourCellMechanics.faceControlInk.b))
+        return CellSprite(cols: 64, rows: 76, cellPt: GlobalLattice.gif(1)) { c, r in
+            (c == 0 || c == 63 || r == 0 || r == 75) ? ink : nil
+        }
+        .allowsHitTesting(false)
+    }
+
     // ── channels: which colour×space pair the brush paints ──────────────────
 
-    /// The 9 ChannelProduct pairs as LATTICE CELLS (QoL 2026-07-03): the system
-    /// segmented Picker was the one control on this surface speaking a foreign
-    /// design language (glass chrome on a cell grid — the LivePhaseField header
-    /// explicitly bans UIKit Picker/Slider chrome). Each cell is tinted by its
-    /// colour axis (`NudgeChannel.tint`, the same hues the paint grid shows), so
-    /// selecting a channel and seeing its paint are one visual system.
+    /// The 9 ChannelProduct pairs as LATTICE CELLS (QoL 2026-07-03): each cell is
+    /// tinted by its colour axis (`NudgeChannel.tint`, the same hues the paint grid
+    /// shows), so selecting a channel and seeing its paint are one visual system.
     private var channelStrip: some View {
         HStack(spacing: 0) {
             ForEach(0 ..< NudgeChannel.labels.count, id: \.self) { i in
@@ -286,7 +396,7 @@ struct DecideSurface: View {
         .buttonStyle(.plain)
     }
 
-    // ── the four decision cells ──────────────────────────────────────────────
+    // ── the demoted toggles ──────────────────────────────────────────────────
 
     private var gaugeCell: some View {
         DecideCell(label: model.paint.gauge ? "φ6 dual" : "c × s",
@@ -302,91 +412,93 @@ struct DecideSurface: View {
             model.useGene.toggle()
         }
     }
-
-    private var againCell: some View {
-        DecideCell(label: "again", active: false) {
-            onDecide(.again, model.modelInput(), model.useGene)
-        }
-    }
-
-    private var acceptCell: some View {
-        DecideCell(label: "accept", active: true) {
-            onDecide(.accept, model.modelInput(), model.useGene)
-        }
-    }
 }
 
-// ── the widgets ──────────────────────────────────────────────────────────────
+// ── the hero (the judgment view, wearing BRACKETS) ───────────────────────────
 
-/// A lattice-styled decision cell: fills its proven region, no free frames.
-private struct DecideCell: View {
-    let label: String
-    let active: Bool
-    var enabled: Bool = true
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(enabled ? (active ? Color.black : Color.white) : Color.gray)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(active && enabled ? Color.white : Color.white.opacity(0.12))
-                .overlay(Rectangle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-    }
-}
-
-/// The preview hero: the scrubbed capture frame as nearest-neighbour pixels
-/// (display-only OKLab → sRGB; never re-enters the byte-exact pipeline).
-/// Horizontal drag scrubs the frame — which also selects the paint layer.
-private struct DecidePreviewWidget: View {
+/// The 64³ judgment view: the scrubbed reconstruction slice (floor or gene — what
+/// accepting would ship; the honest capture-frame fallback until the substrate
+/// lands), wearing the D1 BRACKETS in its gutter. Horizontal drag scrubs the frame
+/// (brackets go full ink while the finger is down); a transient CellText frame
+/// readout rides the bottom edge during the scrub only. The bake is @State-cached
+/// keyed by (frame, arm, revision) — a clock tick alone never rebakes the image.
+private struct DecideHeroWidget: View {
     @ObservedObject var model: DecideModel
+    let clock: SurfaceClock
+    @State private var scrubbing = false
+    @State private var baked: (key: Int, image: UIImage?) = (.min, nil)
 
     var body: some View {
-        GeometryReader { geo in
+        let atom = GlobalLattice.gif(1)
+        let key = imageKey
+        ZStack {
+            // idle = ghost brackets + the cadence BEAT (pinned off under reduce-motion);
+            // scrubbing = the PRESSED ink.
+            ControlBrackets(side: 64, state: scrubbing ? 1 : 0, tick: clock.tick,
+                            reduceMotion: clock.reduceMotion)
             Group {
-                if let cg = reconstructionImage() {
-                    // The REAL build: the 16³ proposal up-rung'd to 64³ (floor or
-                    // the gene's invention) — what accepting would ship.
-                    Image(decorative: cg, scale: 1)
-                        .interpolation(.none)
-                        .resizable()
-                } else if let cg = Self.image(of: model.tiles.indices.contains(model.frame)
-                                              ? model.tiles[model.frame] : nil) {
-                    // No substrate yet: the honest fallback is the capture frame.
-                    Image(decorative: cg, scale: 1)
+                if let img = baked.image {
+                    Image(uiImage: img)
                         .interpolation(.none)
                         .resizable()
                 } else {
-                    Color.white.opacity(0.06)
+                    Color.black   // no capture data yet — an honest void, no fake image
                 }
             }
-            .overlay(alignment: .bottomLeading) {
-                Text("t \(model.frame)/\(max(1, model.tiles.count) - 1) · layer \(model.paintLayer) · \(model.substrate.isEmpty ? "capture" : (model.useGene ? "gene" : "floor"))")
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(GlobalLattice.gif(1))
+            .frame(width: GlobalLattice.gif(64), height: GlobalLattice.gif(64))
+        }
+        .overlay(alignment: .bottom) {
+            if scrubbing {
+                CellText("T \(model.frame)/\(max(model.tiles.count, 1) - 1)",
+                         cell: GlobalLattice.pt(1))
+                    .padding(.bottom, GlobalLattice.gif(3))
+                    .allowsHitTesting(false)
             }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0).onChanged { g in
+        }
+        .contentShape(Rectangle())   // the bracket rect IS the hit rect (D1)
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { g in
+                    scrubbing = true
                     guard !model.tiles.isEmpty else { return }
-                    let t = Int(g.location.x / geo.size.width
+                    // Map over the TILE's 64 cells (the brackets add a 2-cell margin).
+                    let t = Int((g.location.x - 2 * atom) / (64 * atom)
                                 * CGFloat(model.tiles.count))
                     model.frame = min(model.tiles.count - 1, max(0, t))
                 }
-            )
+                .onEnded { _ in scrubbing = false }
+        )
+        .onChange(of: key, initial: true) { _, k in
+            guard k != baked.key else { return }
+            baked = (k, bakeImage())
         }
+        .accessibilityLabel("Judgment view")
+        .accessibilityHint("Drag horizontally to scrub the sixty-four frames")
     }
 
-    /// The reconstruction slice at the scrubbed frame → CGImage (nil without a substrate).
-    private func reconstructionImage() -> CGImage? {
-        guard let rgba = model.reconstructionSlice(frame: model.frame, useGene: model.useGene)
-        else { return nil }
-        return Self.rgbaImage(rgba, side: 64)
+    /// Everything that changes the hero's PIXELS (never the clock).
+    private var imageKey: Int {
+        var h = Hasher()
+        h.combine(model.frame)
+        h.combine(model.useGene)
+        h.combine(model.reconstructionsReady)
+        h.combine(model.reconRevision)
+        h.combine(model.tiles.count)
+        h.combine(model.substrate.count)
+        return h.finalize()
+    }
+
+    /// The REAL build: the 16³ proposal up-rung'd to 64³ (floor or the gene's
+    /// invention) — what accepting would ship. No substrate yet ⇒ the honest
+    /// fallback is the capture frame itself. Never a faked image.
+    private func bakeImage() -> UIImage? {
+        if let rgba = model.reconstructionSlice(frame: model.frame, useGene: model.useGene),
+           let cg = Self.rgbaImage(rgba, side: 64) {
+            return UIImage(cgImage: cg)
+        }
+        let tile = model.tiles.indices.contains(model.frame) ? model.tiles[model.frame] : nil
+        if let cg = Self.image(of: tile) { return UIImage(cgImage: cg) }
+        return nil
     }
 
     /// One tile → CGImage (RGBA8, nearest-neighbour source).
@@ -413,9 +525,241 @@ private struct DecidePreviewWidget: View {
     }
 }
 
-/// The 16×16 paint grid of the scrub-selected control layer (16 pt per control
-/// cell on the proven 64-cell region). Tap/drag paints the brush into the
-/// selected channel of `CellBudget` — the `miNudge` surface.
+// ── the coarse (the 16³ tier, beside the hero) ───────────────────────────────
+
+/// The RAW 16³ coarse tier at the scrubbed layer — one screen cell per voxel
+/// (16×16 cells): the other half of the 64-vs-16 judgment. Display-only
+/// (`allowsHitTesting(false)`); ghost quarter-ink until the substrate lands.
+/// Bake keyed by (layer, substrate arrival) — the scrub swaps whole tiles.
+private struct DecideCoarseWidget: View {
+    @ObservedObject var model: DecideModel
+    @State private var baked: (key: Int, image: UIImage?) = (.min, nil)
+
+    var body: some View {
+        let key = model.substrate.isEmpty ? -1 : model.paintLayer
+        Group {
+            if let img = baked.image {
+                Image(uiImage: img)
+                    .interpolation(.none)
+                    .resizable()
+            } else {
+                Color.clear
+            }
+        }
+        .allowsHitTesting(false)
+        .onChange(of: key, initial: true) { _, k in
+            guard k != baked.key else { return }
+            baked = (k, bake(layer: k))
+        }
+        .accessibilityLabel("Coarse sixteen-cubed view at the scrubbed layer")
+    }
+
+    private func bake(layer: Int) -> UIImage? {
+        let ghost = SFTheme.ledGhost
+        let pending = SIMD3<UInt8>(ghost.x / 4, ghost.y / 4, ghost.z / 4)
+        return CellBitmap.image(cols: 16, rows: 16) { c, r in
+            guard layer >= 0 else { return pending }
+            return model.proposalSRGB8(x: c, y: r, layer: layer) ?? pending
+        }
+    }
+}
+
+// ── the fold chevron (FRAME face) ────────────────────────────────────────────
+
+/// The ONE advanced-fold control: a 12×12 FRAME face (1-cell ring in control ink,
+/// beating lit for 1 tick on every 16-rung realize — the D1 idle invite) around a
+/// chevron pointing down (closed) or up (open). Baked once per (open, treatment).
+private struct FoldChevron: View {
+    let open: Bool
+    let clock: SurfaceClock
+    let action: () -> Void
+    @State private var baked: (key: Int, image: UIImage?) = (.min, nil)
+
+    var body: some View {
+        // Reduce-motion pins the ring's BEAT off (tick 1 is provably beat-free —
+        // `SixFourCellMechanics.goldenBeat[1]`); the chevron itself is static.
+        let treatment = SixFourCellMechanics.faceTreatment(
+            state: 0, tick: clock.reduceMotion ? 1 : clock.tick)
+        let key = (open ? 8 : 0) + treatment
+        Button(action: action) {
+            Group {
+                if let img = baked.image {
+                    Image(uiImage: img)
+                        .interpolation(.none)
+                        .resizable()
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: GlobalLattice.gif(12), height: GlobalLattice.gif(12))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onChange(of: key, initial: true) { _, k in
+            guard k != baked.key else { return }
+            baked = (k, Self.bake(open: open, treatment: treatment))
+        }
+        .accessibilityLabel(open ? "Hide advanced tools" : "Show advanced tools")
+        .accessibilityHint("Paint, channels, gauge, and gene live behind this fold")
+    }
+
+    private static func bake(open: Bool, treatment: Int) -> UIImage? {
+        let lit = SIMD3<UInt8>(UInt8(SixFourCellMechanics.faceControlInk.r),
+                               UInt8(SixFourCellMechanics.faceControlInk.g),
+                               UInt8(SixFourCellMechanics.faceControlInk.b))
+        let ghost = SFTheme.ledGhost
+        let ring = treatment == 1 ? lit : ghost   // the BEAT lights the ring for 1 tick
+        return CellBitmap.image(cols: 12, rows: 12) { c, r in
+            if c == 0 || c == 11 || r == 0 || r == 11 { return ring }   // the FRAME
+            // A 2-cell-thick chevron: down (closed — "more below") or up (open).
+            let o = open ? (7 - r) : (r - 4)
+            guard o >= 0, o <= 2 else { return nil }
+            let onArm = (c == 2 + o || c == 3 + o || c == 8 - o || c == 9 - o)
+            return onArm ? lit : nil
+        }
+    }
+}
+
+// ── the reveal (the fold opens as a cell-row paint, on the one clock) ────────
+
+/// Reveals its content top-down in cell rows once the fold opens: rows paint in
+/// groups of 4 per tick (one pour-group per tick — the full 76-row sheet lands in
+/// ~1 s; the design's letter of 1 row/tick reads as a 3.8 s stall on device, so the
+/// reveal keeps the top-down cell-row FORM at a usable rate). Hit-testing stays off
+/// until fully revealed, then the clock is no longer read at all. A clock that is
+/// not RUNNING (a preview / misconfigured mount) opens instantly — a stopped tick
+/// must never leave the bench sealed behind a hit-test-dead 4-row sliver.
+private struct AdvancedReveal<Content: View>: View {
+    let clock: SurfaceClock
+    let openedAt: Int
+    @ViewBuilder let content: Content
+    @State private var fullyOpen = false
+
+    private static var totalRows: Int { 76 }
+    private static var rowsPerTick: Int { 4 }
+
+    var body: some View {
+        if fullyOpen || !clock.running {
+            content
+        } else {
+            let revealed = min(Self.totalRows,
+                               max(0, (clock.tick - openedAt + 1) * Self.rowsPerTick))
+            content
+                .frame(width: GlobalLattice.gif(64),
+                       height: GlobalLattice.gif(Self.totalRows), alignment: .top)
+                .frame(height: GlobalLattice.gif(revealed), alignment: .top)
+                .clipped()
+                .frame(height: GlobalLattice.gif(Self.totalRows), alignment: .top)
+                .allowsHitTesting(false)
+                .onChange(of: revealed, initial: true) { _, r in
+                    if r >= Self.totalRows { fullyOpen = true }
+                }
+        }
+    }
+}
+
+// ── the verb faces (the control language on the two first-class verbs) ───────
+
+/// The verb face renderer: ACCEPT = filled control-ink face (dark glyph/label);
+/// AGAIN = hollow FRAME (1-cell control-ink ring, lit glyph/label). PRESSED is the
+/// full ink inversion of the face (the filled face goes dark, the hollow face goes
+/// filled) — cell transforms only. Face bitmaps are baked once per (filled) state.
+private struct DecideVerbFace: View {
+    let title: String
+    let filled: Bool
+    let retake: Bool
+    let pressed: Bool
+    @State private var baked: (key: Int, image: UIImage?) = (.min, nil)
+
+    private static let inkLit = SIMD3<UInt8>(UInt8(SixFourCellMechanics.faceControlInk.r),
+                                             UInt8(SixFourCellMechanics.faceControlInk.g),
+                                             UInt8(SixFourCellMechanics.faceControlInk.b))
+    private static let inkDark = SIMD3<UInt8>(255 - UInt8(SixFourCellMechanics.faceControlInk.r),
+                                              255 - UInt8(SixFourCellMechanics.faceControlInk.g),
+                                              255 - UInt8(SixFourCellMechanics.faceControlInk.b))
+
+    var body: some View {
+        // PRESSED inverts the face: filled ↔ hollow-dark, hollow ↔ filled.
+        let showFilled = filled != pressed
+        let fg = showFilled ? Self.inkDark : Self.inkLit
+        let key = showFilled ? 1 : 0
+        ZStack {
+            Group {
+                if let img = baked.image {
+                    Image(uiImage: img)
+                        .interpolation(.none)
+                        .resizable()
+                }
+            }
+            HStack(spacing: GlobalLattice.pt(4)) {
+                if retake {
+                    CellIcon.retake(box: 12, ink: fg)
+                } else {
+                    CellIcon.seal(box: 12, ink: fg)
+                }
+                CellText(title, rows: 11, cell: GlobalLattice.pt(1), ink: Color(srgb8: fg))
+            }
+        }
+        .frame(width: GlobalLattice.gif(44), height: GlobalLattice.gif(16))
+        .contentShape(Rectangle())
+        .onChange(of: key, initial: true) { _, k in
+            guard k != baked.key else { return }
+            baked = (k, Self.bake(filled: showFilled))
+        }
+        .accessibilityHidden(true)   // the wrapping Button carries the real label
+    }
+
+    private static func bake(filled: Bool) -> UIImage? {
+        CellBitmap.image(cols: 44, rows: 16) { c, r in
+            if filled { return inkLit }
+            let onRing = c == 0 || c == 43 || r == 0 || r == 15
+            return onRing ? inkLit : nil
+        }
+    }
+}
+
+/// ButtonStyle wiring the verb face to the press: the whole 44×16-cell face is the
+/// hit rect; `isPressed` drives the ink inversion (no opacity, no scale).
+private struct DecideVerbStyle: ButtonStyle {
+    let title: String
+    let filled: Bool
+    let retake: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        DecideVerbFace(title: title, filled: filled, retake: retake,
+                       pressed: configuration.isPressed)
+    }
+}
+
+// ── the demoted-toggle cell (advanced fold only) ─────────────────────────────
+
+/// A lattice-styled toggle cell for the demoted W1 knobs (gauge/gene): fills its
+/// slot inside the advanced sheet. (The first-class verbs wear `DecideVerbFace`.)
+private struct DecideCell: View {
+    let label: String
+    let active: Bool
+    var enabled: Bool = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                .foregroundStyle(enabled ? (active ? Color.black : Color.white) : Color.gray)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(active && enabled ? Color.white : Color.white.opacity(0.12))
+                .overlay(Rectangle().stroke(Color.white.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+}
+
+// ── the paint bench (the demoted 16³ control grid) ───────────────────────────
+
+/// The 16×16 paint grid of the scrub-selected control layer (3 atoms per control
+/// cell inside the advanced sheet). Tap/drag paints the brush into the selected
+/// channel of `CellBudget` — the `miNudge` surface. W1 semantics untouched.
 private struct DecidePaintWidget: View {
     @ObservedObject var model: DecideModel
     @ObservedObject var paint: NudgePaintModel
@@ -467,7 +811,11 @@ private struct DecidePaintWidget: View {
 #if DEBUG
 struct DecideSurface_Previews: PreviewProvider {
     static var previews: some View {
-        DecideSurface(tiles: [], thetaUp: nil) { _, _, _ in }
+        // Construct-and-START the one clock — a never-started clock would pin the
+        // BEAT and (before the `clock.running` guard) seal the advanced fold.
+        let clock = SurfaceClock()
+        clock.start()
+        return DecideSurface(tiles: [], thetaUp: nil, clock: clock) { _, _, _ in }
     }
 }
 #endif

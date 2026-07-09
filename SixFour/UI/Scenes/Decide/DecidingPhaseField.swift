@@ -9,12 +9,15 @@ import SwiftUI
 /// gene ride on σ (the 256³ build's future input) and fires `.decideAccept`
 /// (→ `.picked`: a decide-accept IS a committed pick, so export stays
 /// pick-gated); again fires `.decideAgain` (→ `.live` for another burst).
+/// κ (the ONE 20 Hz clock) rides along for the D1 control beats + the fold reveal.
 struct DecidingPhaseField: View {
     let surface: Surface
+    let clock: SurfaceClock
 
     var body: some View {
         DecideSurface(tiles: surface.burstTiles, thetaUp: surface.thetaUp,
-                      substrate: surface.coarseSubstrate) { verdict, input, useGene in
+                      substrate: surface.coarseSubstrate,
+                      clock: clock) { verdict, input, useGene in
             switch verdict {
             case .accept:
                 surface.acceptedInput = input

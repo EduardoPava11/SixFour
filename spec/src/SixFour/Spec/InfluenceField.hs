@@ -31,6 +31,8 @@ module SixFour.Spec.InfluenceField
     driftPerTick, reachArrangement, reachSet, usageReachMin
     -- * Seam + lift
   , seamMute, liftDim, liftRampTicks
+    -- * Named function per phase — CAPTURE ENERGY (THE DESIGN E9)
+  , liveIdleEnergy, capturePourRampTicks
     -- * Inks (sRGB8 component triples)
   , neutralInk, farDarkInk
     -- * The field FUNCTION primitives (CPU reference for the GPU shader)
@@ -42,6 +44,8 @@ module SixFour.Spec.InfluenceField
   , lawLiftDims
   , lawRampPositive
   , lawDriftPositive
+  , lawLiveIdleDims
+  , lawPourRampIsPoolCadence
   , lawInksInGamut
   , lawFarDarkerThanNeutral
   , lawNoiseInUnit
@@ -87,6 +91,24 @@ liftDim = 0.4
 -- | Ticks over which the lift-dim ramps in/out (F3) — recede/return, not a snap.
 liftRampTicks :: Int
 liftRampTicks = 4
+
+-- Named function per phase — CAPTURE ENERGY (THE DESIGN E9) ------------------
+
+-- | The ground's ONE named function is CAPTURE ENERGY: while the live surface is
+-- IDLE the field dims to a calm near-void — this is the idle energy multiplier
+-- (@0 < liveIdleEnergy < 1@, 'lawLiveIdleDims'). The pyramid carries the idle
+-- scene; the ground merely admits it is alive.
+liveIdleEnergy :: Double
+liveIdleEnergy = 0.25
+
+-- | During @.capturing@ the ground rises to FULL energy scaled by a
+-- @(tick mod n + 1) / n@ pour ramp with @n = capturePourRampTicks@ — the ground
+-- glows exactly when photons are being banked, peaking on each 16-rung realize.
+-- Pinned to 4 = the 16-rung pool depth ('SixFour.Spec.WeaveOrder' @unitsOf W16@ =
+-- the ControlFace BEAT period; equality re-asserted in @Properties.InfluenceField@),
+-- so the ground's pulse and the pour tallies read ONE clock ('lawPourRampIsPoolCadence').
+capturePourRampTicks :: Int
+capturePourRampTicks = 4
 
 -- Inks (sRGB8 component triples) --------------------------------------------
 
@@ -164,6 +186,18 @@ lawRampPositive = liftRampTicks > 0
 -- | The breathing drift is positive (the chaos moves outward each tick).
 lawDriftPositive :: Bool
 lawDriftPositive = driftPerTick > 0
+
+-- | LIVE-IDLE genuinely DIMS (E9): the idle-live energy is a strict fraction —
+-- the ground recedes to a near-void when no photons are being banked, and it is
+-- strictly below full capture energy (so capture visibly RISES out of idle).
+lawLiveIdleDims :: Bool
+lawLiveIdleDims = liveIdleEnergy > 0 && liveIdleEnergy < 1
+
+-- | The capture pour ramp beats at the 16-rung pool cadence: 4 ticks (= 2^2 =
+-- the coarse rung's pool depth = the ControlFace BEAT period). The ground may
+-- never acquire its own clock.
+lawPourRampIsPoolCadence :: Bool
+lawPourRampIsPoolCadence = capturePourRampTicks == 4
 
 -- | Both inks are in the sRGB8 gamut @[0,255]@.
 lawInksInGamut :: Bool

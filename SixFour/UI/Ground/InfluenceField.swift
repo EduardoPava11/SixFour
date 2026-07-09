@@ -22,6 +22,10 @@ enum FieldTuning {
     static let liftDim = SixFourFieldTuning.liftDim
     /// Ticks over which the lift-dim RAMPS in/out (F3) — recede/return smoothly, not a snap.
     static let liftRampTicks = SixFourFieldTuning.liftRampTicks
+    /// E9 CAPTURE ENERGY — idle-live energy multiplier (the calm near-void).
+    static let liveIdleEnergy = SixFourFieldTuning.liveIdleEnergy
+    /// E9 CAPTURE ENERGY — the pour-ramp period in ticks (= the 16-rung pool depth).
+    static let capturePourRampTicks = SixFourFieldTuning.capturePourRampTicks
     /// The neutral a seam mutes toward, and the calm far-field / unlit ink.
     static let neutral = SixFourFieldTuning.neutral
     static let farDark = SixFourFieldTuning.farDark
@@ -59,6 +63,8 @@ struct InfluenceField: View {
     /// κ's MONOTONIC tick counter (`SurfaceClock.tick`) — advances the breathing every frame so
     /// the look never pauses. (NOT the 0/1 heartbeat, which a static canvas would pin.)
     let tick: Int
+    /// True while burst frames land — the E9 CAPTURE-ENERGY pour ramp (matches the GPU path).
+    var capturing: Bool = false
     /// Extra order-regions for this act (future widgets: filmstrip, scrub rail, gate, lever …).
     /// Each becomes another radiating source. Empty today (only the two movables exist).
     var extraSources: [FieldSource] = []
@@ -78,7 +84,9 @@ struct InfluenceField: View {
                                                      live: live),
                                palette: tilePalette.isEmpty ? surface.palette : tilePalette,
                                tile: tile, tick: tick, phaseToken: surface.phase.token,
-                               liftAmount: liftAmount)
+                               liftAmount: liftAmount,
+                               energyScale: Double(FieldMetalView.energyScale(
+                                   live: live, capturing: capturing, tick: tick)))
         // F0: ONE fresh grid per tick (tick is in `model.key`, so `StageField` re-bakes every
         // tick — the 20 fps budget is for exactly this). A single frame, no pre-baked ring.
         return StageField(phaseCount: 1, phase: 0, bakeKey: model.key) { c, r, _ in
@@ -154,14 +162,16 @@ private struct FieldModel {
     let usageNorm: [Double]        // per-index usage / maxUsage ∈ [0,1] (256)
     let tick: Int
     let liftAmount: Double        // 0…1 eased lift-dim ramp → the radiation recedes (F3)
+    let energyScale: Double       // E9 CAPTURE-ENERGY multiplier (idle void / pour ramp)
     let key: AnyHashable           // re-bake signature (includes `tick` ⇒ one grid per tick, F0)
 
     init(sources: [FieldSource], palette: [SIMD3<UInt8>], tile: [UInt8], tick: Int,
-         phaseToken: String, liftAmount: Double) {
+         phaseToken: String, liftAmount: Double, energyScale: Double = 1) {
         self.sources = sources
         self.tile = tile
         self.tick = tick
         self.liftAmount = liftAmount
+        self.energyScale = energyScale
         let ghost = SIMD3<UInt8>(20, 20, 24)
         pal = (0 ..< 256).map { $0 < palette.count ? palette[$0] : ghost }
 
@@ -205,7 +215,8 @@ private struct FieldModel {
         if sum <= 0.001 { return FieldTuning.farDark }              // far calm: a near-black cell
         // While a widget is lifted the chaos recedes (radiation + lift-drag together), eased by
         // `liftAmount` 0→1 so it dims/returns over a few ticks rather than snapping (F3).
-        let E = min(1.0, sum) * (1 - liftAmount * (1 - FieldTuning.liftDim))
+        // `energyScale` is E9 CAPTURE ENERGY: the idle-live near-void / the capture pour ramp.
+        let E = min(1.0, sum) * (1 - liftAmount * (1 - FieldTuning.liftDim)) * energyScale
 
         // Chaos SEAM: where the runner-up rivals the dominant, mute toward the neutral.
         let interplay = w1 > 0 ? w2 / w1 : 0

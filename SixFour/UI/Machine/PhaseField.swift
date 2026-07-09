@@ -21,6 +21,10 @@ struct EngineStage: Equatable {
     let label: String
     /// 0..1 fill of the shutter progress field; nil = indeterminate (label only).
     let progress: Double?
+    /// EXACT landed burst frames (0…64) — the 16² banked ledger reads THIS, never the
+    /// float `progress` (`Spec.ColorTimeDisplay.ledgerFillCount`; THE DESIGN E7). The
+    /// render stages pass 64 (the whole window is banked); LOCK passes 0; nil = idle.
+    var landed: Int? = nil
     var active: Bool { !label.isEmpty }
     static let idle = EngineStage(label: "", progress: nil)
 }
@@ -55,8 +59,9 @@ enum PhaseField {
                            onExposureBias: onExposureBias, exposureBias: exposureBias,
                            stage: stage)
         case .deciding:
-            // V3.0: the 16³ decide loop (GridLayoutContract.decisionScene widgets).
-            DecidingPhaseField(surface: surface)
+            // The D3 two-verb decide surface (GridLayoutContract.decisionScene widgets);
+            // κ drives the control beats + the advanced-fold reveal.
+            DecidingPhaseField(surface: surface, clock: clock)
         case .captured, .picked:
             // Post-capture REVIEW bench (A/B game retired): the captured 64³ beside its 16³
             // octree coarse, both on the Z₆₄ cursor, with EXPORT / RETAKE controls.

@@ -24,5 +24,10 @@ struct RungTelemetryFolds: ViewModifier {
             .onChange(of: engine.systemTelemetry) { _, snapshot in
                 surface.systemTelemetry = snapshot
             }
+            // THE FLUX BAR (E6): the ≤ 5 Hz GCT pulse rides the same instrument-fold
+            // discipline (un-gated on σ.phase — only `LivePhaseField` mounts the bar).
+            .onChange(of: engine.previewGCT) { _, gct in
+                surface.latestGCT = gct
+            }
     }
 }
