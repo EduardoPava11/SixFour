@@ -31,7 +31,7 @@ cd "$(dirname "$0")/.." || exit 2
 UI_DIR="SixFour/UI"
 # The capture HUD is now the live phase field of the ONE surface (the old
 # Screens/Capture/CaptureView.swift was demolished in the one-surface collapse).
-HUD="SixFour/UI/Surface/LivePhaseField.swift"
+HUD="SixFour/UI/Scenes/Live/LivePhaseField.swift"
 fail=0
 
 note() { printf '  ✘ %s\n' "$1"; fail=1; }

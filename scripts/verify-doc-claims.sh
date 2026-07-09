@@ -32,13 +32,13 @@ check() {
 # (Existence/absence checks via `test`/`find` are NOT listed — for those a missing path is the point.)
 GREP_TARGETS=(
   SixFour/Settings/Feature.swift
-  SixFour/UI/Screens/Capture/CaptureViewModel.swift
+  SixFour/UI/Machine/CaptureViewModel.swift
   SixFour/Settings/AppSettings.swift
   SixFour/Kernels/KernelsGif.swift
   SixFour/Kernels/sixfour_kernels_abi.h
   spec/src/SixFour/Spec/PairTree.hs
   spec/test/Spec.hs
-  SixFour/UI/MovableColorWidget.swift
+  SixFour/UI/Widgets/MovableColorWidget.swift
 )
 for f in "${GREP_TARGETS[@]}"; do
   if [ ! -e "$f" ]; then
@@ -51,7 +51,7 @@ done
 check "MVP1 ships global OFF (Feature.globalPaletteV2 = false)" \
   grep -q 'static let globalPaletteV2 = false' SixFour/Settings/Feature.swift
 check "the live capture router is gated by Feature.globalPaletteV2 (per-frame only in MVP1)" \
-  grep -q 'Feature.globalPaletteV2 ? settings.paletteScope : .perFrame' SixFour/UI/Screens/Capture/CaptureViewModel.swift
+  grep -q 'Feature.globalPaletteV2 ? settings.paletteScope : .perFrame' SixFour/UI/Machine/CaptureViewModel.swift
 
 # --- THE LEARNED OBJECT: theta_B ships HAND-WRITTEN, golden-gated, no Core AI ---
 # CLAUDE.md: the only learned object is the 63-param theta_B; its on-device forward pass is a
@@ -95,7 +95,7 @@ check "Spec.MovableLayout is the source of truth (move operator + laws)" \
 check "Properties.MovableLayout registered in the spec test suite" \
   grep -q 'MovableLayout.tests' spec/test/Spec.hs
 check "MovableColorWidget calls the generated MoveContract.move" \
-  grep -q 'MoveContract.move' SixFour/UI/MovableColorWidget.swift
+  grep -q 'MoveContract.move' SixFour/UI/Widgets/MovableColorWidget.swift
 
 echo "----------------------------------------"
 if [ "$FAILS" -ne 0 ]; then
