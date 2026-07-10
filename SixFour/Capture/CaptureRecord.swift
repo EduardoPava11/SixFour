@@ -228,4 +228,15 @@ struct S4CaptureRecord: Sendable {
     func write(to url: URL) throws {
         try Data(cborBytes).write(to: url, options: .atomic)
     }
+
+    /// THE MERGE's exit seam: seal a played decision word into this record.
+    /// The version rises to 3 (never falls — a v2 record keeps its rung
+    /// evidence; a v1 record's v2 keys appear absent-as-empty, which every
+    /// reader is total over). An empty word is a no-op: an unplayed capture
+    /// never invents a v3 shape.
+    mutating func sealDecisionWord(_ codes: [UInt64]) {
+        guard !codes.isEmpty else { return }
+        version = max(version, 3)
+        decisionWord = codes
+    }
 }

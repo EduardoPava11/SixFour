@@ -568,6 +568,27 @@ final class CaptureViewModel {
         }
     }
 
+    /// The last committed capture's record + GIF pairing, retained for the
+    /// Decide-ACCEPT seal (`sealDecisionWord`). Overwritten at the next
+    /// burst commit — the record's v2 cubes are megabytes, so this holds at
+    /// most one capture's worth, exactly as long as Decide can still accept.
+    private var lastShutterRecord: S4CaptureRecord?
+    private var lastShutterGifURL: URL?
+
+    /// THE MERGE's exit: at Decide-ACCEPT the played decision word seals
+    /// into the capture's own `.s4cr` — the record re-encodes at version 3
+    /// with the `dw` key (`Spec.CaptureRecord.lawRecordedWordReplays`: the
+    /// word alone replays the whole game for training) and atomically
+    /// replaces the shutter's file, same stem. Empty word = no-op (an
+    /// unplayed ACCEPT leaves the shutter's v1/v2 bytes untouched).
+    func sealDecisionWord(_ codes: [UInt64]) {
+        guard !codes.isEmpty, var record = lastShutterRecord,
+              let gifURL = lastShutterGifURL else { return }
+        record.sealDecisionWord(codes)
+        lastShutterRecord = record
+        saveCaptureRecordAsync(record, pairedWith: gifURL)
+    }
+
     /// Best-effort background write of the per-capture CBOR record
     /// (`Spec.CaptureRecord` — the shutter's ledger), paired with the GIF by
     /// stem (`sixfour_<stamp>.s4cr` next to `sixfour_<stamp>.gif`). Logged on
@@ -800,6 +821,8 @@ final class CaptureViewModel {
                 )
             }
             saveCaptureRecordAsync(record, pairedWith: renderResult.output.gifURL)
+            lastShutterRecord = record
+            lastShutterGifURL = renderResult.output.gifURL
             phase = .done
             Haptics.notification(.success)
         } catch let err as CaptureSession.CaptureError {

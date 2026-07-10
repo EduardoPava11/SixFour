@@ -264,6 +264,39 @@ final class CaptureRecordTests: XCTestCase {
         XCTAssertEqual(r.cborBytes, Self.specGoldenV2)
     }
 
+    /// The Decide-ACCEPT seal: sealing a word onto a v2 record produces
+    /// EXACTLY the pinned v3 golden bytes; sealing an empty word is a
+    /// no-op (an unplayed capture never invents a v3 shape); a v3 seal
+    /// never downgrades.
+    func testSealDecisionWord() {
+        var r = S4CaptureRecord(
+            weave: [2, 1, 0, 0],
+            frameIntervalsUs: [50_000, 50_000, 50_000],
+            sums16: [1, 2, 3],
+            gct: [0, 1, 2]
+        )
+        r.version = 2
+        r.cube64 = [4, 5]
+        r.cube32 = [6]
+        r.cube16 = [7, 8, 9]
+        r.exposures = [
+            S4RungExposure(durationUs: 12_500, isoMilli: 1_000, evCentistops: -25),
+            S4RungExposure(durationUs: 25_000, isoMilli: 2_000, evCentistops: 100),
+            S4RungExposure(durationUs: 50_000, isoMilli: 4_000, evCentistops: 200),
+        ]
+        r.telemetry = S4TelemetrySnapshot(arrivals: [64, 32, 16],
+                                          sampleVolumes: [1, 8, 64],
+                                          comovementPermille: 250)
+        var unsealed = r
+        unsealed.sealDecisionWord([])
+        XCTAssertEqual(unsealed.cborBytes, Self.specGoldenV2) // no-op
+        r.sealDecisionWord([0, 1, 46, 2, 48])
+        XCTAssertEqual(r.cborBytes, Self.specGoldenV3)
+        r.sealDecisionWord([7])
+        XCTAssertEqual(r.version, 3) // re-seal stays v3, word replaced
+        XCTAssertEqual(r.decisionWord, [7])
+    }
+
     /// A v3 record with no game played still encodes: the empty decision word
     /// is the empty array — absent-as-empty, never invented.
     func testEmptyV3RecordShape() {
