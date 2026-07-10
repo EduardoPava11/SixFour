@@ -37,6 +37,8 @@ public enum GridLayoutContract {
         GridRegion(name: "hero", col: 14, row: 30, w: 64, h: 64, widget: 0, priority: 0, interactive: true),
         GridRegion(name: "coarse", col: 82, row: 30, w: 16, h: 16, widget: 1, priority: 1, interactive: false),
         GridRegion(name: "tally", col: 82, row: 26, w: 16, h: 2, widget: 2, priority: 2, interactive: false),
+        GridRegion(name: "signal", col: 82, row: 48, w: 16, h: 2, widget: 7, priority: 7, interactive: false),
+        GridRegion(name: "pour", col: 82, row: 52, w: 16, h: 12, widget: 8, priority: 8, interactive: true),
         GridRegion(name: "fold", col: 44, row: 98, w: 12, h: 12, widget: 3, priority: 3, interactive: true),
         GridRegion(name: "advanced", col: 18, row: 112, w: 64, h: 76, widget: 4, priority: 4, interactive: true),
         GridRegion(name: "again", col: 4, row: 188, w: 44, h: 16, widget: 5, priority: 5, interactive: true),

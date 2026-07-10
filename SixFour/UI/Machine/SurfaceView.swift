@@ -58,7 +58,10 @@ struct SurfaceView: View {
                                  onMeter: { engine.focus(at: $0) },
                                  onExposureBias: { engine.setExposureBias($0) },
                                  exposureBias: engine.exposureBiasEV,
-                                 stage: engineStage)
+                                 stage: engineStage,
+                                 // THE MERGE's exit: Decide-ACCEPT seals the
+                                 // played decision word into the capture's .s4cr.
+                                 onSealWord: { engine.sealDecisionWord($0) })
                     .gridCentered(in: geo.size)
             }
             .ignoresSafeArea()

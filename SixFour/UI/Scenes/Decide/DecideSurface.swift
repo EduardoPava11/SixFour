@@ -87,6 +87,24 @@ final class DecideModel: ObservableObject {
     /// The budget magnitude a stroke paints.
     let brush: Int = 32
 
+    /// THE MERGE (`Spec.MergeBoard` / `S4MergeBoard`): the post-capture
+    /// decision game played ON the hero — every capture opens as the
+    /// all-coarse 16-board and the player decomposes toward 64³ by spending
+    /// poured signal. Fresh per decide entry (AGAIN → recapture → new board).
+    @Published private(set) var merge = S4MergeBoard()
+    /// Steps when a merge op is ACCEPTED — the hero's bake key reads this
+    /// (the PERF discipline: refusals never rebake the image).
+    @Published private(set) var mergeRevision = 0
+
+    /// The one write path into the game. Refusals are total no-ops by the
+    /// spec's law; callers read the verdict for haptics only.
+    @discardableResult
+    func mergeStep(_ op: S4MergeOp) -> S4MergeVerdict {
+        let verdict = merge.step(op)
+        if verdict == .accept { mergeRevision += 1 }
+        return verdict
+    }
+
     init(tiles: [OKLabTile], gene: CaptureGene.ThetaUp?,
          substrate: [[VoxelReduce.Px]] = []) {
         self.tiles = tiles
@@ -229,6 +247,11 @@ struct DecideSurface: View {
     /// brackets, the fold chevron, the reveal). The surface body never reads `tick`.
     let clock: SurfaceClock
     private let onDecide: (DecideVerdict, SixFourModelInput, Bool) -> Void
+    /// THE MERGE's exit: ACCEPT hands the played decision word (as `.s4cr`
+    /// v3 op-codes) to whoever owns the capture record — wired by
+    /// `SurfaceView` to `CaptureViewModel.sealDecisionWord`. An unplayed
+    /// board hands the empty word (the seal no-ops; shutter bytes stand).
+    private let onSealWord: ([UInt64]) -> Void
     private let scene = GridLayoutContract.decisionScene
     /// Kept as plain properties so the ASYNC deliveries (QoL 2026-07-03: the gene
     /// trains off the burst seam; the substrate builds off the σ fold) reach the
@@ -255,12 +278,14 @@ struct DecideSurface: View {
     init(tiles: [OKLabTile], thetaUp: CaptureGene.ThetaUp?,
          substrate: [[VoxelReduce.Px]] = [],
          clock: SurfaceClock,
+         onSealWord: @escaping ([UInt64]) -> Void = { _ in },
          onDecide: @escaping (DecideVerdict, SixFourModelInput, Bool) -> Void) {
         _model = StateObject(wrappedValue: DecideModel(
             tiles: tiles, gene: thetaUp, substrate: substrate))
         self.clock = clock
         self.thetaUp = thetaUp
         self.substrate = substrate
+        self.onSealWord = onSealWord
         self.onDecide = onDecide
     }
 
@@ -270,6 +295,8 @@ struct DecideSurface: View {
             DecideHeroWidget(model: model, clock: clock).place("hero", in: scene)
             DecideCoarseWidget(model: model).place("coarse", in: scene)
             tallyRail.place("tally", in: scene)
+            MergeSignalBar(model: model).place("signal", in: scene)
+            MergePourWidget(model: model, clock: clock).place("pour", in: scene)
             FoldChevron(open: advancedOpen, clock: clock) {
                 advancedOpen.toggle()
                 foldOpenedAt = clock.tick
@@ -322,6 +349,11 @@ struct DecideSurface: View {
     private var acceptVerb: some View {
         Button {
             Haptics.play(3)   // dropAccept — the seal
+            // THE MERGE's exit: the played decision word seals into the
+            // capture's own .s4cr (v3 `dw`) BEFORE the verdict advances σ —
+            // the word alone replays the whole game for training
+            // (`Spec.CaptureRecord.lawRecordedWordReplays`).
+            onSealWord(model.merge.decisionWordCodes)
             onDecide(.accept, model.modelInput(), model.useGene)
         } label: { Color.clear }
         .buttonStyle(DecideVerbStyle(title: "ACCEPT", filled: true, retake: false))
@@ -416,16 +448,26 @@ struct DecideSurface: View {
 
 // ── the hero (the judgment view, wearing BRACKETS) ───────────────────────────
 
-/// The 64³ judgment view: the scrubbed reconstruction slice (floor or gene — what
-/// accepting would ship; the honest capture-frame fallback until the substrate
-/// lands), wearing the D1 BRACKETS in its gutter. Horizontal drag scrubs the frame
-/// (brackets go full ink while the finger is down); a transient CellText frame
-/// readout rides the bottom edge during the scrub only. The bake is @State-cached
-/// keyed by (frame, arm, revision) — a clock tick alone never rebakes the image.
+/// The 64³ judgment view AND THE MERGE's board: the scrubbed reconstruction
+/// slice (floor or gene — what accepting would ship; the honest capture-frame
+/// fallback until the substrate lands), rendered at each region's PLAYED
+/// granularity (`S4MergeBoard`: depth 0/1/2 = 4/2/1-px blocks — the pooling
+/// chunkiness IS the depth display, no decoration), wearing the D1 BRACKETS
+/// in its gutter. One gesture, classified the CellMechanics way (movement =
+/// scrub intent, the hold gate is the only door into K):
+///   * horizontal DRAG scrubs the frame (brackets go full ink; a transient
+///     CellText frame readout rides the bottom edge during the scrub only);
+///   * TAP on a region = S (split one rung finer, spends poured signal);
+///   * HOLD (≥ 0.45 s, no movement) = K (pool back coarser — mass kept).
+/// Accepted verbs tick (`Haptics.selection()`); refusals pulse dropReject
+/// (`Haptics.play(4)`) — the board never lies about the economy. The bake is
+/// @State-cached keyed by (frame, arm, revision, merge) — a clock tick alone
+/// never rebakes the image.
 private struct DecideHeroWidget: View {
     @ObservedObject var model: DecideModel
     let clock: SurfaceClock
     @State private var scrubbing = false
+    @State private var pressStart: (time: Date, loc: CGPoint)? = nil
     @State private var baked: (key: Int, image: UIImage?) = (.min, nil)
 
     var body: some View {
@@ -459,6 +501,12 @@ private struct DecideHeroWidget: View {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { g in
+                    if pressStart == nil { pressStart = (Date(), g.startLocation) }
+                    // Movement is scrub intent; a still finger stays a verb
+                    // press (the CellMechanics tap-cannot-drag gate, mirrored).
+                    let moved = hypot(g.location.x - g.startLocation.x,
+                                      g.location.y - g.startLocation.y)
+                    guard scrubbing || moved > 2 * atom else { return }
                     scrubbing = true
                     guard !model.tiles.isEmpty else { return }
                     // Map over the TILE's 64 cells (the brackets add a 2-cell margin).
@@ -466,7 +514,15 @@ private struct DecideHeroWidget: View {
                                 * CGFloat(model.tiles.count))
                     model.frame = min(model.tiles.count - 1, max(0, t))
                 }
-                .onEnded { _ in scrubbing = false }
+                .onEnded { _ in
+                    let press = pressStart
+                    pressStart = nil
+                    if scrubbing { scrubbing = false; return }
+                    guard let press else { return }
+                    // The still press is a MERGE verb: tap = S, hold = K.
+                    let held = Date().timeIntervalSince(press.time)
+                    playMergeVerb(at: press.loc, hold: held >= 0.45, atom: atom)
+                }
         )
         .onChange(of: key, initial: true) { _, k in
             guard k != baked.key else { return }
@@ -474,6 +530,21 @@ private struct DecideHeroWidget: View {
         }
         .accessibilityLabel("Judgment view")
         .accessibilityHint("Drag horizontally to scrub the sixty-four frames")
+    }
+
+    /// THE MERGE verb at a press location: map the press into the 64² plane
+    /// (the scrub's own 2-cell bracket margin), find the region, play the
+    /// verb. The board answers with the spec's verdict — accepted ticks,
+    /// refused pulses dropReject. Off-tile presses are ignored.
+    private func playMergeVerb(at loc: CGPoint, hold: Bool, atom: CGFloat) {
+        let x = Int((loc.x - 2 * atom) / atom)
+        let y = Int((loc.y - 2 * atom) / atom)
+        guard x >= 0, x < 64, y >= 0, y < 64 else { return }
+        let region = S4MergeBoard.regionOfPixel(x: x, y: y)
+        switch model.mergeStep(.move(region, hold ? .k : .s)) {
+        case .accept: Haptics.selection()
+        case .rejected: Haptics.play(4)   // dropReject — the economy said no
+        }
     }
 
     /// Everything that changes the hero's PIXELS (never the clock).
@@ -485,20 +556,70 @@ private struct DecideHeroWidget: View {
         h.combine(model.reconRevision)
         h.combine(model.tiles.count)
         h.combine(model.substrate.count)
+        h.combine(model.mergeRevision)
         return h.finalize()
     }
 
     /// The REAL build: the 16³ proposal up-rung'd to 64³ (floor or the gene's
     /// invention) — what accepting would ship. No substrate yet ⇒ the honest
-    /// fallback is the capture frame itself. Never a faked image.
+    /// fallback is the capture frame itself. Never a faked image. Either
+    /// source then renders at THE MERGE's played granularity (`pooled`).
     private func bakeImage() -> UIImage? {
         if let rgba = model.reconstructionSlice(frame: model.frame, useGene: model.useGene),
-           let cg = Self.rgbaImage(rgba, side: 64) {
+           let cg = Self.rgbaImage(pooled(rgba), side: 64) {
             return UIImage(cgImage: cg)
         }
-        let tile = model.tiles.indices.contains(model.frame) ? model.tiles[model.frame] : nil
-        if let cg = Self.image(of: tile) { return UIImage(cgImage: cg) }
+        guard model.tiles.indices.contains(model.frame) else { return nil }
+        let tile = model.tiles[model.frame]
+        var rgba = [UInt8]()
+        rgba.reserveCapacity(tile.pixels.count * 4)
+        for px in tile.pixels {
+            let c = ColorScience.okLabToSRGB8(OKLab(px.x, px.y, px.z))
+            rgba.append(contentsOf: [c.x, c.y, c.z, 255])
+        }
+        let shaped = tile.side == 64 ? pooled(rgba) : rgba
+        if let cg = Self.rgbaImage(shaped, side: tile.side) { return UIImage(cgImage: cg) }
         return nil
+    }
+
+    /// Render the 64² slice at each region's played granularity: a depth-d
+    /// region shows `4 >> d`-px blocks (their round-half-up mean — the same
+    /// display-only pooling everywhere else in the app), so the board state
+    /// is VISIBLE as resolution, not decoration. Full-depth boards pass
+    /// through untouched (the pre-MERGE hero, byte-identical).
+    private func pooled(_ rgba: [UInt8]) -> [UInt8] {
+        let depths = model.merge.depths
+        guard depths.contains(where: { $0 < S4MergeBoard.maxDepth }) else { return rgba }
+        var out = rgba
+        for region in 0 ..< S4MergeBoard.regionCount {
+            let d = depths[region]
+            guard d < S4MergeBoard.maxDepth else { continue }
+            let block = 4 >> d
+            let rx = (region % S4MergeBoard.boardSide) * S4MergeBoard.regionSide
+            let ry = (region / S4MergeBoard.boardSide) * S4MergeBoard.regionSide
+            let n = block * block
+            for by in stride(from: ry, to: ry + S4MergeBoard.regionSide, by: block) {
+                for bx in stride(from: rx, to: rx + S4MergeBoard.regionSide, by: block) {
+                    var sum = SIMD3<Int>(0, 0, 0)
+                    for y in by ..< by + block {
+                        for x in bx ..< bx + block {
+                            let i = (y * 64 + x) * 4
+                            sum &+= SIMD3(Int(rgba[i]), Int(rgba[i + 1]), Int(rgba[i + 2]))
+                        }
+                    }
+                    let c = SIMD3<UInt8>(UInt8((sum.x + n / 2) / n),
+                                         UInt8((sum.y + n / 2) / n),
+                                         UInt8((sum.z + n / 2) / n))
+                    for y in by ..< by + block {
+                        for x in bx ..< bx + block {
+                            let i = (y * 64 + x) * 4
+                            out[i] = c.x; out[i + 1] = c.y; out[i + 2] = c.z
+                        }
+                    }
+                }
+            }
+        }
+        return out
     }
 
     /// One tile → CGImage (RGBA8, nearest-neighbour source).

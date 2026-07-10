@@ -134,6 +134,14 @@ captureScene =
 --     (176×64 pt, 4× the touch floor), 4-cell gaps (4+44+4+44+4 = 100 cols).
 --     AGAIN = hollow FRAME + retake glyph; ACCEPT = filled control-ink face +
 --     seal glyph. The clearest controls on any scene.
+--   * @signal@ \/ @pour@ : THE MERGE's instrument column ("SixFour.Spec.MergeBoard",
+--     docs\/UI-ISOTROPIC-WINDOW-AND-MERGE.md), stacked under the coarse tier —
+--     @signal@ (16×2, display-only) is the energy account read as a fill bar
+--     (phase 1: banked 32-evidence vs @threshold32@; phase 2: regions at the
+--     ceiling), the same rail idiom as the tally above it; @pour@ (16×12,
+--     FRAME face) banks the next 4-frame slice — the game's ONE resource verb,
+--     12 rows ≥ the 11-cell touch floor. The board itself IS the hero (the
+--     per-region granularity pooling is the depth display — no extra region).
 --
 -- Geometry: rows 26–203 (top 104 pt clears the 62 pt island; bottom 812 pt clears
 -- 874−34 = 840; rows ≤ 203 sit fully above the 14-cell bottom corner arcs, so even
@@ -147,6 +155,10 @@ decisionScene =
                          , lrWidget = 1, lrPriority = 1, lrInteractive = False })
   , ("tally",    LRegion { lrCol = 82, lrRow = 26,  lrW = 16, lrH = 2
                          , lrWidget = 2, lrPriority = 2, lrInteractive = False })
+  , ("signal",   LRegion { lrCol = 82, lrRow = 48,  lrW = 16, lrH = 2
+                         , lrWidget = 7, lrPriority = 7, lrInteractive = False })
+  , ("pour",     LRegion { lrCol = 82, lrRow = 52,  lrW = 16, lrH = 12
+                         , lrWidget = 8, lrPriority = 8, lrInteractive = True })
   , ("fold",     LRegion { lrCol = 44, lrRow = 98,  lrW = 12, lrH = 12
                          , lrWidget = 3, lrPriority = 3, lrInteractive = True })
   , ("advanced", LRegion { lrCol = 18, lrRow = 112, lrW = 64, lrH = 76

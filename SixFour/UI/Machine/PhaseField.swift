@@ -47,7 +47,8 @@ enum PhaseField {
                       onMeter: @escaping (CGPoint) -> Void = { _ in },
                       onExposureBias: @escaping (Float) -> Void = { _ in },
                       exposureBias: Float = 0,
-                      stage: EngineStage = .idle) -> some View {
+                      stage: EngineStage = .idle,
+                      onSealWord: @escaping ([UInt64]) -> Void = { _ in }) -> some View {
         switch phase {
         case .bootstrap:
             BootstrapPhaseField(surface: surface, clock: clock)
@@ -68,8 +69,9 @@ enum PhaseField {
             }
         case .deciding:
             // The D3 two-verb decide surface (GridLayoutContract.decisionScene widgets);
-            // κ drives the control beats + the advanced-fold reveal.
-            DecidingPhaseField(surface: surface, clock: clock)
+            // κ drives the control beats + the advanced-fold reveal. ACCEPT's
+            // played MERGE word seals into the capture's .s4cr via onSealWord.
+            DecidingPhaseField(surface: surface, clock: clock, onSealWord: onSealWord)
         case .captured, .picked:
             // Post-capture REVIEW bench (A/B game retired): the captured 64³ beside its 16³
             // octree coarse, both on the Z₆₄ cursor, with EXPORT / RETAKE controls.

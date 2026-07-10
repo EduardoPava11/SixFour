@@ -13,11 +13,16 @@ import SwiftUI
 struct DecidingPhaseField: View {
     let surface: Surface
     let clock: SurfaceClock
+    /// THE MERGE's exit seam: ACCEPT's played decision word (as `.s4cr` v3
+    /// op-codes) flows OUT to the capture record's owner — wired by
+    /// `SurfaceView` to `CaptureViewModel.sealDecisionWord`.
+    var onSealWord: ([UInt64]) -> Void = { _ in }
 
     var body: some View {
         DecideSurface(tiles: surface.burstTiles, thetaUp: surface.thetaUp,
                       substrate: surface.coarseSubstrate,
-                      clock: clock) { verdict, input, useGene in
+                      clock: clock,
+                      onSealWord: onSealWord) { verdict, input, useGene in
             switch verdict {
             case .accept:
                 surface.acceptedInput = input

@@ -190,6 +190,7 @@ public enum SixFourCellMechanics {
     public static let controlFaces: [String: String] = [
         "hero": "brackets",
         "fold": "frame",
+        "pour": "frame",
         "advanced": "frame",
         "again": "frame",
         "accept": "frame",

@@ -517,6 +517,8 @@ controlFaces =
                                  -- (THE SCROLL's tube viewport is an image-content
                                  -- control too, so it reuses this BRACKETS row)
   , ("fold",     FaceFrame)      -- decisionScene: the advanced-fold chevron (D3)
+  , ("pour",     FaceFrame)      -- decisionScene: THE MERGE's resource verb — banks
+                                 -- the next 4-frame slice (MergeBoard pourDeposit)
   , ("advanced", FaceFrame)      -- decisionScene: the demoted W1 bench behind the fold
   , ("again",    FaceFrame)
   , ("accept",   FaceFrame)
