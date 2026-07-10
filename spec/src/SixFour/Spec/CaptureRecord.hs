@@ -58,6 +58,22 @@ adds five keys, version-gated so version-1 bytes never change
 'goldenRecordV2' \/ 'goldenRecordV2Bytes' pin the v2 encoding
 ('lawGoldenRecordV2Pinned'); 'lawV1DecodesUnderV2Reader' pins that a v2
 reader is total over v1 records (missing keys read as absent-as-empty).
+
+== Version 3 — the decision word
+
+THE MERGE ("SixFour.Spec.MergeBoard") ends at ACCEPT with a decision word —
+the ordered record of every accepted game op, which
+'SixFour.Spec.MergeBoard.lawWordReplaysBoard' proves is the WHOLE game
+state. Version 3 adds ONE key, version-gated like v2 (v1 and v2 bytes never
+change):
+
+* @dw@ — the decision word as an array of op-codes: @0@ = pour,
+  @1 + 3·region + verb@ for a move (verb @0@ = S, @1@ = K, @2@ = I) —
+  'gameOpCode' \/ 'gameOpFromCode', total both ways over the codes a real
+  word can contain (accepted moves are always on-board; that is why the
+  flat code is safe). Keystone 'lawRecordedWordReplays': play any ops, ship
+  the word through the bytes, replay what decodes — the SAME board, every
+  field. The training corpus rides this law.
 -}
 -- COMPARTMENT: PURE-SPEC-WALL | tag:none
 module SixFour.Spec.CaptureRecord
@@ -85,6 +101,12 @@ module SixFour.Spec.CaptureRecord
   , goldenRecordBytes
   , goldenRecordV2
   , goldenRecordV2Bytes
+    -- * Version 3 — the decision word
+  , gameOpCode
+  , gameOpFromCode
+  , decisionWordFromCbor
+  , goldenRecordV3
+  , goldenRecordV3Bytes
     -- * Laws
   , lawHeadsAreMinimal
   , lawMapKeysSortedBytewise
@@ -97,6 +119,11 @@ module SixFour.Spec.CaptureRecord
   , lawV1DecodesUnderV2Reader
   , lawGoldenRecordPinned
   , lawGoldenRecordV2Pinned
+  , lawGameOpCodeRoundTrips
+  , lawDecisionWordSurvivesTheRecord
+  , lawRecordedWordReplays
+  , lawV2DecodesUnderV3Reader
+  , lawGoldenRecordV3Pinned
   ) where
 
 import Data.Bits (shiftR, (.&.))
@@ -104,6 +131,8 @@ import Data.Char (chr, ord)
 import Data.List (sortOn)
 import Data.Word (Word8)
 
+import SixFour.Spec.MergeBoard
+  ( Board (..), GameOp (..), MoveOp (..), playAll, regionCount )
 import SixFour.Spec.WeaveOrder (WeaveRung (..), rungIndex)
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -279,7 +308,7 @@ data TelemetrySnapshot = TelemetrySnapshot
 -- pinned forever by 'lawGoldenRecordPinned'); version 2 adds the five
 -- independent-rung keys.
 data CaptureRecord = CaptureRecord
-  { crVersion          :: Integer     -- ^ record format version (1 or 2)
+  { crVersion          :: Integer     -- ^ record format version (1, 2 or 3)
   , crWindowCs         :: Integer     -- ^ the burst window, cs (320)
   , crBaseDelayCs      :: Integer     -- ^ the timeline quantum, cs (5)
   , crWeave            :: [WeaveRung] -- ^ THE ORDER — rung frames, capture order
@@ -293,6 +322,8 @@ data CaptureRecord = CaptureRecord
   , crExposures        :: [RungExposure] -- ^ v2: per-rung exposure, fine→coarse (or [])
   , crTelemetry        :: Maybe TelemetrySnapshot -- ^ v2: telemetry snapshot
                                       --   ('Nothing' encodes as the empty array)
+  , crDecisionWord     :: [GameOp]    -- ^ v3: THE MERGE's decision word, accepted
+                                      --   ops in play order (or [])
   } deriving (Eq, Show)
 
 -- | The record as a CBOR map. Keys are short ASCII text; the deterministic
@@ -300,7 +331,7 @@ data CaptureRecord = CaptureRecord
 -- The v2 keys appear only when @'crVersion' ≥ 2@ — a version-1 record's
 -- bytes are exactly what they were before version 2 existed.
 recordToCbor :: CaptureRecord -> Cbor
-recordToCbor cr = CMap (v1Fields ++ v2Fields)
+recordToCbor cr = CMap (v1Fields ++ v2Fields ++ v3Fields)
   where
     v1Fields =
       [ (CText "v",     CUInt (crVersion cr))
@@ -319,6 +350,10 @@ recordToCbor cr = CMap (v1Fields ++ v2Fields)
           , (CText "ev",  CArray (map exposureToCbor (crExposures cr)))
           , (CText "tel", telemetryToCbor (crTelemetry cr))
           ]
+      | otherwise = []
+    v3Fields
+      | crVersion cr >= 3 =
+          [ (CText "dw", CArray [ CUInt (gameOpCode op) | op <- crDecisionWord cr ]) ]
       | otherwise = []
 
 -- | One rung's exposure as a fixed triple @[duration_us, iso_milli,
@@ -416,6 +451,36 @@ uintOf :: Cbor -> Maybe Integer
 uintOf (CUInt n) = Just n
 uintOf _         = Nothing
 
+-- | A game op as one unsigned code: @0@ = pour, @1 + 3·region + verb@ for a
+-- move (S\/K\/I = 0\/1\/2). Total: an off-board region clamps into range —
+-- harmless, because a real decision word never contains one (the board
+-- refuses 'SixFour.Spec.MergeBoard.OffBoard' ops and refusals are never
+-- recorded).
+gameOpCode :: GameOp -> Integer
+gameOpCode GPour        = 0
+gameOpCode (GMove r mv) =
+  1 + 3 * toInteger (min (regionCount - 1) (max 0 r)) + toInteger (fromEnum mv)
+
+-- | Decode one op-code; refuses anything past the board's last verb.
+gameOpFromCode :: Integer -> Maybe GameOp
+gameOpFromCode 0 = Just GPour
+gameOpFromCode n
+  | n >= 1 && n <= toInteger (3 * regionCount) =
+      let m = fromInteger (n - 1)
+      in Just (GMove (m `div` 3) (toEnum (m `mod` 3)))
+  | otherwise = Nothing
+
+-- | Read the decision word back out of a decoded record. Missing key reads
+-- as the empty word (a v1\/v2 record, or a capture never played); a
+-- present-but-malformed value refuses.
+decisionWordFromCbor :: Cbor -> Maybe [GameOp]
+decisionWordFromCbor (CMap kvs) =
+  case [ v | (CText "dw", v) <- kvs ] of
+    []          -> Just []
+    [CArray xs] -> traverse (\x -> uintOf x >>= gameOpFromCode) xs
+    _           -> Nothing
+decisionWordFromCbor _ = Nothing
+
 -- | The golden sample: version 1, the shipped window, a two-block weave
 -- @[16] ++ [32,64,64]@ (the 1-then-2:1 orders, 8 units), three measured
 -- intervals, tiny sums, a 3-byte GCT stub. Small enough to eyeball, real
@@ -434,6 +499,7 @@ goldenRecord = CaptureRecord
   , crCube16           = []
   , crExposures        = []
   , crTelemetry        = Nothing
+  , crDecisionWord     = []
   }
 
 -- | The pinned deterministic bytes of 'goldenRecord' — a LITERAL, never
@@ -489,6 +555,58 @@ goldenRecordV2Bytes =
   [ 0xAC                                            -- map(12)
   , 0x61, 0x76, 0x02                                -- "v": 2
   , 0x62, 0x64, 0x30, 0x05                          -- "d0": 5
+  , 0x62, 0x65, 0x76                                -- "ev":
+  , 0x83                                            --   3 rung triples
+  , 0x83, 0x19, 0x30, 0xD4, 0x19, 0x03, 0xE8, 0x18, 0x31
+      -- [12500, 1000, zigzag(-25) = 49]
+  , 0x83, 0x19, 0x61, 0xA8, 0x19, 0x07, 0xD0, 0x18, 0xC8
+      -- [25000, 2000, zigzag(100) = 200]
+  , 0x83, 0x19, 0xC3, 0x50, 0x19, 0x0F, 0xA0, 0x19, 0x01, 0x90
+      -- [50000, 4000, zigzag(200) = 400]
+  , 0x63, 0x63, 0x31, 0x36, 0x83, 0x07, 0x08, 0x09  -- "c16": [7,8,9]
+  , 0x63, 0x63, 0x33, 0x32, 0x81, 0x06              -- "c32": [6]
+  , 0x63, 0x63, 0x36, 0x34, 0x82, 0x04, 0x05        -- "c64": [4,5]
+  , 0x63, 0x67, 0x63, 0x74, 0x43, 0x00, 0x01, 0x02  -- "gct": h'000102'
+  , 0x63, 0x73, 0x31, 0x36, 0x83, 0x01, 0x02, 0x03  -- "s16": [1,2,3]
+  , 0x63, 0x74, 0x65, 0x6C                          -- "tel":
+  , 0x83                                            --   [arrivals, N, comovement]
+  , 0x83, 0x18, 0x40, 0x18, 0x20, 0x10              --   [64,32,16]
+  , 0x83, 0x01, 0x08, 0x18, 0x40                    --   [1,8,64]
+  , 0x18, 0xFA                                      --   250 permille
+  , 0x63, 0x77, 0x69, 0x6E, 0x19, 0x01, 0x40        -- "win": 320
+  , 0x64, 0x64, 0x74, 0x75, 0x73                    -- "dtus":
+  , 0x83, 0x19, 0xC3, 0x50, 0x19, 0xC3, 0x50, 0x19, 0xC3, 0x50 -- [50000 ×3]
+  , 0x65, 0x77, 0x65, 0x61, 0x76, 0x65              -- "weave":
+  , 0x84, 0x02, 0x01, 0x00, 0x00                    -- [2,1,0,0] = 16,32,64,64
+  ]
+
+-- | The version-3 golden: the v2 sample plus a five-op decision word that
+-- pins both head widths (codes < 24 immediate, ≥ 24 one-byte) and all
+-- three verbs: pour, S on region 0, S on region 15, K on region 0, I on
+-- region 15.
+goldenRecordV3 :: CaptureRecord
+goldenRecordV3 = goldenRecordV2
+  { crVersion      = 3
+  , crDecisionWord =
+      [ GPour
+      , GMove 0 OpS
+      , GMove 15 OpS
+      , GMove 0 OpK
+      , GMove 15 OpI
+      ]
+  }
+
+-- | The pinned deterministic bytes of 'goldenRecordV3' — hand-derived like
+-- the others, never recomputed ('lawGoldenRecordV3Pinned'). The @dw@ key
+-- encodes between @d0@ and @ev@ (bytewise: @d0 \< dw \< ev@); the op-codes
+-- are @[0, 1, 46, 2, 48]@.
+goldenRecordV3Bytes :: [Word8]
+goldenRecordV3Bytes =
+  [ 0xAD                                            -- map(13)
+  , 0x61, 0x76, 0x03                                -- "v": 3
+  , 0x62, 0x64, 0x30, 0x05                          -- "d0": 5
+  , 0x62, 0x64, 0x77                                -- "dw":
+  , 0x85, 0x00, 0x01, 0x18, 0x2E, 0x02, 0x18, 0x30  -- [0,1,46,2,48]
   , 0x62, 0x65, 0x76                                -- "ev":
   , 0x83                                            --   3 rung triples
   , 0x83, 0x19, 0x30, 0xD4, 0x19, 0x03, 0xE8, 0x18, 0x31
@@ -620,3 +738,51 @@ lawV1DecodesUnderV2Reader =
 -- SAME bytes it always did).
 lawGoldenRecordV2Pinned :: Bool
 lawGoldenRecordV2Pinned = encodeRecord goldenRecordV2 == goldenRecordV2Bytes
+
+-- | The op-code is an exact bijection on the ops a real word can contain
+-- (on-board regions): every code round-trips, and pour's code is 0.
+lawGameOpCodeRoundTrips :: GameOp -> Bool
+lawGameOpCodeRoundTrips op =
+  gameOpFromCode (gameOpCode op) == Just op
+
+-- | The decision word survives the record IN ORDER — the MERGE's echo of
+-- the weave keystone: the board marginal cannot carry the order
+-- ('SixFour.Spec.MergeBoard.lawOrderSurvivesCancellation'); these bytes do.
+lawDecisionWordSurvivesTheRecord :: [GameOp] -> Bool
+lawDecisionWordSurvivesTheRecord w =
+  case decode (encodeRecord goldenRecordV3 { crDecisionWord = w }) of
+    Just (v, []) -> decisionWordFromCbor v == Just w
+    _            -> False
+
+-- | KEYSTONE, end to end: play ANY ops, write the board's own word into a
+-- v3 record, decode the bytes, replay what comes back — the SAME board,
+-- every field ('SixFour.Spec.MergeBoard.lawWordReplaysBoard' composed with
+-- the wire). This is the guarantee the training corpus stands on.
+lawRecordedWordReplays :: [GameOp] -> Bool
+lawRecordedWordReplays ops =
+  let b = playAll ops
+      bytes = encodeRecord goldenRecordV3 { crDecisionWord = bWord b }
+  in case decode bytes of
+       Just (v, []) ->
+         case decisionWordFromCbor v of
+           Just w  -> playAll w == b
+           Nothing -> False
+       _ -> False
+
+-- | A v3 reader is TOTAL over the pinned v1 AND v2 golden bytes: the
+-- decision word reads absent-as-empty instead of refusing. Old records
+-- never break.
+lawV2DecodesUnderV3Reader :: Bool
+lawV2DecodesUnderV3Reader =
+     readsEmpty goldenRecordBytes
+  && readsEmpty goldenRecordV2Bytes
+  where
+    readsEmpty bs = case decode bs of
+      Just (v, []) -> decisionWordFromCbor v == Just []
+      _            -> False
+
+-- | The v3 golden bytes are pinned: the encoder reproduces the hand-derived
+-- literal byte for byte — the Swift v3 writer's parity gate — while the v1
+-- and v2 goldens stay pinned on the SAME bytes they always were.
+lawGoldenRecordV3Pinned :: Bool
+lawGoldenRecordV3Pinned = encodeRecord goldenRecordV3 == goldenRecordV3Bytes

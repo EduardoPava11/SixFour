@@ -147,6 +147,7 @@ import qualified Properties.MixSKI as MixSKI
 import qualified Properties.AxisSKI as AxisSKI
 import qualified Properties.WeaveOrder as WeaveOrder
 import qualified Properties.WangTiling as WangTiling
+import qualified Properties.MergeBoard as MergeBoard
 import qualified Properties.BitLedger as BitLedger
 import qualified Properties.ColorMomentum as ColorMomentum
 import qualified Properties.CaptureRecord as CaptureRecord
@@ -395,6 +396,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , AxisSKI.tests
   , WeaveOrder.tests
   , WangTiling.tests
+  , MergeBoard.tests
   , BitLedger.tests
   , ColorMomentum.tests
   , CaptureRecord.tests

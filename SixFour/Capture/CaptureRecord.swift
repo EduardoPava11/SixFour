@@ -27,6 +27,13 @@
 //  snapshot). The five keys are VERSION-GATED (`version >= 2`), so a
 //  version-1 record's bytes are exactly what they were before v2 existed.
 //
+//  VERSION 3 (the decision word): THE MERGE (`Spec.MergeBoard`) ends at ACCEPT
+//  with the ordered record of every accepted game op — provably the WHOLE game
+//  state (`lawWordReplaysBoard`). Version 3 adds ONE key, `dw`: the word as
+//  unsigned op-codes (0 = pour; 1 + 3·region + verb, verb 0/1/2 = S/K/I —
+//  `Spec.CaptureRecord.gameOpCode`). Gated `version >= 3`; v1/v2 bytes never
+//  change (`lawGoldenRecordV3Pinned` + `lawV2DecodesUnderV3Reader`).
+//
 //  Zero third-party dependencies (Foundation only, for Data/URL at the write).
 
 import Foundation
@@ -173,6 +180,11 @@ struct S4CaptureRecord: Sendable {
     /// v2: the telemetry snapshot (`nil` encodes as the empty array —
     /// absent-as-empty, like everything else here).
     var telemetry: S4TelemetrySnapshot? = nil
+    /// v3: THE MERGE's decision word as op-codes in play order (or empty).
+    /// Code scheme pinned by `Spec.CaptureRecord.gameOpCode`: 0 = pour,
+    /// `1 + 3·region + verb` with verb 0/1/2 = S/K/I. The game layer emits
+    /// codes; this file stays game-agnostic.
+    var decisionWord: [UInt64] = []
 
     /// The record as canonical CBOR. Key set and semantics are pinned by the
     /// spec; the encoder sorts, so listing order here is documentation only.
@@ -205,6 +217,9 @@ struct S4CaptureRecord: Sendable {
                             .uint(t.comovementPermille)])
                 } ?? .array([])),
             ]
+        }
+        if version >= 3 {
+            fields.append((.text("dw"), .array(decisionWord.map { .uint($0) })))
         }
         return S4Cbor.map(fields).encoded
     }

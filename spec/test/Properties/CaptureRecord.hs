@@ -4,6 +4,8 @@ import Test.Tasty
 import Test.Tasty.QuickCheck
 
 import SixFour.Spec.CaptureRecord
+import SixFour.Spec.MergeBoard
+  ( GameOp (..), MoveOp (..), regionCount )
 import SixFour.Spec.WeaveOrder (WeaveRung (..))
 
 genRung :: Gen WeaveRung
@@ -37,6 +39,14 @@ genTelemetry :: Gen (Maybe TelemetrySnapshot)
 genTelemetry = oneof
   [ pure Nothing
   , Just <$> (TelemetrySnapshot <$> listOf genUInt <*> listOf genUInt <*> genUInt)
+  ]
+
+-- On-board ops only: a real decision word never holds an off-board region
+-- (the board refuses them and refusals are never recorded).
+genGameOp :: Gen GameOp
+genGameOp = frequency
+  [ (2, pure GPour)
+  , (8, GMove <$> choose (0, regionCount - 1) <*> elements [OpS, OpK, OpI])
   ]
 
 genRecord :: Gen CaptureRecord
@@ -97,5 +107,20 @@ tests = testGroup "CaptureRecord (the shutter's ledger: deterministic CBOR, orde
           once lawV1DecodesUnderV2Reader
       , testProperty "golden v2 bytes pinned (the Swift v2 writer's parity gate)" $
           once lawGoldenRecordV2Pinned
+      ]
+
+  , testGroup "Version 3 — the decision word"
+      [ testProperty "the op-code round-trips every on-board game op" $
+          forAll genGameOp lawGameOpCodeRoundTrips
+      , testProperty "the decision word survives the bytes IN ORDER" $
+          forAll (resize 60 (listOf genGameOp)) lawDecisionWordSurvivesTheRecord
+      , testProperty "KEYSTONE end-to-end: play, record, decode, replay — the same board" $
+          forAll (resize 60 (listOf genGameOp)) lawRecordedWordReplays
+      , testProperty "v1 AND v2 records decode under the v3 reader (absent-as-empty)" $
+          once lawV2DecodesUnderV3Reader
+      , testProperty "golden v3 bytes pinned (the Swift v3 writer's parity gate)" $
+          once lawGoldenRecordV3Pinned
+      , testProperty "the 13-key v3 map keeps keys strictly increasing bytewise" $
+          once (lawMapKeysSortedBytewise goldenRecordV3)
       ]
   ]

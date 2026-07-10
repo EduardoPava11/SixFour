@@ -791,6 +791,24 @@ but never the schedule (@lawAttentionModulatesNotMutates@ — syntax theorem-fix
 Boot resolve: @revealTick p = framesPerRealize W16 · unitsOf (bootMirror p)@ = 4/8/16, reveal × pool
 depth = 16 constant (@lawBootResolveIsPourInverse@ — the pour played backwards, zero new constants).
 Tube slices of 4 = the pour group (@lawSliceIsRandomAccess@, @lawSliceNeverRepeats@). Additive),
+"SixFour.Spec.MergeBoard" (★ THE MERGE — the post-capture decision game, 2048 INVERTED: the capture
+opens as the all-coarse 16-board (4×4 partition of the 64² plane, @lawBoardPartitionsPlane@ — the
+per-region scale field RenderSelect draws) and the player DECOMPOSES coarse color into fine with the
+three verbs S/K/I (@skiVerbOf@: S@0=S_xy, S@1=S_xyt, K=K_t — the AxisSKI reading). Economy: signal
+arrives ONLY by pouring the burst's own 4-frame slices (16 × 4 = 64 = windowUnits = threshold32,
+@lawEconomyIsTheWindow@ — zero free constants); a split FROM depth d costs 2^d packets
+(@lawSplitCostIsSTower@ = WeaveOrder's S-tower price); K keeps — never pays, never refunds
+(@lawKKeepsAndNeverPays@). The 32↔64 phase gate is an ENERGY account: pours credit banked
+32-evidence only where the board already measures at ≥32 (@lawBankNeedsMeasurement@ — the
+all-coarse board banks ZERO; evidence is measured, never derived), the unlock is monotone
+(@lawUnlockMonotone@), the gate exact (@lawPhaseGateIsEnergy@). KEYSTONE @lawWordReplaysBoard@:
+every accepted op (pours included) appends itself to the DECISION WORD and refusals are total
+no-ops, so replaying a board's own word from init reproduces the board EXACTLY — the .s4cr v3
+training record; S;K restores the depths but word+spend remember (@lawOrderSurvivesCancellation@ =
+WeaveOrder's order-is-invisible-to-the-measure at the game layer). Victory floor: ≥32 S-moves,
+≥48 packets, the banked window (@lawWinCostsTheLadder@); @canonicalConstruction@ pinned tight at
+12 pours / 48 spent / signal 0 (@lawCanonicalRunConstructs@). UI front door for
+ChoiceTraining/MixSKI/CubeBrush per docs/UI-ISOTROPIC-WINDOW-AND-MERGE.md. Additive),
 "SixFour.Spec.CaptureRecord" (★ THE SHUTTER'S LEDGER — one deterministic-CBOR record per capture
 (RFC 8949 core deterministic subset: majors 0/2/3/4/5, minimal heads @lawHeadsAreMinimal@, definite
 lengths, bytewise-sorted map keys @lawMapKeysSortedBytewise@, NO floats), carrying what the sums
@@ -798,7 +816,12 @@ cannot: the weave word IN ORDER (@lawWeaveSurvivesTheRecord@, keystone), per-fra
 integer-exact), 16×16×3 u64 bin sums (the transitive carrier, stored once), the 768-byte GCT.
 Total decoder: @lawDecodeInvertsEncode@ + @lawEncodingIsCanonicallyStable@ (equal content ⇒ identical
 bytes: records content-address and diff). Golden bytes @lawGoldenRecordPinned@ gate the hand-written
-Swift writer (Capture/CaptureRecordWriter). Additive),
+Swift writer (Capture/CaptureRecordWriter). VERSION 3 adds ONE key @dw@ = THE MERGE's decision word
+as op-codes (@gameOpCode@ 0=pour, 1+3·region+verb; total both ways over on-board ops,
+@lawGameOpCodeRoundTrips@); KEYSTONE @lawRecordedWordReplays@ = play ops → ship the word through the
+bytes → replay what decodes = the SAME board every field (MergeBoard's @lawWordReplaysBoard@ composed
+with the wire — the training-corpus guarantee); v1 AND v2 bytes never change
+(@lawGoldenRecordV3Pinned@, @lawV2DecodesUnderV3Reader@). Additive),
 "SixFour.Spec.RungTelemetry" (★ WHAT THE GRID SHOWS PER RUNG — the exact per-rung telemetry algebra,
 BOTH modes. EXPOSURE, one vocabulary: optical light ratio (duration×ISO vs the fine reference, exact ℚ)
 vs pooling-equivalent stops (derived); they COINCIDE on the ladder's one integer k
