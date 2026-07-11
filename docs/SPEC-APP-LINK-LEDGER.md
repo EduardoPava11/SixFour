@@ -41,11 +41,12 @@ self-containment), training honesty, paint/gesture intent, and super-res.
    Promote: a checked assertion at the ladder-pool → OKLab boundary + test.
 
 ### Wave 2 — kernel/record work (next sessions; spec-read first, then port)
-6. **TemporalLoop** (the ONE KERNEL-ONLY) — proven seamless 64-frame loop
-   closure (period-2⁶ Q16 cosine + low-freq temporal residual); temporal-Haar
-   half ships, closure kernel uncalled. Promote at burst composition; pairs
-   with **CanonicalPhase** (loop first-frame gauge — loop identity/dedup),
-   which needs its kernel written. THE looping-GIF mechanic.
+6. **TemporalLoop** — ✅ PROMOTED 2026-07-11 (59e528d): Swift twin
+   `Core/TemporalLoop.swift` (golden cosine table, bitmask closure, lossless
+   temporal Haar with floored halving) + `[loop]` per-burst readout at the
+   commit seam; laws in TemporalLoopTests. FOLLOW-ON (still queued): the
+   seam-smoothing RENDER use (flag-gated — it would change GIF bytes) and
+   **CanonicalPhase** (loop first-frame gauge — needs its kernel written).
 7. **PaintOrderPrior capture half** — record first-touch ORDER in the paint
    grid (today only magnitude survives, so the proven order→halt prior is
    unexpressible). Small data-model change, real training payoff. With
