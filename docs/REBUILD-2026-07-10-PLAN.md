@@ -139,6 +139,50 @@ verdict + a new delay-law rung, side | 320).
 
 ---
 
+## 2b. THE ONTOLOGY (Stage 1 core — Daniel's brief 2026-07-11)
+
+Daniel: "GIFs are self-contained stop motion. The app needs to take the concepts
+like color palette and index mapping and abstract it." The whole-app review
+(2026-07-11 ontology audit) found: **that abstraction already exists exactly
+once — in the spec — and the Swift app never adopted it.** Spec.ModelIO /
+Spec.Palette / Spec.WeaveOrder state the GIF ontology cleanly; the app restates
+color in ≥7 incompatible shapes (OKLabQ16, float OKLab, sRGB8 SIMD, 768-byte
+GCT, u64 sums, Haar doubles, genome DOF), the index plane in 3 widths
+(UInt8/UInt16/Int), time in 4 encodings (WeaveRung/UInt64/WeaveTick/nanos +
+cs/ticks/µs delays), and runs TWO full palette pipelines (float GPU
+GIFRenderer vs integer DeterministicRenderer).
+
+**Stage 1 is therefore a PROMOTION, not an invention.** Four core types, all
+existing today, lifted to the app surface; everything else becomes a view:
+
+1. `Palette` — value type over `OKLabQ16` leaves (+ slot order + provenance);
+   promoted from `CollapsedPalette`; mirrors `Spec.Palette`. sRGB8, the GCT,
+   and the genome DOF are VIEWS via existing kernels
+   (`s4_palette_oklab_to_srgb8`, `BranchedPalette.projectQ16`).
+2. `IndexPlane` — side² `UInt8` indices into a `Palette` (kernel-native
+   width); `[UInt16]`/`[Int]` shapes retire.
+3. `WeaveRung` as THE time unit — side ↔ delay ↔ units ↔ cadence are theorems
+   (`s4_ladder_delay_cs`, Spec.ColorTimeDisplay), so a Cel = IndexPlane +
+   rung, and delay is DERIVED, never stored twice.
+4. `Loop` — the in-memory GIF: [Cel] + per-frame Palettes (global optional).
+   Promoted from `SixFourModelOutput` + `ModelRender` (palette[index] IS the
+   render). GIF89a bytes = ONE codec of `Loop` (`s4_gif_assemble` /
+   `s4_gif_decode` round-trip is the self-containment law); `.s4cr` stays the
+   measurement sidecar (its bare arrays re-serialize as these types).
+
+SELF-CONTAINED STOP MOTION, as laws: (a) `decode(encode(loop)) == loop`
+(exists: Spec.Gif89aDecode round-trip); (b) everything needed to re-render is
+inside `Loop`; (c) the 64³ cell-tensor record is the pre-collapse measurement,
+`Loop` is the collapse — the model's job is exactly `record → Loop`, better
+than the classical pipeline.
+
+Demotions this implies (Stage 2 delete-list additions): the float
+GIFRenderer/ClusterStatistics pipeline demotes to editing-only (explicitly not
+the bit-exact core); dead-in-app Palette/Encoder files (BrushSet,
+DivergenceSchedule, IsometryMove, QuartetDelta, NetSynth256, LadderExport)
+join the delete list; `Surface.palette`/`palettesPerFrame`/`indexCube` raw
+arrays are replaced by the four types.
+
 ## 3. The stages (each ends at a device gate)
 
 **Stage 0 — PROVE (this session, additive only, no deletions).**
