@@ -45,6 +45,19 @@ final class NudgePaintModel: ObservableObject {
     /// The φ6 gauge (`miGauge`): colour-by-space vs the dual pairing.
     @Published var gauge: Bool = false
 
+    /// THE TOUCH-ORDER CARRIER (`Spec.PaintOrderPrior`, promoted by the
+    /// 2026-07-11 link ledger, wave 2): Morton cell indices in FIRST-TOUCH
+    /// order. The spec's keystone is a permutation-pair property — paints
+    /// [a,b] and [b,a] carry IDENTICAL budgets but must yield swapped decode
+    /// depths — so this order is information the magnitude field structurally
+    /// cannot carry; until now the surface discarded it, making "commit
+    /// compute where the user looked first" unexpressible. Recorded here at
+    /// the capture surface; the halt-prior consumption (the KL target λ_p)
+    /// is the trainer-side follow-on. A cell ranks once, at its first
+    /// non-zero paint; erasing later does not un-touch it.
+    @Published private(set) var touchOrder: [Int] = []
+    private var touched = Set<Int>()
+
     static let side = SixFourModelIO.controlGridSide               // 16
     static let channels = SixFourModelIO.paintChannelsPerCell      // 9
 
@@ -65,14 +78,27 @@ final class NudgePaintModel: ObservableObject {
     }
 
     /// Paint a budget into (cell, channel) — the spec's `paintCellPair` (clamped ≥ 0).
+    /// A first NON-ZERO paint of a cell also stamps its touch rank (`touchOrder`).
     func paint(x: Int, y: Int, z: Int, channel: Int, value: Int) {
         let cell = Self.mortonIndex(x: x, y: y, z: z)
         budget[cell][channel] = max(0, value)
+        if value > 0, touched.insert(cell).inserted {
+            touchOrder.append(cell)
+        }
         objectWillChange.send()
     }
 
-    /// Reset to the neutral floor (all channels of every cell to 0).
-    func reset() { budget = SixFourModelIO.neutralNudge(); objectWillChange.send() }
+    /// The first-touch rank of a Morton cell (0 = touched first, deepest
+    /// read under the order prior), or nil if never touched.
+    func touchRank(cell: Int) -> Int? { touchOrder.firstIndex(of: cell) }
+
+    /// Reset to the neutral floor (all channels of every cell to 0, no touches).
+    func reset() {
+        budget = SixFourModelIO.neutralNudge()
+        touchOrder = []
+        touched = []
+        objectWillChange.send()
+    }
 
     /// Count of cells with any non-zero budget (the painted footprint).
     var paintedCellCount: Int { budget.reduce(0) { $0 + ($1.contains { $0 != 0 } ? 1 : 0) } }
