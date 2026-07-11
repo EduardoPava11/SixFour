@@ -23,7 +23,26 @@ enum ModelFloor {
             frame.map { c in SIMD3<Int>(Int(c.x), Int(c.y), Int(c.z)) }
         }
         let planes = indexPlanes.map { plane in plane.map { Int($0) } }
-        return SixFourModelOutput(palettes: palettes, indexPlanes: planes)
+        let out = SixFourModelOutput(palettes: palettes, indexPlanes: planes)
+        // THE ≤K BRAND (`Spec.SuperResPalette.mkPaletteFrame`, promoted by the
+        // 2026-07-11 link ledger): debug-asserted here, law-tested in
+        // SuperResPaletteBrandTests, and the hard refusal lives at the wire
+        // (`Loop.gifBytes`). When the 256³ `upscale256` port lands, its output
+        // flows through this same adapter and inherits the check.
+        assert(Self.paletteBrandHolds(out), "SuperResPalette ≤K brand violated")
+        return out
+    }
+
+    /// The `mkPaletteFrame` smart-constructor check, app-side: every frame's
+    /// palette holds ≤ K (256) DISTINCT colours, and every index addresses its
+    /// own frame's table. Invented detail may only ever be INDEX detail.
+    static func paletteBrandHolds(_ out: SixFourModelOutput, k: Int = 256) -> Bool {
+        guard out.palettes.count == out.indexPlanes.count else { return false }
+        for (frame, plane) in zip(out.palettes, out.indexPlanes) {
+            guard Set(frame).count <= k else { return false }
+            guard plane.allSatisfy({ $0 >= 0 && $0 < frame.count }) else { return false }
+        }
+        return true
     }
 
     /// Defense-in-depth self-check: a tiny native cube round-trips through the adapter and

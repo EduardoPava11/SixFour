@@ -39,15 +39,22 @@ enum CaptureGene {
         /// Did this capture's learning YIELD WORK worth shipping the gene for?
         /// Two conditions, mirroring the FLOORED-discharge probe's three regimes
         /// (`AmortizedFitProbeTests`):
-        ///   1. it CLEARED THE Q16 LSB — at least one committed band is non-zero
-        ///      (a flat capture commits all-zero and fails here), AND
+        ///   1. it CLEARED THE ABOVE-FLOOR MARGIN — at least one committed band's
+        ///      magnitude reaches `SixFourModelIO.marginCoeffQ16`, the minimum
+        ///      invented-detail coefficient that SURVIVES the Q16 commit
+        ///      (`Spec.AboveFloorMargin`, promoted by the 2026-07-11 link
+        ///      ledger: the old `≠ 0` check equalled this only because the
+        ///      margin is currently one LSB — naming the constant removes the
+        ///      drift trap if the spec ever widens it). A flat capture commits
+        ///      all-zero and fails here. AND
         ///   2. it EXPLAINED ENOUGH — `lossReduction ≥ bar` (a noise capture floors
         ///      below the bar, its residual being unpredictable from coarse).
         /// When false, the gene invented nothing useful; ship the byte-exact floor.
         /// This is the gated-S rule made a runtime decision — the S-map spends only
         /// where the free coarse-pool label carries above-floor, learnable detail.
         func yieldsWork(bar: Double = defaultWorkBar) -> Bool {
-            committed.contains { $0 != 0 } && lossReduction >= bar
+            committed.contains { abs($0) >= SixFourModelIO.marginCoeffQ16 }
+                && lossReduction >= bar
         }
     }
 

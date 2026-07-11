@@ -238,6 +238,42 @@ struct Loop: Equatable, Hashable, Sendable {
         return Loop(cels: wireCels, palettes: palettes)
     }
 
+    /// THE IMPORT VIEW (Spec.CaptureFormat's other half — promoted by the
+    /// 2026-07-11 link ledger, wave 1): decimate every cel's plane by `factor`
+    /// via the generated contract (`SixFourCaptureFormat.decimate`, the exact
+    /// left inverse of `replicated(by:)` on its range). Palettes and TIME
+    /// untouched, mirroring the export view.
+    func decimated(by factor: Int) -> Loop? {
+        guard factor >= 1 else { return nil }
+        if factor == 1 { return self }
+        var smallCels = [Cel]()
+        smallCels.reserveCapacity(cels.count)
+        for cel in cels {
+            guard cel.plane.side % factor == 0 else { return nil }
+            let small = SixFourCaptureFormat.decimate(
+                cel.plane.indices, bigSide: cel.plane.side, factor: factor)
+            guard let plane = IndexPlane(side: cel.plane.side / factor, indices: small),
+                  let smallCel = Cel(plane: plane, rung: cel.rung) else { return nil }
+            smallCels.append(smallCel)
+        }
+        return Loop(cels: smallCels, palettes: palettes)
+    }
+
+    /// THE INGEST — self-containment's missing direction closed: shipped wire
+    /// bytes (the 256-side replicated export) back to the CANONICAL
+    /// capture-side Loop. Decode, then undo the wire replication when the
+    /// raster is the wire side; native ladder-side GIFs pass through
+    /// unchanged. This is what re-editing and training on an already-exported
+    /// GIF stand on: `ingest(loop.replicated.gifBytes()) == loop`.
+    static func ingest(wireGif: Data) -> Loop? {
+        guard let wire = Loop(gifBytes: wireGif),
+              let side = wire.cels.first?.plane.side else { return nil }
+        if side == SixFourCaptureFormat.wireSide {
+            return wire.decimated(by: SixFourCaptureFormat.upscaleFactor)
+        }
+        return wire
+    }
+
     /// UI VIEW: the per-frame palettes as sRGB8 triples — the shape the
     /// observable surface paints with (`σ.palettesPerFrame`). Same realization
     /// kernel as the wire, so display and file can never disagree.
@@ -264,7 +300,12 @@ struct Loop: Equatable, Hashable, Sendable {
         let rung = first.rung
         let k = palettes[0].k
         guard cels.allSatisfy({ $0.plane.side == side && $0.rung == rung }),
-              palettes.allSatisfy({ $0.k == k })
+              palettes.allSatisfy({ $0.k == k }),
+              // THE ≤K BRAND at the wire (`Spec.SuperResPalette`, promoted by
+              // the 2026-07-11 link ledger): invented detail is free only as
+              // INDEX detail inside each frame's ≤256 table — never a 257th
+              // colour. GIF89a physically caps the table; refuse, never clamp.
+              k <= 256
         else { return nil }
         var indices = [UInt8]()
         indices.reserveCapacity(frameCount * side * side)

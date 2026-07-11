@@ -112,6 +112,24 @@ struct GifOntologyTests {
         #expect(loop.renderFrameQ16(2) == nil)   // out of range refuses
     }
 
+    @Test func ingestInvertsTheWire() {
+        // SELF-CONTAINMENT, both directions: export a canonical loop to the
+        // 256-side wire, ingest the bytes, and recover the SAME VALUE — the
+        // capture-format contract (replicate ∘ decimate == id) at Loop level.
+        var seed: UInt64 = 0xC0FF_EE00_0C7A_6006
+        guard let loop = randomLoop(frames: 3, rung: .w64, k: 16, seed: &seed),
+              let wire = loop.replicated(by: SixFourCaptureFormat.upscaleFactor),
+              let bytes = wire.gifBytes() else {
+            Issue.record("wire construction failed"); return
+        }
+        #expect(Loop.ingest(wireGif: bytes) == loop)
+        // A native ladder-side GIF passes through ingest unchanged.
+        guard let nativeBytes = loop.gifBytes() else { Issue.record("encode failed"); return }
+        #expect(Loop.ingest(wireGif: nativeBytes) == loop)
+        // decimated is the exact left inverse of replicated.
+        #expect(wire.decimated(by: SixFourCaptureFormat.upscaleFactor) == loop)
+    }
+
     @Test func nonUniformLoopRefusesEncode() {
         // GIF89a needs one side / one K / one rung; the Loop refuses to
         // coerce a mixed value silently.
