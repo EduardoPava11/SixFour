@@ -52,8 +52,9 @@ self-containment), training honesty, paint/gesture intent, and super-res.
    keystone witnessed in PaintOrderPriorTests). FOLLOW-ON queued: the
    halt-prior consumption (λ_p) trainer-side, and **MixSKI** (paint = section
    of the K-chain) wiring into CaptureGene.
-8. **DetailEntropy** — integer histogram entropy over detail bands (bit-budget
-   honesty); new s4 kernel from spec, golden-gated.
+8. **DetailEntropy** — ✅ PROMOTED 2026-07-11 (aaf40c2): `Core/DetailEntropy.swift`
+   twin + laws (flat = 0 bits; per-band strictly refines pooled). FOLLOW-ON:
+   the curate/telemetry consumer.
 9. **PairedResidual** — capture-anchored 256³ super-res (residual codebook
    keyed by coarse value). The export-quality spine; replaces the dead
    NetSynth256 scaffold direction.
