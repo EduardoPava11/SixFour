@@ -1085,6 +1085,13 @@ final class CaptureViewModel {
             paletteQ16Frames: result.loop.palettes.map(\.leavesQ16)) {
             Self.logger.log("[quartet] \(motion.quartets) quartets: slot displacement mean \(String(format: "%.4f", motion.meanDisplacement)) max \(String(format: "%.4f", motion.maxDisplacement)) (OKLab)")
         }
+        // TemporalLoop LIVE (link-ledger wave 2): one temporal-Haar level over
+        // the burst's palette barycenters — how much of the loop's motion is
+        // high-frequency detail the low band drops. Once per burst.
+        if let temporal = TemporalLoop.burstTemporalSummary(
+            paletteQ16Frames: result.loop.palettes.map(\.leavesQ16)) {
+            Self.logger.log("[loop] temporal Haar: \(temporal.low) low + \(temporal.high) high, max |detail| \(temporal.maxDetailQ16) Q16")
+        }
         let output = CaptureOutput(
             gifURL: baseURL,
             contactURL: contact,
