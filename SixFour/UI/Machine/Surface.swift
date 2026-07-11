@@ -48,12 +48,44 @@ final class Surface {
 
     /// THE ONTOLOGY: the committed render as a typed value — the canonical
     /// 64-side `Loop` (docs/REBUILD-2026-07-10-PLAN.md §2b). When present,
-    /// `palette` / `palettesPerFrame` / `indexCube` below are derived VIEWS of
-    /// it, populated once at commit (single owner; the arrays stay stored as
-    /// caches for per-frame render cost). nil before the first deterministic
-    /// commit and on the float fallback path, where the arrays populate as
-    /// before.
-    var loop: Loop? = nil
+    /// `palettesPerFrame` / `indexCube` below are derived VIEWS of it,
+    /// populated once at commit (the arrays stay stored as caches for the
+    /// per-cell render cost of `gifCell`). nil before the first deterministic
+    /// commit and on the float fallback path. UNIT 3 OWNERSHIP: all three are
+    /// `private(set)` — the ONLY way in is `adopt(_:)` / `adoptLegacy(…)`, so
+    /// no caller can ever desync the views from the value.
+    private(set) var loop: Loop? = nil
+
+    /// Adopt a committed render as the typed value: σ.loop plus every derived
+    /// view (`palettesPerFrame`, `indexCube`, frame-0 `palette`) populated
+    /// from it atomically — one owner, byte-identical to the legacy arrays by
+    /// the same golden kernels (LoopPipelineParityTests). Returns false (and
+    /// mutates NOTHING) if the palette view fails, so the caller can fall
+    /// back to `adoptLegacy`.
+    func adopt(_ newLoop: Loop) -> Bool {
+        guard let pals = newLoop.srgb8Palettes() else { return false }
+        loop = newLoop
+        palettesPerFrame = pals
+        if let pal = pals.first { palette = pal }
+        indexCube = newLoop.cels.flatMap { $0.plane.indices }
+        return true
+    }
+
+    /// The float-fallback commit (no deterministic Loop exists): populate the
+    /// arrays exactly as the pre-ontology path did, and mark the typed value
+    /// absent. `frameIndices` nil leaves the previous cube untouched
+    /// (matching the legacy behaviour for outputs without voxel indices).
+    func adoptLegacy(palettesPerFrame pals: [[SIMD3<UInt8>]], frameIndices: [[UInt8]]?) {
+        loop = nil
+        palettesPerFrame = pals
+        if let pal = pals.first { palette = pal }
+        if let frames = frameIndices {
+            var cube = [UInt8]()
+            cube.reserveCapacity(frames.count * SixFourShape.pixelsPerFrame)
+            for f in frames { cube.append(contentsOf: f) }
+            indexCube = cube
+        }
+    }
 
     /// The current 256-colour palette (sRGB8) the surface paints — the live per-frame
     /// palette during capture, frame-0's palette after a commit (the `palette` accessor).
@@ -63,11 +95,11 @@ final class Surface {
     /// Review renders the cube through THIS (not a single global palette replicated 64×), so
     /// the hero is the true per-frame GIFA the app produces — each frame its own 256 colours.
     /// Empty until a GIFA commits.
-    var palettesPerFrame: [[SIMD3<UInt8>]] = []
+    private(set) var palettesPerFrame: [[SIMD3<UInt8>]] = []
 
     /// The 64×64×64 index cube (row-major `t,y,x`), populated once a GIFA exists.
     /// Empty until review. A flat buffer keeps the value type cheap to carry.
-    var indexCube: [UInt8] = []
+    private(set) var indexCube: [UInt8] = []
 
     /// The 16³ octree-coarse substrate — the byte-exact `VoxelReduce` reduction of the
     /// committed 64³ `indexCube`, in Q16 OKLab (`[frame'][position']`, 16 frames × 256

@@ -319,28 +319,13 @@ struct SurfaceView: View {
     /// caller fires `.burstComplete` AFTER this (so σ already has the data when `.captured`
     /// mounts the A/B field).
     private func commit(_ out: CaptureOutput) {
-        // THE ONTOLOGY SEAM: when the render carries its typed Loop, σ's
-        // palette/index fields are derived from THAT value (one owner; the
-        // views run through the same golden kernels, so the values are
-        // byte-identical to the legacy arrays — LoopPipelineParityTests pins
-        // it). The float fallback (loop == nil) populates them exactly as
-        // before.
-        surface.loop = out.loop
-        if let loop = out.loop, let pals = loop.srgb8Palettes() {
-            surface.palettesPerFrame = pals
-            if let pal = pals.first { surface.palette = pal }
-            surface.indexCube = loop.cels.flatMap { $0.plane.indices }
-        } else {
-            surface.palettesPerFrame = out.palettesForDisplay
-            if let pal = out.palettesForDisplay.first {
-                surface.palette = pal
-            }
-            if let frames = out.frameIndicesForVoxels {
-                var cube = [UInt8]()
-                cube.reserveCapacity(frames.count * SixFourShape.pixelsPerFrame)
-                for f in frames { cube.append(contentsOf: f) }
-                surface.indexCube = cube
-            }
+        // THE ONTOLOGY SEAM: σ's palette/index views are populated ONLY
+        // through the adopt seam (`private(set)` enforces it) — from the typed
+        // Loop when the render carries one, else the legacy arrays (float
+        // fallback, and the never-in-practice palette-view failure).
+        if out.loop.map({ surface.adopt($0) }) != true {
+            surface.adoptLegacy(palettesPerFrame: out.palettesForDisplay,
+                                frameIndices: out.frameIndicesForVoxels)
         }
         surface.gifURL = out.gifURL
         // V2.1 (gated): fold the engine's time-pooled camera-box field into σ so the review bench's
