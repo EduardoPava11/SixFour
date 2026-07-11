@@ -47,11 +47,11 @@ self-containment), training honesty, paint/gesture intent, and super-res.
    commit seam; laws in TemporalLoopTests. FOLLOW-ON (still queued): the
    seam-smoothing RENDER use (flag-gated — it would change GIF bytes) and
    **CanonicalPhase** (loop first-frame gauge — needs its kernel written).
-7. **PaintOrderPrior capture half** — record first-touch ORDER in the paint
-   grid (today only magnitude survives, so the proven order→halt prior is
-   unexpressible). Small data-model change, real training payoff. With
-   **MixSKI** (paint = section of the K-chain) it makes v3 somatic training
-   consume paint intent.
+7. **PaintOrderPrior capture half** — ✅ PROMOTED 2026-07-11 (6c776cf):
+   `NudgePaintModel.touchOrder` carries first-touch rank (permutation-pair
+   keystone witnessed in PaintOrderPriorTests). FOLLOW-ON queued: the
+   halt-prior consumption (λ_p) trainer-side, and **MixSKI** (paint = section
+   of the K-chain) wiring into CaptureGene.
 8. **DetailEntropy** — integer histogram entropy over detail bands (bit-budget
    honesty); new s4 kernel from spec, golden-gated.
 9. **PairedResidual** — capture-anchored 256³ super-res (residual codebook
