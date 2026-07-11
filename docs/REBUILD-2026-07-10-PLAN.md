@@ -276,6 +276,21 @@ Baseline burst (ladderProbe OFF — no [proof] lines; this is the pre-probe run)
 - Benign: 3× Fig -12710 during format scanning, texture-pool miss #1 warmup,
   first tick +250 ms warmup, AE/AWB lock settled 0 ms.
 
+**RUN 2 (same day, ~03:00Z)** — the signature REPRODUCES, it is not a fluke or a
+thermal ramp: tick CPU mean 64.50 ms (was 65.39), max 149.41 (was 213.83 — run-1
+max was warmup), 19 dropped (was 20), intervals 65.09 ms. GPU hang reproduced at
+the SAME seam (during the async V2.1 flow-encode window while the preview
+quantize storm runs) — deterministic, therefore debuggable. NEW: the pipeline
+completed end-to-end this time — deterministic GIF 64f side=256, 1,263,097 B,
+sha ef13a2d4…, 4425 ms [quant 2255 · dither 1239 · signif 227 · palette 7 ·
+encode 697], plus `[perf] s4cr: 65 KiB (v2)` saved = the derived c16-only
+provenance signature, exactly the Phase-A expected shape. CAVEAT for training
+data: at ~65 ms real intervals the burst's time axis is ~30% slower than the
+5 cs the woven GIF claims — drops corrupt the cadence contract, so no corpus
+generation until the tick is fixed. Identical numbers across runs also mean:
+if run 2 was already a RELEASE build, the Debug hypothesis dies and GPU pooling
+(H1) is promoted to mandatory Stage-0 work.
+
 **PHASE P sequencing verdict**: do NOT flip `ladderProbe` on this config yet —
 the probe adds ~4 more crop walks to an already-saturated tick. Order:
 (1) rerun this exact baseline in RELEASE; (2) if tick mean lands single-digit
