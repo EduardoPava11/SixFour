@@ -28,8 +28,8 @@
 //    (`lawLoopWallTimeInvariant`) — "slower" is chunkier holds, never a
 //    longer loop.
 //  • The slide is DISPLAY ONLY: no detent or playhead transition ever emits a
-//    game op (`lawSlideNeverWritesTheWord` — `slideOps` is pinned empty; the
-//    decision word is THE MERGE's alone).
+//    game op (`lawSlideNeverWritesTheWord`, pinned at the model boundary by
+//    `MergeBoardTests` — the decision word is THE MERGE's alone).
 //
 //  Cross-language goldens (`goldenPlayhead16`, `goldenVolumeQ16`,
 //  `goldenIntegralQ16`) are mirrored VERBATIM from the Haskell module and
@@ -51,19 +51,25 @@ enum TimeSlideMath {
     static let minDetent = 0
     static let maxDetent = 2
 
-    /// The 64-frame loop (`Spec.WeaveOrder.windowUnits` — ticks = frames = units).
-    static let windowUnits = 64
+    /// The 64-frame loop (`Spec.WeaveOrder.windowUnits` — ticks = frames =
+    /// units). DELEGATED to the one Swift owner
+    /// (`ColorTimeDisplayMath.burstFrames`), never a free 64.
+    static let windowUnits = ColorTimeDisplayMath.burstFrames
 
     /// The loop's wall time: `Spec.WeaveOrder.windowCs` = 320 cs at EVERY
-    /// detent (`lawLoopWallTimeInvariant`).
-    static let windowCs = 320
+    /// detent (`lawLoopWallTimeInvariant`) — the window × the fine GCE delay,
+    /// both delegated integers, never a free 320.
+    static let windowCs = windowUnits * delayCsOf(0)
 
     /// Haskell `div` — FLOOR division (Swift `/` truncates toward zero; the
     /// two differ exactly on negative operands, the upward slide branch).
+    /// DELEGATED to the kernel core's one implementation (`s4DivFloor64`,
+    /// the same floor every golden-gated kernel rounds with) — a third
+    /// hand-copy of the negative-branch discipline is exactly how a future
+    /// fix misses one.
     @inline(__always)
     static func floorDiv(_ a: Int, _ b: Int) -> Int {
-        let q = a / b, r = a % b
-        return (r != 0 && (r < 0) != (b < 0)) ? q - 1 : q
+        Int(s4DivFloor64(Int64(a), Int64(b)))
     }
 
     /// Quantize a slide to a detent (`Spec.TimeSlide.detentOf`):
@@ -80,13 +86,13 @@ enum TimeSlideMath {
     // MARK: Detents are rungs
 
     /// A detent's playback period in ticks (`Spec.TimeSlide.periodOf` =
-    /// `Spec.WeaveOrder.unitsOf` = 2^k): 1/2/4 ticks = 20/10/5 Hz.
-    /// DELEGATION, not a free constant — the slide's cadence and the GIF89a
-    /// delay ladder are the same integer (`lawDetentsAreRungs`; equals
-    /// `ColorTimeDisplayMath.displayPeriodTicks[k]`, pinned by the tests).
+    /// `Spec.WeaveOrder.unitsOf` = 2^k): 1/2/4 ticks = 20/10/5 Hz. TRUE
+    /// DELEGATION — reads `ColorTimeDisplayMath.displayPeriodTicks` (the one
+    /// Swift owner of the pool-depth ladder), so a ladder change moves the
+    /// slide's cadence by compile-time link, not by remembering a parity test.
     @inline(__always)
     static func periodOf(_ k: Int) -> Int {
-        1 << min(maxDetent, max(minDetent, k))
+        ColorTimeDisplayMath.displayPeriodTicks[min(maxDetent, max(minDetent, k))]
     }
 
     /// The spatial side a detent names: 64/32/16 (`Spec.ColorTime.coarseSide`).
@@ -95,12 +101,13 @@ enum TimeSlideMath {
         64 >> min(maxDetent, max(minDetent, k))
     }
 
-    /// The detent's GIF89a GCE delay in centiseconds: 5·2^k = 5/10/20 cs —
-    /// exactly `s4_ladder_delay_cs(coarseSide(k))` (`Spec.WeaveOrder.delayCsOf`,
-    /// `lawDelayMatchesFloorLaw`; the parity is pinned by the tests).
+    /// The detent's GIF89a GCE delay in centiseconds: 5/10/20 cs — TRUE
+    /// DELEGATION to THE TIME LAW kernel itself (`s4_ladder_delay_cs`,
+    /// `Spec.WeaveOrder.delayCsOf` / `lawDelayMatchesFloorLaw`): the readout
+    /// chip displays the same integer the encoder writes, by construction.
     @inline(__always)
     static func delayCsOf(_ k: Int) -> Int {
-        5 * periodOf(k)
+        Int(s4_ladder_delay_cs(Int32(coarseSide(k))))
     }
 
     /// The two-sided detent readout the slide's transient CellText shows:
@@ -155,18 +162,16 @@ enum TimeSlideMath {
     // MARK: The temporal integral (divide once, round half up)
 
     /// Round-half-up integer mean (`Spec.TimeSlide.divRoundHalfUp`):
-    /// `floor((2s + n) / (2n))` — an EXPLICIT FLOOR division (Swift `/`
-    /// truncates toward zero and silently diverges on the negative Q16 OKLab
-    /// a/b channels; `lawDivRoundHalfUpNegatives` pins `(−5)/4 → −1` where a
-    /// truncating port answers 0). Halves round UP (toward +∞): −1.5 → −1.
-    /// Non-positive divisors answer 0 (totality; the ladder's divisors are
-    /// 2^k ≥ 1).
+    /// `floor((2s + n) / (2n))` — DELEGATED to the kernel core's floor
+    /// division (`s4DivFloor64`, the identical `q−1` correction every
+    /// golden-gated realize rounds with — e.g. the palette kernels'
+    /// `s4DivFloor64(dot + 16384, 32768)`). Halves round UP (toward +∞):
+    /// −1.5 → −1; `lawDivRoundHalfUpNegatives` pins `(−5)/4 → −1` where a
+    /// truncating port answers 0. Non-positive divisors answer 0 (totality;
+    /// the ladder's divisors are 2^k ≥ 1).
     static func divRoundHalfUp(_ s: Int64, _ n: Int64) -> Int64 {
         guard n > 0 else { return 0 }
-        let a = 2 * s + n
-        let b = 2 * n
-        let q = a / b, r = a % b
-        return (r != 0 && (r < 0) != (b < 0)) ? q - 1 : q
+        return s4DivFloor64(2 * s + n, 2 * n)
     }
 
     /// THE INTEGRAL FRAME of group `j` at detent `k` over a generic
@@ -213,18 +218,6 @@ enum TimeSlideMath {
         }
         let n = Int64(p)
         return sums.map { Int32(clamping: divRoundHalfUp($0, n)) }
-    }
-
-    // MARK: The slide's word contribution (none, ever)
-
-    /// The game ops a detent transition contributes to THE MERGE's decision
-    /// word: NONE, EVER (`Spec.TimeSlide.slideOps` /
-    /// `lawSlideNeverWritesTheWord`) — the slide re-times the display, it
-    /// never plays the board. Pinned as the empty list so the law is a
-    /// theorem, not a comment.
-    static func slideOps(from kFrom: Int, to kTo: Int) -> [S4MergeOp] {
-        _ = (kFrom, kTo)
-        return []
     }
 
     // MARK: The cross-language goldens

@@ -260,19 +260,4 @@ final class TimeSlideMathTests: XCTestCase {
         XCTAssertEqual(TimeSlideMath.snapToGroupStart(99, k: 2), 60)
     }
 
-    // MARK: The slide never writes the word (`lawSlideNeverWritesTheWord`)
-
-    /// A full slide session contributes ZERO game ops: `slideOps` is pinned
-    /// empty for every detent pair, so appending a session's contribution to
-    /// any op list replays to the SAME board — the display mechanic is
-    /// invisible to `lawWordReplaysBoard` and the `.s4cr` `dw` key.
-    func testSlideSessionProducesZeroMergeOps() {
-        var session: [S4MergeOp] = []
-        for (from, to) in [(2, 1), (1, 0), (0, 2), (2, 2), (0, 0)] {
-            session += TimeSlideMath.slideOps(from: from, to: to)
-        }
-        XCTAssertTrue(session.isEmpty)
-        let ops: [S4MergeOp] = [.pour, .move(3, .s), .pour, .move(3, .k), .move(0, .i)]
-        XCTAssertEqual(S4MergeBoard.playAll(ops + session), S4MergeBoard.playAll(ops))
-    }
 }

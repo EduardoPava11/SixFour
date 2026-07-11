@@ -73,6 +73,12 @@ struct MergePourWidget: View {
     var body: some View {
         let remaining = S4MergeBoard.pourCap - model.merge.pours
         let exhausted = remaining <= 0
+        // The NEXT pour's ACTUAL deposit under the capture's own schedule —
+        // never a hardcoded "+4": an evidence-scaled burst may deposit less
+        // (a zero-deposit pour is an accepted honest dud, and the instrument
+        // must say so before the tap, not after).
+        let nextDeposit = S4MergeBoard.effectiveDeposit(model.pourSchedule,
+                                                        model.merge.pours)
         let treatment = SixFourCellMechanics.faceTreatment(
             state: 0, tick: (clock.reduceMotion || exhausted) ? 1 : clock.tick)
         let key = (exhausted ? 16 : 0) + treatment
@@ -95,7 +101,11 @@ struct MergePourWidget: View {
                 VStack(spacing: GlobalLattice.gif(1)) {
                     CellText("POUR", rows: 5, cell: GlobalLattice.pt(1),
                              ink: exhausted ? Color(srgb8: SFTheme.ledGhost) : .white)
-                    CellText("\(remaining)/16", rows: 3, cell: GlobalLattice.pt(1),
+                    // remaining slices + the next slice's REAL worth ("+4"
+                    // derived, less on a scaled short burst, "+0" for a dud).
+                    CellText(exhausted ? "\(remaining)/16"
+                                       : "\(remaining)/16 +\(nextDeposit)",
+                             rows: 3, cell: GlobalLattice.pt(1),
                              ink: Color(srgb8: SFTheme.ledGhost))
                 }
             }
@@ -108,7 +118,7 @@ struct MergePourWidget: View {
             guard k != baked.key else { return }
             baked = (k, Self.bake(exhausted: exhausted, treatment: treatment))
         }
-        .accessibilityLabel("Pour: bank the next four-frame slice")
+        .accessibilityLabel("Pour: bank the next four-frame slice, worth \(nextDeposit) signal")
         .accessibilityHint("\(remaining) of sixteen slices remain")
     }
 

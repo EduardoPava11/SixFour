@@ -877,9 +877,15 @@ final class CaptureViewModel {
             // realize the honest c16-only subset (`independent == false`).
             if let cubes = result.rungCubes {
                 let epoch = flowEpoch
-                Task.detached(priority: .userInitiated) { [weak self] in
+                // UTILITY, not userInitiated: the reads are a display nicety
+                // that attaches WHENEVER it lands (the attachGene pattern) —
+                // at userInitiated it competed with the substrate build, gene
+                // training, and record encode for P-cores during the burst
+                // seam's thermal spike, while holding a second copy of the
+                // ~2.6 MB cubes. One MainActor hop, no re-enqueued inner Task.
+                Task.detached(priority: .utility) { [weak self] in
                     let reads = RungReads.build(from: cubes)
-                    Task { @MainActor [weak self] in
+                    await MainActor.run { [weak self] in
                         guard let self, self.flowEpoch == epoch else {
                             Self.logger.warning("[viewmodel] DROPPED stale rung reads (epoch \(epoch))")
                             return

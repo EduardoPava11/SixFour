@@ -44,11 +44,10 @@ final class BurstWeaveDriver {
     /// The burst TICK each landed slice arrived on, per scale (by rawValue),
     /// in owned order — what `cubesSnapshot` hands the display's causal hold
     /// (`Spec.RungReadDisplay.sliceForTick`). `ingest` records the REAL tick;
-    /// the direct `accumulate` test seam falls back to the plan's owned ticks.
+    /// direct `accumulate` callers (the test seam) pass their own explicit
+    /// ticks — no fallback exists, so a fabricated-looking tick log can never
+    /// compile its way into production.
     private(set) var ownedTicks: [[Int]] = [[], [], []]
-    /// The plan's owned tick indices per scale — the `accumulate` fallback
-    /// (and the settle-2 fixture rule readers reconstruct with).
-    private let plannedTicks: [[Int]]
     /// Ticks charged to each scale that produced NO evidence: settle frames,
     /// pool failures, kernel-dropped frames (by rawValue).
     private(set) var skipped: [Int] = [0, 0, 0]
@@ -80,9 +79,6 @@ final class BurstWeaveDriver {
                 scale: sc, durationSeconds: 0, iso: 0, evOffsetStops: 0)
         }
         self.poolHead = ColorHead(cropSide: cropSide)
-        self.plannedTicks = MultiScaleLadder.Scale.allCases.map { sc in
-            plan.indices.filter { plan[$0].scale == sc && plan[$0].owned }
-        }
         self.volumes = MultiScaleLadder.Scale.allCases.map { sc in
             let n = MultiScaleLadder.plannedOwnedCount(plan, scale: sc)
             return [UInt64](repeating: 0, count: n * sc.side * sc.side * 3)
@@ -141,25 +137,20 @@ final class BurstWeaveDriver {
     /// 64-rung sums (64·64·3 u64) into `scale`'s independent volume at the
     /// scale's OWN resolution — exact `poolSpatial2` block sums down to the
     /// owner side, never derived from another rung's stream — and fold the
-    /// frame into the scale's 16²-lattice running total. `tickIndex` is the
-    /// burst tick this frame landed on (`ingest` passes the real one); the
-    /// default -1 falls back to the plan's next owned tick for the scale, so
-    /// direct test-seam calls still emit a lawful ascending tick log.
+    /// frame into the scale's 16²-lattice running total. `tickIndex` is
+    /// REQUIRED: it is the burst tick this frame actually landed on (`ingest`
+    /// passes the real one; tests pass the plan ticks they assert against).
+    /// A defaulted fallback here once let a caller compile with a
+    /// fabricated-but-lawful-looking tick log — the causal-hold display
+    /// (`RungReads.sliceForTick`, `lawHoldIsCausal`) trusts this log, so the
+    /// seam refuses to invent ticks.
     func accumulate(scale: MultiScaleLadder.Scale, sums64: [UInt64], fineBinArea area: Int64,
-                    tickIndex: Int = -1) {
+                    tickIndex: Int) {
         precondition(sums64.count == 64 * 64 * 3)
         fineBinArea = area
         // Record the slice's arrival tick (owned order == slice order).
         let slot = owned[scale.rawValue]
-        let planned = plannedTicks[scale.rawValue]
-        let tick: Int
-        if tickIndex >= 0 {
-            tick = tickIndex
-        } else if slot < planned.count {
-            tick = planned[slot]
-        } else {
-            tick = (ownedTicks[scale.rawValue].last ?? -1) + 1
-        }
+        let tick = tickIndex
         // Pool to the owner's resolution (exact block sums; fine64 = identity).
         var rung = sums64
         var side = 64

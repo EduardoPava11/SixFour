@@ -123,12 +123,11 @@ final class DecideModel: ObservableObject {
         let verdict = merge.step(op, schedule: pourSchedule)
         // Only DEPTH changes repaint the hero: an accepted pour moves the
         // ledger (the signal bar re-reads `merge` via its own publish) but
-        // no pixel — bumping the revision would throw away every baked
-        // integral group for nothing (16 consecutive pours = 16 pointless
-        // full-cache flushes).
+        // no pixel. The revision in the cache KEY is the one invalidation
+        // mechanism — stale entries become unreachable; the capacity bound
+        // reclaims them.
         if verdict == .accept, merge.depths != depthsBefore {
             mergeRevision += 1
-            heroCache.removeAll()
         }
         return verdict
     }
@@ -137,19 +136,18 @@ final class DecideModel: ObservableObject {
 
     /// The burst's realized independent rung reads — arrives LATE like the
     /// gene/substrate (the realize runs detached after the record write).
-    /// Non-published on purpose: `readsRevision` is the observable pulse (the
-    /// megabyte value itself never rides a publish diff).
-    private(set) var rungReads: RungReads?
-    /// Steps when the reads land — the hero's bake key reads this.
-    @Published private(set) var readsRevision = 0
+    /// @Published directly: `objectWillChange` is a Void send (no value
+    /// copy/diff rides a publish), and a derived `rungReads != nil` in the
+    /// cache key cannot desync the way a hand-pulsed revision int could.
+    @Published private(set) var rungReads: RungReads?
 
     /// The ASYNC rung reads landed: attach them (the attachGene pattern —
-    /// repeat/nil deliveries are no-ops; the first delivery wins).
+    /// repeat/nil deliveries are no-ops; the first delivery wins). The bake
+    /// keys carry `hasReads`, so every pre-reads cache entry is unreachable
+    /// the moment this flips — no wholesale flush needed.
     func attachRungReads(_ r: RungReads?) {
         guard rungReads == nil, let r else { return }
         rungReads = r
-        readsRevision += 1
-        heroCache.removeAll()   // every cached frame may change source
     }
 
     /// The hero's 64² RGBA frame from THE READS — each MERGE region rendered
@@ -283,8 +281,11 @@ final class DecideModel: ObservableObject {
 
     /// One baked hero image per (detent, group, arm, revisions): at the
     /// 16-rung a full loop is only 16 groups, so after one 3.2 s loop every
-    /// realize is a dictionary hit. Wholesale-cleared on ANY pixel-changing
-    /// bump (recon/merge/substrate/arm) — never invalidated piecemeal.
+    /// realize is a dictionary hit. THE ONE INVALIDATION MECHANISM is the
+    /// key itself: every pixel-changing input is a key field, so a bump makes
+    /// stale entries unreachable — there are NO scattered `removeAll` calls
+    /// to keep in sync (the capacity bound in `heroCacheStore` reclaims dead
+    /// entries; a new pixel input goes HERE and nowhere else).
     struct HeroCacheKey: Hashable {
         let rungK: Int
         let group: Int
@@ -295,9 +296,9 @@ final class DecideModel: ObservableObject {
         /// The pixel SOURCE (0 = derived reconstruction, 1 = the reads) —
         /// step B's display mode is part of the pixels' identity.
         let mode: Int
-        /// The reads arrival pulse — a late-landing `RungReads` invalidates
-        /// by key, exactly like `reconRevision`.
-        let readsRevision: Int
+        /// Whether the reads have landed — first-delivery-wins makes the
+        /// Bool a complete arrival marker (a derived value cannot desync).
+        let hasReads: Bool
     }
 
     /// Max cached images: all groups of all coarse detents is 32+16 = 48;
@@ -314,7 +315,7 @@ final class DecideModel: ObservableObject {
         HeroCacheKey(rungK: k, group: j, useGene: useGene,
                      reconRevision: reconRevision, mergeRevision: mergeRevision,
                      substrateEpoch: substrate.count,
-                     mode: mode, readsRevision: readsRevision)
+                     mode: mode, hasReads: rungReads != nil)
     }
 
     /// Cached baked hero image, if this exact (detent, group, revisions) was
@@ -384,8 +385,7 @@ final class DecideModel: ObservableObject {
             self.floorRecon = floor
             self.geneRecon = geneArm
             self.reconstructionsReady = true
-            self.reconRevision += 1
-            self.heroCache.removeAll()   // every cached integral frame is stale
+            self.reconRevision += 1   // the key field IS the invalidation
         }
     }
 
@@ -425,8 +425,7 @@ final class DecideModel: ObservableObject {
                                                     channel: channel, mask: mask)
             guard !Task.isCancelled else { return }
             self.geneRecon = geneArm
-            self.reconRevision += 1
-            self.heroCache.removeAll()   // every cached integral frame is stale
+            self.reconRevision += 1   // the key field IS the invalidation
             self.objectWillChange.send()
         }
     }
@@ -761,7 +760,12 @@ private struct DecideHeroWidget: View {
     /// `Self.railLingerTicks` later (materialize-on-touch, no resident chrome).
     @State private var slideReleasedAt: Int? = nil
     @State private var pressStart: (time: Date, loc: CGPoint)? = nil
-    @State private var baked: (key: Int, image: UIImage?) = (.min, nil)
+    /// The baked hero + THE SOURCE ITS PIXELS ACTUALLY CAME FROM: the chip
+    /// reads `baked.source`, never the model's attempted mode — a reads
+    /// composite that REFUSES falls through to the derived path, and the
+    /// chip must fall with it (provenance can never disagree with pixels).
+    @State private var baked: (key: Int, image: UIImage?,
+                               source: DecideModel.HeroSource) = (.min, nil, .derived)
 
     /// Ticks the time rail lingers after release (8 ticks = 0.4 s).
     private static let railLingerTicks = 8
@@ -845,12 +849,15 @@ private struct DecideHeroWidget: View {
             // resident label — an unusual pixel source must stay named for
             // as long as it is the source (color-provenance honesty outranks
             // chrome minimalism, and "SHIPS RECON" is the accept contract).
-            if model.heroSource == .rungReads || railVisible {
+            // The chip reads the BAKED source — what the pixels on screen
+            // actually are — so a refused reads-composite that fell through
+            // to the derived path can never wear a READS label.
+            if baked.source == .rungReads || railVisible {
                 VStack(alignment: .leading, spacing: 0) {
-                    CellText(model.heroSource.chipLabel, rows: 5,
+                    CellText(baked.source.chipLabel, rows: 5,
                              cell: GlobalLattice.pt(1),
                              ink: Color(srgb8: SFTheme.ledGhost))
-                    if model.heroSource == .rungReads {
+                    if baked.source == .rungReads {
                         CellText("SHIPS RECON", rows: 5,
                                  cell: GlobalLattice.pt(1),
                                  ink: Color(srgb8: SFTheme.ledGhost))
@@ -960,7 +967,8 @@ private struct DecideHeroWidget: View {
         }
         .onChange(of: key, initial: true) { _, k in
             guard k != baked.key else { return }
-            baked = (k, bakeImage())
+            let (image, source) = bakeImage()
+            baked = (k, image, source)
         }
         .accessibilityLabel("Judgment view")
         // The hint must describe only gestures that EXIST in this build —
@@ -1021,20 +1029,17 @@ private struct DecideHeroWidget: View {
     /// Everything that changes the hero's PIXELS (never the raw clock: the
     /// playhead enters ONLY as the realized `frame` + the detent `rungK`, so
     /// paused/idle ticks bake nothing and playing bakes once per 2^k ticks).
+    /// ONE identity definition: the model's `HeroCacheKey` (every revision
+    /// field lands there and nowhere else) plus the widget-only extras — the
+    /// exact frame and the fallback inputs the cache never stores.
     private var imageKey: Int {
         var h = Hasher()
+        h.combine(model.heroCacheKey(rungK: model.playhead.rungK,
+                                     group: model.frame, useGene: model.useGene,
+                                     mode: model.heroSource == .rungReads ? 1 : 0))
         h.combine(model.frame)
-        h.combine(model.playhead.rungK)
-        h.combine(model.useGene)
         h.combine(model.reconstructionsReady)
-        h.combine(model.reconRevision)
         h.combine(model.tiles.count)
-        h.combine(model.substrate.count)
-        h.combine(model.mergeRevision)
-        // Step B: the display MODE (reads vs derived) and the reads' arrival
-        // pulse are pixel identity — a late-landing `RungReads` rebakes once.
-        h.combine(model.heroSource == .rungReads)
-        h.combine(model.readsRevision)
         return h.finalize()
     }
 
@@ -1050,7 +1055,9 @@ private struct DecideHeroWidget: View {
     /// cycle is a dictionary hit. k=0 short-circuits below to today's
     /// `reconstructionSlice` path BYTE-IDENTICALLY. A coarse detent with no
     /// reconstruction yet falls through to the same honest fallback as k=0.
-    private func bakeImage() -> UIImage? {
+    /// Returns the image WITH the source its pixels actually came from —
+    /// the chip renders that pair, so provenance can never outrun a refusal.
+    private func bakeImage() -> (UIImage?, DecideModel.HeroSource) {
         // THE READS (step B, `Spec.RungReadDisplay`): when the ladder wrote
         // three independent cubes, every MERGE region renders from ITS OWN
         // read (`RungReads.composited` — select + causal hold, the SAME
@@ -1067,14 +1074,15 @@ private struct DecideHeroWidget: View {
             let key = model.heroCacheKey(rungK: 0,
                                          group: model.frame, useGene: false,
                                          mode: 1)
-            if let hit = model.heroCached(key) { return hit }
+            if let hit = model.heroCached(key) { return (hit, .rungReads) }
             if let rgba = model.readsSlice(frame: model.frame),
                let cg = Self.rgbaImage(rgba, side: 64) {
                 let img = UIImage(cgImage: cg)
                 model.heroCacheStore(key, img)
-                return img
+                return (img, .rungReads)
             }
-            // Composite refused — fall through to the honest derived path.
+            // Composite refused — fall through to the honest derived path
+            // (and the chip falls with it: the returned source is what BAKED).
         }
         if Feature.decideTimeSlide {
             // ONE cached path for every detent: coarse groups bake temporal
@@ -1085,22 +1093,22 @@ private struct DecideHeroWidget: View {
             let k = model.playhead.rungK
             let j = model.frame / TimeSlideMath.periodOf(k)
             let key = model.heroCacheKey(rungK: k, group: j, useGene: model.useGene)
-            if let hit = model.heroCached(key) { return hit }
+            if let hit = model.heroCached(key) { return (hit, .derived) }
             let rgba = k > 0
                 ? model.integralSlice(rungK: k, group: j, useGene: model.useGene)
                 : model.reconstructionSlice(frame: model.frame, useGene: model.useGene)
             if let rgba, let cg = Self.rgbaImage(pooled(rgba), side: 64) {
                 let img = UIImage(cgImage: cg)
                 model.heroCacheStore(key, img)
-                return img
+                return (img, .derived)
             }
             // No reconstruction yet — fall through to the honest fallback.
         }
         if let rgba = model.reconstructionSlice(frame: model.frame, useGene: model.useGene),
            let cg = Self.rgbaImage(pooled(rgba), side: 64) {
-            return UIImage(cgImage: cg)
+            return (UIImage(cgImage: cg), .derived)
         }
-        guard model.tiles.indices.contains(model.frame) else { return nil }
+        guard model.tiles.indices.contains(model.frame) else { return (nil, .derived) }
         let tile = model.tiles[model.frame]
         var rgba = [UInt8]()
         rgba.reserveCapacity(tile.pixels.count * 4)
@@ -1109,8 +1117,8 @@ private struct DecideHeroWidget: View {
             rgba.append(contentsOf: [c.x, c.y, c.z, 255])
         }
         let shaped = tile.side == 64 ? pooled(rgba) : rgba
-        if let cg = Self.rgbaImage(shaped, side: tile.side) { return UIImage(cgImage: cg) }
-        return nil
+        if let cg = Self.rgbaImage(shaped, side: tile.side) { return (UIImage(cgImage: cg), .derived) }
+        return (nil, .derived)
     }
 
     /// Render the 64² slice at each region's played granularity: a depth-d
@@ -1182,15 +1190,20 @@ private struct DecideHeroWidget: View {
 /// The RAW 16³ coarse tier at the scrubbed layer — one screen cell per voxel
 /// (16×16 cells): the other half of the 64-vs-16 judgment. Display-only
 /// (`allowsHitTesting(false)`); ghost quarter-ink until the substrate lands.
-/// Bake keyed by (layer, substrate arrival) — the scrub swaps whole tiles.
+/// MEMOIZED PER LAYER: play-by-default cycles the same 16 layers forever
+/// (5 Hz at the default detent), so each layer bakes ONCE per substrate
+/// epoch and the permanent cadence is a pure image swap — never a perpetual
+/// 256-conversion + UIImage alloc loop.
 private struct DecideCoarseWidget: View {
     @ObservedObject var model: DecideModel
-    @State private var baked: (key: Int, image: UIImage?) = (.min, nil)
+    @State private var layerCache: [Int: UIImage] = [:]
+    @State private var cacheEpoch = -1
 
     var body: some View {
+        let epoch = model.substrate.count
         let key = model.substrate.isEmpty ? -1 : model.paintLayer
         Group {
-            if let img = baked.image {
+            if let img = layerCache[key] {
                 Image(uiImage: img)
                     .interpolation(.none)
                     .resizable()
@@ -1199,9 +1212,15 @@ private struct DecideCoarseWidget: View {
             }
         }
         .allowsHitTesting(false)
-        .onChange(of: key, initial: true) { _, k in
-            guard k != baked.key else { return }
-            baked = (k, bake(layer: k))
+        .onChange(of: epoch, initial: true) { _, e in
+            guard e != cacheEpoch else { return }
+            cacheEpoch = e
+            layerCache = [:]   // the substrate arrived/changed: all 16 stale
+            if let img = bake(layer: key) { layerCache[key] = img }
+        }
+        .onChange(of: key) { _, k in
+            guard layerCache[k] == nil, let img = bake(layer: k) else { return }
+            layerCache[k] = img
         }
         .accessibilityLabel("Coarse sixteen-cubed view at the scrubbed layer")
     }

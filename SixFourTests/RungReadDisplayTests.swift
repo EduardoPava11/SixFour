@@ -164,9 +164,9 @@ struct RungReadDisplayTests {
         let driver = BurstWeaveDriver(plan: MultiScaleLadder.weavePlan(),
                                       stops: makeStops(), cropSide: 512)
         let frame = constantSums(mean: 40000, area: 64)
-        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64)
-        driver.accumulate(scale: .mid32, sums64: frame, fineBinArea: 64)
-        driver.accumulate(scale: .coarse16, sums64: frame, fineBinArea: 64)
+        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64, tickIndex: 2)
+        driver.accumulate(scale: .mid32, sums64: frame, fineBinArea: 64, tickIndex: 10)
+        driver.accumulate(scale: .coarse16, sums64: frame, fineBinArea: 64, tickIndex: 15)
         let cubes = driver.cubesSnapshot()
         // The driver hands the display everything the realize needs.
         #expect(cubes.fineBinArea == 64)
@@ -350,10 +350,10 @@ struct RungReadDisplayTests {
         let driver = BurstWeaveDriver(plan: MultiScaleLadder.weavePlan(),
                                       stops: makeStops(), cropSide: 512)
         let frame = constantSums(mean: 12000, area: 64)
-        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64)
-        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64)
-        driver.accumulate(scale: .mid32, sums64: frame, fineBinArea: 64)
-        driver.accumulate(scale: .coarse16, sums64: frame, fineBinArea: 64)
+        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64, tickIndex: 2)
+        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64, tickIndex: 3)
+        driver.accumulate(scale: .mid32, sums64: frame, fineBinArea: 64, tickIndex: 10)
+        driver.accumulate(scale: .coarse16, sums64: frame, fineBinArea: 64, tickIndex: 15)
         let cubes = driver.cubesSnapshot()
         let live = RungReads.build(from: cubes)
         let fixture = RungReads.fixture(cube64: cubes.cube64, cube32: cubes.cube32,
@@ -392,7 +392,8 @@ struct RungReadDisplayTests {
     }
 
     /// A ladder burst's reads attach late and flip the hero source; the
-    /// readsRevision pulse steps exactly once (repeat deliveries are no-ops).
+    /// arrival flips the cache keys' `hasReads` marker exactly once (repeat
+    /// deliveries are no-ops — first delivery wins).
     @MainActor
     @Test func ladderReadsAttachAndFlipTheSource() {
         let cubes = CaptureSession.RungCubes(
@@ -404,13 +405,13 @@ struct RungReadDisplayTests {
         let reads = RungReads.build(from: cubes)
         #expect(reads.independent)
         let model = DecideModel(tiles: [], gene: nil)
-        #expect(model.readsRevision == 0)
+        #expect(model.heroCacheKey(rungK: 0, group: 0, useGene: false).hasReads == false)
         model.attachRungReads(reads)
-        #expect(model.readsRevision == 1)
+        #expect(model.heroCacheKey(rungK: 0, group: 0, useGene: false).hasReads == true)
         #expect(model.heroSource == .rungReads)
         #expect(model.readsSlice(frame: 0) != nil)
         model.attachRungReads(reads)              // repeat delivery: no-op
-        #expect(model.readsRevision == 1)
+        #expect(model.rungReads == reads)
         // The slide never touches the reads gate either way (display-only).
         model.startPlayback(rungK: 2, atTick: 0, fromFrame: 0)
         #expect(model.heroSource == .rungReads)

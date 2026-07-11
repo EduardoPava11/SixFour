@@ -78,10 +78,12 @@ struct BurstWeaveTests {
         let driver = BurstWeaveDriver(plan: MultiScaleLadder.weavePlan(),
                                       stops: makeStops(), cropSide: 512)
         let frame = gradientSums(base: 100, step: 1)
-        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64)
-        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64)
-        driver.accumulate(scale: .mid32, sums64: frame, fineBinArea: 64)
-        driver.accumulate(scale: .coarse16, sums64: frame, fineBinArea: 64)
+        // Explicit plan ticks (fine owns 2,3…; mid 10…; coarse 15 — the
+        // settle-2 weave): `tickIndex` is required, the seam never invents.
+        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64, tickIndex: 2)
+        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64, tickIndex: 3)
+        driver.accumulate(scale: .mid32, sums64: frame, fineBinArea: 64, tickIndex: 10)
+        driver.accumulate(scale: .coarse16, sums64: frame, fineBinArea: 64, tickIndex: 15)
         let cubes = driver.cubesSnapshot()
         #expect(cubes.frames64 == 2 && cubes.cube64.count == 2 * 64 * 64 * 3)
         #expect(cubes.frames32 == 1 && cubes.cube32.count == 1 * 32 * 32 * 3)
@@ -100,9 +102,9 @@ struct BurstWeaveTests {
         let stops = makeStops()
         let driver = BurstWeaveDriver(plan: plan, stops: stops, cropSide: 512)
         let frame = gradientSums(base: 100, step: 1)
-        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64)
-        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64)
-        driver.accumulate(scale: .mid32, sums64: frame, fineBinArea: 64)
+        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64, tickIndex: 2)
+        driver.accumulate(scale: .fine64, sums64: frame, fineBinArea: 64, tickIndex: 3)
+        driver.accumulate(scale: .mid32, sums64: frame, fineBinArea: 64, tickIndex: 10)
         let t = driver.telemetrySnapshot(generation: 3)
         #expect(t.generation == 3)
         #expect(t.rungs.map(\.side) == [64, 32, 16])
@@ -135,9 +137,9 @@ struct BurstWeaveTests {
         // 16²-lattice totals are proportional → fully determined (1000‰).
         let derived = BurstWeaveDriver(plan: plan, stops: stops, cropSide: 512)
         let rising = gradientSums(base: 1000, step: 2)
-        derived.accumulate(scale: .fine64, sums64: rising, fineBinArea: 64)
-        derived.accumulate(scale: .fine64, sums64: rising, fineBinArea: 64)
-        derived.accumulate(scale: .mid32, sums64: rising, fineBinArea: 64)
+        derived.accumulate(scale: .fine64, sums64: rising, fineBinArea: 64, tickIndex: 2)
+        derived.accumulate(scale: .fine64, sums64: rising, fineBinArea: 64, tickIndex: 3)
+        derived.accumulate(scale: .mid32, sums64: rising, fineBinArea: 64, tickIndex: 10)
         #expect(derived.telemetrySnapshot(generation: 0).rungs[0]
                     .comovementPermilleVsCoarser == 1000)
 
@@ -145,8 +147,8 @@ struct BurstWeaveTests {
         // never saw, and its spatial curve counter-moves → strictly < 1000.
         let independent = BurstWeaveDriver(plan: plan, stops: stops, cropSide: 512)
         let falling = gradientSums(base: 100_000, step: -2)
-        independent.accumulate(scale: .fine64, sums64: rising, fineBinArea: 64)
-        independent.accumulate(scale: .mid32, sums64: falling, fineBinArea: 64)
+        independent.accumulate(scale: .fine64, sums64: rising, fineBinArea: 64, tickIndex: 2)
+        independent.accumulate(scale: .mid32, sums64: falling, fineBinArea: 64, tickIndex: 10)
         let stat = independent.telemetrySnapshot(generation: 0).rungs[0]
             .comovementPermilleVsCoarser
         #expect(stat >= 0 && stat < 1000)

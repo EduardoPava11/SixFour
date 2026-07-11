@@ -41,15 +41,19 @@ enum S4MergeEvidence {
     /// (`lawDerivedScheduleIsStep`).
     static var derivedSchedule: [Int] { S4MergeBoard.derivedSchedule }
 
-    /// The 320 cs window in weave units (`Spec.WeaveOrder.windowUnits`) — the
-    /// budget ceiling AND `threshold32` AND `pourCap × pourDeposit`
-    /// (`Spec.MergeBoard.lawEconomyIsTheWindow`).
-    static let windowUnits = 64
+    /// The 320 cs window in weave units (`Spec.WeaveOrder.windowUnits`) —
+    /// DERIVED from the economy identity it prices
+    /// (`Spec.MergeBoard.lawEconomyIsTheWindow`: window = threshold32 =
+    /// `pourCap × pourDeposit`), never a free 64: if the economy ever moves,
+    /// the budget ceiling moves with it by compile-time link.
+    static let windowUnits = S4MergeBoard.pourCap * S4MergeBoard.pourDeposit
 
     /// Weave units one arrival of each rung spans, fine → coarse (the
-    /// `S4TelemetrySnapshot.arrivals` order): `Spec.WeaveOrder.unitsOf` =
-    /// 1 / 2 / 4 for W64 / W32 / W16.
-    static let unitsPerRung = [1, 2, 4]
+    /// `S4TelemetrySnapshot.arrivals` order): `Spec.WeaveOrder.unitsOf` —
+    /// DELEGATED to the one Swift owner of the pool-depth ladder
+    /// (`ColorTimeDisplayMath.displayPeriodTicks` = 1/2/4), the same integers
+    /// the display cadence and the slide's detents read.
+    static let unitsPerRung = ColorTimeDisplayMath.displayPeriodTicks
 
     /// The burst's evidence budget in window units — the twin of
     /// `Spec.MergeEvidence.colorTimeBudget`: per rung, arrivals × `unitsOf`,
