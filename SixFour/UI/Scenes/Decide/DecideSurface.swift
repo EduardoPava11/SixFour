@@ -41,19 +41,27 @@ enum DecideVerdict {
 /// Observable decision state: the paint model (nudge + gauge), the gene toggle,
 /// and the preview scrub. `modelInput()` is the wireable boundary. MainActor:
 /// this is UI state, and the off-main reconstruction build delivers back here.
+/// @Observable (the Observation framework), NOT ObservableObject: only the
+/// views that READ a changed property invalidate — the 20 Hz playhead realize
+/// (`frame`) repaints the hero and the paint-layer readers alone, never the
+/// whole Decide tree (the old objectWillChange invalidated every widget,
+/// including the 256-cell paint bench, on every realize — the review's
+/// standing thermal finding). The nested `NudgePaintModel` stays an
+/// ObservableObject; its direct readers observe it themselves.
+@Observable
 @MainActor
-final class DecideModel: ObservableObject {
+final class DecideModel {
     let tiles: [OKLabTile]
     /// The somatic gene. `var` since QoL 2026-07-03: training left the burst seam, so
     /// the gene may ARRIVE LATE (`attachGene`) — the surface starts on the floor arm
     /// and the gene cell enables the moment θ_up lands.
-    @Published private(set) var gene: CaptureGene.ThetaUp?
+    private(set) var gene: CaptureGene.ThetaUp?
     /// The REAL 16³ proposal — the lossless coarse tier of the committed cube
     /// (`Surface.coarseSubstrate`, 16 frames × 16² OKLab Q16). Empty until a
     /// capture commits (then the surface falls back to capture-frame preview).
     /// `var` since QoL 2026-07-03: the substrate builds OFF-MAIN at the σ fold,
     /// so a fast user can mount this surface before it lands (`attachSubstrate`).
-    @Published private(set) var substrate: [[VoxelReduce.Px]]
+    private(set) var substrate: [[VoxelReduce.Px]]
     let paint = NudgePaintModel()
 
     /// Cached 64³ reconstructions (interleaved Q16): the deterministic floor and
@@ -63,27 +71,27 @@ final class DecideModel: ObservableObject {
     /// the capture-frame fallback until `reconstructionsReady`.
     private var floorRecon: [Int32]?
     private var geneRecon: [Int32]?
-    @Published private(set) var reconstructionsReady = false
+    private(set) var reconstructionsReady = false
     /// Steps whenever a reconstruction arm lands or rebuilds — the hero's bake key
     /// (the PERF discipline: the 64² image rebakes only when this or the scrub steps,
     /// never per body evaluation).
-    @Published private(set) var reconRevision = 0
+    private(set) var reconRevision = 0
 
     /// `paint` is a NESTED ObservableObject — its mutations (gauge toggle, strokes)
     /// do not propagate through DecideModel automatically (device audit: the gauge
     /// button never repainted). Forward them.
-    private var paintForward: AnyCancellable?
+    @ObservationIgnored private var paintForward: AnyCancellable?
     /// The debounced gene-arm rebuild after a paint stroke (W1): cancelled and
     /// re-armed per stroke so a drag repaints once, ~0.35 s after the last cell.
-    private var repaintTask: Task<Void, Never>?
+    @ObservationIgnored private var repaintTask: Task<Void, Never>?
 
     /// Ride the learned somatic detail (true) or the deterministic floor (false).
     /// Defaults to the gene when the burst trained one; absence pins the floor.
-    @Published var useGene: Bool
+    var useGene: Bool
     /// The previewed burst frame (0-based); horizontal drag on the hero scrubs it.
-    @Published var frame: Int = 0
+    var frame: Int = 0
     /// The brush's paint channel (default L·t, the φ6 diagonal value-over-time pair).
-    @Published var channel: Int = 8
+    var channel: Int = 8
     /// The budget magnitude a stroke paints.
     let brush: Int = 32
 
@@ -91,10 +99,10 @@ final class DecideModel: ObservableObject {
     /// decision game played ON the hero — every capture opens as the
     /// all-coarse 16-board and the player decomposes toward 64³ by spending
     /// poured signal. Fresh per decide entry (AGAIN → recapture → new board).
-    @Published private(set) var merge = S4MergeBoard()
+    private(set) var merge = S4MergeBoard()
     /// Steps when a merge op is ACCEPTED — the hero's bake key reads this
     /// (the PERF discipline: refusals never rebake the image).
-    @Published private(set) var mergeRevision = 0
+    private(set) var mergeRevision = 0
 
     /// The capture's IMMUTABLE evidence schedule (`Spec.MergeEvidence`):
     /// installed AT CONSTRUCTION, before the first pour can happen — a
@@ -136,10 +144,10 @@ final class DecideModel: ObservableObject {
 
     /// The burst's realized independent rung reads — arrives LATE like the
     /// gene/substrate (the realize runs detached after the record write).
-    /// @Published directly: `objectWillChange` is a Void send (no value
-    /// copy/diff rides a publish), and a derived `rungReads != nil` in the
-    /// cache key cannot desync the way a hand-pulsed revision int could.
-    @Published private(set) var rungReads: RungReads?
+    /// Observation-tracked directly (no publish rides a value copy/diff),
+    /// and a derived `rungReads != nil` in the cache key cannot desync the
+    /// way a hand-pulsed revision int could.
+    private(set) var rungReads: RungReads?
 
     /// The ASYNC rung reads landed: attach them (the attachGene pattern —
     /// repeat/nil deliveries are no-ops; the first delivery wins). The bake
@@ -304,7 +312,7 @@ final class DecideModel: ObservableObject {
     /// Max cached images: all groups of all coarse detents is 32+16 = 48;
     /// 128 (~1.8 MiB of 64² RGBA) bounds any future source generously.
     private static let heroCacheCapacity = 128
-    private var heroCache: [HeroCacheKey: UIImage] = [:]
+    @ObservationIgnored private var heroCache: [HeroCacheKey: UIImage] = [:]
 
     /// The cache key for detent `k`, group `j` under the CURRENT revisions.
     /// `mode` 0 = derived reconstruction (step A's integral bakes), 1 = the
@@ -361,9 +369,12 @@ final class DecideModel: ObservableObject {
         self.rungReads = rungReads
         self.pourSchedule = pourSchedule
         self.useGene = gene != nil
+        // The nested paint model stays an ObservableObject; this sink only
+        // drives the debounced gene-arm rebuild. View updates for paint state
+        // come from OBSERVING PAINT DIRECTLY (AdvancedBench) — there is no
+        // whole-model forward to re-diff the tree on every stroke.
         paintForward = paint.objectWillChange
             .sink { [weak self] _ in
-                self?.objectWillChange.send()
                 self?.scheduleGeneRebuild()
             }
         buildReconstructions()
@@ -426,7 +437,6 @@ final class DecideModel: ObservableObject {
             guard !Task.isCancelled else { return }
             self.geneRecon = geneArm
             self.reconRevision += 1   // the key field IS the invalidation
-            self.objectWillChange.send()
         }
     }
 
@@ -492,7 +502,7 @@ final class DecideModel: ObservableObject {
 }
 
 struct DecideSurface: View {
-    @StateObject private var model: DecideModel
+    @State private var model: DecideModel
     /// THE one 20 Hz clock — passed to the leaf views that carry a beat (the hero
     /// brackets, the fold chevron, the reveal). The surface body never reads `tick`.
     let clock: SurfaceClock
@@ -536,7 +546,7 @@ struct DecideSurface: View {
          clock: SurfaceClock,
          onSealWord: @escaping ([UInt64]) -> Void = { _ in },
          onDecide: @escaping (DecideVerdict, SixFourModelInput, Bool) -> Void) {
-        _model = StateObject(wrappedValue: DecideModel(
+        _model = State(initialValue: DecideModel(
             tiles: tiles, gene: thetaUp, substrate: substrate,
             rungReads: rungReads, pourSchedule: pourSchedule))
         self.clock = clock
@@ -706,10 +716,10 @@ struct DecideSurface: View {
     // ── the demoted toggles ──────────────────────────────────────────────────
 
     private var gaugeCell: some View {
-        DecideCell(label: model.paint.gauge ? "φ6 dual" : "c × s",
-                   active: model.paint.gauge) {
-            model.paint.gauge.toggle()
-        }
+        // Observes PAINT DIRECTLY: the gauge lives on the nested
+        // ObservableObject, which the @Observable model no longer forwards
+        // (the old whole-model forward re-diffed the entire tree per stroke).
+        PaintGaugeCell(paint: model.paint)
     }
 
     private var geneCell: some View {
@@ -747,7 +757,7 @@ struct DecideSurface: View {
 /// tick alone never rebakes the image (the playhead enters only as the
 /// realized frame, once per 2^k ticks while playing).
 private struct DecideHeroWidget: View {
-    @ObservedObject var model: DecideModel
+    let model: DecideModel
     let clock: SurfaceClock
     @State private var scrubbing = false
     /// THE TIME SLIDE latched (a vertical winner at the movement threshold):
@@ -1195,7 +1205,7 @@ private struct DecideHeroWidget: View {
 /// epoch and the permanent cadence is a pure image swap — never a perpetual
 /// 256-conversion + UIImage alloc loop.
 private struct DecideCoarseWidget: View {
-    @ObservedObject var model: DecideModel
+    let model: DecideModel
     @State private var layerCache: [Int: UIImage] = [:]
     @State private var cacheEpoch = -1
 
@@ -1404,6 +1414,21 @@ private struct DecideVerbStyle: ButtonStyle {
 
 // ── the demoted-toggle cell (advanced fold only) ─────────────────────────────
 
+/// The φ6-gauge toggle cell — the ONE Decide widget whose state lives on the
+/// nested `NudgePaintModel` (an ObservableObject): it observes the paint model
+/// DIRECTLY, so a gauge toggle repaints exactly this cell and the bench that
+/// also observes paint — never the whole surface.
+private struct PaintGaugeCell: View {
+    @ObservedObject var paint: NudgePaintModel
+
+    var body: some View {
+        DecideCell(label: paint.gauge ? "φ6 dual" : "c × s",
+                   active: paint.gauge) {
+            paint.gauge.toggle()
+        }
+    }
+}
+
 /// A lattice-styled toggle cell for the demoted W1 knobs (gauge/gene): fills its
 /// slot inside the advanced sheet. (The first-class verbs wear `DecideVerbFace`.)
 private struct DecideCell: View {
@@ -1432,7 +1457,7 @@ private struct DecideCell: View {
 /// cell inside the advanced sheet). Tap/drag paints the brush into the selected
 /// channel of `CellBudget` — the `miNudge` surface. W1 semantics untouched.
 private struct DecidePaintWidget: View {
-    @ObservedObject var model: DecideModel
+    let model: DecideModel
     @ObservedObject var paint: NudgePaintModel
     private let side = NudgePaintModel.side
 

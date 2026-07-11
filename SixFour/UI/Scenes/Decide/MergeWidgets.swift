@@ -19,7 +19,7 @@ import SwiftUI
 /// then regions at 64), row 1 = spendable signal (one cell per frame-unit,
 /// capped at the rail width). Display-only.
 struct MergeSignalBar: View {
-    @ObservedObject var model: DecideModel
+    let model: DecideModel   // @Observable: body reads are tracked
 
     var body: some View {
         let ink = SIMD3<UInt8>(UInt8(SixFourCellMechanics.faceControlInk.r),
@@ -66,7 +66,7 @@ struct MergeSignalBar: View {
 /// text. Exhausted pours = quarter-ink ring, disabled (the burst has no more
 /// slices — the honest end of the resource).
 struct MergePourWidget: View {
-    @ObservedObject var model: DecideModel
+    let model: DecideModel   // @Observable: body reads are tracked
     let clock: SurfaceClock
     @State private var baked: (key: Int, image: UIImage?) = (.min, nil)
 
