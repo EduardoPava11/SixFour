@@ -1,5 +1,21 @@
 # LOOM RUNGS — DEVICE VALIDATION CHECKLIST (iPhone 17 Pro)
 
+> **PHASE P — THE LADDER PROBE (2026-07-10, Stage 0 of docs/REBUILD-2026-07-10-PLAN.md).**
+> Run this BEFORE (or instead of) Phase A/B when validating the rebuild direction.
+> Flip `Feature.ladderProbe = true` (keep `yinYangBands = true`, `multiScaleLadder = false`;
+> set `v21Capture = false` to free 384 MiB during probe bursts), build for device, fire a
+> burst, filter Console on `[proof]`. Expect, once per burst: a one-time `[proof] format:`
+> x420 census (the 4K line answers whether the 512² rung is reachable); five
+> `[proof] rung N²:` lines (16/32/64/128/256 — 64/64 frames each at crop 512, pool
+> mean/max ms per probe rung); three `[proof] fold: … BYTE-IDENTICAL` lines (the
+> `Spec.LadderColorTime` transitivity checked on real photons); one
+> `[proof] foldl==foldr:` order-invariance line; the `[proof] collapse:` canonical 64³
+> record line (~6 MiB, 64 slices); `[proof] probe memory:` (~128 MiB held) and
+> `[proof] budget: dropped=0, pressure=0`. PASS = all folds BYTE-IDENTICAL, dropped=0,
+> tick CPU max under the 50 ms budget in the `[perf]` line, stable across 5 bursts.
+> Any fold line reading FAILED is a stop-the-line bug (the exact-integer contract broke).
+> Bring the log back to the rebuild plan — it is the "prove the three resolutions" artifact.
+
 The rung-telemetry GRID + independent-ladder capture landed sim-green but the
 exposure hardware only exists on a real device (`setExposureModeCustom` is
 ignored/unavailable in the Simulator). This is the on-device pass, in two

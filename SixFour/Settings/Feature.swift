@@ -98,6 +98,21 @@ enum Feature {
     /// byte depends on it, so flipping this off degrades to exactly today's output.
     static let yinYangBands = true
 
+    /// THE LADDER PROBE — the hardware-capability + theorem-witness burst mode
+    /// (docs/REBUILD-2026-07-10-PLAN.md, Stage 0). **OFF — flip for probe runs only.**
+    ///
+    /// With this on (and `yinYangBands` on), every burst additionally pools the
+    /// SAME x420 crop at every rung of `{16,32,64,128,256}` that divides the crop
+    /// (`LadderProbe`, fed after `ColorHead.ingest`), holds the per-rung burst
+    /// cubes, verifies the fold algebra on the real photons (`Spec.LadderColorTime`:
+    /// transitivity `pool(256→64) == direct64` byte-identity, foldl == foldr over
+    /// the burst's temporal accumulation), and emits the once-per-burst `[proof]`
+    /// log lines — the device half of the ladder–color-time theorem plus the
+    /// 128²/256² training-data capability census. Telemetry/log only: no GIF byte
+    /// and no record byte depends on it; with it OFF the probe is never constructed
+    /// and the capture path is byte-for-byte today's behaviour.
+    static let ladderProbe = false
+
     /// The LIVE-LADDER preview realization — the inverted-pyramid's 32²/16² rungs
     /// read the REAL device ladder instead of view-pooling the 64² index tile.
     /// **OFF — device-only, in bring-up (mirrors `multiScaleLadder`).**

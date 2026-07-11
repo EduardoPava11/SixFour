@@ -72,6 +72,10 @@ final class ColorHead {
     private var pending16: [UInt64]?
     private var pendingRaw64: [UInt64]?
     private var lastCropArea: Int64 = 0
+    /// The ACTUAL crop side of the most recent pooled frame (may be < `cropSide`
+    /// when the camera's min dimension is smaller). 0 until a frame pools.
+    /// The ladder probe divides its rungs against this, never the requested side.
+    private(set) var lastCropSide: Int = 0
     /// Whether the current sums are LINEAR16 BT.2020 (x420 measurement path) vs
     /// gamma sRGB8 bytes (32BGRA path). Selects the emit16 GCT realization:
     /// linear → `s4_sums_bt2020_to_srgb8` (gamut hop + inverse-EOTF), byte →
@@ -131,6 +135,7 @@ final class ColorHead {
         }
         guard rc == 0 else { return nil }
         lastCropArea = Int64(crop.side / 16) * Int64(crop.side / 16)
+        lastCropSide = crop.side
         sumsAreLinear = false // gamma sRGB8 bytes → s4_sums_to_srgb8 in emit16
         return sums
     }
@@ -258,8 +263,36 @@ final class ColorHead {
         }
         guard rc == 0 else { return nil }
         lastCropArea = Int64(side / 16) * Int64(side / 16)
+        lastCropSide = side
         sumsAreLinear = true // linear16 BT.2020 → s4_sums_bt2020_to_srgb8 in emit16
         return sums
+    }
+
+    // MARK: - The ladder probe tap (Feature.ladderProbe)
+
+    /// Pool the CURRENT tick's converted x420 crop (`rgb10Scratch`) at an
+    /// arbitrary rung — the `LadderProbe`'s tap into the measurement path. The
+    /// scratch is only valid immediately after a successful
+    /// `poolSums64(fromX420:)` on this queue-confined head, and only rungs that
+    /// divide the actual crop pool exactly (`s4_pool_sums_linear_hlg10` requires
+    /// `out_side | side`). Same kernel, same crop, same linearization as the
+    /// canonical 64-rung sums — so a probe rung differs from the direct sums
+    /// ONLY in bin geometry, which is what makes the fold byte-identity checks
+    /// (`Spec.LadderColorTime.lawPoolTransitive`) non-vacuous. Nil off the x420
+    /// path or for a non-dividing rung.
+    func probePool(outSide: Int) -> [UInt64]? {
+        guard sumsAreLinear, lastCropSide > 0, outSide > 0,
+              lastCropSide % outSide == 0,
+              rgb10Scratch.count == lastCropSide * lastCropSide * 3
+        else { return nil }
+        var sums = [UInt64](repeating: 0, count: outSide * outSide * 3)
+        let rc = rgb10Scratch.withUnsafeBufferPointer { rgb in
+            sums.withUnsafeMutableBufferPointer { out in
+                s4_pool_sums_linear_hlg10(
+                    rgb.baseAddress, Int32(lastCropSide), Int32(outSide), out.baseAddress)
+            }
+        }
+        return rc == 0 ? sums : nil
     }
 
     // MARK: - The ladder: exact u64 adds at GIF-exact cadences

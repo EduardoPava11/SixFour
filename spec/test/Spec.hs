@@ -135,6 +135,7 @@ import qualified Properties.FidelityLadder as FidelityLadder
 import qualified Properties.RadiometricRealize as RadiometricRealize
 import qualified Properties.ColorTime         as ColorTime
 import qualified Properties.ColorTimeDisplay  as ColorTimeDisplay
+import qualified Properties.LadderColorTime   as LadderColorTime
 import qualified Properties.TimeSlide         as TimeSlide
 import qualified Properties.GaussianLadder    as GaussianLadder
 import qualified Properties.EventEncoding     as EventEncoding
@@ -387,6 +388,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , RadiometricRealize.tests
   , ColorTime.tests
   , ColorTimeDisplay.tests
+  , LadderColorTime.tests
   , TimeSlide.tests
   , GaussianLadder.tests
   , EventEncoding.tests

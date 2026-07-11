@@ -594,6 +594,17 @@ light ladder @Δ_k = 2^k Δ₀@ gives @τ_c(k) = 4^k Δ₀@ (@lawColorTimeQuarti
 pool factor (@lawStopEqualsPoolIndex@) — one integer k for coarsening, pooling, and stops. A finitely-
 additive measure (@lawColorTimeAdditive@) whose reported colour is the temporal MEAN, so motion is averaged
 (@lawMotionAverageInHull@). Pure-spec, exact @Rational@. Additive),
+"SixFour.Spec.LadderColorTime" (★ THE LADDER–COLOR-TIME THEOREM — the consolidating statement that training on
+the @{16³,32³,64³}@ ladder IS training on color time. FOLD ALGEBRA: pooling = the fold of the commutative monoid
+@(ℕⁿ,+,0)@ over 2×2×2 blocks — @foldl == foldr ==@ any traversal (@lawFoldOrderInvariant@; lifts to whole cell
+tensors channelwise, @lawCellTensorLifts@); associativity = transitivity @poolBy 2 ∘ poolBy 2 == poolBy 4@
+(@lawPoolTransitive@ — the spec twin of the on-device @[proof] fold:@ byte-identity check); mass-splitting
+@expandDouble@ makes the canonical 64 a RETRACT of every finer rung (@lawPoolExpandIdentity@), so the probe
+ladder @{16,32,64,128,256}@ is symmetric about the 64 reality, octave distances @2,1,0,1,2@
+(@lawLadderSymmetricAboutCanonical@). BRIDGE: one fold step = one color-time quadrupling — side halves, @τ_c ×4@
+(@lawRungIsColorTimeStop@ → the quartic of "SixFour.Spec.ColorTime"); training density is
+"SixFour.Spec.TriScaleTraining"'s disjoint bits, convergence "SixFour.Spec.FidelityLadder"'s @lawDeeperIsCloser@,
+learnability "SixFour.Spec.EventEncoding"'s zero-irreducible-loss decode. Pure-spec, exact. Additive),
 "SixFour.Spec.GaussianLadder" (★ THE ARITHMETIC OF THE LADDER — the spatial sample lattice is the Gaussian
 integers @ℤ[i]@; the atomic "halve resolution" is division by the RAMIFIED prime squared @π²@ (2 = −i·(1+i)²,
 @lawTwoRamifies@; @N(1+i)=2@). The rung-k ideal @π^{2k}=(2^k)@ has norm @4^k@ (pooled cell AREA,

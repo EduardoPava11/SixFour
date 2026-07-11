@@ -145,6 +145,7 @@ library
         SixFour.Spec.RadiometricRealize
         SixFour.Spec.ColorTime
         SixFour.Spec.ColorTimeDisplay
+        SixFour.Spec.LadderColorTime
         SixFour.Spec.TimeSlide
         SixFour.Spec.GaussianLadder
         SixFour.Spec.EventEncoding
@@ -554,6 +555,7 @@ test-suite spec-tests
         Properties.RadiometricRealize
         Properties.ColorTime
         Properties.ColorTimeDisplay
+        Properties.LadderColorTime
         Properties.TimeSlide
         Properties.GaussianLadder
         Properties.EventEncoding

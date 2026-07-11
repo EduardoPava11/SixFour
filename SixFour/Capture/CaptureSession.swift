@@ -79,6 +79,13 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// `delegateQueue` right after each frame's GPU submission, drained at the
     /// burst seam. nil keeps the shipped path untouched.
     private var colorHead: ColorHead?
+    /// THE LADDER PROBE (Feature.ladderProbe): per-burst capability + theorem
+    /// witness — pools the colorHead's x420 crop at {16,32,64,128,256}, verifies
+    /// the fold byte-identities, renders the `[proof]` lines at the burst seam.
+    /// Requires the colorHead (it taps its scratch); nil keeps today's path.
+    private var ladderProbe: LadderProbe?
+    /// One-shot `[proof] format:` census guard (first probe burst only).
+    private var formatCensusLogged = false
     /// The band-head twin of `thetaUpCallback`: the S_t yang head's training
     /// verdict (generation-tagged, nil = Metal unavailable, no pairs, or the
     /// certified floor was already exact — the floor ships, never an error) AND
@@ -909,6 +916,11 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                 // the ladder off this line is byte-for-byte today's behaviour.
                 self.colorHead = (Feature.yinYangBands && self.weaveDriver == nil)
                     ? ColorHead(cropSide: 512) : nil
+                // LADDER PROBE (gated): fresh per burst, rides the colorHead's
+                // x420 scratch — log-only, no GIF/record byte depends on it.
+                self.ladderProbe = (Feature.ladderProbe && self.colorHead != nil)
+                    ? LadderProbe() : nil
+                if self.ladderProbe != nil { self.logFormatCensusOnce() }
                 self.continuation = cont
                 self.firstFrameVerified = false
                 self.collecting = true
@@ -1045,6 +1057,27 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                            pressureLevel: pressureRaw))
     }
 
+    /// One-shot `[proof] format:` census for the ladder probe: every x420-capable
+    /// format's dims / max fps / silicon binning — the facts that decide whether
+    /// the 512² probe rung (crop 2048, 4K-class) is even reachable on this phone.
+    /// Format-side facts only; whether a 4K format actually DELIVERS x420 through
+    /// the data output stays the `selectHDRFormat` probe loop's verdict (its
+    /// `[capture] Probing …` lines — read both when judging the ceiling).
+    private func logFormatCensusOnce() {
+        guard !formatCensusLogged, let device else { return }
+        formatCensusLogged = true
+        var x420Count = 0
+        for f in device.formats {
+            let dims = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
+            let sub = CMFormatDescriptionGetMediaSubType(f.formatDescription)
+            guard sub == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange else { continue }
+            x420Count += 1
+            let maxFps = f.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0
+            Self.log.log("[proof] format: \(dims.width)×\(dims.height) x420 maxFps \(Int(maxFps)) binned=\(f.isVideoBinned)")
+        }
+        Self.log.log("[proof] format census: \(x420Count) x420-capable formats of \(device.formats.count) total")
+    }
+
     /// Map `AVCaptureDevice.SystemPressureState.Level` to the telemetry's
     /// 0…4 scale (nominal → shutdown); -1 for anything unknown.
     private static func pressureLevelRaw(_ level: AVCaptureDevice.SystemPressureState.Level) -> Int {
@@ -1076,6 +1109,13 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             let meanMs = Double(tickCpuTotalUs) / Double(tickCpuCount) / 1000.0
             let maxMs = Double(tickCpuMaxUs) / 1000.0
             Self.log.log("[perf] yin-yang tick CPU: \(self.tickCpuCount) ticks, mean \(meanMs, format: .fixed(precision: 2)) ms, max \(maxMs, format: .fixed(precision: 2)) ms (50 ms tick budget)")
+        }
+        // [proof] the ladder-probe burst summary (Feature.ladderProbe): per-rung
+        // census, fold byte-identities, canonical collapse — once per burst.
+        if let probe = ladderProbe {
+            for line in probe.summaryLines() { Self.log.log("\(line)") }
+            Self.log.log("[proof] budget: dropped=\(self.droppedFrameCount), pressure=\(self.pressureRaw)")
+            ladderProbe = nil
         }
         // SYSTEM TELEMETRY: publish the burst's tick-CPU aggregate BEFORE the
         // counters reset (burst-boundary publish, never per tick).
@@ -1452,6 +1492,7 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
             v21HistBuffer = nil
             v21BufferState = .none
             colorHead = nil
+            ladderProbe = nil
             weaveDriver = nil   // the viewmodel's defer restores continuous AE
             collecting = false
             cont?.resume(throwing: error)
@@ -1490,6 +1531,10 @@ extension CaptureSession: AVCaptureVideoDataOutputSampleBufferDelegate {
             let t0 = DispatchTime.now().uptimeNanoseconds
             if let sums = ch.poolSums64(fromX420: pixelBuffer) {
                 ch.ingest(sums)
+                // LADDER PROBE (gated): pool the same scratch at the probe rungs
+                // + run the fold byte-identity checks. Inside the tick timing on
+                // purpose — the probe's cost must show in the [perf] tick line.
+                ladderProbe?.ingest(head: ch, directSums64: sums)
                 // COALESCED derived-mode telemetry at the 16-rung cadence (every
                 // 4th ingested tick = 5 Hz) — constants + counters, no computation
                 // (the coarse rungs ARE exact pools; comovement is 1000‰ by
