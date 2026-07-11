@@ -52,6 +52,13 @@ struct CaptureOutput: Sendable, Hashable, Identifiable {
     /// default — matching `deterministic`/`sha256` below.
     var frameIndicesForVoxels: [[UInt8]]? = nil
 
+    /// THE ONTOLOGY: the render as a typed value — the canonical 64-side Loop
+    /// (docs/REBUILD-2026-07-10-PLAN.md §2b). Non-nil only on the deterministic
+    /// path; when present, σ derives its palette/index views from THIS (the
+    /// single owner) instead of the raw arrays above. Out of ==/hash like the
+    /// arrays (identity is gifURL).
+    var loop: Loop? = nil
+
     /// True when produced by the deterministic fixed-point Zig core (vs the GPU
     /// float path). Drives the Review reproducibility badge.
     var deterministic: Bool = false
@@ -1089,6 +1096,7 @@ final class CaptureViewModel {
             perFrameCoverage: result.perFrameCoverage,
             perFrameMSE: result.perFrameMSE,
             frameIndicesForVoxels: result.frameIndices,
+            loop: result.loop,
             deterministic: true,
             sha256: result.sha256Hex,
             stageMillis: result.stageMillis

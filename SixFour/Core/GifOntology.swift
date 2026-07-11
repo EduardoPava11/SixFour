@@ -33,7 +33,7 @@ import simd
 /// table order). Mirrors `Spec.Palette`; promoted from `CollapsedPalette`'s
 /// leaves. The sRGB8 GCT/LCT bytes are a VIEW (`srgb8()`), not a second
 /// representation — both directions run through the golden color kernels.
-struct Palette: Equatable, Sendable {
+struct Palette: Equatable, Hashable, Sendable {
     /// OKLab Q16 leaves in slot order.
     var leavesQ16: [SIMD3<Int32>]
 
@@ -112,7 +112,7 @@ struct Palette: Equatable, Sendable {
 /// THE INDEX MAP: side² palette indices, row-major, kernel-native `UInt8`
 /// (the one width — the `[UInt16]`/`[Int]` shapes retire with Unit 2).
 /// Mirrors `Spec.Gif89aDecode.IndexMap`.
-struct IndexPlane: Equatable, Sendable {
+struct IndexPlane: Equatable, Hashable, Sendable {
     /// The square side in pixels.
     let side: Int
     /// side² indices into a `Palette`, row-major.
@@ -131,7 +131,7 @@ struct IndexPlane: Equatable, Sendable {
 /// isotropic ladder a frame belongs to. The GCE delay is a THEOREM of the
 /// rung (`s4_ladder_delay_cs`: 64→5 cs, 32→10, 16→20 — the GIF89a time law),
 /// so it is derived here and stored nowhere.
-enum WeaveRung: UInt8, Equatable, Sendable, CaseIterable {
+enum WeaveRung: UInt8, Equatable, Hashable, Sendable, CaseIterable {
     case w64 = 0
     case w32 = 1
     case w16 = 2
@@ -170,7 +170,7 @@ enum WeaveRung: UInt8, Equatable, Sendable, CaseIterable {
 /// side may be an integer REPLICATION of the rung's side (the 64→256 export,
 /// `replicate2D` — replication adds pixels, never information or time), so
 /// the delay always comes from the RUNG, not the raster.
-struct Cel: Equatable, Sendable {
+struct Cel: Equatable, Hashable, Sendable {
     var plane: IndexPlane
     var rung: WeaveRung
 
@@ -193,7 +193,7 @@ struct Cel: Equatable, Sendable {
 /// ONE codec of this value (`gifBytes()` / `init(gifBytes:)`); `.s4cr` stays
 /// the pre-collapse measurement sidecar. A model that "makes the GIF better"
 /// is exactly a better `record → Loop` function.
-struct Loop: Equatable, Sendable {
+struct Loop: Equatable, Hashable, Sendable {
     /// The stop-motion frames, in play order.
     var cels: [Cel]
     /// Per-frame palettes (MVP1 is per-frame; a global palette is the special
@@ -216,6 +216,41 @@ struct Loop: Equatable, Sendable {
         guard let maxIndex = cels[t].plane.indices.max(), Int(maxIndex) < leaves.count
         else { return nil }
         return cels[t].plane.indices.map { leaves[Int($0)] }
+    }
+
+    /// THE EXPORT VIEW (the capture-format contract, `replicate2D ≠ upscale256`):
+    /// every cel's plane replicated `factor`× per axis in the INDEX domain via
+    /// the generated contract (`SixFourExport.replicate`, whose exact left
+    /// inverse is `decimate`). Palettes and TIME are untouched — replication
+    /// adds pixels, never information. The wire loop whose `gifBytes()` is the
+    /// shipped 256-side file.
+    func replicated(by factor: Int) -> Loop? {
+        guard factor >= 1 else { return nil }
+        if factor == 1 { return self }
+        var wireCels = [Cel]()
+        wireCels.reserveCapacity(cels.count)
+        for cel in cels {
+            let big = SixFourExport.replicate(cel.plane.indices, side: cel.plane.side, factor: factor)
+            guard let plane = IndexPlane(side: cel.plane.side * factor, indices: big),
+                  let wireCel = Cel(plane: plane, rung: cel.rung) else { return nil }
+            wireCels.append(wireCel)
+        }
+        return Loop(cels: wireCels, palettes: palettes)
+    }
+
+    /// UI VIEW: the per-frame palettes as sRGB8 triples — the shape the
+    /// observable surface paints with (`σ.palettesPerFrame`). Same realization
+    /// kernel as the wire, so display and file can never disagree.
+    func srgb8Palettes() -> [[SIMD3<UInt8>]]? {
+        var out = [[SIMD3<UInt8>]]()
+        out.reserveCapacity(palettes.count)
+        for palette in palettes {
+            guard let rgb = palette.srgb8() else { return nil }
+            out.append((0..<palette.k).map {
+                SIMD3(rgb[$0 * 3], rgb[$0 * 3 + 1], rgb[$0 * 3 + 2])
+            })
+        }
+        return out
     }
 
     /// SELF-CONTAINMENT, encode half: the GIF89a bytes, via the same golden

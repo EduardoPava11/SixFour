@@ -40,6 +40,13 @@ struct DeterministicRenderer {
 
     struct Result: Sendable {
         let gifData: Data
+        /// THE ONTOLOGY (docs/REBUILD-2026-07-10-PLAN.md §2b): the render as a
+        /// typed value — the canonical 64-side Loop (per-frame Palettes over
+        /// the Q16 centroids + index-plane Cels on the source rung).
+        /// `gifData` IS `loop.replicated(by: SixFourExport.upscaleFactor)`'s
+        /// `gifBytes()` — the file is derived from the value, so they cannot
+        /// drift. The raw arrays below remain as views for existing readers.
+        let loop: Loop
         /// 64 frames × 4096 palette indices — for the CompleteVoxelVolume gate.
         let frameIndices: [[UInt8]]
         /// 64 × 256 sRGB palettes — for the UI palette strip + the encoder.
@@ -190,15 +197,12 @@ struct DeterministicRenderer {
 
         // ── Stage 4: palette → sRGB8 ──────────────────────────────────────────
         onStage(.palette)
-        var palettesRGBFlat: [UInt8] = []
-        palettesRGBFlat.reserveCapacity(tiles.count * k * 3)
         var srgbPalettes: [[SIMD3<UInt8>]] = []
         srgbPalettes.reserveCapacity(tiles.count)
         for f in 0..<tiles.count {
             guard let rgb = SixFourNative.paletteToSRGB8(centroidsQ16: centroidsPerFrame[f], k: k) else {
                 throw DetError.stageFailed("palette")
             }
-            palettesRGBFlat.append(contentsOf: rgb)
             var pal: [SIMD3<UInt8>] = []
             pal.reserveCapacity(k)
             for j in 0..<k { pal.append(SIMD3(rgb[j * 3], rgb[j * 3 + 1], rgb[j * 3 + 2])) }
@@ -241,17 +245,31 @@ struct DeterministicRenderer {
 
         // ── Stage 5: LZW / GIF89a ─────────────────────────────────────────────
         onStage(.encode)
-        // Export at 256² via 1→4×4 index replication (SixFourExport). Brand/gates ran
-        // on the 64² source above; replication is index-domain (palette untouched, no
-        // transparency). Pass the upscaled side to the side-parametrized assembler.
-        let outSide = side * SixFourExport.upscaleFactor
-        let flatIndices = indicesPerFrame.flatMap {
-            SixFourExport.replicate($0, side: side, factor: SixFourExport.upscaleFactor)
+        // THE ONTOLOGY SEAM: fold the staged buffers into the canonical 64-side
+        // Loop, then DERIVE the shipped bytes from it — export at 256² via the
+        // index-domain replication view (`Loop.replicated`, the capture-format
+        // contract) and the same golden assembler as before, with the 5 cs
+        // delay now the RUNG'S THEOREM (`s4_ladder_delay_cs`) instead of a
+        // constant. Byte-parity with the pre-Loop path is structural (identical
+        // kernel arguments) and pinned by the golden SHA tests + parity suite.
+        guard let rung = WeaveRung(side: side) else { throw DetError.stageFailed("rung") }
+        var cels = [Cel]()
+        var palettes = [Palette]()
+        cels.reserveCapacity(tiles.count)
+        palettes.reserveCapacity(tiles.count)
+        for f in 0..<tiles.count {
+            guard let plane = IndexPlane(side: side, indices: indicesPerFrame[f]),
+                  let cel = Cel(plane: plane, rung: rung) else { throw DetError.stageFailed("loop") }
+            cels.append(cel)
+            let cents = centroidsPerFrame[f]
+            palettes.append(Palette(leavesQ16: (0..<k).map {
+                SIMD3<Int32>(cents[$0 * 3], cents[$0 * 3 + 1], cents[$0 * 3 + 2])
+            }))
         }
-        guard let gif = SixFourNative.gifAssemble(
-            indices: flatIndices, palettesRGB: palettesRGBFlat,
-            frameCount: tiles.count, side: outSide, k: k, delayCs: 5, comment: comment
-        ) else { throw DetError.stageFailed("encode") }
+        guard let loop = Loop(cels: cels, palettes: palettes),
+              let exportLoop = loop.replicated(by: SixFourExport.upscaleFactor),
+              let gif = exportLoop.gifBytes(comment: comment)
+        else { throw DetError.stageFailed("encode") }
 
         let sha = SHA256.hash(data: gif).map { String(format: "%02x", $0) }.joined()
         let eMs = lap()
@@ -266,6 +284,7 @@ struct DeterministicRenderer {
 
         return Result(
             gifData: gif,
+            loop: loop,
             frameIndices: indicesPerFrame,
             srgbPalettes: srgbPalettes,
             cells: cellsPerFrame,

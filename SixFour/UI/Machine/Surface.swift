@@ -46,6 +46,15 @@ final class Surface {
     /// observable by VALUE change, not nil-ness (the Done bundle rebuild trigger).
     var v21FlowVersion: Int = 0
 
+    /// THE ONTOLOGY: the committed render as a typed value — the canonical
+    /// 64-side `Loop` (docs/REBUILD-2026-07-10-PLAN.md §2b). When present,
+    /// `palette` / `palettesPerFrame` / `indexCube` below are derived VIEWS of
+    /// it, populated once at commit (single owner; the arrays stay stored as
+    /// caches for per-frame render cost). nil before the first deterministic
+    /// commit and on the float fallback path, where the arrays populate as
+    /// before.
+    var loop: Loop? = nil
+
     /// The current 256-colour palette (sRGB8) the surface paints — the live per-frame
     /// palette during capture, frame-0's palette after a commit (the `palette` accessor).
     var palette: [SIMD3<UInt8>] = []

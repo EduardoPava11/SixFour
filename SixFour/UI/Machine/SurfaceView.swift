@@ -319,17 +319,30 @@ struct SurfaceView: View {
     /// caller fires `.burstComplete` AFTER this (so σ already has the data when `.captured`
     /// mounts the A/B field).
     private func commit(_ out: CaptureOutput) {
-        surface.palettesPerFrame = out.palettesForDisplay
+        // THE ONTOLOGY SEAM: when the render carries its typed Loop, σ's
+        // palette/index fields are derived from THAT value (one owner; the
+        // views run through the same golden kernels, so the values are
+        // byte-identical to the legacy arrays — LoopPipelineParityTests pins
+        // it). The float fallback (loop == nil) populates them exactly as
+        // before.
+        surface.loop = out.loop
+        if let loop = out.loop, let pals = loop.srgb8Palettes() {
+            surface.palettesPerFrame = pals
+            if let pal = pals.first { surface.palette = pal }
+            surface.indexCube = loop.cels.flatMap { $0.plane.indices }
+        } else {
+            surface.palettesPerFrame = out.palettesForDisplay
+            if let pal = out.palettesForDisplay.first {
+                surface.palette = pal
+            }
+            if let frames = out.frameIndicesForVoxels {
+                var cube = [UInt8]()
+                cube.reserveCapacity(frames.count * SixFourShape.pixelsPerFrame)
+                for f in frames { cube.append(contentsOf: f) }
+                surface.indexCube = cube
+            }
+        }
         surface.gifURL = out.gifURL
-        if let pal = out.palettesForDisplay.first {
-            surface.palette = pal
-        }
-        if let frames = out.frameIndicesForVoxels {
-            var cube = [UInt8]()
-            cube.reserveCapacity(frames.count * SixFourShape.pixelsPerFrame)
-            for f in frames { cube.append(contentsOf: f) }
-            surface.indexCube = cube
-        }
         // V2.1 (gated): fold the engine's time-pooled camera-box field into σ so the review bench's
         // FIELD / AIRDROP read the true camera histogram (nil keeps the index-cube proxy path).
         surface.v21Counts = engine.v21Counts
