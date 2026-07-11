@@ -50,6 +50,36 @@ enum QuartetDelta {
         return sum / Double(slots.count)
     }
 
+    /// LIVE BURST READOUT (promoted by the 2026-07-11 link ledger, wave 1 —
+    /// this twin was golden-gated but had zero callers): chunk a burst's
+    /// per-frame Q16 palettes into consecutive quartets and summarize the
+    /// palette MOTION — mean and max slot displacement across all quartets.
+    /// Collapse owns the static pose; this number is the motion it discards.
+    /// Log-only consumer today; Review surfacing follows the device-fit gate.
+    static func burstMotion(paletteQ16Frames: [[SIMD3<Int32>]])
+        -> (quartets: Int, meanDisplacement: Double, maxDisplacement: Double)? {
+        let quartets = paletteQ16Frames.count / quartetFrames
+        guard quartets > 0 else { return nil }
+        var total = 0.0
+        var maxDisplacement = 0.0
+        var slotCount = 0
+        for q in 0..<quartets {
+            let palettes = (0..<quartetFrames).map { f in
+                paletteQ16Frames[q * quartetFrames + f].map {
+                    SIMD3<Double>(Double($0.x), Double($0.y), Double($0.z)) / 65536.0
+                }
+            }
+            for slot in toSlots(palettes) {
+                let d = slotDisplacement(slot)
+                total += d
+                if d > maxDisplacement { maxDisplacement = d }
+                slotCount += 1
+            }
+        }
+        guard slotCount > 0 else { return nil }
+        return (quartets, total / Double(slotCount), maxDisplacement)
+    }
+
     /// Slots ranked by displacement, ascending — `(slotIndex, displacement)`. Lowest first =
     /// most "core". Ties resolve to the lower slot index (a total, device-stable order).
     static func corenessRanked(_ slots: [[SIMD3<Double>]]) -> [(Int, Double)] {

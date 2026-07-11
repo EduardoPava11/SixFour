@@ -1078,6 +1078,13 @@ final class CaptureViewModel {
             $0.filter { $0.count >= SixFourSignificance.minPopulation }.count
         }
 
+        // QuartetDelta LIVE (link-ledger wave 1): the palette-motion readout on
+        // every deterministic capture — collapse owns the static pose, this
+        // owns the motion it discards. Once per burst, at the commit seam.
+        if let motion = QuartetDelta.burstMotion(
+            paletteQ16Frames: result.loop.palettes.map(\.leavesQ16)) {
+            Self.logger.log("[quartet] \(motion.quartets) quartets: slot displacement mean \(String(format: "%.4f", motion.meanDisplacement)) max \(String(format: "%.4f", motion.maxDisplacement)) (OKLab)")
+        }
         let output = CaptureOutput(
             gifURL: baseURL,
             contactURL: contact,
