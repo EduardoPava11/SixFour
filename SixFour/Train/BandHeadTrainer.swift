@@ -95,6 +95,18 @@ final class BandHeadTrainer: @unchecked Sendable {
         enc.endEncoding()
         cmd.commit()
         cmd.waitUntilCompleted()
+        // Honest-nil on GPU failure (the RungDispatch guard, device audit
+        // 2026-07-11): the first real-corpus capture shipped weights=[0…],
+        // MSE 0→0 — impossible on live targets — because a failed command
+        // buffer (single-thread 2500-step dispatch at the burst seam; watchdog
+        // territory on device, invisible on the simulator's Mac GPU) left the
+        // zero-initialized buffers to be read back as a "trained" result.
+        // nil = the floor ships and the corpus sidecar records absent, never
+        // an invented outcome.
+        guard cmd.status == .completed else {
+            NSLog("BandHeadTrainer: GPU dispatch failed (\(String(describing: cmd.error))) — returning nil")
+            return nil
+        }
 
         let losses = lBuf.contents().assumingMemoryBound(to: Float.self)
         let wOut = wBuf.contents().assumingMemoryBound(to: Float.self)
