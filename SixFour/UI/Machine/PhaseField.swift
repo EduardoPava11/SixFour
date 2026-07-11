@@ -133,6 +133,13 @@ struct DonePhaseField: View {
     /// sidecar + manifest), built from the committed burst when EXPORT is tapped.
     @State private var shareItems: [Any] = []
     @State private var showShare = false
+    /// THE CORPUS (Feature.trainingCorpus): how many captures have a persisted
+    /// training volume (0 hides the button), and the staged archive awaiting the
+    /// share sheet once CORPUS is tapped (nil while zipping).
+    @State private var corpusCount = 0
+    @State private var corpusArchive: URL?
+    @State private var showCorpusShare = false
+    @State private var corpusBuilding = false
     /// The colours the LUT grades toward: ALL frames' palettes pooled into one cloud (a
     /// clip-wide profile), falling back to the single review palette. (Ported from Review.)
     private var lutPalette: [SIMD3<UInt8>] {
@@ -179,6 +186,35 @@ struct DonePhaseField: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Export 3D LUT for R3D")
                 }
+                // THE CORPUS (Feature.trainingCorpus): AirDrop the ACCUMULATED
+                // training data — every capture's GIF + .s4cr + Q16 volume +
+                // train sidecar, staged with a manifest and zipped
+                // (`TrainingCorpus.exportArchive`, Mac reader
+                // `trainer/corpus_ingest.py`). One tap ships the whole corpus;
+                // the count is the honest label. Blocking file I/O runs off the
+                // main actor; the sheet opens when the archive lands.
+                if Feature.trainingCorpus && corpusCount > 0 {
+                    Button {
+                        guard !corpusBuilding else { return }
+                        corpusBuilding = true
+                        Task {
+                            let url = await Task.detached(priority: .userInitiated) {
+                                TrainingCorpus.exportArchive()
+                            }.value
+                            corpusBuilding = false
+                            if let url {
+                                corpusArchive = url
+                                showCorpusShare = true
+                            }
+                        }
+                    } label: {
+                        CellActionButton(icon: .none,
+                                         title: corpusBuilding ? "PACKING…" : "CORPUS (\(corpusCount))",
+                                         prominent: false, fillWidth: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Export all captured training data")
+                }
                 Button { surface.step(.retake) } label: {
                     CellActionButton(icon: .none, title: "NEW SHOT",
                                      prominent: true, fillWidth: false)
@@ -188,7 +224,14 @@ struct DonePhaseField: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task { if shareItems.isEmpty { shareItems = exportItems() } }
+        .task {
+            if shareItems.isEmpty { shareItems = exportItems() }
+            if Feature.trainingCorpus,
+               let docs = FileManager.default.urls(for: .documentDirectory,
+                                                   in: .userDomainMask).first {
+                corpusCount = TrainingCorpus.corpusStems(in: docs).count
+            }
+        }
         // The flow may land (or be invalidated) AFTER this field mounts: rebuild on the
         // VERSION, not nil-ness — a stale→correct replacement is non-nil→non-nil and a
         // nil-ness trigger would silently ship the wrong time axis (device audit).
@@ -197,6 +240,9 @@ struct DonePhaseField: View {
             ActivityView(items: [item.url])
         }
         .sheet(isPresented: $showShare) { ActivityView(items: shareItems) }
+        .sheet(isPresented: $showCorpusShare) {
+            if let corpusArchive { ActivityView(items: [corpusArchive]) }
+        }
     }
 
     /// Build the EXPORT bundle once: the GIF plus the probability-field `.npy` (the functions the

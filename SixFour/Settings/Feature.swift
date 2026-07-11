@@ -60,6 +60,22 @@ enum Feature {
     /// starts from zero exactly as today.
     static let metaInitW0 = false
 
+    /// THE CORPUS EXPORT — per-capture training data on disk + the AirDrop
+    /// batch archive. **ON: this is how the real-capture corpus gets made.**
+    ///
+    /// With this on, every burst commit also writes `sixfour_<stamp>.volume.npy`
+    /// (the burst as the int32 Q16 OKLab volume — `CaptureGene.volume`, the same
+    /// bytes the somatic trainer consumes) and `sixfour_<stamp>.train.json` (the
+    /// device's training verdicts and labels: shipped θ_up, band-head outcome,
+    /// per-slot halt orders, drained t-band pairs) beside the GIF + `.s4cr`; the
+    /// Done screen gains a CORPUS button that stages every capture's artifacts
+    /// into one manifest-carrying zip for AirDrop (`TrainingCorpus`). This is
+    /// the missing half of `metaInitW0` above: a real-corpus `metainit-w0.bin`
+    /// can only exist once real bursts reach the Mac
+    /// (`trainer/corpus_ingest.py`). Telemetry/persistence only — no GIF byte
+    /// depends on it; off restores exactly today's disk footprint.
+    static let trainingCorpus = true
+
     /// The Loom's multi-scale INDEPENDENT capture (16³/32³/64³ = three independent
     /// exposure reads, not pools of one source). **OFF — device-only, in bring-up.**
     ///

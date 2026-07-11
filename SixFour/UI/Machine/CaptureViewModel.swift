@@ -163,6 +163,21 @@ final class CaptureViewModel {
     var burstTiles: [OKLabTile] = []
     var thetaUp: CaptureGene.ThetaUp? = nil
 
+    /// THE CORPUS (Feature.trainingCorpus): this capture's training sidecar
+    /// under assembly, and where it persists (`sixfour_<stamp>.train.json`).
+    /// Built at burst commit; the async θ_up / band-head arrivals re-attach and
+    /// re-persist (best-effort, the `.s4cr` write pattern). Cleared at burst
+    /// START with the other per-burst stashes.
+    private var corpusSidecar: TrainingCorpus.Sidecar?
+    private var corpusSidecarURL: URL?
+    /// A band-head outcome that lands BEFORE commit builds the sidecar
+    /// (`finishBurst`'s starved/skip branches fire at the seam itself, and the
+    /// ms-scale GPU train usually beats the seconds-scale render): parked here,
+    /// merged when the sidecar is born.
+    private var pendingBandOutcome: (outcome: TrainingCorpus.BandHeadOutcome?,
+                                     pairs: TrainingCorpus.TBandPairs?,
+                                     haltOrders: [Int32])?
+
     /// THE READS (step B, `Spec.RungReadDisplay`): the last burst's realized
     /// per-rung sRGB8 read volumes (`RungReads.build` on `BurstResult.rungCubes`,
     /// detached — the async build lands AFTER `BurstResult`, the flow/gene
@@ -541,12 +556,24 @@ final class CaptureViewModel {
             // MULTISCALE (halt→depth): the per-slot certified order (haltFloor, 256 = the 16×16
             // region face) drained at burst end → the per-region depth field via the spec-mirrored
             // `HaltDepthBridge` (order≤1→16³, =2→32³, ≥3→64³). Fires on delegateQueue; marshal to
-            // publish. The band-head training result is not consumed here.
-            session.bandHeadCallback = { [weak self] _, haltOrders, _ in
+            // publish. THE CORPUS (Feature.trainingCorpus) additionally keeps the training
+            // result + the drained t-band labels for the capture's sidecar.
+            session.bandHeadCallback = { [weak self] result, pairs, haltOrders, _ in
                 let g = Int(Double(haltOrders.count).squareRoot())
-                guard g > 0, g * g == haltOrders.count else { return }
-                let field = HaltDepthBridge.depthField(fromHaltOrders: haltOrders, gridSide: g)
-                Task { @MainActor [weak self] in self?.haltDepthField = field }
+                let field: [Int32]? = (g > 0 && g * g == haltOrders.count)
+                    ? HaltDepthBridge.depthField(fromHaltOrders: haltOrders, gridSide: g)
+                    : nil
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if let field { self.haltDepthField = field }
+                    guard Feature.trainingCorpus else { return }
+                    let outcome = result.map {
+                        TrainingCorpus.BandHeadOutcome(initialMSE: $0.initialMSE,
+                                                       finalMSE: $0.finalMSE,
+                                                       weights: $0.weights)
+                    }
+                    self.attachBandToSidecar(outcome, pairs, haltOrders)
+                }
             }
 
             // RUNG + SYSTEM TELEMETRY (Feature.rungTelemetry only): already
@@ -657,6 +684,45 @@ final class CaptureViewModel {
         }
     }
 
+    // MARK: - THE CORPUS sidecar assembly (Feature.trainingCorpus)
+
+    /// Fold a band-head arrival into the capture's sidecar — or park it when
+    /// the sidecar is not born yet (the seam's synchronous branches beat the
+    /// commit). Main-actor serialized with the commit, so no torn merge.
+    private func attachBandToSidecar(_ outcome: TrainingCorpus.BandHeadOutcome?,
+                                     _ pairs: TrainingCorpus.TBandPairs?,
+                                     _ haltOrders: [Int32]) {
+        if corpusSidecar != nil {
+            corpusSidecar?.bandHead = outcome
+            corpusSidecar?.tband = pairs
+            corpusSidecar?.haltOrders = haltOrders.isEmpty ? nil : haltOrders
+            persistCorpusSidecar()
+        } else {
+            pendingBandOutcome = (outcome, pairs, haltOrders)
+        }
+    }
+
+    /// Fold the async θ_up arrival into the sidecar (the gene that lands before
+    /// commit rides in on `self.thetaUp` at sidecar birth instead).
+    private func attachGeneToSidecar(_ gene: CaptureGene.ThetaUp?) {
+        guard corpusSidecar != nil, let gene else { return }
+        corpusSidecar?.thetaUp = gene
+        persistCorpusSidecar()
+    }
+
+    /// Best-effort background sidecar write (the `saveBundleAsync` pattern);
+    /// re-fired on every attach so the file converges to the full record.
+    private func persistCorpusSidecar() {
+        guard let sidecar = corpusSidecar, let url = corpusSidecarURL else { return }
+        Task.detached(priority: .background) {
+            do {
+                try TrainingCorpus.writeSidecar(sidecar, to: url)
+            } catch {
+                Self.logger.warning("[corpus] sidecar save failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
     func focus(at normalized: CGPoint) {
         session?.focusAndExpose(at: normalized)
     }
@@ -694,6 +760,11 @@ final class CaptureViewModel {
         // stale-flow discipline, applied to step B's stashes).
         burstRungReads = nil
         mergePourSchedule = S4MergeBoard.derivedSchedule
+        // THE CORPUS stashes too: a late previous-burst arrival must never
+        // fold into this capture's sidecar (its own file already persisted).
+        corpusSidecar = nil
+        corpusSidecarURL = nil
+        pendingBandOutcome = nil
         syncPreviewDither()  // keep the live look in sync with the engine + sampler
         Haptics.impact(.medium)
         loadingProgress = 0      // fresh resolve sweep for this capture
@@ -789,6 +860,9 @@ final class CaptureViewModel {
                         return
                     }
                     self.thetaUp = gene
+                    // THE CORPUS: a gene landing after commit re-attaches to the
+                    // persisted sidecar (before commit it rides in on self.thetaUp).
+                    if Feature.trainingCorpus { self.attachGeneToSidecar(gene) }
                 }
             }
             let result = try await session.captureBurst(into: pipeline)
@@ -865,6 +939,46 @@ final class CaptureViewModel {
             saveCaptureRecordAsync(record, pairedWith: renderResult.output.gifURL)
             lastShutterRecord = record
             lastShutterGifURL = renderResult.output.gifURL
+            // THE CORPUS (Feature.trainingCorpus): persist this capture's
+            // training volume + sidecar beside the GIF/.s4cr, same stem. The
+            // volume is `CaptureGene.volume` as `.npy` — the byte-identical
+            // input the somatic trainer consumed — written detached (it is
+            // ~3 MB, the record-encode pattern). The sidecar is born here from
+            // whatever async arrivals already landed (parked band outcome,
+            // early gene on self.thetaUp); later arrivals re-attach + re-write.
+            if Feature.trainingCorpus {
+                let gifURL = renderResult.output.gifURL
+                var sidecar = TrainingCorpus.Sidecar(
+                    stem: gifURL.deletingPathExtension().lastPathComponent,
+                    capturedAt: Date(),
+                    colorSpace: session.activeColorSpaceTag.label,
+                    frames: tiles.count,
+                    side: tiles.first?.side ?? 0)
+                sidecar.thetaUp = thetaUp
+                if let parked = pendingBandOutcome {
+                    sidecar.bandHead = parked.outcome
+                    sidecar.tband = parked.pairs
+                    sidecar.haltOrders = parked.haltOrders.isEmpty ? nil : parked.haltOrders
+                    pendingBandOutcome = nil
+                }
+                let volumeURL = TrainingCorpus.volumeURL(pairedWith: gifURL)
+                sidecar.volumeFile = volumeURL.lastPathComponent
+                corpusSidecar = sidecar
+                corpusSidecarURL = TrainingCorpus.sidecarURL(pairedWith: gifURL)
+                persistCorpusSidecar()
+                Task.detached(priority: .background) {
+                    guard let npy = TrainingCorpus.volumeNpy(tiles: tiles) else {
+                        Self.logger.warning("[corpus] volume npy skipped (burst not octant-partitionable)")
+                        return
+                    }
+                    do {
+                        try npy.write(to: volumeURL, options: .atomic)
+                        Self.logger.log("[corpus] volume saved: \(volumeURL.lastPathComponent, privacy: .public) (\((npy.count + 1023) / 1024) KiB)")
+                    } catch {
+                        Self.logger.warning("[corpus] volume save failed: \(String(describing: error), privacy: .public)")
+                    }
+                }
+            }
             // THE CAPTURE'S IMMUTABLE POUR SCHEDULE (Spec.MergeEvidence): a
             // pure function of the snapshot just SEALED beside the future
             // decision word — never the live 5 Hz telemetry fold, and NEVER

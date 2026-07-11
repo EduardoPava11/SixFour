@@ -88,11 +88,14 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     private var formatCensusLogged = false
     /// The band-head twin of `thetaUpCallback`: the S_t yang head's training
     /// verdict (generation-tagged, nil = Metal unavailable, no pairs, or the
-    /// certified floor was already exact — the floor ships, never an error) AND
-    /// the per-slot certified-order vector (`haltFloor()`), the halting-depth
-    /// budget that must survive to the render/influence path (A1, the
-    /// KinematicHaltPrior keystone). Empty vector = the ladder was off.
-    var bandHeadCallback: (@Sendable (BandHeadTrainer.Result?, [Int32], Int) -> Void)?
+    /// certified floor was already exact — the floor ships, never an error),
+    /// the drained t-band pairs the verdict was trained on (nil = ladder
+    /// starved; delivered even when training is skipped, so the corpus keeps
+    /// the labels — `Feature.trainingCorpus`), AND the per-slot
+    /// certified-order vector (`haltFloor()`), the halting-depth budget that
+    /// must survive to the render/influence path (A1, the KinematicHaltPrior
+    /// keystone). Empty vector = the ladder was off.
+    var bandHeadCallback: (@Sendable (BandHeadTrainer.Result?, TrainingCorpus.TBandPairs?, [Int32], Int) -> Void)?
 
     /// INDEPENDENT LADDER (Feature.multiScaleLadder only): the burst-time weave
     /// driver — cycles REAL exposures across the interleaved schedule and
@@ -1305,6 +1308,10 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             // linear16 L-sums per fine bin: ~pxPerBin·65535 per channel at clip —
             // 1/(pxPerBin·65535) puts features at O(1) (the drain contract).
             let (f, y, w) = ch.drainTBandPairs(scale: 1.0 / (Float(pxPerBin) * 65535.0))
+            // The corpus keeps the manufactured labels whether or not training
+            // runs below (Feature.trainingCorpus persists them via the callback).
+            let pairs = y.isEmpty ? nil
+                : TrainingCorpus.TBandPairs(width: w, features: f, targets: y)
             // A1 (KinematicHaltPrior keystone): keep the FULL per-slot certified-order
             // vector, not a scalar count. It is the halting-depth budget AND survives to
             // the render/influence path via `bandHeadCallback`.
@@ -1316,12 +1323,12 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             let callback = bandHeadCallback
             if y.isEmpty {
                 Self.log.log("YinYang S_t (gen=\(generation)): no pairs (ladder starved) — the floor ships")
-                callback?(nil, haltOrders, generation)
+                callback?(nil, pairs, haltOrders, generation)
             } else if !needsLearning {
                 // The certified floor already ships the motion exactly (order ≤ 1
                 // everywhere): predict with the derivatives we have, pay no S-packets.
                 Self.log.log("YinYang S_t (gen=\(generation)): SKIP — halt budget \(budget) (\(certifiable)/256 certifiable) ≤ 1, kinematic floor is exact, no residual to learn")
-                callback?(nil, haltOrders, generation)
+                callback?(nil, pairs, haltOrders, generation)
             } else {
                 Task.detached(priority: .userInitiated) {
                     // Subsample stride 16 for the single-thread kernel's budget
@@ -1343,7 +1350,7 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                     } else {
                         Self.log.log("YinYang S_t (async gen=\(generation)): nil (Metal unavailable) — the floor ships")
                     }
-                    callback?(r, haltOrders, generation)
+                    callback?(r, pairs, haltOrders, generation)
                 }
             }
         }

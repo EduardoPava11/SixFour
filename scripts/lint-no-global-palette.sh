@@ -63,7 +63,7 @@ check_frozen 'globalCollapse' \
   spec/src/SixFour/Codegen/Collapse.hs
 
 check_frozen 's4_global_collapse' \
-  SixFour/UI/Screens/Capture/CaptureViewModel.swift \
+  SixFour/UI/Machine/CaptureViewModel.swift \
   SixFour/Native/SixFourNative.swift \
   SixFour/Encoder/DeterministicRenderer.swift \
   SixFour/Kernels/KernelsQuantize.swift \
@@ -72,13 +72,13 @@ check_frozen 's4_global_collapse' \
   spec/src/SixFour/Spec/Map.hs
 
 check_frozen 'renderGlobalPalette' \
-  SixFour/UI/Screens/Capture/CaptureViewModel.swift \
+  SixFour/UI/Machine/CaptureViewModel.swift \
   SixFour/Encoder/DeterministicRenderer.swift \
   SixFour/Atlas/AtlasCollapse.swift \
   SixFour/Atlas/AtlasBoard.swift
 
 check_frozen 'renderDeterministicGlobal' \
-  SixFour/UI/Screens/Capture/CaptureViewModel.swift \
+  SixFour/UI/Machine/CaptureViewModel.swift \
   SixFour/Atlas/AtlasCollapse.swift
 
 if [ "$fail" -eq 0 ]; then

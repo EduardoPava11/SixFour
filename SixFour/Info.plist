@@ -22,6 +22,8 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>SixFour captures 64 frames at 20 fps to build a 64×64 animated GIF with a global 256-color Lab palette shaped by your signature look.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
@@ -31,6 +33,8 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIStatusBarHidden</key>
