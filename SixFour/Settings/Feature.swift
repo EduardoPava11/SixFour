@@ -31,8 +31,12 @@ enum Feature {
     /// with it `false` the V2.1 surface is statically unreachable and MVP1 is untouched. Flip to
     /// `true` to wire it into the post-capture surface in V2.1. Mirrors `globalPaletteV2`.
     /// ON: the review bench shows FIELD (the two probability widgets) and AIRDROP (GIF + field tensor),
-    /// both built from the committed burst. Not read by the capture engine, so it only lights the UI.
-    static let v21Capture = true
+    /// both built from the committed burst. NOTE (2026-07-10): this flag now ALSO gates the capture
+    /// engine's per-burst 384 MiB v21 hist buffer + flow encode (`CaptureSession` burst start) — the
+    /// old "UI-only" note was stale.
+    /// **OFF 2026-07-10 for the PHASE P device round (frees the 384 MiB buffer and the flow-encode
+    /// GPU pass — the reproduced GPU-hang suspect) — revert with `ladderProbe` after the probe log.**
+    static let v21Capture = false
 
     /// V3.0 on-device SOMATIC training at the capture seam. **ON while V3 is built.**
     ///
@@ -111,7 +115,9 @@ enum Feature {
     /// 128²/256² training-data capability census. Telemetry/log only: no GIF byte
     /// and no record byte depends on it; with it OFF the probe is never constructed
     /// and the capture path is byte-for-byte today's behaviour.
-    static let ladderProbe = false
+    /// **ON 2026-07-10 for the PHASE P device round (with `v21Capture=false`) —
+    /// revert both after the probe log is captured.**
+    static let ladderProbe = true
 
     /// The LIVE-LADDER preview realization — the inverted-pyramid's 32²/16² rungs
     /// read the REAL device ladder instead of view-pooling the 64² index tile.

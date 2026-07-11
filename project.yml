@@ -277,7 +277,16 @@ schemes:
       targets:
         SixFour: all
         SixFourTests: [test]
+    # ▶ Run ships the RELEASE configuration (2026-07-10, THE REBUILD Stage 0):
+    # the scheme's implicit Debug run put -Onone on the phone and the scalar
+    # per-tick colorimetry measured 65 ms against the 50 ms budget (20 dropped
+    # frames/burst). Device perf numbers are only meaningful at -O, and the
+    # capture logging is unconditional os.Logger (nothing observable is lost).
+    # Simulator TESTS stay Debug below, so asserts and previews are unchanged.
+    run:
+      config: Release
     test:
+      config: Debug
       targets:
         - SixFourTests
       gatherCoverageData: false
