@@ -212,6 +212,12 @@ targets:
         # launch (before SwiftUI applies the modifier). See docs/SIXFOUR-TOTAL-PIXELATION.md.
         UIStatusBarHidden: true
         UIViewControllerBasedStatusBarAppearance: false
+        # Expose the app's Documents folder in the Files app (and Finder device
+        # sharing): the .s4cr capture records and the PHASE P ladder-proof.log
+        # ledger are files Daniel pulls off the phone — without these keys the
+        # only way out is Console copy-paste or an in-app share sheet.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:

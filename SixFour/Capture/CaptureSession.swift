@@ -1057,6 +1057,32 @@ final class CaptureSession: NSObject, @unchecked Sendable {
                            pressureLevel: pressureRaw))
     }
 
+    /// PHASE P ergonomics: append one verdict block per probe burst to
+    /// `Documents/ladder-proof.log`. The PASS bar is the device checklist's:
+    /// all three fold identities BYTE-IDENTICAL + temporal order-invariance +
+    /// dropped=0. Best-effort file IO (a failed write never touches capture);
+    /// ~1 KiB once per burst at the seam, not on the tick path.
+    private func appendProofLedger(_ lines: [String], dropped: Int, pressure: Int, generation: Int) {
+        let pass = dropped == 0
+            && lines.filter { $0.contains("BYTE-IDENTICAL") }.count >= 3
+            && lines.contains { $0.contains("order-invariant") }
+        var block = "=== burst gen=\(generation) \(ISO8601DateFormatter().string(from: Date())) build=\(BuildStamp.gitSHA) ===\n"
+        block += lines.joined(separator: "\n")
+        block += "\n[proof] budget: dropped=\(dropped), pressure=\(pressure)\n"
+        block += "[proof] verdict: \(pass ? "PASS" : "FAIL") (bar: 3 folds byte-identical + order-invariant + dropped=0)\n\n"
+        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
+              let data = block.data(using: .utf8) else { return }
+        let url = dir.appendingPathComponent("ladder-proof.log")
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: url)
+        }
+        Self.log.log("[proof] ledger: \(pass ? "PASS" : "FAIL") appended to Documents/ladder-proof.log")
+    }
+
     /// One-shot `[proof] format:` census for the ladder probe: every x420-capable
     /// format's dims / max fps / silicon binning — the facts that decide whether
     /// the 512² probe rung (crop 2048, 4K-class) is even reachable on this phone.
@@ -1112,9 +1138,15 @@ final class CaptureSession: NSObject, @unchecked Sendable {
         }
         // [proof] the ladder-probe burst summary (Feature.ladderProbe): per-rung
         // census, fold byte-identities, canonical collapse — once per burst.
+        // Lines go to the os.Logger AND append to Documents/ladder-proof.log
+        // (one PASS/FAIL block per burst) so a multi-burst round is ONE file
+        // pulled via the Files app, never a Console copy-paste session.
         if let probe = ladderProbe {
-            for line in probe.summaryLines() { Self.log.log("\(line)") }
+            let lines = probe.summaryLines()
+            for line in lines { Self.log.log("\(line)") }
             Self.log.log("[proof] budget: dropped=\(self.droppedFrameCount), pressure=\(self.pressureRaw)")
+            appendProofLedger(lines, dropped: droppedFrameCount,
+                              pressure: pressureRaw, generation: generation)
             ladderProbe = nil
         }
         // SYSTEM TELEMETRY: publish the burst's tick-CPU aggregate BEFORE the
