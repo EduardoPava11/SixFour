@@ -20,6 +20,8 @@ self-containment), training honesty, paint/gesture intent, and super-res.
 ## A. PROMOTION QUEUE (every actionable missing link, ordered)
 
 ### Wave 1 — small, pure, this-session (no UI composition; unit-committed)
+> **STATUS: COMPLETE 2026-07-11 (commits a0f76d6, a1c0e68) — all 5 promoted,
+> suite 478/478 green.**
 1. **CaptureFormat import half** — `decimate2D` exists (Generated contract) but
    there is no first-class ingest: GIF file → canonical 64-side `Loop`.
    Promote: `Loop` gains the canonical-ingest view (decode + decimate),
