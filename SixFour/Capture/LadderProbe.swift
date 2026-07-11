@@ -56,6 +56,14 @@ final class LadderProbe {
 
     init() {
         states = LadderProbe.rungs.map { RungState(side: $0) }
+        // Reserve every rung cube UP FRONT (~128 MiB total): the probe is
+        // constructed at burst setup, BEFORE frame 0 lands — reserving here
+        // keeps the allocation (and its page faults) off the first tick.
+        // PHASE P run 2026-07-11 measured the lazy version as a 95 ms first
+        // tick and 2 dropped warmup frames; the checklist bar is dropped=0.
+        for i in states.indices {
+            states[i].cube.reserveCapacity(64 * states[i].side * states[i].side * 3)
+        }
     }
 
     /// One probe tick. `directSums64` is the canonical crop→64² pool the shipped
@@ -83,9 +91,6 @@ final class LadderProbe {
             guard let sums else {
                 states[i].undividedTicks += 1
                 continue
-            }
-            if states[i].frames == 0 {
-                states[i].cube.reserveCapacity(64 * side * side * 3)
             }
             states[i].cube.append(contentsOf: sums)
             states[i].frames += 1

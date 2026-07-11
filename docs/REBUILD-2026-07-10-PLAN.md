@@ -297,6 +297,41 @@ the probe adds ~4 more crop walks to an already-saturated tick. Order:
 ms, flip `ladderProbe=true` + `v21Capture=false` and run PHASE P; (3) chase the
 GPU hang regardless.
 
+## 5c. PHASE P RUN (2026-07-11 03:10Z, RELEASE build f45d6c3 — THE PROOF LOG)
+
+**The theorem held on real photons.** All five rungs 64/64 frames at crop 512;
+`pool(256→64) == direct64` and `pool(128→64) == direct64` and
+`pool(64→32→16) == direct16` all **BYTE-IDENTICAL 64/64 ticks**
+(lawPoolTransitive on device); temporal foldl==foldr order-invariant; canonical
+64³ record 6.0 MiB × 64 slices; probe held 127.9 MiB at pressure=0.
+
+**Debug hypothesis CONFIRMED**: tick CPU mean 65.39 → **3.66 ms** in Release
+(≈18×; base ≈2.2 ms + ≈1.5 ms probe overhead — the "~ms in release" note was
+right). Encoder 4425 → **350 ms** (12.6×). Intervals mean 50.80 ms σ 6.25,
+burst 3200.4 ms — ON the 20 fps contract.
+
+**Format census (the 512² question, format-side): 4K x420 EXISTS** —
+3840×2160 x420 at 30/60/120 max fps, plus 1920×1080 (30/60/120) and 1920×1440
+(60); all `binned=false`. Crop 1024 and crop 2048 are format-side possible; the
+btp2 output-delivery question remains (the selector only output-probes the
+smallest format today).
+
+**Residuals**:
+- dropped=2, tick max 95.03 ms — BOTH at burst start: the probe's five
+  `reserveCapacity` calls (~128 MiB) ran lazily inside the FIRST tick, plus
+  texture-pool miss #2. FIXED same-day: cubes now reserve at `LadderProbe`
+  init (burst setup, before frame 0). The checklist bar is dropped=0 —
+  re-verify on the next run.
+- **GPU hang REPRODUCES WITH v21 OFF** — v21 is EXONERATED. In all three runs
+  the hang lands in the same window: after the θ_up commit, immediately before
+  the `YinYang S_t` result line ⇒ prime suspect is now the **BandHeadTrainer
+  command buffer** (fused descent kernel; a long-running loop can trip the GPU
+  watchdog). Corroboration: S_t reports MSE exactly 0.000000 in all three runs
+  — plausibly the ABORTED buffer's zeroed outputs being read as results, not a
+  real fit. Next unit: check the command-buffer error status in
+  BandHeadTrainer, REFUSE the result on abort, and time the kernel.
+- 5-burst sustain round still pending (single burst so far).
+
 ## 6. Open questions (parked, not blocking Stage 0)
 
 - 512² verdict awaits the 4K-x420 census line.
