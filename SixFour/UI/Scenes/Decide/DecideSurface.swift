@@ -96,20 +96,269 @@ final class DecideModel: ObservableObject {
     /// (the PERF discipline: refusals never rebake the image).
     @Published private(set) var mergeRevision = 0
 
+    /// The capture's IMMUTABLE evidence schedule (`Spec.MergeEvidence`):
+    /// installed AT CONSTRUCTION, before the first pour can happen — a
+    /// mid-game schedule swap would break the replay keystone
+    /// (`lawWordReplaysBoardUnderSchedule`), a runtime invariant no law can
+    /// enforce, hence `let`. ALWAYS priced from the capture's own sealed
+    /// telemetry (`S4MergeEvidence.schedule(from:)` — the same rule every
+    /// replay reader runs on the record's bytes; a flag gating only the live
+    /// side was the replay-keystone gap). Derived bursts price to the
+    /// constant, under which every step is byte-for-byte today's game
+    /// (`lawDerivedScheduleIsStep`).
+    let pourSchedule: [Int]
+
+    /// Whether pours credit MEASURED evidence (a non-constant schedule) —
+    /// the ONE provenance bit the economy instruments caption
+    /// (`MergeSignalBar`: MEASURED/DERIVED, the hero chip's vocabulary).
+    var evidenceScaled: Bool { pourSchedule != S4MergeBoard.derivedSchedule }
+
     /// The one write path into the game. Refusals are total no-ops by the
-    /// spec's law; callers read the verdict for haptics only.
+    /// spec's law; callers read the verdict for haptics only. Every op runs
+    /// under the capture's own schedule (`step(_:schedule:)` — the derived
+    /// constant reproduces the classic step exactly).
     @discardableResult
     func mergeStep(_ op: S4MergeOp) -> S4MergeVerdict {
-        let verdict = merge.step(op)
-        if verdict == .accept { mergeRevision += 1 }
+        let depthsBefore = merge.depths
+        let verdict = merge.step(op, schedule: pourSchedule)
+        // Only DEPTH changes repaint the hero: an accepted pour moves the
+        // ledger (the signal bar re-reads `merge` via its own publish) but
+        // no pixel — bumping the revision would throw away every baked
+        // integral group for nothing (16 consecutive pours = 16 pointless
+        // full-cache flushes).
+        if verdict == .accept, merge.depths != depthsBefore {
+            mergeRevision += 1
+            heroCache.removeAll()
+        }
         return verdict
     }
 
+    // ── THE READS (step B, `Spec.RungReadDisplay` / `RungReads`) ─────────────
+
+    /// The burst's realized independent rung reads — arrives LATE like the
+    /// gene/substrate (the realize runs detached after the record write).
+    /// Non-published on purpose: `readsRevision` is the observable pulse (the
+    /// megabyte value itself never rides a publish diff).
+    private(set) var rungReads: RungReads?
+    /// Steps when the reads land — the hero's bake key reads this.
+    @Published private(set) var readsRevision = 0
+
+    /// The ASYNC rung reads landed: attach them (the attachGene pattern —
+    /// repeat/nil deliveries are no-ops; the first delivery wins).
+    func attachRungReads(_ r: RungReads?) {
+        guard rungReads == nil, let r else { return }
+        rungReads = r
+        readsRevision += 1
+        heroCache.removeAll()   // every cached frame may change source
+    }
+
+    /// The hero's 64² RGBA frame from THE READS — each MERGE region rendered
+    /// from ITS OWN rung read (`RungReads.composited`: select + causal hold +
+    /// block-replicate, the same chunk geometry as `pooled()` with an
+    /// independent SOURCE). nil unless the feature is on AND the ladder wrote
+    /// all three cubes (`independent` — the BINARY WHOLE-HERO gate: camera
+    /// sRGB8 and Q16-OKLab reconstruction never mix inside one frame, the
+    /// color-jump refusal). Derived bursts always answer nil ⇒ the pooled
+    /// reconstruction stays the honest fallback, byte-for-byte today's hero.
+    func readsSlice(frame: Int) -> [UInt8]? {
+        guard Feature.rungReadHero, let reads = rungReads, reads.independent
+        else { return nil }
+        return reads.composited(frame: frame, depths: merge.depths)
+    }
+
+    // ── THE TIME SLIDE's playhead (Spec.TimeSlide / TimeSlideMath) ───────────
+
+    /// The hero's PIXEL SOURCE seam: `bakeImage`'s source is a parameter, not
+    /// a hardwired call, so step B (the independent rung reads,
+    /// `Spec.RungReadDisplay`) plugs in here without touching the slide
+    /// mechanic. Today the ONE honest source is the derived reconstruction.
+    enum HeroSource: Equatable {
+        /// The ONE reconstruction (floor or gene arm), MERGE-pooled — the
+        /// derived display mode. The provenance chip reads "DERIVED".
+        case derived
+        /// The independent c64/c32/c16 read volumes (step B,
+        /// `Spec.RungReadDisplay`) — ladder bursts only. The chip reads
+        /// "READS" and carries the honesty note: ACCEPT ships the
+        /// reconstruction, not the reads.
+        case rungReads
+
+        /// The gutter provenance chip's honest vocabulary.
+        var chipLabel: String {
+            switch self {
+            case .derived: return "DERIVED"
+            case .rungReads: return "READS"
+            }
+        }
+    }
+
+    /// Which source the hero bakes from — DATA-GATED, never a preference:
+    /// `.rungReads` iff the feature is on and a ladder burst's three
+    /// independent cubes realized (`independent`); every derived burst (the
+    /// shipped path) answers `.derived` — the honest fallback stays forever.
+    var heroSource: HeroSource {
+        (Feature.rungReadHero && rungReads?.independent == true) ? .rungReads : .derived
+    }
+
+    /// THE TIME SLIDE's playhead — state + intent ONLY (the `PlaybackClock`
+    /// template: no timer, the ONE 20 Hz `SurfaceClock` drives motion
+    /// externally via the hero's leaf tick read). Non-published on purpose:
+    /// the hero body already re-evaluates per tick (it reads `clock.tick`),
+    /// so playhead mutations surface within one tick without a second
+    /// publish stream.
+    struct DecidePlayhead {
+        /// Playback intent. Pausing keeps the detent (and the anchor).
+        var playing = false
+        /// The current detent k ∈ {0,1,2} (0 = 64-rung … 2 = 16-rung).
+        var rungK = 0
+        /// The clock tick the playhead was (re-)anchored at.
+        var anchorTick = 0
+        /// The frame at the anchor — ALWAYS snapped to a group boundary of
+        /// `rungK` (the latch convention `lawGroupChangesExactlyOnRealize`
+        /// requires: the group then steps exactly on the realize ticks).
+        var anchorFrame = 0
+    }
+
+    /// The hero's playhead. Read by the hero leaf each tick; written only by
+    /// the three intents below (`lawSlideNeverWritesTheWord`: none of them
+    /// touches `merge` or the decision word).
+    private(set) var playhead = DecidePlayhead()
+
+    /// Start (or restart) playback at detent `k`, anchored on the one clock.
+    /// `fromFrame` snaps DOWN to a group boundary (the latch convention).
+    func startPlayback(rungK k: Int, atTick tick: Int, fromFrame frame: Int = 0) {
+        let kc = min(TimeSlideMath.maxDetent, max(TimeSlideMath.minDetent, k))
+        playhead = DecidePlayhead(playing: true, rungK: kc, anchorTick: tick,
+                                  anchorFrame: TimeSlideMath.snapToGroupStart(frame, k: kc))
+    }
+
+    /// Pause playback (the position gesture's intent). The detent and anchor
+    /// survive — a later slide resumes from here.
+    func pausePlayback() {
+        playhead.playing = false
+    }
+
+    /// Move to detent `k`, re-anchoring on the ALIGNED frame (the current
+    /// playhead position snapped to the new period's group boundary) so the
+    /// group keeps stepping exactly on realize ticks. Same-detent calls are
+    /// no-ops (a touch drag must never re-anchor per event).
+    func setRung(_ k: Int, atTick tick: Int) {
+        let kc = min(TimeSlideMath.maxDetent, max(TimeSlideMath.minDetent, k))
+        guard kc != playhead.rungK else { return }
+        let current = playhead.playing
+            ? TimeSlideMath.pos(anchorTick: playhead.anchorTick,
+                                anchorFrame: playhead.anchorFrame, tick: tick)
+            : frame
+        playhead.rungK = kc
+        playhead.anchorTick = tick
+        playhead.anchorFrame = TimeSlideMath.snapToGroupStart(current, k: kc)
+        // Realize the new detent's group NOW: if the new display group's
+        // integer happens to equal the old detent's playKey, the hero's
+        // `.onChange(of: playKey)` never fires and `frame` would keep the
+        // OLD detent's group-end value for up to one full group.
+        realizePlayhead(group: TimeSlideMath.displayGroup(
+            k: kc, anchorTick: tick, anchorFrame: playhead.anchorFrame, tick: tick))
+    }
+
+    /// Realize one display group: `frame` becomes the group's END frame
+    /// (`Spec.TimeSlide.groupEndFrame` — the poured window ENDS at the
+    /// realize tick). Called exactly once per group change by the hero's
+    /// `.onChange(of: playKey)`; `frame` stays THE one time axis, so the 16³
+    /// paint layer (t/4) and `DecideCoarseWidget` follow for free.
+    func realizePlayhead(group j: Int) {
+        // Before the async reconstruction lands the hero rides the TILES
+        // fallback, which owns fewer frames on a short burst (kernel-dropped
+        // frames) — never realize past what can bake, or the hero flashes
+        // blank for the tail groups of every loop. Once the reconstruction
+        // exists all 64 frames are real.
+        let cap = reconstructionsReady
+            ? TimeSlideMath.windowUnits
+            : max(1, min(TimeSlideMath.windowUnits, tiles.count))
+        let f = min(cap - 1,
+                    max(0, TimeSlideMath.groupEndFrame(group: j, k: playhead.rungK)))
+        guard f != frame else { return }
+        frame = f
+    }
+
+    // ── the hero's integral-frame cache (loop 2+ is a cached-image swap) ─────
+
+    /// One baked hero image per (detent, group, arm, revisions): at the
+    /// 16-rung a full loop is only 16 groups, so after one 3.2 s loop every
+    /// realize is a dictionary hit. Wholesale-cleared on ANY pixel-changing
+    /// bump (recon/merge/substrate/arm) — never invalidated piecemeal.
+    struct HeroCacheKey: Hashable {
+        let rungK: Int
+        let group: Int
+        let useGene: Bool
+        let reconRevision: Int
+        let mergeRevision: Int
+        let substrateEpoch: Int
+        /// The pixel SOURCE (0 = derived reconstruction, 1 = the reads) —
+        /// step B's display mode is part of the pixels' identity.
+        let mode: Int
+        /// The reads arrival pulse — a late-landing `RungReads` invalidates
+        /// by key, exactly like `reconRevision`.
+        let readsRevision: Int
+    }
+
+    /// Max cached images: all groups of all coarse detents is 32+16 = 48;
+    /// 128 (~1.8 MiB of 64² RGBA) bounds any future source generously.
+    private static let heroCacheCapacity = 128
+    private var heroCache: [HeroCacheKey: UIImage] = [:]
+
+    /// The cache key for detent `k`, group `j` under the CURRENT revisions.
+    /// `mode` 0 = derived reconstruction (step A's integral bakes), 1 = the
+    /// reads (step B — `group` then carries the display FRAME, the reads'
+    /// finest-changing time index).
+    func heroCacheKey(rungK k: Int, group j: Int, useGene: Bool,
+                      mode: Int = 0) -> HeroCacheKey {
+        HeroCacheKey(rungK: k, group: j, useGene: useGene,
+                     reconRevision: reconRevision, mergeRevision: mergeRevision,
+                     substrateEpoch: substrate.count,
+                     mode: mode, readsRevision: readsRevision)
+    }
+
+    /// Cached baked hero image, if this exact (detent, group, revisions) was
+    /// baked before.
+    func heroCached(_ key: HeroCacheKey) -> UIImage? { heroCache[key] }
+
+    /// Store a baked hero image; wholesale-clears first at capacity (the
+    /// revisions in the key make stale entries unreachable anyway).
+    func heroCacheStore(_ key: HeroCacheKey, _ image: UIImage) {
+        if heroCache.count >= Self.heroCacheCapacity { heroCache.removeAll() }
+        heroCache[key] = image
+    }
+
+    /// The hero's 64² RGBA slice for a COARSE detent: the group's temporal
+    /// integral (`TimeSlideMath.integralFrame64` — Int64 sums over the
+    /// aligned window, ONE round-half-up divide by the frame count 2^k in
+    /// Q16 OKLab; `lawIntegralIsSumsDividedOnce`), display-converted. The
+    /// temporal divisor is applied ONCE here in Q16; the MERGE's spatial
+    /// block-means happen once later in sRGB (`pooled`) — different axes,
+    /// never a double-divide. nil until a reconstruction exists (the caller
+    /// falls through to the honest fallback). k=0 callers must use
+    /// `reconstructionSlice` (byte-identical short-circuit, no integral).
+    func integralSlice(rungK k: Int, group j: Int, useGene: Bool) -> [UInt8]? {
+        guard k > 0, let vol = reconstruction(useGene: useGene) else { return nil }
+        let q16 = TimeSlideMath.integralFrame64(volume: vol, group: j, k: k)
+        var rgba = [UInt8](); rgba.reserveCapacity(64 * 64 * 4)
+        for p in 0 ..< 64 * 64 {
+            let i = p * 3
+            let c = ModelRender.displaySRGB8(
+                SIMD3<Int>(Int(q16[i]), Int(q16[i + 1]), Int(q16[i + 2])))
+            rgba.append(contentsOf: [c.x, c.y, c.z, 255])
+        }
+        return rgba
+    }
+
     init(tiles: [OKLabTile], gene: CaptureGene.ThetaUp?,
-         substrate: [[VoxelReduce.Px]] = []) {
+         substrate: [[VoxelReduce.Px]] = [],
+         rungReads: RungReads? = nil,
+         pourSchedule: [Int] = S4MergeBoard.derivedSchedule) {
         self.tiles = tiles
         self.gene = gene
         self.substrate = substrate
+        self.rungReads = rungReads
+        self.pourSchedule = pourSchedule
         self.useGene = gene != nil
         paintForward = paint.objectWillChange
             .sink { [weak self] _ in
@@ -136,6 +385,7 @@ final class DecideModel: ObservableObject {
             self.geneRecon = geneArm
             self.reconstructionsReady = true
             self.reconRevision += 1
+            self.heroCache.removeAll()   // every cached integral frame is stale
         }
     }
 
@@ -176,6 +426,7 @@ final class DecideModel: ObservableObject {
             guard !Task.isCancelled else { return }
             self.geneRecon = geneArm
             self.reconRevision += 1
+            self.heroCache.removeAll()   // every cached integral frame is stale
             self.objectWillChange.send()
         }
     }
@@ -259,6 +510,10 @@ struct DecideSurface: View {
     /// `@StateObject`.
     private let thetaUp: CaptureGene.ThetaUp?
     private let substrate: [[VoxelReduce.Px]]
+    /// THE READS (step B): kept as a plain property like the gene/substrate so
+    /// the ASYNC delivery (the realize runs detached after the record write)
+    /// reaches the persistent `DecideModel` via `.onChange`.
+    private let rungReads: RungReads?
 
     /// The advanced fold (render state — the `advanced` region is static in the
     /// proven scene, so the reveal can never contend).
@@ -277,14 +532,18 @@ struct DecideSurface: View {
     @MainActor
     init(tiles: [OKLabTile], thetaUp: CaptureGene.ThetaUp?,
          substrate: [[VoxelReduce.Px]] = [],
+         rungReads: RungReads? = nil,
+         pourSchedule: [Int] = S4MergeBoard.derivedSchedule,
          clock: SurfaceClock,
          onSealWord: @escaping ([UInt64]) -> Void = { _ in },
          onDecide: @escaping (DecideVerdict, SixFourModelInput, Bool) -> Void) {
         _model = StateObject(wrappedValue: DecideModel(
-            tiles: tiles, gene: thetaUp, substrate: substrate))
+            tiles: tiles, gene: thetaUp, substrate: substrate,
+            rungReads: rungReads, pourSchedule: pourSchedule))
         self.clock = clock
         self.thetaUp = thetaUp
         self.substrate = substrate
+        self.rungReads = rungReads
         self.onSealWord = onSealWord
         self.onDecide = onDecide
     }
@@ -300,6 +559,11 @@ struct DecideSurface: View {
             FoldChevron(open: advancedOpen, clock: clock) {
                 advancedOpen.toggle()
                 foldOpenedAt = clock.tick
+                // The paint bench targets ONE layer (paintLayer = frame/4):
+                // opening the fold pauses playback so the stroke's z-layer
+                // cannot drift under the finger mid-drag. The slide is the
+                // resume verb, as everywhere else.
+                if advancedOpen { model.pausePlayback() }
                 Haptics.selection()
             }
             .place("fold", in: scene)
@@ -310,11 +574,23 @@ struct DecideSurface: View {
             acceptVerb.place("accept", in: scene)
         }
         .ignoresSafeArea()
+        // PLAY BY DEFAULT (THE TIME SLIDE): the hero opens PLAYING at the
+        // 16-rung detent (k=2 — 5 realizes/s, thermally the gentlest lawful
+        // cadence); the first slide re-anchors. A non-running clock (a
+        // preview) pins tick=0, so the playhead honestly holds group 0.
+        .onAppear {
+            if Feature.decideTimeSlide {
+                model.startPlayback(rungK: 2, atTick: clock.tick, fromFrame: 0)
+            }
+        }
         // The async somatic gene landed after this surface mounted: attach it.
         .onChange(of: thetaUp) { _, g in model.attachGene(g) }
         // The async coarse substrate landed (built off-main at the σ fold): attach it.
         // Keyed on the layer count — the build only ever transitions empty → full.
         .onChange(of: substrate.count) { _, _ in model.attachSubstrate(substrate) }
+        // The async rung reads landed (step B — the realize runs detached after the
+        // record write): attach them so a ladder burst's hero can flip to READS.
+        .onChange(of: rungReads) { _, r in model.attachRungReads(r) }
     }
 
     // ── the static tally rail (the pour-equivalence language, crossing scenes) ──
@@ -456,27 +732,64 @@ struct DecideSurface: View {
 /// in its gutter. One gesture, classified the CellMechanics way (movement =
 /// scrub intent, the hold gate is the only door into K):
 ///   * horizontal DRAG scrubs the frame (brackets go full ink; a transient
-///     CellText frame readout rides the bottom edge during the scrub only);
+///     CellText frame readout rides the bottom edge during the scrub only)
+///     and PAUSES playback;
+///   * vertical DRAG is THE TIME SLIDE (`Feature.decideTimeSlide`,
+///     `Spec.TimeSlide`/`TimeSlideMath`): finger travel quantizes to the
+///     three lawful detents (16 cells per rung step, down = coarser), the
+///     hero PLAYS on the one 20 Hz clock at the detent's exact cadence
+///     (64@20 Hz / 32@10 Hz / 16@5 Hz), coarse detents show true temporal
+///     integrals, and the frame-locked `.cellDetent` ticks each crossing;
 ///   * TAP on a region = S (split one rung finer, spends poured signal);
 ///   * HOLD (≥ 0.45 s, no movement) = K (pool back coarser — mass kept).
 /// Accepted verbs tick (`Haptics.selection()`); refusals pulse dropReject
 /// (`Haptics.play(4)`) — the board never lies about the economy. The bake is
-/// @State-cached keyed by (frame, arm, revision, merge) — a clock tick alone
-/// never rebakes the image.
+/// @State-cached keyed by (frame, detent, arm, revision, merge) — a clock
+/// tick alone never rebakes the image (the playhead enters only as the
+/// realized frame, once per 2^k ticks while playing).
 private struct DecideHeroWidget: View {
     @ObservedObject var model: DecideModel
     let clock: SurfaceClock
     @State private var scrubbing = false
+    /// THE TIME SLIDE latched (a vertical winner at the movement threshold):
+    /// finger travel now picks the detent; the horizontal scrub branch is
+    /// untouched (`Feature.decideTimeSlide` off ⇒ this never latches).
+    @State private var timeSliding = false
+    /// The detent when the slide latched (`Spec.TimeSlide.detentOf`'s anchor).
+    @State private var slideLatchK = 0
+    /// The tick the last slide released — the time rail dematerializes
+    /// `Self.railLingerTicks` later (materialize-on-touch, no resident chrome).
+    @State private var slideReleasedAt: Int? = nil
     @State private var pressStart: (time: Date, loc: CGPoint)? = nil
     @State private var baked: (key: Int, image: UIImage?) = (.min, nil)
+
+    /// Ticks the time rail lingers after release (8 ticks = 0.4 s).
+    private static let railLingerTicks = 8
 
     var body: some View {
         let atom = GlobalLattice.gif(1)
         let key = imageKey
+        // THE ADVANCE (leaf-reads-tick — `clock.onTick` is single-slot and
+        // owned by `SurfaceView`, never claimed): the derived play key is the
+        // playhead's display group, a pure function of the one 20 Hz tick.
+        // It changes exactly on `realizesAt(2^k)` ticks (goldenSchedule16-
+        // gated), so the bake fires at 20/10/5 Hz — coarse bakes FEWER. A
+        // non-running clock (a preview) pins tick=0 ⇒ an honest static hero.
+        // Reduce-motion keeps playing: cadence = CONTENT (the pyramid rule);
+        // only the decorative bracket BEAT pins.
+        let playKey: Int? = (Feature.decideTimeSlide && model.playhead.playing)
+            ? TimeSlideMath.displayGroup(k: model.playhead.rungK,
+                                         anchorTick: model.playhead.anchorTick,
+                                         anchorFrame: model.playhead.anchorFrame,
+                                         tick: clock.tick)
+            : nil
+        let railVisible = timeSliding
+            || slideReleasedAt.map { clock.tick - $0 < Self.railLingerTicks } ?? false
         ZStack {
             // idle = ghost brackets + the cadence BEAT (pinned off under reduce-motion);
-            // scrubbing = the PRESSED ink.
-            ControlBrackets(side: 64, state: scrubbing ? 1 : 0, tick: clock.tick,
+            // scrubbing OR sliding = the PRESSED ink.
+            ControlBrackets(side: 64, state: (scrubbing || timeSliding) ? 1 : 0,
+                            tick: clock.tick,
                             reduceMotion: clock.reduceMotion)
             Group {
                 if let img = baked.image {
@@ -490,24 +803,121 @@ private struct DecideHeroWidget: View {
             .frame(width: GlobalLattice.gif(64), height: GlobalLattice.gif(64))
         }
         .overlay(alignment: .bottom) {
+            // ONE bottom-edge readout slot, shared: the scrub's frame count
+            // and the slide's detent readout are gesture-exclusive.
             if scrubbing {
-                CellText("T \(model.frame)/\(max(model.tiles.count, 1) - 1)",
+                CellText(scrubReadout, cell: GlobalLattice.pt(1))
+                    .padding(.bottom, GlobalLattice.gif(3))
+                    .allowsHitTesting(false)
+            } else if timeSliding {
+                // The two-sided detent readout: side + exact GCE delay
+                // ("64 - 5cs" / "32 - 10cs" / "16 - 20cs") — both integers
+                // are theorems of the ladder (`s4_ladder_delay_cs`).
+                CellText(TimeSlideMath.readoutLabel(model.playhead.rungK),
                          cell: GlobalLattice.pt(1))
                     .padding(.bottom, GlobalLattice.gif(3))
                     .allowsHitTesting(false)
+            }
+        }
+        .overlay(alignment: .trailing) {
+            // THE TIME RAIL (materialize-on-touch): the three lawful detents
+            // as FRAMEd 2×2-cell blocks in the tile's rightmost 2 cell-
+            // columns, top (k=0) → bottom (k=2), the current rung inverted.
+            // Restricted to the THREE detents — never a continuum (off-
+            // ladder holds are dilation, not rungs). Display-only.
+            if Feature.decideTimeSlide && railVisible {
+                timeRail
+                    .padding(.trailing, GlobalLattice.gif(2))
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            // The provenance chip: the hero's pixel source, honestly named in
+            // the gutter ("DERIVED" for the pooled reconstruction; "READS"
+            // when a ladder burst's independent cubes drive the render). In
+            // READS mode the chip carries the honesty note: ACCEPT still
+            // ships the reconstruction — the reads are the display evidence,
+            // never the committed GIF.
+            // Materialize-on-touch (the charter's no-resident-chrome rule):
+            // the DERIVED chip appears only while the time gesture is live
+            // (where it contextualizes what the pixels are), then
+            // dematerializes with the rail. READS mode is the one justified
+            // resident label — an unusual pixel source must stay named for
+            // as long as it is the source (color-provenance honesty outranks
+            // chrome minimalism, and "SHIPS RECON" is the accept contract).
+            if model.heroSource == .rungReads || railVisible {
+                VStack(alignment: .leading, spacing: 0) {
+                    CellText(model.heroSource.chipLabel, rows: 5,
+                             cell: GlobalLattice.pt(1),
+                             ink: Color(srgb8: SFTheme.ledGhost))
+                    if model.heroSource == .rungReads {
+                        CellText("SHIPS RECON", rows: 5,
+                                 cell: GlobalLattice.pt(1),
+                                 ink: Color(srgb8: SFTheme.ledGhost))
+                    }
+                }
+                .padding(.leading, GlobalLattice.gif(2))
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
         }
         .contentShape(Rectangle())   // the bracket rect IS the hit rect (D1)
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { g in
-                    if pressStart == nil { pressStart = (Date(), g.startLocation) }
-                    // Movement is scrub intent; a still finger stays a verb
-                    // press (the CellMechanics tap-cannot-drag gate, mirrored).
-                    let moved = hypot(g.location.x - g.startLocation.x,
-                                      g.location.y - g.startLocation.y)
-                    guard scrubbing || moved > 2 * atom else { return }
-                    scrubbing = true
+                    if pressStart == nil {
+                        pressStart = (Date(), g.startLocation)
+                        // Self-heal a CANCELLED gesture (an incoming call or
+                        // system alert skips onEnded, and @State does not
+                        // auto-reset the way @GestureState does): a fresh
+                        // press always starts UNLATCHED, so a stuck mode can
+                        // never survive past the next touch — without this,
+                        // a stale `timeSliding` would skip the latch guard,
+                        // jump detents against the old anchor, and make the
+                        // tap/hold verbs unreachable.
+                        scrubbing = false
+                        timeSliding = false
+                    }
+                    // Movement is scrub/slide intent; a still finger stays a
+                    // verb press (the CellMechanics tap-cannot-drag gate).
+                    let dx = g.location.x - g.startLocation.x
+                    let dy = g.location.y - g.startLocation.y
+                    let moved = hypot(dx, dy)
+                    if !scrubbing && !timeSliding {
+                        guard moved > 2 * atom else { return }
+                        // AXIS TEST at the one threshold crossing: |dx| ≥ |dy|
+                        // latches the EXISTING horizontal scrub byte-identically
+                        // (ties go horizontal — the landed feel survives);
+                        // |dy| > |dx| latches THE TIME SLIDE. Flag off ⇒ any
+                        // movement scrubs, exactly as landed.
+                        if Feature.decideTimeSlide && abs(dy) > abs(dx) {
+                            timeSliding = true
+                            slideLatchK = model.playhead.rungK
+                            // A slide RESTARTS playback (scrub-end never
+                            // auto-resumes; the slide is the resume verb).
+                            if !model.playhead.playing {
+                                model.startPlayback(rungK: slideLatchK,
+                                                    atTick: clock.tick,
+                                                    fromFrame: model.frame)
+                            }
+                        } else {
+                            scrubbing = true
+                            // The position gesture pauses playback (no-op
+                            // while the flag is off — never playing).
+                            model.pausePlayback()
+                        }
+                    }
+                    if timeSliding {
+                        // Finger travel → detent (`Spec.TimeSlide.detentOf`,
+                        // FLOOR division — down = coarser). Cell conversion
+                        // floors too, matching the spec's negative-branch
+                        // discipline. Same-detent moves are model no-ops.
+                        let dyCells = Int((dy / atom).rounded(.down))
+                        model.setRung(TimeSlideMath.detentOf(kAtLatch: slideLatchK,
+                                                             dyCells: dyCells),
+                                      atTick: clock.tick)
+                        return
+                    }
                     guard !model.tiles.isEmpty else { return }
                     // Map over the TILE's 64 cells (the brackets add a 2-cell margin).
                     let t = Int((g.location.x - 2 * atom) / (64 * atom)
@@ -517,25 +927,86 @@ private struct DecideHeroWidget: View {
                 .onEnded { _ in
                     let press = pressStart
                     pressStart = nil
+                    if timeSliding {
+                        // Release keeps playing at the released detent; the
+                        // rail lingers `railLingerTicks` then dematerializes.
+                        timeSliding = false
+                        slideReleasedAt = clock.tick
+                        return
+                    }
                     if scrubbing { scrubbing = false; return }
                     guard let press else { return }
-                    // The still press is a MERGE verb: tap = S, hold = K.
+                    // The still press is a MERGE verb: tap = S, hold = K —
+                    // stillness-gated, untouched by the slide (a latched
+                    // slide returns above and can never reach here).
                     let held = Date().timeIntervalSince(press.time)
                     playMergeVerb(at: press.loc, hold: held >= 0.45, atom: atom)
                 }
         )
+        // DETENT HAPTIC — the LINT-DETENT-sanctioned route (never a bare
+        // `Haptics.play(1)`): the synthetic cell IS the rung index, so
+        // `cellsCrossed` fires exactly one frame-locked play(1) per detent
+        // crossing, coalesced to the 20 fps tick.
+        .cellDetent(tick: clock.tick, every: 1, position: {
+            timeSliding ? (col: 0, row: model.playhead.rungK) : nil
+        })
+        // The realize gate: the group key steps exactly on the rung's
+        // realize ticks; each step realizes ONE playhead frame
+        // (`groupEndFrame` — model.frame stays THE one time axis, so the 16³
+        // paint layer and the coarse widget follow free). `initial: true`
+        // aligns the opening frame to its group end.
+        .onChange(of: playKey, initial: true) { _, g in
+            if let g { model.realizePlayhead(group: g) }
+        }
         .onChange(of: key, initial: true) { _, k in
             guard k != baked.key else { return }
             baked = (k, bakeImage())
         }
         .accessibilityLabel("Judgment view")
-        .accessibilityHint("Drag horizontally to scrub the sixty-four frames")
+        // The hint must describe only gestures that EXIST in this build —
+        // with the slide off, the escape hatch restores the landed classifier
+        // (any movement scrubs) and a vertical-drag promise would be a lie.
+        .accessibilityHint(Feature.decideTimeSlide
+            ? "Drag horizontally to scrub the sixty-four frames; drag vertically to slow or speed playback"
+            : "Drag horizontally to scrub the sixty-four frames")
+    }
+
+    /// The time rail bitmap: 2 columns × 10 rows — three 2×2 detent blocks
+    /// (rows 0-1 / 4-5 / 8-9 for k = 0/1/2) separated by 2-row gaps. The
+    /// current detent is INVERTED (filled control ink); the others are ghost.
+    /// Tiny (20 cells), so the per-body CellSprite bake is free — the
+    /// `CapturedReviewPhaseField` precedent at 1/200th the area.
+    private var timeRail: some View {
+        let lit = SIMD3<UInt8>(UInt8(SixFourCellMechanics.faceControlInk.r),
+                               UInt8(SixFourCellMechanics.faceControlInk.g),
+                               UInt8(SixFourCellMechanics.faceControlInk.b))
+        let ghost = SFTheme.ledGhost
+        let current = model.playhead.rungK
+        return CellSprite(cols: 2, rows: 10, cellPt: GlobalLattice.gif(1)) { _, r in
+            guard r % 4 < 2 else { return nil }   // the 2-row gaps
+            let k = r / 4                          // block index == detent
+            return k == current ? lit : ghost
+        }
     }
 
     /// THE MERGE verb at a press location: map the press into the 64² plane
     /// (the scrub's own 2-cell bracket margin), find the region, play the
     /// verb. The board answers with the spec's verdict — accepted ticks,
     /// refused pulses dropReject. Off-tile presses are ignored.
+    /// The scrub's bottom-edge readout, HONEST about what the pixels are: at
+    /// the finest detent it names the exact frame; at a coarse detent the
+    /// hero shows the GROUP's temporal integral (pixels identical across the
+    /// window), so the readout names the whole window — never an exact-frame
+    /// claim over blurred pixels.
+    private var scrubReadout: String {
+        let last = max(model.tiles.count, 1) - 1
+        let k = Feature.decideTimeSlide ? model.playhead.rungK : 0
+        guard k > 0 else { return "T \(model.frame)/\(last)" }
+        let gs = TimeSlideMath.snapToGroupStart(model.frame, k: k)
+        let ge = min(last, gs + TimeSlideMath.periodOf(k) - 1)
+        return "T \(gs)-\(ge)/\(last)"
+    }
+
     private func playMergeVerb(at loc: CGPoint, hold: Bool, atom: CGFloat) {
         let x = Int((loc.x - 2 * atom) / atom)
         let y = Int((loc.y - 2 * atom) / atom)
@@ -547,16 +1018,23 @@ private struct DecideHeroWidget: View {
         }
     }
 
-    /// Everything that changes the hero's PIXELS (never the clock).
+    /// Everything that changes the hero's PIXELS (never the raw clock: the
+    /// playhead enters ONLY as the realized `frame` + the detent `rungK`, so
+    /// paused/idle ticks bake nothing and playing bakes once per 2^k ticks).
     private var imageKey: Int {
         var h = Hasher()
         h.combine(model.frame)
+        h.combine(model.playhead.rungK)
         h.combine(model.useGene)
         h.combine(model.reconstructionsReady)
         h.combine(model.reconRevision)
         h.combine(model.tiles.count)
         h.combine(model.substrate.count)
         h.combine(model.mergeRevision)
+        // Step B: the display MODE (reads vs derived) and the reads' arrival
+        // pulse are pixel identity — a late-landing `RungReads` rebakes once.
+        h.combine(model.heroSource == .rungReads)
+        h.combine(model.readsRevision)
         return h.finalize()
     }
 
@@ -564,7 +1042,60 @@ private struct DecideHeroWidget: View {
     /// invention) — what accepting would ship. No substrate yet ⇒ the honest
     /// fallback is the capture frame itself. Never a faked image. Either
     /// source then renders at THE MERGE's played granularity (`pooled`).
+    ///
+    /// THE TIME SLIDE's coarse detents (k > 0) bake the group's TEMPORAL
+    /// INTEGRAL through the model's source seam (`integralSlice` — today the
+    /// derived reconstruction; step B plugs the independent rung reads in
+    /// there), cached per (detent, group, revisions) so loop 2+ of a coarse
+    /// cycle is a dictionary hit. k=0 short-circuits below to today's
+    /// `reconstructionSlice` path BYTE-IDENTICALLY. A coarse detent with no
+    /// reconstruction yet falls through to the same honest fallback as k=0.
     private func bakeImage() -> UIImage? {
+        // THE READS (step B, `Spec.RungReadDisplay`): when the ladder wrote
+        // three independent cubes, every MERGE region renders from ITS OWN
+        // read (`RungReads.composited` — select + causal hold, the SAME
+        // sliceForTick hold during step-A playback, so playback and scrub
+        // agree). BINARY WHOLE-HERO: any empty rung / realize failure drops
+        // the ENTIRE frame to the derived path below (no intra-frame mixing
+        // of camera sRGB8 with Q16-OKLab reconstruction). Derived bursts
+        // never enter here — byte-for-byte today's hero.
+        if model.heroSource == .rungReads {
+            // The reads' pixels are independent of the DETENT (composited
+            // holds on the display frame alone), so the key pins rungK to 0
+            // — three detents share one entry per frame instead of tripling
+            // the keyspace past the cache capacity.
+            let key = model.heroCacheKey(rungK: 0,
+                                         group: model.frame, useGene: false,
+                                         mode: 1)
+            if let hit = model.heroCached(key) { return hit }
+            if let rgba = model.readsSlice(frame: model.frame),
+               let cg = Self.rgbaImage(rgba, side: 64) {
+                let img = UIImage(cgImage: cg)
+                model.heroCacheStore(key, img)
+                return img
+            }
+            // Composite refused — fall through to the honest derived path.
+        }
+        if Feature.decideTimeSlide {
+            // ONE cached path for every detent: coarse groups bake temporal
+            // integrals; k=0 "groups" ARE the frames (periodOf(0) == 1) and
+            // cache the plain slice — without this, the finest detent's
+            // 3.2 s loop re-baked 64 pixel-identical images at 20 Hz forever
+            // (the thermal budget is the standing priority).
+            let k = model.playhead.rungK
+            let j = model.frame / TimeSlideMath.periodOf(k)
+            let key = model.heroCacheKey(rungK: k, group: j, useGene: model.useGene)
+            if let hit = model.heroCached(key) { return hit }
+            let rgba = k > 0
+                ? model.integralSlice(rungK: k, group: j, useGene: model.useGene)
+                : model.reconstructionSlice(frame: model.frame, useGene: model.useGene)
+            if let rgba, let cg = Self.rgbaImage(pooled(rgba), side: 64) {
+                let img = UIImage(cgImage: cg)
+                model.heroCacheStore(key, img)
+                return img
+            }
+            // No reconstruction yet — fall through to the honest fallback.
+        }
         if let rgba = model.reconstructionSlice(frame: model.frame, useGene: model.useGene),
            let cg = Self.rgbaImage(pooled(rgba), side: 64) {
             return UIImage(cgImage: cg)

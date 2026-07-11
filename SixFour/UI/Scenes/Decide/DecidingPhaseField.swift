@@ -21,6 +21,13 @@ struct DecidingPhaseField: View {
     var body: some View {
         DecideSurface(tiles: surface.burstTiles, thetaUp: surface.thetaUp,
                       substrate: surface.coarseSubstrate,
+                      // THE READS (step B): usually land late (async realize) —
+                      // DecideSurface forwards them via `.onChange`.
+                      rungReads: surface.rungReads,
+                      // The capture's IMMUTABLE pour schedule — installed at
+                      // DecideModel CONSTRUCTION, before the first pour can
+                      // happen (the replay-keystone runtime invariant).
+                      pourSchedule: surface.mergePourSchedule,
                       clock: clock,
                       onSealWord: onSealWord) { verdict, input, useGene in
             switch verdict {

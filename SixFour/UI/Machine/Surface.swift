@@ -135,6 +135,24 @@ final class Surface {
     /// and at burst boundaries only. The `liveScene` system region reads it.
     var systemTelemetry: SystemTelemetry?
 
+    /// THE READS (step B, `Spec.RungReadDisplay`): the committed burst's realized
+    /// per-rung read volumes, folded from the engine at `commit` PLUS a late
+    /// `.onChange` fold (the realize runs detached and lands after `BurstResult` —
+    /// the attachGene/attachSubstrate arrival pattern). The Decide hero renders
+    /// each MERGE region from ITS OWN read when `independent` (ladder bursts
+    /// only); derived bursts carry the honest c16-only subset and the hero stays
+    /// on the pooled reconstruction. PER-CAPTURE stash: cleared on `.live` like
+    /// `acceptedInput` (stale-reads-under-fresh-board is the σ-lifecycle hazard).
+    var rungReads: RungReads?
+
+    /// The capture's IMMUTABLE pour schedule (`Spec.MergeEvidence`), folded from
+    /// the engine at `commit` — installed into `DecideModel` AT CONSTRUCTION
+    /// (before the first pour can happen; a mid-game swap breaks
+    /// `lawWordReplaysBoardUnderSchedule`). ALWAYS priced from the sealed
+    /// telemetry (the flag-free replay-keystone rule); derived bursts price
+    /// to the constant. PER-CAPTURE stash: reset to the constant on `.live`.
+    var mergePourSchedule: [Int] = S4MergeBoard.derivedSchedule
+
     /// The Z₆₄ playback cursor — the current frame `0..<64`. Advanced by κ each tick.
     var cursor: Int = 0
 
@@ -173,6 +191,7 @@ final class Surface {
         phase = abStep(phase, event)
         if phase == .live {                                    // retake drops the per-capture stashes
             coarseSubstrate = []; midSubstrate = []; sceneRung = .fine64; curatedUseGene = nil
+            rungReads = nil; mergePourSchedule = S4MergeBoard.derivedSchedule
         }
     }
 

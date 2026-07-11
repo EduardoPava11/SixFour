@@ -135,6 +135,7 @@ import qualified Properties.FidelityLadder as FidelityLadder
 import qualified Properties.RadiometricRealize as RadiometricRealize
 import qualified Properties.ColorTime         as ColorTime
 import qualified Properties.ColorTimeDisplay  as ColorTimeDisplay
+import qualified Properties.TimeSlide         as TimeSlide
 import qualified Properties.GaussianLadder    as GaussianLadder
 import qualified Properties.EventEncoding     as EventEncoding
 import qualified Properties.Gif89aDecode      as Gif89aDecode
@@ -148,6 +149,7 @@ import qualified Properties.AxisSKI as AxisSKI
 import qualified Properties.WeaveOrder as WeaveOrder
 import qualified Properties.WangTiling as WangTiling
 import qualified Properties.MergeBoard as MergeBoard
+import qualified Properties.MergeEvidence as MergeEvidence
 import qualified Properties.BitLedger as BitLedger
 import qualified Properties.ColorMomentum as ColorMomentum
 import qualified Properties.CaptureRecord as CaptureRecord
@@ -156,6 +158,7 @@ import qualified Properties.CaptureDiversity as CaptureDiversity
 import qualified Properties.RungTelemetry as RungTelemetry
 import qualified Properties.MultiScaleFusion as MultiScaleFusion
 import qualified Properties.RenderSelect as RenderSelect
+import qualified Properties.RungReadDisplay as RungReadDisplay
 import qualified Properties.MultiScaleIntegrate as MultiScaleIntegrate
 import qualified Properties.OpponentDerivation as OpponentDerivation
 import qualified Properties.YinYangCNN as YinYangCNN
@@ -384,6 +387,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , RadiometricRealize.tests
   , ColorTime.tests
   , ColorTimeDisplay.tests
+  , TimeSlide.tests
   , GaussianLadder.tests
   , EventEncoding.tests
   , Gif89aDecode.tests
@@ -397,6 +401,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , WeaveOrder.tests
   , WangTiling.tests
   , MergeBoard.tests
+  , MergeEvidence.tests
   , BitLedger.tests
   , ColorMomentum.tests
   , CaptureRecord.tests
@@ -405,6 +410,7 @@ main = defaultMain $ testGroup "sixfour-spec"
   , RungTelemetry.tests
   , MultiScaleFusion.tests
   , RenderSelect.tests
+  , RungReadDisplay.tests
   , MultiScaleIntegrate.tests
   , OpponentDerivation.tests
   , YinYangCNN.tests

@@ -36,10 +36,26 @@ struct MergeSignalBar: View {
             let fill = r == 0 ? phaseFill : signalFill
             return c < fill ? ink : dim
         }
+        // THE PROVENANCE CAPTION (`Spec.MergeEvidence`): one word of the SAME
+        // honesty vocabulary as the hero chip — MEASURED when pours credit a
+        // non-constant schedule priced from the capture's own sealed
+        // telemetry, DERIVED for the constant. An instrument label on an
+        // instrument (never over image pixels), naming a real provenance bit
+        // (`evidenceScaled`) — the charter's rule, not decoration. Data-gated
+        // by nature: every shipped burst prices to the constant and reads
+        // DERIVED.
+        .overlay(alignment: .trailing) {
+            CellText(model.evidenceScaled ? "MEASURED" : "DERIVED",
+                     rows: 2, cell: GlobalLattice.pt(1),
+                     ink: Color(srgb8: SFTheme.ledGhost))
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .allowsHitTesting(false)
         .accessibilityLabel(b.phase2Unlocked
             ? "Phase two: \(b.count(atLeast: 2)) of sixteen regions at sixty-four"
-            : "Banked evidence \(b.bank32) of \(S4MergeBoard.threshold32)")
+            : "Banked evidence \(b.bank32) of \(S4MergeBoard.threshold32)"
+              + (model.evidenceScaled ? ", measured evidence" : ", derived evidence"))
     }
 }
 

@@ -161,4 +161,33 @@ final class MergeBoardTests: XCTestCase {
         XCTAssertEqual(b.spent, before.spent)
         XCTAssertEqual(b.bank32, before.bank32)
     }
+
+    /// `Spec.TimeSlide.lawSlideNeverWritesTheWord`, at the model boundary:
+    /// THE TIME SLIDE is display-only — any interleaving of `setRung` /
+    /// `startPlayback` / `pausePlayback` / `realizePlayhead` leaves the
+    /// played board AND its decision-word codes byte-identical. The word is
+    /// THE MERGE's alone.
+    @MainActor
+    func testSlideNeverWritesTheWord() {
+        let model = DecideModel(tiles: [], gene: nil)
+        XCTAssertEqual(model.mergeStep(.pour), .accept)
+        XCTAssertEqual(model.mergeStep(.move(3, .s)), .accept)
+        let word = model.merge.decisionWordCodes
+        let board = model.merge
+        // A full slide session: play at every detent, realize groups, pause,
+        // re-slide, pause again.
+        model.startPlayback(rungK: 2, atTick: 0, fromFrame: 0)
+        model.realizePlayhead(group: 3)
+        model.setRung(1, atTick: 13)
+        model.realizePlayhead(group: 9)
+        model.setRung(0, atTick: 21)
+        model.realizePlayhead(group: 40)
+        model.pausePlayback()
+        model.setRung(2, atTick: 30)
+        model.startPlayback(rungK: 2, atTick: 34, fromFrame: model.frame)
+        model.realizePlayhead(group: 7)
+        model.pausePlayback()
+        XCTAssertEqual(model.merge.decisionWordCodes, word)
+        XCTAssertEqual(model.merge, board)
+    }
 }

@@ -143,17 +143,50 @@ struct S4MergeBoard: Equatable, Sendable {
 
     // MARK: The step (total; the twin of `Spec.MergeBoard.step`)
 
+    /// The derived-mode evidence schedule: `pourDeposit` in every slot — sums
+    /// to exactly one window (16 × 4 = 64). Under this schedule the two-arg
+    /// `step(_:schedule:)` IS the classic constant step, byte for byte
+    /// (`Spec.MergeEvidence.lawDerivedScheduleIsStep`) — today's game is the
+    /// derived special case.
+    static let derivedSchedule = [Int](repeating: pourDeposit, count: pourCap)
+
+    /// The deposit pour `i` actually makes under `schedule` — the twin of
+    /// `Spec.MergeEvidence.effectiveDeposit`: the slot clamped at 0, and 0 for
+    /// any out-of-range slot (total over hostile schedules; a zero-deposit
+    /// pour is an ACCEPTED honest dud).
+    static func effectiveDeposit(_ schedule: [Int], _ i: Int) -> Int {
+        guard i >= 0, i < schedule.count else { return 0 }
+        return max(0, schedule[i])
+    }
+
     /// Apply one op. Guard order for S: ceiling, then phase, then price.
     /// A pour credits `bank32` against the PRE-pour depths: evidence lands
-    /// where the board is measuring when the slice arrives.
+    /// where the board is measuring when the slice arrives. Forwards to the
+    /// evidence-generalized step under `derivedSchedule` — byte-identical to
+    /// the pre-evidence constant step (`lawDerivedScheduleIsStep`).
     @discardableResult
     mutating func step(_ op: S4MergeOp) -> S4MergeVerdict {
+        step(op, schedule: Self.derivedSchedule)
+    }
+
+    /// The EVIDENCE-CREDITED step — the twin of `Spec.MergeEvidence.stepWith`:
+    /// identical to the classic step except that an accepted pour deposits its
+    /// schedule slot (`effectiveDeposit` at the PRE-pour pour index) instead
+    /// of the constant `pourDeposit` — signal grows by it and the bank credits
+    /// it per measuring region against the PRE-pour depths. Moves are
+    /// untouched: evidence scaling touches deposits ONLY. Replay stays a pure
+    /// function of `(schedule, word)` (`lawWordReplaysBoardUnderSchedule`);
+    /// the schedule itself derives from the telemetry sealed in the SAME
+    /// `.s4cr` record (`S4MergeEvidence.schedule(from:)`), so no wire change.
+    @discardableResult
+    mutating func step(_ op: S4MergeOp, schedule: [Int]) -> S4MergeVerdict {
         switch op {
         case .pour:
             guard pours < Self.pourCap else { return .rejected(.poursExhausted) }
-            signal += Self.pourDeposit
+            let e = Self.effectiveDeposit(schedule, pours)
+            signal += e
             pours += 1
-            bank32 += Self.pourDeposit * count(atLeast: 1)
+            bank32 += e * count(atLeast: 1)
         case .move(let r, let verb):
             guard (0..<Self.regionCount).contains(r) else { return .rejected(.offBoard) }
             switch verb {
@@ -177,9 +210,20 @@ struct S4MergeBoard: Equatable, Sendable {
     }
 
     /// Fold a whole op list from the opening board (refusals are no-ops).
+    /// The derived special case of `playAll(_:schedule:)` — kept as the
+    /// golden-gated classic entry (`MergeBoardTests` pins it against the
+    /// Haskell authority). Production replay readers must use the
+    /// two-argument form (`scripts/lint-merge-replay.sh` polices this).
     static func playAll(_ ops: [S4MergeOp]) -> S4MergeBoard {
+        playAll(ops, schedule: derivedSchedule)
+    }
+
+    /// Fold a whole op list under an evidence schedule — the twin of
+    /// `Spec.MergeEvidence.playAllWith`, the GENERALIZED KEYSTONE's replay:
+    /// `playAll(b.word, schedule: s) == b` for a board built under `s`.
+    static func playAll(_ ops: [S4MergeOp], schedule: [Int]) -> S4MergeBoard {
         var b = S4MergeBoard()
-        for op in ops { b.step(op) }
+        for op in ops { b.step(op, schedule: schedule) }
         return b
     }
 

@@ -145,6 +145,7 @@ library
         SixFour.Spec.RadiometricRealize
         SixFour.Spec.ColorTime
         SixFour.Spec.ColorTimeDisplay
+        SixFour.Spec.TimeSlide
         SixFour.Spec.GaussianLadder
         SixFour.Spec.EventEncoding
         SixFour.Spec.Gif89aDecode
@@ -156,6 +157,7 @@ library
         SixFour.Spec.WeaveOrder
         SixFour.Spec.WangTiling
         SixFour.Spec.MergeBoard
+        SixFour.Spec.MergeEvidence
         SixFour.Spec.BitLedger
         SixFour.Spec.ColorMomentum
         SixFour.Spec.CaptureRecord
@@ -164,6 +166,7 @@ library
         SixFour.Spec.RungTelemetry
         SixFour.Spec.MultiScaleFusion
         SixFour.Spec.RenderSelect
+        SixFour.Spec.RungReadDisplay
         SixFour.Spec.HaltDepth
         SixFour.Spec.LabTransition
         SixFour.Spec.MultiScaleIntegrate
@@ -551,6 +554,7 @@ test-suite spec-tests
         Properties.RadiometricRealize
         Properties.ColorTime
         Properties.ColorTimeDisplay
+        Properties.TimeSlide
         Properties.GaussianLadder
         Properties.EventEncoding
         Properties.Gif89aDecode
@@ -564,6 +568,7 @@ test-suite spec-tests
         Properties.WeaveOrder
         Properties.WangTiling
         Properties.MergeBoard
+        Properties.MergeEvidence
         Properties.BitLedger
         Properties.ColorMomentum
         Properties.CaptureRecord
@@ -572,6 +577,7 @@ test-suite spec-tests
         Properties.RungTelemetry
         Properties.MultiScaleFusion
         Properties.RenderSelect
+        Properties.RungReadDisplay
         Properties.MultiScaleIntegrate
         Properties.OpponentDerivation
         Properties.YinYangCNN

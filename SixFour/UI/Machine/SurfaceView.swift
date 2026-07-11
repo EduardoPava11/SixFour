@@ -144,6 +144,17 @@ struct SurfaceView: View {
             .onChange(of: engine.thetaUp) { _, g in
                 surface.thetaUp = g
             }
+            // The ASYNC rung reads landed (step B — the realize runs detached, after
+            // the record write): fold into σ so the Decide hero can attach the
+            // per-region read render late (the attachGene/attachSubstrate pattern).
+            // PHASE-GATED: a quick retake puts σ back in `.live` (which clears the
+            // stash) BEFORE a slow realize lands — retake does not bump flowEpoch,
+            // so without this guard the PREVIOUS burst's reads would repopulate σ
+            // under the next shot (the stale-stash hazard the field's own comment
+            // names). Reads belong only to the post-capture phases.
+            .onChange(of: engine.burstRungReads) { _, r in
+                if surface.phase != .live { surface.rungReads = r }
+            }
             // engine.phase → σ event. The engine drives the lifecycle forward; σ.step
             // maps each engine edge onto the verified A/B FSM. Lock + burst + render are all
             // internal to `.live`; the engine's `.done` folds the GIFA into σ then fires
@@ -325,6 +336,11 @@ struct SurfaceView: View {
         surface.v21Flow = engine.v21Flow   // the recovered time axis; the export ships this
         surface.burstTiles = engine.burstTiles   // V3.0: the decide surface previews these
         surface.thetaUp = engine.thetaUp         // V3.0: the somatic gene (nil == floor)
+        // THE READS + POUR SCHEDULE (step B): the reads usually land late (the
+        // `.onChange` fold above); the schedule is already final at commit —
+        // computed at the burst seam, immutable for the capture's whole game.
+        surface.rungReads = engine.burstRungReads
+        surface.mergePourSchedule = engine.mergePourSchedule
         surface.v21FlowVersion += 1              // flow state (possibly nil) is fresh for THIS burst
         // Every new burst starts UNDECIDED: the previous capture's accepted decision
         // must never ride along to this one's export (σ-lifecycle audit).

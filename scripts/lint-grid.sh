@@ -215,6 +215,20 @@ if [ -n "$launch_bad" ]; then
   printf '%s\n' "$launch_bad" | sed 's/^/      /'
 else ok "launch-plist clean (modern UILaunchScreen:{}, no storyboard/colorname keys)"; fi
 
+# ── LINT-MERGE-REPLAY (delegated to scripts/lint-merge-replay.sh) ──────────
+# The two-argument replay gate (Spec.MergeEvidence): a decision word replays a
+# board only as (schedule, word) — a schedule-less playAll( reader outside the
+# allowlist silently replays the WRONG board for evidence-scaled captures.
+# Runs here so it gates every build wherever lint-grid runs.
+echo "GRID lint — MERGE replay (two-argument (schedule, word) readers)"
+replay_out=$(scripts/lint-merge-replay.sh 2>&1)
+if [ $? -eq 0 ]; then
+  ok "playAll readers are schedule-aware (lawWordReplaysBoardUnderSchedule)"
+else
+  note "schedule-less playAll reader — run scripts/lint-merge-replay.sh for detail"
+  printf '%s\n' "$replay_out" | sed 's/^/      /'
+fi
+
 echo
 if [ "$fail" -eq 0 ]; then
   echo "GRID lint: PASS — UI conformant (grid-following placement, one pitch)."

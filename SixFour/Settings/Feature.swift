@@ -153,6 +153,48 @@ enum Feature {
     /// unreachable — the capture flow is byte-identical either way.
     static let scrollTube = true
 
+    /// THE TIME SLIDE — the Decide hero PLAYS on the one 20 Hz clock and a
+    /// vertical finger slide dilates playback between the THREE LAWFUL RUNGS
+    /// (detents k = 0/1/2 → 64@20 Hz / 32@10 Hz / 16@5 Hz, `Spec.TimeSlide` /
+    /// `TimeSlideMath`). Coarse detents show TRUE temporal integrals (Int64
+    /// sums over the aligned group window, ONE round-half-up divide by 2^k);
+    /// the loop's wall time is invariant (320 cs at every detent — "slower"
+    /// is chunkier holds, never a longer loop). DISPLAY-ONLY: never touches
+    /// `S4MergeBoard` state, the decision word, `.s4cr` bytes, or GIF bytes
+    /// (`lawSlideNeverWritesTheWord`). With this OFF the hero is today's
+    /// static scrubbed frame and the gesture classifier is byte-for-byte the
+    /// landed one (any movement latches the horizontal scrub) — the escape
+    /// hatch if the detent feel fails the iPhone 17 Pro sign-off.
+    static let decideTimeSlide = true
+
+    /// THE READS ON SCREEN (`Spec.RungReadDisplay`) — the Decide hero renders each
+    /// MERGE region from ITS OWN independent rung read (the ladder's c64/c32/c16
+    /// cubes realized to sRGB8, `RungReads`) instead of pooling the one
+    /// reconstruction. **ON, but DATA-GATED: statically inert today.**
+    ///
+    /// The reads branch runs ONLY when `model.rungReads?.independent == true`,
+    /// which requires all three rung cubes — produced exclusively by the
+    /// `multiScaleLadder` weave driver (OFF, device-only bring-up). Every derived
+    /// burst (the shipped path) writes the c16-only signature, `independent`
+    /// stays false, and the hero renders byte-for-byte today's pooled
+    /// reconstruction (`lawDerivedNeverClaimsReads` — pooled display is the
+    /// honest fallback FOREVER, never deleted). MODE IS BINARY WHOLE-HERO: any
+    /// empty rung (kernel refusal, short cube) drops the ENTIRE frame back to
+    /// derived — camera sRGB8 and Q16-OKLab reconstruction never mix inside one
+    /// frame (the color-jump refusal). Display-only: no GIF byte, no `.s4cr`
+    /// byte, no board state depends on it; flipping it off restores the pooled
+    /// hero even for a ladder burst.
+    static let rungReadHero = true
+
+    // MERGE EVIDENCE CREDIT is NOT a flag (removed 2026-07-10, replay-keystone
+    // review): the pour schedule is ALWAYS `S4MergeEvidence.schedule(from:)`
+    // on the capture's own sealed telemetry — every replay reader derives the
+    // schedule from the record's `tel`, so a flag gating only the live side
+    // would make the sealed word replay to a DIFFERENT board. Today's derived
+    // bursts price to the constant by arithmetic (`lawFullBudgetYieldsConstant`
+    // — full arrivals clamp to the window), so the shipped game is
+    // byte-for-byte the classic step with no gate needed.
+
     /// MULTISCALE RENDER — the always-on adaptive 16/32/64 GIF. When true, `renderOnce` swaps the
     /// uniform 64³ tiles for the halt-floor multiscale cube (fused via `MultiScaleRender` →
     /// `s4_render_select`): motion regions stay 64³, static regions collapse to chunky block-16³.

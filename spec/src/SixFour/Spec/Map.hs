@@ -742,6 +742,16 @@ output depends ONLY on V16, invariant to V64: the coarse pixels come from the ou
 derived pool. @lawCoarseSelectsIndependentCoarse@ pins it on a scene where pool(V64)≠V16.
 @lawFineIsIdentity@ (depth2=V64), @lawSelectIsLocal@, @lawTemporalReplicateOnSharedClock@ (coarse
 constant across its 4-frame window). Deterministic/byte-exact/no-NN; Zig twin s4_render_select. Additive),
+"SixFour.Spec.RungReadDisplay" (★ THE READS ON SCREEN — the display algebra for showing a MERGE region
+from ITS OWN independent read. Owned slices are SPARSE in burst time ⇒ CAUSAL hold: @sliceForTick@ =
+last owned tick ≤ t, slice 0 before the first arrival (@lawOwnedTickShowsOwnSlice@, @lawHoldIsCausal@
+— kills naive frame/2 indexing); realize pixel base @sliceRealizeCount@ = fineBinArea × spatial pool ×
+ticks-per-slice with ticks-per-slice 1 ladder / 4 derived-c16 (@lawSliceCountMatchesProvenance@ — pins
+the ColorHead.emit16 ×4 double-count = a 2-stop shift or a kernel refusal); provenance gate
+@independentReads@ (all three cubes) vs the c16-only @derivedSignature@ (@lawDerivedNeverClaimsReads@ —
+pooled display stays the honest fallback); per-display-frame sampler @frameSample@ = RenderSelect's
+index math one frame at a time (@temporalQuantize@ on the shared 4:2:1 clock), gated against the
+whole-volume authority by @lawSamplerMatchesRenderSelectWhenDense@. Additive),
 "SixFour.Spec.MultiScaleIntegrate" (★ THE INTEGRATOR — assemble the 3 INDEPENDENT volumes from the
 raw laddered capture; independence made PHYSICAL: each scale integrates a DISJOINT set of sub-exposures
 (an @owner@ schedule partitions every photon to one scale), strengthening MultiScaleCapture from
@@ -822,6 +832,20 @@ as op-codes (@gameOpCode@ 0=pour, 1+3·region+verb; total both ways over on-boar
 bytes → replay what decodes = the SAME board every field (MergeBoard's @lawWordReplaysBoard@ composed
 with the wire — the training-corpus guarantee); v1 AND v2 bytes never change
 (@lawGoldenRecordV3Pinned@, @lawV2DecodesUnderV3Reader@). Additive),
+"SixFour.Spec.MergeEvidence" (★ SIGNAL FROM THE READS — THE MERGE's pour credit derived from the
+burst's OWN sealed telemetry, MergeBoard and the wire untouched. @scheduleOf@: no snapshot → @derivedSchedule@;
+else @fairSplit@ (exact integer fair division, @lawScheduleSplitConserves@) of @colorTimeBudget@ =
+arrivals × unitsOf clamped to the window — PRICED BY ARRIVALS ALONE, never the comovement byte
+(1000‰ means both "derived" and "could not measure"; @lawUnmeasuredCannotMasquerade@ pins that a
+short unmeasured burst earns only its own budget). Full budgets clamp to the constant by ARITHMETIC
+(@lawFullBudgetYieldsConstant@): healthy 64/32/16 (192→64) AND the shipped 24/12/4 weave plan
+(24+24+16=64, @lawWeavePlanBudgetIsFullWindow@), so TODAY'S GAME IS BYTE-FOR-BYTE THE DERIVED
+SPECIAL CASE (@lawDerivedScheduleIsStep@). @stepWith@ = step
+with the pour deposit generalized (0-deposit pours = accepted honest duds); GENERALIZED KEYSTONE
+@lawWordReplaysBoardUnderSchedule@ (replay = pure fn of (schedule, word)); WIRE KEYSTONE
+@lawRecordedWordReplaysWithTelemetry@ (tel + dw in ONE existing v3 record — no version bump, goldens
+stand). Honesty as law: @lawShortEvidenceCannotConstruct@ (refuse, never invent),
+@lawBankNeedsMeasurementUnderSchedule@, @lawUnlockMonotoneUnderSchedule@. Additive),
 "SixFour.Spec.RungTelemetry" (★ WHAT THE GRID SHOWS PER RUNG — the exact per-rung telemetry algebra,
 BOTH modes. EXPOSURE, one vocabulary: optical light ratio (duration×ISO vs the fine reference, exact ℚ)
 vs pooling-equivalent stops (derived); they COINCIDE on the ladder's one integer k
@@ -1529,6 +1553,18 @@ every interactive GridLayout region declares a face, @lawControlFaceTotal@), "Si
 ONE 20 Hz tick (@lawDisplayCadenceIsPoolDepth@ = WeaveOrder @unitsOf@), intake-tally slots = pool depth
 (@lawTallyEqualsUnits@), the 256-cell banked capture ledger @64×4@ (@lawLedgerConserves@), the 5 cs
 banked window, and the flux-bar log₂ quantizer — the spec home of the live pyramid's honest cadences),
+"SixFour.Spec.TimeSlide" (★ THE TIME SLIDE — slide-to-dilate playback for the Decide hero, every
+quantity a ladder integer: @detentOf@ quantizes vertical travel to k ∈ {0,1,2} (@cellsPerDetent@ = 16
+cells/rung, THE one named tuning integer; down = coarser), @periodOf@ = WeaveOrder @unitsOf@ (1/2/4
+ticks — @lawDetentsAreRungs@ refuses the 3-tick delay, 64 mod 3 ≠ 0), the playhead is a pure function
+of the ONE 20 Hz tick (@pos@/@displayGroup@, steps exactly on @realizesAt@ —
+@lawGroupChangesExactlyOnRealize@); KEYSTONE @lawGroupWindowIsPouredWindow@ pins group j = pouredWindow
+ENDING at r=(j+1)·2^k under 1-based bookkeeping (the off-by-one killer vs goldenSchedule16); coarse
+frames are true integrals — Integer sums over the aligned window, ONE @divRoundHalfUp@ by 2^k (never
+8^k, @lawIntegralIsSumsDividedOnce@; negative Q16 a/b vectors pinned @lawDivRoundHalfUpNegatives@);
+wall time invariant: 64 ticks = 320 cs at EVERY detent (@lawLoopWallTimeInvariant@ — slower is
+chunkier, never longer); and the slide NEVER writes the decision word (@lawSlideNeverWritesTheWord@).
+Goldens @goldenPlayhead16@/@goldenIntegralQ16@ mirror into the Swift twin verbatim),
 "SixFour.Spec.GridAxis",
 "SixFour.Spec.GridScript", "SixFour.Spec.MovableLayout", "SixFour.Spec.WidgetDescriptor", "SixFour.Spec.Ownership", "SixFour.Spec.Order",
 "SixFour.Spec.CloudProjection", "SixFour.Spec.SevenSeg", "SixFour.Spec.Pipeline", "SixFour.Spec.Obfuscation".

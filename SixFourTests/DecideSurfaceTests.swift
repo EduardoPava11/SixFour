@@ -10,10 +10,11 @@ struct DecideSurfaceTests {
     /// runtime self-check (spanning all scenes) holds.
     @Test func decisionSceneResolvesEveryWidget() {
         let scene = GridLayoutContract.decisionScene
-        for name in ["hero", "coarse", "tally", "fold", "advanced", "again", "accept"] {
+        for name in ["hero", "coarse", "tally", "signal", "pour",
+                     "fold", "advanced", "again", "accept"] {
             #expect(GridLayoutContract.region(name, in: scene) != nil, "missing \(name)")
         }
-        #expect(scene.count == 7)
+        #expect(scene.count == 9)   // THE MERGE added signal + pour (fab48df)
         #expect(GridLayoutContract.isDisjoint(scene))
         #expect(GridLayoutContract.selfCheck())
     }

@@ -156,6 +156,16 @@ final class CaptureViewModel {
     var burstTiles: [OKLabTile] = []
     var thetaUp: CaptureGene.ThetaUp? = nil
 
+    /// THE READS (step B, `Spec.RungReadDisplay`): the last burst's realized
+    /// per-rung sRGB8 read volumes (`RungReads.build` on `BurstResult.rungCubes`,
+    /// detached — the async build lands AFTER `BurstResult`, the flow/gene
+    /// arrival pattern). `SurfaceView` folds it into σ so the Decide hero can
+    /// render each MERGE region from ITS OWN read. Derived bursts carry the
+    /// honest c16-only subset (`independent == false` ⇒ the hero stays pooled);
+    /// nil until a burst's build lands. Cleared at burst START (a new capture
+    /// must never inherit a previous burst's reads).
+    var burstRungReads: RungReads? = nil
+
     /// Bumps when the ASYNC V2.1 flow lands (the flow encode left the burst seam —
     /// device-measured 19 s — so it arrives after `BurstResult`) AND when a new burst
     /// invalidates it. `SurfaceView` observes this to fold the (possibly nil) flow into σ.
@@ -575,6 +585,36 @@ final class CaptureViewModel {
     private var lastShutterRecord: S4CaptureRecord?
     private var lastShutterGifURL: URL?
 
+    /// The capture's IMMUTABLE pour schedule (`Spec.MergeEvidence`): computed
+    /// ONCE at burst commit from the snapshot just sealed in the `.s4cr` and
+    /// installed into `DecideModel` AT CONSTRUCTION — a mid-game schedule
+    /// swap would break the replay keystone
+    /// (`lawWordReplaysBoardUnderSchedule`), so no other writer exists. NEVER
+    /// flag-gated: replay readers derive the schedule from the record's own
+    /// telemetry, so the live game must use the identical rule. Derived
+    /// bursts price to the constant by arithmetic — byte-for-byte today's
+    /// game.
+    private(set) var mergePourSchedule: [Int] = S4MergeBoard.derivedSchedule
+
+    /// The `.s4cr` `tel` construction — the WORST (largest) pairwise
+    /// comovement statistic on the wire (`Spec.CaptureRecord.TelemetrySnapshot`):
+    /// 1000 = some pair is fully determined; NO measured pair reads 1000 too
+    /// (no evidence of independence is not evidence of independence — the
+    /// `comovementPermille` zero-total rule). Factored (byte-neutral) so the
+    /// pour schedule and the record writer share ONE derivation; the
+    /// `CaptureRecordTests` golden bytes gate the neutrality.
+    nonisolated static func wireTelemetry(_ tel: RungTelemetry) -> S4TelemetrySnapshot {
+        let worst = tel.rungs
+            .map(\.comovementPermilleVsCoarser)
+            .filter { $0 >= 0 }
+            .max() ?? 1000
+        return S4TelemetrySnapshot(
+            arrivals: tel.rungs.map { UInt64(max(0, $0.arrivals)) },
+            sampleVolumes: tel.rungs.map { UInt64(max(0, $0.sampleVolume)) },
+            comovementPermille: UInt64(worst)
+        )
+    }
+
     /// THE MERGE's exit: at Decide-ACCEPT the played decision word seals
     /// into the capture's own `.s4cr` — the record re-encodes at version 3
     /// with the `dw` key (`Spec.CaptureRecord.lawRecordedWordReplays`: the
@@ -642,6 +682,11 @@ final class CaptureViewModel {
         flowEpoch += 1
         v21Flow = nil
         v21FlowVersion += 1
+        // THE READS + POUR SCHEDULE start fresh per burst: a new capture must
+        // never inherit a previous burst's reads or evidence schedule (the
+        // stale-flow discipline, applied to step B's stashes).
+        burstRungReads = nil
+        mergePourSchedule = S4MergeBoard.derivedSchedule
         syncPreviewDither()  // keep the live look in sync with the engine + sampler
         Haptics.impact(.medium)
         loadingProgress = 0      // fresh resolve sweep for this capture
@@ -805,24 +850,44 @@ final class CaptureViewModel {
                                    isoMilli: UInt64(max(0, r.isoMilli)),
                                    evCentistops: Int64(r.evCentistops))
                 }
-                // ONE comovement scalar on the wire (`Spec.CaptureRecord.
-                // TelemetrySnapshot`): the WORST (largest) pairwise statistic —
-                // 1000 = some pair is fully determined. No measured pair reads
-                // 1000 too (no evidence of independence is not evidence of
-                // independence — the `comovementPermille` zero-total rule).
-                let worst = tel.rungs
-                    .map(\.comovementPermilleVsCoarser)
-                    .filter { $0 >= 0 }
-                    .max() ?? 1000
-                record.telemetry = S4TelemetrySnapshot(
-                    arrivals: tel.rungs.map { UInt64(max(0, $0.arrivals)) },
-                    sampleVolumes: tel.rungs.map { UInt64(max(0, $0.sampleVolume)) },
-                    comovementPermille: UInt64(worst)
-                )
+                // ONE comovement scalar on the wire — the factored
+                // `wireTelemetry` (byte-neutral: the worst-pairwise rule moved
+                // verbatim; the CaptureRecordTests golden bytes gate it).
+                record.telemetry = Self.wireTelemetry(tel)
             }
             saveCaptureRecordAsync(record, pairedWith: renderResult.output.gifURL)
             lastShutterRecord = record
             lastShutterGifURL = renderResult.output.gifURL
+            // THE CAPTURE'S IMMUTABLE POUR SCHEDULE (Spec.MergeEvidence): a
+            // pure function of the snapshot just SEALED beside the future
+            // decision word — never the live 5 Hz telemetry fold, and NEVER
+            // a feature flag: every replay reader derives the schedule from
+            // the record's own telemetry, so the live game must use the
+            // IDENTICAL rule or the sealed word replays to a different board
+            // (the replay-keystone gap). Today's derived bursts price to the
+            // constant by arithmetic (`lawFullBudgetYieldsConstant`) ⇒
+            // byte-for-byte today's game (`lawDerivedScheduleIsStep`).
+            // Computed once here; DecideModel receives it at construction,
+            // so the keystone can never see a mid-game swap.
+            mergePourSchedule = S4MergeEvidence.schedule(from: record.telemetry)
+            // THE READS (Spec.RungReadDisplay): realize the rung cubes to
+            // display sRGB8 OFF the seam (the flow/gene detached pattern) —
+            // this was the cubes' drop point; now they feed the Decide hero's
+            // per-region read render before being dropped. Derived bursts
+            // realize the honest c16-only subset (`independent == false`).
+            if let cubes = result.rungCubes {
+                let epoch = flowEpoch
+                Task.detached(priority: .userInitiated) { [weak self] in
+                    let reads = RungReads.build(from: cubes)
+                    Task { @MainActor [weak self] in
+                        guard let self, self.flowEpoch == epoch else {
+                            Self.logger.warning("[viewmodel] DROPPED stale rung reads (epoch \(epoch))")
+                            return
+                        }
+                        self.burstRungReads = reads
+                    }
+                }
+            }
             phase = .done
             Haptics.notification(.success)
         } catch let err as CaptureSession.CaptureError {

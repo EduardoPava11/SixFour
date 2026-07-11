@@ -41,6 +41,14 @@ final class BurstWeaveDriver {
 
     /// Owned frames landed per scale (by rawValue).
     private(set) var owned: [Int] = [0, 0, 0]
+    /// The burst TICK each landed slice arrived on, per scale (by rawValue),
+    /// in owned order — what `cubesSnapshot` hands the display's causal hold
+    /// (`Spec.RungReadDisplay.sliceForTick`). `ingest` records the REAL tick;
+    /// the direct `accumulate` test seam falls back to the plan's owned ticks.
+    private(set) var ownedTicks: [[Int]] = [[], [], []]
+    /// The plan's owned tick indices per scale — the `accumulate` fallback
+    /// (and the settle-2 fixture rule readers reconstruct with).
+    private let plannedTicks: [[Int]]
     /// Ticks charged to each scale that produced NO evidence: settle frames,
     /// pool failures, kernel-dropped frames (by rawValue).
     private(set) var skipped: [Int] = [0, 0, 0]
@@ -72,6 +80,9 @@ final class BurstWeaveDriver {
                 scale: sc, durationSeconds: 0, iso: 0, evOffsetStops: 0)
         }
         self.poolHead = ColorHead(cropSide: cropSide)
+        self.plannedTicks = MultiScaleLadder.Scale.allCases.map { sc in
+            plan.indices.filter { plan[$0].scale == sc && plan[$0].owned }
+        }
         self.volumes = MultiScaleLadder.Scale.allCases.map { sc in
             let n = MultiScaleLadder.plannedOwnedCount(plan, scale: sc)
             return [UInt64](repeating: 0, count: n * sc.side * sc.side * 3)
@@ -113,7 +124,8 @@ final class BurstWeaveDriver {
             skipped[t.scale.rawValue] += 1
             return nil
         }
-        accumulate(scale: t.scale, sums64: sums, fineBinArea: poolHead.pixelsPerFineBin)
+        accumulate(scale: t.scale, sums64: sums, fineBinArea: poolHead.pixelsPerFineBin,
+                   tickIndex: i)
         return t.scale
     }
 
@@ -129,10 +141,25 @@ final class BurstWeaveDriver {
     /// 64-rung sums (64·64·3 u64) into `scale`'s independent volume at the
     /// scale's OWN resolution — exact `poolSpatial2` block sums down to the
     /// owner side, never derived from another rung's stream — and fold the
-    /// frame into the scale's 16²-lattice running total.
-    func accumulate(scale: MultiScaleLadder.Scale, sums64: [UInt64], fineBinArea area: Int64) {
+    /// frame into the scale's 16²-lattice running total. `tickIndex` is the
+    /// burst tick this frame landed on (`ingest` passes the real one); the
+    /// default -1 falls back to the plan's next owned tick for the scale, so
+    /// direct test-seam calls still emit a lawful ascending tick log.
+    func accumulate(scale: MultiScaleLadder.Scale, sums64: [UInt64], fineBinArea area: Int64,
+                    tickIndex: Int = -1) {
         precondition(sums64.count == 64 * 64 * 3)
         fineBinArea = area
+        // Record the slice's arrival tick (owned order == slice order).
+        let slot = owned[scale.rawValue]
+        let planned = plannedTicks[scale.rawValue]
+        let tick: Int
+        if tickIndex >= 0 {
+            tick = tickIndex
+        } else if slot < planned.count {
+            tick = planned[slot]
+        } else {
+            tick = (ownedTicks[scale.rawValue].last ?? -1) + 1
+        }
         // Pool to the owner's resolution (exact block sums; fine64 = identity).
         var rung = sums64
         var side = 64
@@ -140,11 +167,14 @@ final class BurstWeaveDriver {
             rung = ColorHead.poolSpatial2(rung, side: side)
             side /= 2
         }
-        // Write the slice into the preallocated volume (skip if the plan's
-        // owned budget is somehow exceeded — cannot happen with plan-driven
-        // ticks, but never write out of bounds).
+        // Write the slice into the preallocated volume. If the plan's owned
+        // budget is somehow exceeded (cannot happen with plan-driven ticks),
+        // skip the WHOLE slice bookkeeping — tick log, slice bytes, and the
+        // owned counter move together or not at all, so `cubesSnapshot` can
+        // never report one more frame than the cube holds (one phantom frame
+        // would fail `RungReads.realizeRung`'s shape guard and silently drop
+        // the entire reads display).
         let sliceLen = scale.side * scale.side * 3
-        let slot = owned[scale.rawValue]
         if (slot + 1) * sliceLen <= volumes[scale.rawValue].count {
             volumes[scale.rawValue].withUnsafeMutableBufferPointer { buf in
                 rung.withUnsafeBufferPointer { src in
@@ -152,8 +182,9 @@ final class BurstWeaveDriver {
                                sliceLen * MemoryLayout<UInt64>.stride)
                 }
             }
+            ownedTicks[scale.rawValue].append(tick)
+            owned[scale.rawValue] += 1
         }
-        owned[scale.rawValue] += 1
         // Fold into the shared 16² lattice total (pool the rest of the way down).
         while side > 16 {
             rung = ColorHead.poolSpatial2(rung, side: side)
@@ -175,7 +206,15 @@ final class BurstWeaveDriver {
         return CaptureSession.RungCubes(
             cube64: trimmed(.fine64), frames64: owned[MultiScaleLadder.Scale.fine64.rawValue],
             cube32: trimmed(.mid32), frames32: owned[MultiScaleLadder.Scale.mid32.rawValue],
-            cube16: trimmed(.coarse16), frames16: owned[MultiScaleLadder.Scale.coarse16.rawValue])
+            cube16: trimmed(.coarse16), frames16: owned[MultiScaleLadder.Scale.coarse16.rawValue],
+            ownedTicks64: ownedTicks[MultiScaleLadder.Scale.fine64.rawValue],
+            ownedTicks32: ownedTicks[MultiScaleLadder.Scale.mid32.rawValue],
+            ownedTicks16: ownedTicks[MultiScaleLadder.Scale.coarse16.rawValue],
+            fineBinArea: fineBinArea,
+            // Ladder slices are SINGLE-tick (one owned frame each) — the
+            // realize count must NOT carry the derived ×4
+            // (`Spec.RungReadDisplay.lawSliceCountMatchesProvenance`).
+            ticksPerSlice16: 1)
     }
 
     /// The independence statistic between `scale` and the next-coarser rung on

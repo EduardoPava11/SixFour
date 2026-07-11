@@ -266,13 +266,33 @@ final class CaptureSession: NSObject, @unchecked Sendable {
     /// ticks are skipped honestly and show up in the telemetry's `skipped`,
     /// never as zero slices here); derived mode fills `cube16` only, from the
     /// ColorHead's exactly-pooled 16-rung stream.
-    struct RungCubes: Sendable {
+    struct RungCubes: Sendable, Equatable {
         let cube64: [UInt64]
         let frames64: Int
         let cube32: [UInt64]
         let frames32: Int
         let cube16: [UInt64]
         let frames16: Int
+        /// ADDITIVE (step B, `Spec.RungReadDisplay`): the burst TICK each slice
+        /// landed on, ascending, one per slice (owned order == slice order) —
+        /// what the causal display hold (`RungReads.sliceForTick`) indexes by.
+        /// The `.s4cr` wire copies only the cube arrays, exactly as before:
+        /// these fields never reach disk (persisting them is a future record
+        /// version; the settle-2 fixture rule reconstructs them until then).
+        var ownedTicks64: [Int] = []
+        var ownedTicks32: [Int] = []
+        /// Derived mode: the 5 Hz realize ticks `[3, 7, … 63]` — the poured
+        /// window ENDS at the realize tick (`lawGroupWindowIsPouredWindow`).
+        var ownedTicks16: [Int] = []
+        /// Pixels pooled into ONE 64-rung bin per tick (`ColorHead.
+        /// pixelsPerFineBin`) — the realize pixel base's spatial factor
+        /// (`RungReads.sliceRealizeCount`). 0 = unknown (reads unrealizable).
+        var fineBinArea: Int64 = 0
+        /// Temporal ticks summed into ONE c16 slice: 1 for a ladder cube
+        /// (single-tick slices) vs 4 for the derived c16 (ColorHead's 4-tick
+        /// sums) — the pinned ×4 the realize count must NOT double-apply
+        /// (`Spec.RungReadDisplay.lawSliceCountMatchesProvenance`).
+        var ticksPerSlice16: Int = 1
     }
 
     /// Aggregate statistics over the 63 inter-frame intervals (in ms).
@@ -1091,9 +1111,16 @@ final class CaptureSession: NSObject, @unchecked Sendable {
             // c16-only shape is the derived-provenance signature
             // (`Spec.CaptureRecord`: "derived mode writes c16 only").
             if ch.cube16Frames > 0 {
-                recordRungCubes = RungCubes(cube64: [], frames64: 0,
-                                            cube32: [], frames32: 0,
-                                            cube16: ch.cube16, frames16: ch.cube16Frames)
+                recordRungCubes = RungCubes(
+                    cube64: [], frames64: 0,
+                    cube32: [], frames32: 0,
+                    cube16: ch.cube16, frames16: ch.cube16Frames,
+                    // The 5 Hz realize ticks (0-based): slice j pooled frames
+                    // 4j…4j+3 and realized at tick 4j+3 — the poured window
+                    // ENDS at the realize tick.
+                    ownedTicks16: (0..<ch.cube16Frames).map { $0 * 4 + 3 },
+                    fineBinArea: ch.pixelsPerFineBin,
+                    ticksPerSlice16: 4)
             }
         }
         if let t = recordRungTelemetry { rungTelemetryCallback?(t) }
