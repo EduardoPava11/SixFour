@@ -240,6 +240,48 @@ under budget, stable across 5 bursts, pressure logged.
 
 ---
 
+## 5b. DEVICE BASELINE RUN (2026-07-10, iPhone 17 Pro / A19 Pro — parsed from Daniel's log)
+
+Baseline burst (ladderProbe OFF — no [proof] lines; this is the pre-probe run):
+
+- **THE MISSING NUMBER, CAPTURED — and the tick budget is BLOWN**:
+  `[perf] yin-yang tick CPU: 64 ticks, mean 65.39 ms, max 213.83 ms (50 ms budget)`.
+  Mean tick cost > the 50 ms frame interval ⇒ the 1-deep delegate queue saturates ⇒
+  20 dropped frames, intervals mean 65.88 ms (σ 31.91, worst Δ 200 ms), burst took
+  4150 ms not 3200. Every `[tick] LATE +100.01 ms` is the mechanical signature of
+  tick-cost > interval (each late tick drops exactly one frame) — not thermal.
+  SUSPECT #1: a DEBUG build ("Reading from public effective user settings" =
+  Xcode-launched; the design note's "~ms in release" is plausible at 20–60×
+  under -Onone with bounds checks in the per-pixel loop). ACTION: rerun RELEASE
+  before concluding anything about hardware. If Release still busts 50 ms,
+  PERF-MAP H1 (pooling into the existing GPU pass) is Stage-0-blocking.
+- **GPU HANG**: `IOGPUCommandBufferCallbackErrorHang` during the post-burst
+  flurry (v21 flow encode + preview quantize storm + both trainers contending).
+  Stop-the-line item for Stage 1; reinforces v21Capture=false for probe runs
+  (the 384 MiB hist buffer + double-walk GPU pass are prime suspects).
+- **Format reality**: 72 formats scanned, 9 x420@20fps (all HLG, none P3);
+  selected 1280×720 → min-dim 720 → crop 512 lives, crop 1024 does NOT on this
+  format. The full dims-of-all-x420 census (incl. any 4K x420 verdict) needs the
+  probe's one-shot `[proof] format:` lines — still pending.
+- **Exposure reality (SF-probe)**: custom exposure supported; shutter
+  1/71429s…1s, ISO 54…5184, bias ±8 EV. CAUTION: the printed bracket
+  (64²=1/30 | 32²=1/15 | 16²=1/8, "2.00 stops") is SENSOR-capable, not
+  cadence-capable — 1/15 and 1/8 exceed the 50 ms frame duration; at 20 fps from
+  a 1/30 base the TIME headroom is ~0.58 stops and the rest must be GAIN,
+  exactly as the weave plan already assumes.
+- **Learners behaved**: θ_up trained in 22 ms and FLOORED (−0%, 513.465 vs
+  floor 513.922) — the corpus lesson again (static test scene, nothing to
+  invent); YinYang S_t 512 pairs MSE 0→0, halt budget 4, 256/256 certifiable
+  (a static scene certifies everywhere; the kinematic floor ships it).
+- Benign: 3× Fig -12710 during format scanning, texture-pool miss #1 warmup,
+  first tick +250 ms warmup, AE/AWB lock settled 0 ms.
+
+**PHASE P sequencing verdict**: do NOT flip `ladderProbe` on this config yet —
+the probe adds ~4 more crop walks to an already-saturated tick. Order:
+(1) rerun this exact baseline in RELEASE; (2) if tick mean lands single-digit
+ms, flip `ladderProbe=true` + `v21Capture=false` and run PHASE P; (3) chase the
+GPU hang regardless.
+
 ## 6. Open questions (parked, not blocking Stage 0)
 
 - 512² verdict awaits the 4K-x420 census line.
