@@ -60,9 +60,9 @@ self-containment), training honesty, paint/gesture intent, and super-res.
    NetSynth256 scaffold direction.
 10. **LabBleed codegen** — emit the RGB↔Lab coefficient matrix from the spec
     instead of hand-copies per tier (kills a tier-drift bug class).
-11. **GMM** — assemble the (μ,Σ,w) palette mixture the device already has
-    moments for, as the look-NN input surface (feeds the Temporal PaletteNet
-    plan).
+11. **GMM** — ✅ PROMOTED 2026-07-11 (7bd0fcd): `Core/GMMToken.swift` — the
+    (μ,Σ,w) 10-double token surface over ClusterStatistics. FOLLOW-ON: the
+    MLX set-encoder consumption (Mac-side, Stage 3).
 12. **AtlasCascade** — the spec claims a byte-for-byte Swift mirror of the
     64³→256³ cascade ExitState that was never written. Write it (with 9).
 13. **Gif89aDecode factorization / CoarseIsPalette / ConstructionEncoder** —
