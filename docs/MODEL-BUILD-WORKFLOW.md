@@ -1,5 +1,9 @@
 # SixFour Model Build Workflow (handoff plan, 2026-06-26)
 
+> **HISTORICAL (banner added 2026-07-13).** Pre-pivot workflow (2026-06-26 era). The live
+> workflow is the rebuild plan; Zig paths read as `SixFour/Kernels/`.
+
+
 Derived from the deep model review. This expands every TODO from that review into ordered,
 self-contained tasks. Each task states its goal, what it depends on, the exact files it touches,
 the concrete steps, the laws/goldens it must add, the gate command, and the acceptance bar

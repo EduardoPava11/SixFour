@@ -6,7 +6,8 @@ a learned global colour palette. The defining engineering principle is
 
 > **PIVOT 2026-07-06 — the native core is SWIFT, Zig is retired.** Daniel's call
 > (reversing the 2026-06 "Zig decided" ruling): the byte-exact integer core is now
-> pure Swift in `SixFour/Kernels/` — all 71 `s4_*` kernels hand-ported from
+> pure Swift in `SixFour/Kernels/` — the `s4_*` kernels (72 exports as of 2026-07-13;
+> 71 at port time) hand-ported from
 > `Native/src/*.zig` with IDENTICAL names and C signatures (`@_cdecl`), so every
 > Swift call site and golden test compiled unchanged. `Native/` is DELETED (git
 > history is the record). The determinism contract is unchanged: bit-exactness is
@@ -23,6 +24,21 @@ a learned global colour palette. The defining engineering principle is
 > `trainer/lib/libsixfour_kernels.dylib`, ctypes binding `trainer/native_kernels.py`)
 > — no train/deploy skew, exactly as before. Haskell spec + golden vectors remain
 > the source of truth (Tier 0 unchanged). Do not reintroduce Zig.
+
+## Status-of-record (where "what is true NOW" lives — nothing else is a ledger)
+
+Exactly three surfaces carry current status; everything else in `docs/` is history
+or design and must say so in its header:
+
+1. **`CLAUDE.md`** (this file) — the contract/rules canon.
+2. **`docs/REBUILD-2026-07-10-PLAN.md`** — the active-arc ledger (rebuild stages,
+   device-gate results appended in place).
+3. **`docs/SPEC-APP-LINK-LEDGER.md`** — the spec→app adoption/promotion ledger
+   (updated per promotion commit).
+
+`docs/STATUS.md` stays deleted — do not recreate it, and do not let a fourth
+ledger accrete (session notes are `docs/SESSION-*.md`, history only; `NOTES.md`
+is the closed pre-2026-07-06 log).
 
 ## The dependency contract (HARD RULE)
 

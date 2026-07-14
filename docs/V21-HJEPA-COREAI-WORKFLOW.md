@@ -1,5 +1,10 @@
 # V2.1 to H-JEPA to Core AI: train on probability functions, deploy with on-device LoRA
 
+> **SUPERSEDED (banner added 2026-07-13).** The Core AI display side was retired 2026-06 and the
+> full-matrix H-JEPA working plan was replaced by [`REBUILD-2026-07-10-PLAN.md`](REBUILD-2026-07-10-PLAN.md) §1.1.
+> Zig paths herein read as `SixFour/Kernels/` (CLAUDE.md pivot note). Historical record.
+
+
 The workflow for the direction the owner named: feed the model the PROBABILITY FUNCTIONS (not the
 collapsed GIF), let the encoder collapse them the way the user's eye does, train the H-JEPA large head
 on energy and entropy, export it to Core AI, and improve it per-user on the iPhone with a LoRA adapter.

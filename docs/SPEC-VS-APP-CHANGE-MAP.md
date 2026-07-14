@@ -1,5 +1,11 @@
 # SPEC-VS-APP CHANGE-MAP — how much of the app moves under the recent spec arc
 
+> **SUPERSEDED 2026-07-13.** Snapshot of the 2026-07-03..05 spec arc, written pre-Swift-pivot
+> (it cites deleted `Native/src/*.zig` paths). The living spec→app ledger is
+> [`SPEC-APP-LINK-LEDGER.md`](SPEC-APP-LINK-LEDGER.md); this file is kept as the historical
+> record of the A-contradiction analysis and the "do NOT touch" rulings.
+
+
 > Status: LIVING · Created: 2026-07-05 · Owner: SixFour
 > Produced by a 10-agent workflow (9 spec-stack audits + 2 cross-cuts, Opus 4.8)
 > measuring the 2026-07-03…07-05 spec arc against the working tree. Every claim is

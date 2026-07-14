@@ -1,7 +1,8 @@
 # PERF MAP: the thermal-budget re-map — tick/burst/post/preview/cold/dead classification, hot-path chain, ring re-map proposal, iOS 27 adoption points
 
 > Status: LIVING (§1–2, §5) + PROPOSAL (§3–4, pending Daniel's approval) · Created: 2026-07-08 · Owner: SixFour
-> Companions: `docs/DEVICE-MODEL-MAP.md` (memory ledger), `docs/APP-MAP.md` (UI map), `docs/STATUS.md`.
+> Companions: `docs/DEVICE-MODEL-MAP.md` (memory ledger, historical). (`docs/APP-MAP.md` and
+> `docs/STATUS.md` were deleted; status-of-record is CLAUDE.md §"Status-of-record".)
 > Every anchor is `file:line` from the 2026-07-08 five-scanner inventory + hot-path audit; flags read
 > live from `SixFour/Settings/Feature.swift` (`v21Capture = true`, `v3SomaticTrain = true`,
 > `yinYangBands = true`; `globalPaletteV2`/`metaInitW0`/`multiScaleLadder`/`liveLadder`/`opticalEV`/

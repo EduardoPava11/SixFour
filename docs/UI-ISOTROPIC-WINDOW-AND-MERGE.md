@@ -1,5 +1,11 @@
 # THE ISOTROPIC WINDOW + THE MERGE — open-scene reorg & the decision game
 
+> **SUNSET 2026-07-10.** The MERGE arc this proposal describes failed on device and was sunset
+> the same day it was last edited (see [`SESSION-2026-07-10-NOTES.md`](SESSION-2026-07-10-NOTES.md)
+> and [`REBUILD-2026-07-10-PLAN.md`](REBUILD-2026-07-10-PLAN.md)). Historical record; the spec
+> laws and the `.s4cr` v3 `dw` field survive it.
+
+
 Status: **PROPOSAL** (Daniel's remote brief, 2026-07-09). Extends
 `docs/UI-FORM-FOLLOWS-FUNCTION.md` (the charter); same rule of law — name FUNCTIONS
 first, derive FORM, every visualization names its spec quantity. Iterative over the

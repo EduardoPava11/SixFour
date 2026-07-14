@@ -1,6 +1,13 @@
 # NOTES — design decisions, session log
 
-> NOTES.md is a chronological session log (history), NOT current status. For current build-state, canon = CLAUDE.md (the contract) + SixFour.Spec.Map (the spec index) + the module doc-comments. (docs/STATUS.md was deleted; do not recreate.)
+> **LOG CLOSED 2026-07-05.** The session-log function moved to `docs/SESSION-*.md`
+> (07-06, 07-08, 07-10, …); this file is the 2026-05-28 → 2026-07-05 record and no
+> longer receives entries. It ends BEFORE the Swift-kernel pivot (07-06), the UX
+> charter (07-08), and the LOOM rebuild (07-10).
+>
+> NOTES.md is a chronological session log (history), NOT current status. For current
+> build-state see CLAUDE.md §"Status-of-record" (the contract + the rebuild-plan and
+> link-ledger docs). (docs/STATUS.md was deleted; do not recreate.)
 
 Running notes on architectural pivots and their tensor evidence. Entries are
 newest first.

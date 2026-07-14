@@ -200,8 +200,8 @@ the seam.
   `rungTelemetry = true`.
 - Phase B all green (meters optical, comove < 1000‰, AE restores, no seam
   hitch, records ~MB with all three cubes) → `multiScaleLadder` is a
-  candidate default; bring the result back to `docs/STATUS.md` + the spec
-  session notes before flipping anything permanently.
+  candidate default; bring the result back to `docs/REBUILD-2026-07-10-PLAN.md`
+  (the arc ledger) + the spec session notes before flipping anything permanently.
 - Any failure: flip `multiScaleLadder` back to `false` — with it off the
   capture path is byte-for-byte the shipped single-exposure burst.
 

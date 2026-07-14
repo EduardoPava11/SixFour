@@ -1,5 +1,10 @@
 # LAUNCH build workflow — the 256³ curation loop, the gene swap, and the atlas
 
+> **STALE (banner added 2026-07-13).** Pre-Swift-pivot: Zig references throughout read as
+> `SixFour/Kernels/` (CLAUDE.md pivot note); any "LIVING" claim below no longer holds.
+> Historical workflow record.
+
+
 > Status: LIVING · Created: 2026-07-02 · Owner: SixFour
 > Companions: `docs/V3-BUILD-WORKFLOW.md` (cascade + gene registry),
 > `docs/SWAP-ECONOMY-CARRIER.md` (the S4GX wire contract, landed green).

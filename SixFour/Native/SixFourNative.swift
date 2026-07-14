@@ -1,21 +1,22 @@
 import Foundation
 import os
 
-/// Sink for the log lines the Zig core pushes (one per kernel call). Global so
+/// Sink for the log lines the kernel core pushes (one per kernel call). Global so
 /// the `@convention(c)` callback can reference it without capturing.
+/// (Category string kept as "native.zig" from the Zig era so Console filters keep working.)
 private let zigLogger = Logger(subsystem: "com.sixfour.SixFour", category: "native.zig")
 
-/// Thread-dictionary key that suppresses Zig log forwarding on the current thread
+/// Thread-dictionary key that suppresses kernel log forwarding on the current thread
 /// (set by the live preview). File-scope so the non-capturing C callback can read it.
 private let zigLogSuppressKey = "com.sixfour.suppressZigLog"
 
-/// Swift surface over the native Zig kernels.
+/// Swift surface over the native kernel core.
 ///
-/// The implementations live in `Native/src/*.zig` (C ABI declared in
-/// `Native/include/sixfour_native.h`, bridged via `SixFour-Bridging-Header.h`)
-/// and are compiled to `libsixfour_native.a` by `Native/build-ios.sh` during
-/// the build. Each entry point mirrors a Swift reference implementation that
-/// stays in the tree as the parity oracle.
+/// The implementations live in `SixFour/Kernels/Kernels*.swift` (`@_cdecl`
+/// exports; the 2026-07-06 hand-port of the retired Zig core — C ABI declared
+/// in `SixFour/Kernels/sixfour_kernels_abi.h`, bridged via
+/// `SixFour-Bridging-Header.h`). Each entry point mirrors a Swift reference
+/// implementation that stays in the tree as the parity oracle.
 enum SixFourNative {
     private static let log = Logger(subsystem: "com.sixfour", category: "native")
 

@@ -1,5 +1,9 @@
 # YIN-YANG = ZIG ↔ METAL/MPS? — an identification, tested against the code
 
+> **HISTORICAL (banner added 2026-07-13).** Written one day before the Swift-kernel pivot;
+> every Zig/Native path here now reads `SixFour/Kernels/Kernels*.swift` (CLAUDE.md pivot note).
+
+
 > Status: EXPLORATION · Created: 2026-07-05 · Owner: SixFour
 > Question (Daniel): is the yin-yang split (Spec.YinYangCNN) the SAME thing as the
 > Zig-integer-floor ↔ Metal/MPS-float split? Yin = Zig (frozen, exact, K/I carrier),

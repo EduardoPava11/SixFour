@@ -1,5 +1,9 @@
 # V3.0 — on-device training + the 16³ decision surface (build workflow)
 
+> **HISTORICAL (banner added 2026-07-13).** Pre-Swift-pivot workflow; Zig paths read as
+> `SixFour/Kernels/`. The live arc is [`REBUILD-2026-07-10-PLAN.md`](REBUILD-2026-07-10-PLAN.md).
+
+
 > Status: LIVING · Created: 2026-07-01 · Owner: SixFour
 > Companions: `SIXFOUR-MODEL.md` (the frozen V2 boundary), `docs/NEXT-STEPS.md`,
 > `docs/MODEL-BUILD-WORKFLOW.md`. Spec wins on any disagreement.

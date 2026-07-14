@@ -33,11 +33,12 @@ hand-written**:
    hand-written Swift + Metal.
 
 3. **Integer-exact.** The real render engine is a **deterministic, integer-exact
-   Zig core** (`Native/`). It runs the same fixed-point (Q16) fold on every
-   device, so the GIF is **bit-identical across phones** — no float drift, no
-   "looks different on my device." This is the default path
-   (`useDeterministicCore = true`); the GPU-float Swift renderer exists only as a
-   throw-fallback.
+   Swift kernel core** (`SixFour/Kernels/`, the 2026-07-06 port of the retired
+   Zig core — same `s4_*` names, same C signatures, same golden vectors). It runs
+   the same fixed-point (Q16) fold on every device, so the GIF is **bit-identical
+   across phones** — no float drift, no "looks different on my device." This is
+   the default path (`useDeterministicCore = true`); the GPU-float Swift renderer
+   exists only as a throw-fallback.
 
 A learned "look-network" that would emit a single *learned* global palette is
 designed and golden-verified in Haskell, and partially trained on the Mac — but
@@ -49,9 +50,9 @@ but **deferred to V2** behind `Feature.globalPaletteV2 = false` (unreachable in 
 
 | Path | Tier | Shipped? | Purpose |
 |---|---|---|---|
-| `spec/` | 0 — Haskell spec | No (Mac-side) | Formally-verified source of truth: shapes, laws, Q16 algorithms; emits Swift/Python/Rust/Zig contracts + golden vectors. GHC-boot-only deps. |
-| `Native/` | — Zig core | **Yes** | The default render engine: integer-exact `s4_*` C-ABI kernels (the deterministic GIF pipeline). |
-| `SixFour/` | 2 — iOS 26 app | **Yes (core product)** | Hand-written Swift + Metal, zero third-party deps. Capture, cell-grid UI, the renderer driving the Zig core, GIF export, swipe-to-LOOK + `.cube` LUT, the on-device Color Atlas trainer. |
+| `spec/` | 0 — Haskell spec | No (Mac-side) | Formally-verified source of truth: shapes, laws, Q16 algorithms; emits contracts + golden vectors for every other tier. GHC-boot-only deps. |
+| `SixFour/Kernels/` | 2 — Swift kernel core | **Yes** | The default render engine: integer-exact `s4_*` kernels (`@_cdecl`, C signatures preserved from the retired Zig core; ABI at `sixfour_kernels_abi.h`). |
+| `SixFour/` | 2 — iOS 26 app | **Yes (core product)** | Hand-written Swift + Metal, zero third-party deps. Capture, cell-grid UI, the renderer driving the kernel core, GIF export, swipe-to-LOOK, the per-capture θ_up trainer (`Train/RungDispatch.swift`). |
 | `SixFourTests/` | 2 | — | Swift unit tests (ports verified against Haskell golden vectors). |
 | `trainer/mlx/` | 1 — Python trainer | No (Mac-side) | The hand-written H-JEPA trainer, gated byte-exact against spec-emitted goldens. `torch`/`coremltools` only for the dormant CoreML fallback. |
 | `studio/` | — Rust analysis | No (Mac-side) | Analysis/baseline-research workspace (`analysis-core`, `look-nn-baseline` pure-Rust forward net, ES baseline, Bures covariance oracle). Not a runtime tier. |
@@ -61,13 +62,13 @@ but **deferred to V2** behind `Feature.globalPaletteV2 = false` (unreachable in 
 
 ```
   Haskell spec (spec/, Tier 0)          ── source of truth, Mac-side, NOT shipped
-        │  emits contracts + golden vectors (Swift / Python / Rust / Zig)
+        │  emits contracts + golden vectors (Swift / Python / Rust)
         ▼
-  ┌─────────────────────────────────────────────────────────────┐
-  │  Zig deterministic core (Native/)   ── DEFAULT engine, shipped │
-  │  s4_* C-ABI kernels, integer-exact, byte-identical per device  │
-  └─────────────────────────────────────────────────────────────┘
-        │  loaded by
+  ┌───────────────────────────────────────────────────────────────────┐
+  │  Swift kernel core (SixFour/Kernels/)  ── DEFAULT engine, shipped │
+  │  s4_* @_cdecl kernels, integer-exact, byte-identical per device   │
+  └───────────────────────────────────────────────────────────────────┘
+        │  called by
         ▼
   iOS 26 app (SixFour/, Tier 2)         ── the SHIPPED CORE PRODUCT, zero deps
         ▲
@@ -82,9 +83,11 @@ Every dimension, law, and Q16 fixed-point algorithm is defined here first. The
 with **golden vectors** so no tier drifts. The gate is `cabal test`. Browse it
 starting from module **`SixFour.Spec.Map`** — the categorised index.
 
-### 2. Zig deterministic core — the default render engine (`Native/`, shipped)
-The integer-exact pipeline that actually makes the GIF, identical on every
-device:
+### 2. Swift kernel core — the default render engine (`SixFour/Kernels/`, shipped)
+(**PIVOT 2026-07-06:** the former Zig core `Native/` was hand-ported to pure
+Swift — identical `s4_*` names, C signatures via `@_cdecl`, and golden vectors;
+`Native/` is deleted, git history is the record.) The integer-exact pipeline
+that actually makes the GIF, identical on every device:
 
 ```
 widen → linear → OKLab → quantize (maximin = Gonzalez farthest-first + Lloyd)
@@ -92,12 +95,14 @@ widen → linear → OKLab → quantize (maximin = Gonzalez farthest-first + Llo
 ```
 
 plus `s4_global_collapse` (per-frame → one global palette), the `s4_haar_*`
-projections, the `s4_*_q16` look/LUT kernels, and `s4_load_look_net`. The header
-(`Native/include/sixfour_native.h`) declares all **35** exports, and a gate
-asserts the header symbol set equals the Zig export set.
+projections, the `s4_*_q16` look/LUT kernels, and `s4_load_look_net`. The ABI
+contract lives at `SixFour/Kernels/sixfour_kernels_abi.h`; the former Zig test
+batteries run as `SixFourTests/ZigPort*Tests.swift`. The Mac trainer loads the
+SAME Swift sources as a dylib (`scripts/build-kernels-dylib.sh`) — no
+train/deploy skew.
 
 The **maximin** step (Gonzalez 1985 farthest-first, then Lloyd) is the canonical
-collapse in `Spec.QuantFixed` / `Spec.Collapse`, and the Zig matches it
+collapse in `Spec.QuantFixed` / `Spec.Collapse`, and the kernel core matches it
 byte-for-byte. It is the canon, not a bug.
 
 ### 3. iOS 26 app — the shipped product (`SixFour/`, Tier 2)
@@ -106,11 +111,14 @@ dependencies** (Apple frameworks + `simd` only):
 - the capture pipeline (64-frame burst at 20 fps),
 - the **cell-grid UI** — one 4 pt cell atom, the whole screen is a cell field
   (no glass / no SF-Symbol chrome on the HUD),
-- `DeterministicRenderer` driving the Zig core,
+- `DeterministicRenderer` driving the Swift kernel core,
 - GIF export: the per-frame **GIFA** path, the global-palette **GIFB** ladder,
   and Save,
-- **swipe-to-LOOK** + R3D `.cube` LUT export,
-- the on-device **Color Atlas** MPSGraph trainer.
+- **swipe-to-LOOK** (the `.cube` LUT export is deprecated, gated off behind
+  `Feature.lutExport = false`),
+- the per-capture **θ_up** trainer (`Train/RungDispatch.swift`, plain Metal;
+  the earlier Color Atlas MPSGraph trainer was retired — its device-training
+  proof stands in git history).
 
 Every port is verified bit-for-bit against the Haskell golden vectors.
 
@@ -124,11 +132,14 @@ only for the dormant CoreML fallback. Run `python3 trainer/mlx/gate_trainer.py`;
 
 ### Train → verify → deploy spine
 - **Train (base net):** MLX on the M1.
-- **Train (per-user, on device):** **MPSGraph** — an Apple system framework, so
-  it stays inside the Tier-2 zero-dependency contract. Proven on real hardware
-  (Color Atlas: `SixFour/Atlas/AtlasTrainer.swift`, MPSGraph SGD, Bradley–Terry
-  value net, bit-identical loss trajectory Mac ↔ iPhone). MPSGraph does not run
-  in the simulator (gated via `targetEnvironment(simulator)`).
+- **Train (per-user, on device):** `SixFour/Train/` — `RungDispatch.swift`
+  (plain Metal fused kernel, runs in the simulator too) is the LIVE per-capture
+  θ_up trainer; `DeviceTrainer.swift` (MPSGraph, an Apple system framework —
+  inside the Tier-2 zero-dependency contract) is the golden-parity harness.
+  On-device MPSGraph training was proven on real hardware by the retired Color
+  Atlas trainer (bit-identical loss trajectory Mac ↔ iPhone; git history is the
+  record). MPSGraph does not run in the simulator (gated via
+  `targetEnvironment(simulator)`).
 - **Verify:** Haskell golden vectors gate every backend.
 - **Deploy:** hand-written Swift + Metal on device (zero deps).
 - **Fallback:** PyTorch → CoreML → ANE, kept dormant, **never shipped**. Never
@@ -153,7 +164,7 @@ behaviour is the user's verification step.)
 ```bash
 cd spec
 cabal build
-cabal test                 # ~1249 tests; one leg of the gate (spec/scripts/gate.sh is the full gate)
+cabal test                 # the full law + golden suite; one leg of the gate (spec/scripts/gate.sh is the full gate)
 cabal run spec-codegen     # regenerate the per-tier contracts
 ```
 
@@ -186,23 +197,28 @@ generated/trained artifacts (e.g. the gitignored `trainer/out/` fixtures), and
 
 ## Status
 
-The canon is **`CLAUDE.md`** (the contract) + **`SixFour.Spec.Map`** (the spec index) + the
-Haskell module doc-comments; `scripts/verify-doc-claims.sh` gates their load-bearing facts.
-(`docs/STATUS.md` was deleted; do not recreate it.) Current state:
+Status-of-record lives on exactly three surfaces (see `CLAUDE.md`
+§"Status-of-record"): **`CLAUDE.md`** (the contract), the arc ledger
+**`docs/REBUILD-2026-07-10-PLAN.md`**, and the spec→app promotion ledger
+**`docs/SPEC-APP-LINK-LEDGER.md`**; `scripts/verify-doc-claims.sh` gates the
+canon's load-bearing facts. (`docs/STATUS.md` was deleted; do not recreate it.)
+Current state:
 
-- **Spec suite: ~1249 Haskell tests pass** (`cabal test`).
-- The **deterministic Zig render core is built and is the default path**
+- **The full Haskell spec suite passes** (`cabal test`; the count grows with the spec —
+  run it, don't quote it).
+- The **deterministic Swift kernel core is built and is the default path**
   (`useDeterministicCore = true`); the GPU-float Swift `GIFRenderer` is the
   throw-fallback only.
 - **GIFA → GIFB global collapse is wired in production**:
   `CaptureViewModel.renderDeterministic` → `renderDeterministicGlobal` →
   `DeterministicRenderer.renderGlobalPalette` → `SixFourNative.globalCollapse` →
-  Zig `s4_global_collapse`. The shipped global palette is the deterministic
+  `s4_global_collapse`. The shipped global palette is the deterministic
   pooled-maximin collapse, **not** a learned NN genome.
-- **Swipe-to-LOOK + R3D `.cube` LUT export is built**
-  (`Spec.{ZoneProfile,LookTransfer,RedFrontEnd,CubeLut}`; Zig
-  `s4_zone_profile_q16` / `s4_look_transfer_q16` / `s4_build_cube_q16`; 72 Zig
-  tests; iOS build succeeds — on-device verification is the user's step).
+- **Swipe-to-LOOK is built**
+  (`Spec.{ZoneProfile,LookTransfer,RedFrontEnd}`;
+  `s4_zone_profile_q16` / `s4_look_transfer_q16`; iOS build succeeds —
+  on-device verification is the user's step). The R3D `.cube` LUT export is
+  **deprecated** (2026-07-08), gated off behind `Feature.lutExport = false`.
 - The **look-NN forward path is proven in Haskell** (`LookNetE/R/D`, a 384-DOF
   `SigmaPairTree` decoder) but **nothing runs it on device**: `loadLookNet` has
   zero production callers (open debt: `looknet-load-unused`). The learned global
@@ -238,19 +254,19 @@ cross-checks — i.e. a moment-matched spread prior, **not** the collapse.
 
 ## Where to read next
 
-The `docs/` tree was deleted; the canon now lives in-repo:
-
 | Document | What it covers |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | The canon: dependency + train/deploy contract (three tiers, zero-dep rule), the H-JEPA direction. **Start here.** |
+| [`CLAUDE.md`](CLAUDE.md) | The canon: dependency + train/deploy contract (three tiers, zero-dep rule), status-of-record rules. **Start here.** |
+| [`docs/REBUILD-2026-07-10-PLAN.md`](docs/REBUILD-2026-07-10-PLAN.md) | The active-arc ledger: rebuild stages, device-gate results, reconciliations. |
+| [`docs/SPEC-APP-LINK-LEDGER.md`](docs/SPEC-APP-LINK-LEDGER.md) | The spec→app adoption/promotion ledger (updated per promotion commit). |
 | [`spec/src/SixFour/Spec/Map.hs`](spec/src/SixFour/Spec/Map.hs) | Spec index — browse the Haskell source of truth (NN design is the ★ core category). |
 | [`trainer/TRAINING.md`](trainer/TRAINING.md) | The H-JEPA trainer runbook (`trainer/mlx/`): how to run the gate and the end-to-end loop. |
 | [`spec/README.md`](spec/README.md) | How the spec is built, what `spec-codegen` emits, and how the trainer is gated against it. |
-| [`NOTES.md`](NOTES.md) | Chronological session log (history, not current status). |
+| [`NOTES.md`](NOTES.md) | Chronological session log, closed 2026-07-05 (history; later sessions live in `docs/SESSION-*.md`). |
 
 ## License
 
-Proprietary. The shipped iOS app and the deterministic Zig core have **zero
+Proprietary. The shipped iOS app and its deterministic Swift kernel core have **zero
 third-party dependencies**. The Mac-side Rust analysis workspace is gated by
 `cargo deny check licenses` (permissive-only); the Haskell spec uses only GHC
 boot libraries.

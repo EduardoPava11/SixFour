@@ -384,3 +384,27 @@ smallest format today).
   GIF would need delay 2.5cs — violates s4_ladder_delay_cs integrality;
   export replication sidesteps this, canon unchanged).
 - GeneLibrary quarantine vs delete: Daniel's call at Stage 2.
+
+## 7. Reconciliation — 2026-07-13 cleanup pass (ledger catch-up, facts from git)
+
+- **Stage 0 — DONE & DEVICE-PASSED.** `Spec.LadderColorTime` + probe committed
+  (`fda48a2`); PHASE P Release run 2026-07-11 (§5b/§5c): all 5 rungs 64/64, all
+  folds byte-identical, tick 65.4 → 3.66 ms.
+- **Stage 1 is the §2b reading (promotion, not invention).** Units 1–3 landed
+  (`d7e97ef`, `6933d5f`, `63e1738`). §3's original second-`project.yml`-target
+  parity gate is superseded by §2b and has no artifact — the §2b promotion path
+  within the existing target is the Stage 1 of record.
+- **Stage 3 bullet 1 shipped EARLY:** `.s4cr` corpus export + AirDrop batch =
+  `87d6ab4` ("THE CORPUS EXPORT") + `docs/TRAINING-CORPUS.md` (LIVE,
+  `Feature.trainingCorpus = true`). Legitimate: §5c's "no corpus generation
+  until the tick is fixed" caveat was cleared by the Release-tick result. The
+  MLX Temporal PaletteNet (Stage 3 bullet 2+) does not exist yet.
+- **§5c residual closed:** BandHeadTrainer refuses results on GPU dispatch
+  failure (honest-nil, `a7eea21`).
+- **§5c still open:** dropped=0 re-verify; the 5-burst sustain round.
+- **Stage 2 (DELETE) untouched** — `Merge/`, `Tube/`, `Organs/`, `GeneLibrary/`
+  all on disk, pending Daniel's explicit approval, as specified.
+- **Flag debt:** the PHASE P probe pair (`ladderProbe = true`,
+  `v21Capture = false`) is still the committed default; `Feature.swift` says to
+  revert it after the probe log — left in place pending the open §5c rounds,
+  but it must not outlive them.

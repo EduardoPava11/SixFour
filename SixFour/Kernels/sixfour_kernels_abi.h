@@ -1,8 +1,10 @@
 // SixFour native kernels — C ABI contract.
 //
-// Implemented in Zig (Native/src/*.zig), compiled to libsixfour_native.a by
-// Native/build-ios.sh and linked into the SixFour app target. The Swift side
-// imports these declarations through SixFour-Bridging-Header.h.
+// Implemented in pure Swift (SixFour/Kernels/Kernels*.swift, `@_cdecl` exports;
+// the 2026-07-06 hand-port of the retired Zig core — same names, same
+// signatures, same golden vectors). The Swift side imports these declarations
+// through SixFour-Bridging-Header.h; the Mac trainer links the same sources as
+// a dylib (scripts/build-kernels-dylib.sh).
 //
 // Memory rule: the caller (Swift) owns ALL memory. No allocator crosses this
 // boundary. Functions read from `const` input pointers and write into

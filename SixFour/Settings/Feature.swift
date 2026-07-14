@@ -14,10 +14,11 @@ enum Feature {
     /// so with it `false` the global render is statically unreachable on device. Flip to `true`
     /// to re-enable the global path in V2.
     ///
-    /// Guard sites (see `docs/SIXFOUR-GLOBAL-PALETTE-RETIREMENT-WORKFLOW.md` §2): the capture
-    /// router (GS1), the Review Ship/Export rung (GS2), the group-pick (GS3) and cut-lever (GS4)
-    /// preview tools, and the Color Atlas curation + curated-leaves injection (GS5). A stale
-    /// persisted `paletteScope == .global` is sanitised to per-frame while this is off (SAN).
+    /// Guard sites (the originating retirement-workflow doc was sunset; canon is CLAUDE.md
+    /// §"Palette: global vs per-frame"): the capture router (GS1), the Review Ship/Export rung
+    /// (GS2), the group-pick (GS3) and cut-lever (GS4) preview tools. (GS5, the Color Atlas
+    /// curation, was deleted with `SixFour/Atlas/` 2026-07-03.) A stale persisted
+    /// `paletteScope == .global` is sanitised to per-frame while this is off (SAN).
     static let globalPaletteV2 = false
 
     /// The V2.1 pre-collapse capture/preview surface. **DEFERRED, OFF in MVP1.**

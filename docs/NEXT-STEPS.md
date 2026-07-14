@@ -1,5 +1,11 @@
 # SixFour — Next Steps (handoff, 2026-06-26)
 
+> **HISTORICAL (banner added 2026-07-13).** This is the 2026-06-26 handoff — two pivots old
+> (Swift-kernel pivot 2026-07-06, LOOM rebuild 2026-07-10). Current next steps live in
+> [`REBUILD-2026-07-10-PLAN.md`](REBUILD-2026-07-10-PLAN.md); current adoption status in
+> [`SPEC-APP-LINK-LEDGER.md`](SPEC-APP-LINK-LEDGER.md).
+
+
 Branch: everything below is on `master` (the L-anchor pivot merged at `6575d2e`).
 Gate state at handoff: `bash spec/scripts/gate.sh` green, **1137 tests, 178 Spec modules**.
 

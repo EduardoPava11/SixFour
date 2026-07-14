@@ -1,5 +1,11 @@
 # SIXFOUR-MODEL.md — the single source for the model
 
+> **SCOPE CAVEAT (added 2026-07-13, per `docs/REBUILD-2026-07-10-PLAN.md` §1.1):** this doc
+> remains the **north-star** description of the full-matrix H-JEPA, but it is no longer the
+> *working* model plan — the rebuild plan's Temporal PaletteNet path supersedes it as the
+> thing being built next. Its "frozen per `docs/NEXT-STEPS.md`" line refers to the 2026-06-26
+> handoff, now historical. Zig references read as `SixFour/Kernels/` (CLAUDE.md pivot note).
+
 This is the one place to start reading "the model": the **Held-Out Full-Matrix H-JEPA**. It is the
 narrative companion to the Haskell module `SixFour.Spec.Model` (`spec/src/SixFour/Spec/Model.hs`), which
 is the machine-checked single source. If this doc and the spec ever disagree, the spec wins — and

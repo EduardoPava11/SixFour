@@ -79,8 +79,8 @@ index cross-cut; physically the modules stay where they are, gated by golden vec
     ("SixFour.Spec.NudgeStep", "SixFour.Spec.LatentNavigation", "SixFour.Spec.SteeringSpine",
     "SixFour.Spec.TwoMoveOctave", the @bandEnergy@ half of "SixFour.Spec.MoveSignal",
     "SixFour.Spec.DisplayDecoder", "SixFour.Spec.ContinuousLoop"); the Core AI socket
-    (@CoreAILInference@) is ORPHANED (TODO stub, aimed at the deleted L-net) — it is the SOCKET the
-    large I-JEPA head must plug into once trained.
+    (@CoreAILInference@) is NOTIONAL — no module exists (the old stub was deleted with the L-net);
+    it names the SOCKET a large I-JEPA head must plug into once trained, nothing more.
 
 THE I-JEPA MODEL COMPARTMENT makes Core AI CHECKABLE: the large head is @MacTag@ float, but
 @lawDepth1ReducesToFeaturesBPos@ pins its single-token limit to the SAME goldens the byte-exact
