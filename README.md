@@ -1,9 +1,19 @@
 # SixFour
 
+[![spec-codegen drift](https://github.com/EduardoPava11/SixFour/actions/workflows/spec-drift.yml/badge.svg)](https://github.com/EduardoPava11/SixFour/actions/workflows/spec-drift.yml)
+[![gate (grid lint)](https://github.com/EduardoPava11/SixFour/actions/workflows/gates.yml/badge.svg)](https://github.com/EduardoPava11/SixFour/actions/workflows/gates.yml)
+![iOS 26](https://img.shields.io/badge/iOS-26-black)
+![Swift 6.2](https://img.shields.io/badge/Swift-6.2-F05138)
+![Haskell spec](https://img.shields.io/badge/spec-Haskell-5D4F85)
+![shipped deps](https://img.shields.io/badge/shipped_dependencies-0-brightgreen)
+
 **SixFour is an iOS 26 camera app that turns a 64-frame burst into a
 64 × 64 × 256-colour animated GIF.** You hold the shutter, it captures 64 frames
 at 20 fps, and it renders them into a tiny looping GIF: a 64 × 64 pixel grid,
-64 frames long, drawn from a single shared 256-colour palette.
+64 frames long, drawn from a single shared 256-colour palette. The same burst
+produces the **byte-identical GIF on every device**, because the entire render
+engine is integer-exact and every implementation is pinned to a formally-verified
+Haskell spec by golden vectors.
 
 The interesting part is *how* it is built, and *why*.
 
@@ -43,8 +53,26 @@ hand-written**:
 A learned "look-network" that would emit a single *learned* global palette is
 designed and golden-verified in Haskell, and partially trained on the Mac — but
 it is **not shipped on device**. **MVP1 emits PER-FRAME palettes only.** The global
-(GIFB) deterministic Zig **pooled-maximin collapse** is implemented and golden-gated
+(GIFB) deterministic **pooled-maximin collapse** is implemented and golden-gated
 but **deferred to V2** behind `Feature.globalPaletteV2 = false` (unreachable in MVP1).
+
+## Quickstart
+
+```bash
+# 1. Verify everything (Haskell laws + hermetic codegen + lints + doc claims
+#    + Swift golden suite + Python trainer parity — one command, non-fail-fast):
+bash spec/scripts/gate.sh
+
+# 2. Build the app (camera apps are compile-checked; the camera needs a device):
+xcodegen generate
+xcodebuild -scheme SixFour -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+
+# 3. Or run the ordered full pipeline (codegen → doc → verify → native → lint → gen → build → test):
+scripts/s4.sh all
+```
+
+Requires Xcode 26.2 / iOS 26 / Swift 6.2, GHC + cabal for the spec, and Python 3
+for the trainer legs (each leg skips loudly if its toolchain is absent).
 
 ## Layout
 
@@ -79,7 +107,7 @@ but **deferred to V2** behind `Feature.globalPaletteV2 = false` (unreachable in 
 ### 1. Haskell spec — the source of truth (`spec/`, Tier 0, not shipped)
 Every dimension, law, and Q16 fixed-point algorithm is defined here first. The
 `sixfour-spec` library is GHC-boot-only (`base`, `vector`, `containers`, `text`,
-`transformers`). It emits Swift, Python, Rust, and Zig contracts and pins them
+`transformers`). It emits Swift, Python, and Rust contracts and pins them
 with **golden vectors** so no tier drifts. The gate is `cabal test`. Browse it
 starting from module **`SixFour.Spec.Map`** — the categorised index.
 
@@ -145,6 +173,31 @@ only for the dormant CoreML fallback. Run `python3 trainer/mlx/gate_trainer.py`;
 - **Fallback:** PyTorch → CoreML → ANE, kept dormant, **never shipped**. Never
   `mlx-swift`, never a CoreML black box.
 
+## The gate — correctness as a build artifact
+
+The claim "the app matches the spec" is not documentation, it is a **build
+theorem**. Four mechanisms enforce it, all under one command (`bash
+spec/scripts/gate.sh`, non-fail-fast so one broken leg cannot hide another):
+
+1. **Laws.** `cabal test` proves every spec law (QuickCheck properties over the
+   algebra: pooling is a commutative-monoid fold, the ladder is a retract, the
+   gate is contractive, …) plus the golden-vector suites.
+2. **Hermetic codegen.** The gate regenerates every contract from the spec and
+   fails on `git diff` — a stale regen or a hand-edit of a generated file is a
+   build failure, which is what makes the spec the *design authority* rather
+   than a checker.
+3. **Lints as invariants.** What the type system cannot ban, a lint does: the
+   single float→Q16 crossing (`lint-q16-crossing`), the frozen global-palette
+   blast radius (`lint-no-global-palette`), the 4 pt GRID design language
+   (`lint-grid`, also a CI + Xcode build phase), and the doc-claims gate
+   (`verify-doc-claims.sh` — greps the canon's load-bearing facts so status
+   claims cannot rot in prose).
+4. **Cross-language goldens.** The Swift kernel suite (`SixFourTests`,
+   including the ported `ZigPort*Tests` fixture batteries) and seven Python
+   trainer legs each reproduce spec-emitted goldens byte-exactly — the Mac
+   trainer loads the *same* Swift kernel sources as a dylib, so there is no
+   train/deploy skew to test around.
+
 ## Build
 
 ### iOS app
@@ -196,6 +249,14 @@ generated/trained artifacts (e.g. the gitignored `trainer/out/` fixtures), and
 `build` needs Xcode 26.2 / iOS 26, none of which exist on hosted CI runners.
 
 ## Status
+
+**Active arc — THE LOOM rebuild** (`docs/REBUILD-2026-07-10-PLAN.md`): pure-64³
+creation with colour as the substrate, probing the hardware ladder
+16/32/64/128/256 and always collapsing to 64³. Stage 0 (the ladder colour-time
+laws + on-device proof log) **passed on a physical iPhone 17 Pro 2026-07-11** —
+all five rungs byte-identical, tick cost 3.66 ms in Release. Stage 1 is
+promoting the spec's ontology (`Palette` / `IndexPlane` / `Cel` / `Loop`) into
+the app; the real-capture training corpus (`.s4cr` export) is live.
 
 Status-of-record lives on exactly three surfaces (see `CLAUDE.md`
 §"Status-of-record"): **`CLAUDE.md`** (the contract), the arc ledger
