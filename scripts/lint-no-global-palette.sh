@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# lint-no-global-palette.sh — Phase 0 of the per-frame / orthogonal-A/B migration
-# (docs/SIXFOUR-PER-FRAME-GENOME-AB-MIGRATION-WORKFLOW.md §6).
+# lint-no-global-palette.sh — the per-frame-palette freeze lint. (Born as Phase 0 of the
+# per-frame/A-B migration; that workflow doc was sunset — the living canon is CLAUDE.md
+# §"Palette: global vs per-frame".)
 #
 # The single-global-palette collapse is DEFERRED TO V2 (behind Feature.globalPaletteV2 = false),
 # not deleted. MVP1 is per-frame only; the global code stays compiled + golden-gated for V2.
@@ -34,8 +35,8 @@ check_frozen() {
     if [ "$ok" -eq 0 ]; then
       echo "FAIL: new caller of DEPRECATED-GLOBAL-PALETTE symbol '$pattern':"
       echo "        $f"
-      echo "      Use the per-frame + orthogonal-A/B path instead"
-      echo "      (docs/SIXFOUR-PER-FRAME-GENOME-AB-MIGRATION-WORKFLOW.md §4)."
+      echo "      Use the per-frame path instead (canon: CLAUDE.md §'Palette: global vs per-frame';"
+      echo "      the global path is V2-deferred behind Feature.globalPaletteV2 = false)."
       fail=1
     fi
   done < <(grep -rl "$pattern" "${ROOTS[@]}" "${INCLUDES[@]}" 2>/dev/null | sort -u)

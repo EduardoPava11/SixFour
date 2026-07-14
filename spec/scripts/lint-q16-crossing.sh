@@ -3,12 +3,12 @@
 #
 # The ByteCarrier type already makes a float->device byte UNREPRESENTABLE (the Q16
 # constructor is hidden; `toByte someLatent` is a compile error). The one thing the
-# type system cannot ban is a NEW module importing AtlasGame.quantizeQ16 directly to
+# type system cannot ban is a NEW module importing Spec.Q16's quantizeQ16 directly to
 # hand-roll its own float->Q16 crossing, bypassing ByteCarrier.reenterQ16.
 #
 # This lint enforces: ByteCarrier is the ONLY module that imports quantizeQ16. Every
 # other float->device crossing must go through reenterQ16. (Comments mentioning
-# `AtlasGame.quantizeQ16` are fine; only IMPORT lines are checked.)
+# `quantizeQ16` are fine; only IMPORT lines are checked.)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

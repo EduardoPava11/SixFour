@@ -19,7 +19,7 @@ to be the surfaced rung, @[Double]@ the latent). This module makes it a TYPE:
 
 The teeth are the EXPORTS: there is exactly ONE float→device crossing, 'reenterQ16'
 (the @zero-genome == floor@ requantisation, delegating to
-"SixFour.Spec.AtlasGame"'s @quantizeQ16@). There is NO exported @'Latent' -> Int@, so
+"SixFour.Spec.Q16"'s @quantizeQ16@). There is NO exported @'Latent' -> Int@, so
 @'toByte' someLatent@ does not type-check — the type system, not a lint, enforces
 "float must never directly carry a device byte". (Raw @Prelude.round@ is of course
 always writable, but it is off-spec; the spec's job is to make the SANCTIONED crossing
@@ -88,7 +88,7 @@ toByte :: Q16 -> Int
 toByte = unCarried
 
 -- | THE single float→device crossing: requantise a Mac-side latent onto the Q16 floor
--- (@zero-genome == floor@), delegating to "SixFour.Spec.AtlasGame"'s @quantizeQ16@.
+-- (@zero-genome == floor@), delegating to "SixFour.Spec.Q16"'s @quantizeQ16@.
 reenterQ16 :: Latent -> Q16
 reenterQ16 (Carried x) = Carried (quantizeQ16 x)
 
@@ -111,7 +111,7 @@ lawByteOnlyFromQ16 x = toByte (reenterQ16 (mkLatent x)) == quantizeQ16 x
 
 -- | A value already on the Q16 floor is a re-entry FIXPOINT: re-entering the float
 -- image of an integer grid point returns that integer (delegates to the proven
--- @AtlasGame.lawTerminalQuantizationIdempotent@: @quantizeQ16 (toQ16 q) == q@).
+-- @Q16.lawTerminalQuantizationIdempotent@: @quantizeQ16 (toQ16 q) == q@).
 lawReentryIsFloor :: Int -> Bool
 lawReentryIsFloor q = toByte (reenterQ16 (mkLatent (toQ16 q))) == q
 

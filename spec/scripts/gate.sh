@@ -38,28 +38,22 @@ run "check-compartments (every module tagged to one backend)" "bash scripts/chec
 
 # The belt-and-suspenders lints (each guards an invariant the type system cannot fully ban).
 # Spec-side lints live in spec/scripts/; the repo-root lints live in ../scripts/.
-# NOTE: scripts/verify-doc-claims.sh is intentionally NOT run here — it has a pre-existing
-# self-bug (greps a stale path SixFour/UI/Surface/ReviewPhaseField.swift); all its real claim
-# checks pass. Run it directly once that path is fixed.
 root="$(cd "$here/.." && pwd)"
 [ -f "scripts/lint-q16-crossing.sh" ] && run "lint-q16-crossing" "bash scripts/lint-q16-crossing.sh"
 for lint in lint-grid lint-no-global-palette; do
   [ -f "$root/scripts/$lint.sh" ] && run "$lint" "bash '$root/scripts/$lint.sh'"
 done
 
-# CROSS-LANGUAGE GOLDENS, fixtures REQUIRED (not skip-if-absent). The readiness proof found
-# the strongest ownership in the system (the spec FORCES the iPhone to make the byte-exact
-# GIF) was conditionally NOT exercised: the Zig fixture tests skip-if-absent, so a checkout
-# that never produced the goldens passed green vacuously.
-# Here we PRODUCE the goldens from the spec (spec-fixtures) then run the Native tests with
-# -Drequire_fixtures=true so an absent or mismatched golden FAILS. (Skipped if zig is not
-# installed — the spec-side gate above still stands.)
-if command -v zig >/dev/null 2>&1; then
-  run "Zig cross-language goldens (fixtures REQUIRED, byte-exact GIF)" "
-    cabal run -v0 spec-fixtures >/dev/null 2>&1 &&
-    ( cd '$root/Native' && zig build test -Drequire_fixtures=true )
-  "
-fi
+# The doc-claims gate: the load-bearing facts of the canon (CLAUDE.md + Spec.Map) are
+# re-asserted by grep/test/find. (Re-wired 2026-07-13: the old exclusion cited a stale-path
+# self-bug fixed in the 2026-07-08 rewrite; the script self-locates and passes clean.)
+[ -f "$root/scripts/verify-doc-claims.sh" ] && run "verify-doc-claims (canon load-bearing facts)" "bash '$root/scripts/verify-doc-claims.sh'"
+
+# CROSS-LANGUAGE GOLDENS: the former Zig fixture leg (cd Native/ && zig build test) died with
+# the 2026-07-06 Swift-kernel pivot — Native/ is deleted; the SAME fixture batteries now run
+# as SixFourTests/ZigPort*Tests.swift inside the xcodebuild leg below, with goldens embedded
+# (KernelsLUTData.swift base64 + GifGoldenFixture.swift), so absent-golden vacuous passes
+# cannot recur. No separate native build exists.
 
 # THE SWIFT TIER (SixFourTests): every Generated/*Golden selfCheck + spec-parity fold
 # (SwapCarrier/GenomeCarrier/GeneHash goldens, DecideMachine, RungDispatch bitwise) runs under
@@ -133,4 +127,4 @@ if [ "$fail" -ne 0 ]; then
   echo "GATE: FAIL"
   exit 1
 fi
-echo "GATE: all green (tests + hermetic codegen + compartments + lints + cross-language goldens)."
+echo "GATE: all green (tests + hermetic codegen + compartments + lints + doc claims + Swift/Python goldens)."

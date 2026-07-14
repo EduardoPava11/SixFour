@@ -113,7 +113,8 @@ targets:
         basedOnDependencyAnalysis: false
       - name: GRID design-language lint
         script: |
-          # Enforce the capture-HUD GRID invariants (docs/SIXFOUR-DESIGN-LANGUAGE.md):
+          # Enforce the capture-HUD GRID invariants (spec: scripts/lint-grid.sh header;
+          # living charter: docs/UI-FORM-FOLLOWS-FUNCTION.md):
           # no glass / opacity-on-a-cell / raw vector primitives on the HUD
           # (LINT-DRAW-VOCAB), no bare point literal bypassing GlobalLattice.pt()
           # (LINT-SINGLE-PITCH), and the Spec.* goldens + contracts exist (LINT-GOLDEN).

@@ -9,7 +9,7 @@ residual by @tanh α@ with @α@ initialised at @0@. This module makes that a con
   * The ungated readout is "SixFour.Spec.DetailPredictor" @rawBands@ (@θ·φ(v)@ per band).
   * The GATE is the scalar @s = tanh α ∈ (-1, 1)@; the gated band is @s · rawⱼ(v)@.
   * The committed band is the gated readout re-entered to Q16 (the ONE float→device
-    crossing, "SixFour.Spec.ByteCarrier" @reenterQ16@ via 'quantizeQ16Gate').
+    crossing, "SixFour.Spec.ByteCarrier" @reenterQ16@ via 'gatedCommitted').
 
 Two determinism-safety properties fall out, and they are the whole point:
 
@@ -47,7 +47,7 @@ module SixFour.Spec.GatedResidual
   , lawGateSignPreserving
   ) where
 
-import SixFour.Spec.Q16          (quantizeQ16)
+import SixFour.Spec.ByteCarrier  (mkLatent, reenterQ16, toByte)
 import SixFour.Spec.DetailPredictor (PredictorShape, rawBands)
 
 -- | The GATE: @s = tanh α ∈ (-1, 1)@. @α = 0 ⇒ s = 0@ (the floor); @α → ±∞ ⇒ s → ±1@
@@ -65,14 +65,15 @@ gatedRawBands sh ps v alpha = map (gate alpha *) (rawBands sh ps v)
 -- the same crossing "SixFour.Spec.DetailPredictor" @predictDetail@ uses. At @α = 0@ every
 -- entry is @0@ = the byte-exact floor.
 gatedCommitted :: PredictorShape -> [Double] -> Int -> Double -> [Int]
-gatedCommitted sh ps v alpha = map quantizeQ16 (gatedRawBands sh ps v alpha)
+gatedCommitted sh ps v alpha =
+  map (toByte . reenterQ16 . mkLatent) (gatedRawBands sh ps v alpha)
 
 -- ---------------------------------------------------------------------------
 -- Laws
 -- ---------------------------------------------------------------------------
 
 -- | ZERO GATE IS THE FLOOR: at @α = 0@ the committed detail is all-zero for every band,
--- by arithmetic (@tanh 0 = 0@, @quantizeQ16 0 = 0@) — the gene dialled fully to the
+-- by arithmetic (@tanh 0 = 0@, @reenterQ16 0 = 0@) — the gene dialled fully to the
 -- lossless floor without touching its weights.
 lawZeroGateIsFloor :: PredictorShape -> [Double] -> Int -> Bool
 lawZeroGateIsFloor sh ps v = all (== 0) (gatedCommitted sh ps v 0)

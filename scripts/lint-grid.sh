@@ -2,7 +2,9 @@
 #
 # lint-grid.sh — the GRID design-language build gate (v3.0, the 4 pt atom).
 #
-# Enforces "operations follow the grid" from docs/SIXFOUR-DESIGN-LANGUAGE.md across
+# Enforces "operations follow the grid" (the GRID design language; the originating
+# docs/SIXFOUR-DESIGN-LANGUAGE.md was sunset — the living charter is
+# docs/UI-FORM-FOLLOWS-FUNCTION.md, and the invariant list below IS the spec) across
 # ALL of SixFour/UI (not just the capture HUD). The invariants:
 #
 #   LINT-PLACEMENT     — a governed widget is placed ONLY by claiming cells
